@@ -6,6 +6,11 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     case invalidResponse
     case httpError(statusCode: Int)
     case missingManifest
+    /// The Core ML snapshot has no usable `openmed-coreml.json` or package
+    /// inventory.
+    case invalidCoreMLManifest
+    /// Core ML could not compile the downloaded `.mlpackage`.
+    case coreMLCompilationFailed
     case missingWeights
     /// Carries a controlled confinement reason code such as `outside_snapshot`.
     case invalidManifestPath(String)
@@ -16,6 +21,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
         case .invalidResponse: return "invalid_response"
         case .httpError: return "http_status"
         case .missingManifest: return "missing_manifest"
+        case .invalidCoreMLManifest: return "invalid_coreml_manifest"
+        case .coreMLCompilationFailed: return "coreml_compilation_failed"
         case .missingWeights: return "missing_weights"
         case .invalidManifestPath: return "invalid_manifest_path"
         }
@@ -29,6 +36,10 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
             return "HTTP \(statusCode) while downloading an MLX model file."
         case .missingManifest:
             return "Downloaded MLX model is missing openmed-mlx.json."
+        case .invalidCoreMLManifest:
+            return "The Core ML model snapshot has no usable openmed-coreml.json."
+        case .coreMLCompilationFailed:
+            return "The downloaded Core ML package could not be compiled."
         case .missingWeights:
             return "Downloaded MLX model does not contain any usable weight file."
         case .invalidManifestPath:
@@ -151,7 +162,7 @@ struct OpenMedMLXPathBoundary {
 
 /// Download and cache OpenMed MLX model snapshots from the Hugging Face Hub.
 public enum OpenMedModelStore {
-    private static let readyMarkerFileName = ".openmed-artifact-ready"
+    static let readyMarkerFileName = ".openmed-artifact-ready"
 
     private static let legacyTokenizerFiles = [
         "tokenizer.json",
@@ -385,7 +396,7 @@ public enum OpenMedModelStore {
         try writeReadyMarker(to: boundary.fileURL(readyMarkerFileName))
     }
 
-    private static func defaultCacheDirectory() throws -> URL {
+    static func defaultCacheDirectory() throws -> URL {
         let base =
             try FileManager.default.url(
                 for: .cachesDirectory,
@@ -454,7 +465,7 @@ public enum OpenMedModelStore {
         }
     }
 
-    private static func resolveHubURL(
+    static func resolveHubURL(
         repoID: String,
         revision: String,
         relativePath: String
@@ -482,13 +493,13 @@ public enum OpenMedModelStore {
         return url
     }
 
-    private static func sanitizedPathComponent(_ value: String) -> String {
+    static func sanitizedPathComponent(_ value: String) -> String {
         value
             .replacingOccurrences(of: "/", with: "__")
             .replacingOccurrences(of: ":", with: "_")
     }
 
-    private static func writeReadyMarker(to url: URL) throws {
+    static func writeReadyMarker(to url: URL) throws {
         let marker = [
             "state": OpenMedMLXModelCacheState.ready.rawValue,
             "completed_at": ISO8601DateFormatter().string(from: Date()),
