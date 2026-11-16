@@ -149,9 +149,15 @@ A rerooted class:
 - keeps its method resolution order: `LegacyRootedError` and `OpenMedError`
   are inserted directly in front of `Exception`, so `except` ordering,
   `isinstance` checks and MRO-based dispatch tables resolve as before;
-- gains a class-level `code`, a `message` that falls back to `str(error)`,
-  empty `details`, and `to_dict()`. A `code`, `message` or `details` the class
-  or its instances already define wins, and no instance attribute is added.
+- gains only a class-level `code` and `to_dict()`. A `code` or `to_dict()` the
+  class or its instances already define wins. No other attribute and no
+  instance attribute is added, so `hasattr(error, "message")`,
+  `hasattr(error, "details")` and `vars(error)` answer as before.
+  `to_dict()` reports the code, `str(error)` as the message and empty
+  `details`: attributes of a legacy class were never reviewed against the
+  PHI-safe details contract, so they are not promoted into it. Unlike other
+  `OpenMedError` subclasses, read `str(error)` or `to_dict()` rather than
+  `error.message` and `error.details`.
 
 ### Rules
 
