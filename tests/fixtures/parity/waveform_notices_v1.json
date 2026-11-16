@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "edf": "Non-diagnostic signals for review only. Explicit reviewer confirmation is required before consequential use. Header withholding does not de-identify waveform samples or establish clinical validity.",
+  "wfdb": "Non-diagnostic waveform data for human review only. No clinical validation or autonomous clinical action is provided. Explicit reviewer confirmation is required for consequential use.",
+  "aecg": "Non-diagnostic waveform for review only. Explicit reviewer confirmation is required before consequential use. No autonomous clinical decisions."
+}
