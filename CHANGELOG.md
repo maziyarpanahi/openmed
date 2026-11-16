@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Emit value-free `openmed.model.lifecycle.v1` events (`requested`, `fetching`, `verified`, `integrity_failed`, `ready`, `activated`, `rolled_back`, `evicted`, `failed`) from `prefetch_model` and `ModelCachePolicy` through an injectable `lifecycle_sink` whose default records nothing, with `model_lifecycle_event.schema.json`, activation and rollback hooks, a `reason` code on `DownloadIntegrityError`, and ordered vectors in `tests/fixtures/parity/model_lifecycle_v1.json` (#5353).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
