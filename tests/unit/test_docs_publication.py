@@ -832,13 +832,19 @@ def _settings_renderer() -> Any:
     return module
 
 
-def _settings_reference_rows(markdown: str) -> dict[str, list[str]]:
+SETTINGS_EXCLUDED_HEADING = "## Identifiers that are not settings"
+
+
+def _settings_reference_rows(
+    markdown: str, *, width: int = 7, excluded: bool = False
+) -> dict[str, list[str]]:
+    settings_part, _, excluded_part = markdown.partition(SETTINGS_EXCLUDED_HEADING)
     rows: dict[str, list[str]] = {}
-    for line in markdown.splitlines():
+    for line in (excluded_part if excluded else settings_part).splitlines():
         if not line.startswith("| `"):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split(" | ")]
-        assert len(cells) == 7, line
+        assert len(cells) == width, line
         name = cells[0].strip("`")
         assert name not in rows, f"{name} is listed twice"
         rows[name] = cells
@@ -895,6 +901,18 @@ def test_settings_reference_lists_every_setting_and_hides_secret_defaults() -> N
             assert cells[3] == renderer.SECRET_DEFAULT
         else:
             assert cells[3] != renderer.SECRET_DEFAULT
+        if declaration.user_supplied:
+            assert cells[3] == renderer.USER_SUPPLIED_DEFAULT
+
+
+def test_settings_reference_lists_excluded_identifiers_with_reasons() -> None:
+    from openmed.core.settings_registry import excluded_identifiers
+
+    page = SETTINGS_REFERENCE.read_text(encoding="utf-8")
+    rows = _settings_reference_rows(page, width=2, excluded=True)
+
+    assert set(rows) == set(excluded_identifiers())
+    assert all(cells[1] for cells in rows.values())
 
 
 def test_settings_reference_never_renders_a_secret_default() -> None:

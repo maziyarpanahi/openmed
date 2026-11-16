@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed or an undeclared field appears (#3925).
 - Fail tests when code under `openmed/` reads an `OPENMED_*` environment variable, or carries an `OPENMED_*` identifier, that `settings.schema.json` does not declare; failures name the variable and its `path:line` only, runtime-built names need a reasoned allowlist entry, and the seeded allowlist for not-yet-declared sections only shrinks (#5340).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Declare the MCP, OpenHIM, Journey, evaluation-dataset, integration, runtime and release-evidence settings in `settings.schema.json`, with dataset paths marked user-supplied and without defaults, and list `OPENMED_*` constants that only look like settings in `x-excluded-identifiers` with a reason; the undeclared-read allowlist is now empty (#5386).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
 - Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).

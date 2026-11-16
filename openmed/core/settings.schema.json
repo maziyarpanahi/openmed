@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openmed.life/schemas/settings.schema.json",
   "title": "OpenMedSettings",
-  "description": "Declared OpenMed environment settings, grouped into named sections. Each property is one environment variable; its JSON type describes the parsed value. The schema declares settings only and never carries deployment values.",
+  "description": "Declared OpenMed environment settings, grouped into named sections. Each property is one environment variable; its JSON type describes the parsed value. The schema declares settings only and never carries deployment values. x-excluded-identifiers lists OPENMED_* identifiers that are not settings, each with the reason.",
   "schema_version": 1,
   "type": "object",
   "additionalProperties": false,
@@ -1354,6 +1354,883 @@
           "x-module": "openmed.service.runtime"
         }
       }
+    },
+    "mcp": {
+      "title": "MCP",
+      "description": "Model Context Protocol server transport and opt-in remote authorization settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_MCP_ALLOW_INSECURE_LOCALHOST": {
+          "description": "Allow plain-HTTP MCP authorization URLs on localhost, for local development only.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_AUTHORIZATION_SERVER_URL": {
+          "description": "OAuth authorization server URL for MCP clients.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "url",
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_AUTH_ENABLED": {
+          "description": "Enable OAuth authorization for remote MCP transports.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_HOST": {
+          "description": "Bind host for the streamable HTTP transport.",
+          "type": "string",
+          "default": "127.0.0.1",
+          "x-secret": false,
+          "x-module": "openmed.mcp.server"
+        },
+        "OPENMED_MCP_INJECTION_GUARD_MODE": {
+          "description": "Prompt-injection guard mode for MCP tool inputs: strict rejects a flagged input, allow quarantines it.",
+          "type": "string",
+          "enum": ["allow", "strict"],
+          "default": "strict",
+          "x-secret": false,
+          "x-module": "openmed.mcp.server"
+        },
+        "OPENMED_MCP_PATH": {
+          "description": "Path for the streamable HTTP transport.",
+          "type": "string",
+          "default": "/mcp",
+          "x-secret": false,
+          "x-module": "openmed.mcp.server"
+        },
+        "OPENMED_MCP_PORT": {
+          "description": "Port for the streamable HTTP transport; a non-integer value falls back to the default.",
+          "type": "integer",
+          "default": 8081,
+          "x-secret": false,
+          "x-module": "openmed.mcp.server"
+        },
+        "OPENMED_MCP_REQUIRED_SCOPES": {
+          "description": "Comma- or space-separated scopes every MCP request needs.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_RESOURCE_URL": {
+          "description": "Protected-resource URL advertised for MCP authorization.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "url",
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_STATE_CHANGE_SCOPES": {
+          "description": "Comma- or space-separated scopes required for state-changing MCP tools.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["mcp:state:write"],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.security"
+        },
+        "OPENMED_MCP_TRANSPORT": {
+          "description": "MCP transport the server uses.",
+          "type": "string",
+          "enum": ["stdio", "streamable-http", "http"],
+          "default": "stdio",
+          "x-secret": false,
+          "x-module": "openmed.mcp.server"
+        }
+      }
+    },
+    "openhim": {
+      "title": "OpenHIM",
+      "description": "Opt-in OpenHIM mediator registration, heartbeat and de-identification settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_OPENHIM_ALLOW_INSECURE_HTTP": {
+          "description": "Allow an http:// OpenHIM core URL.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_AUTH_MODE": {
+          "description": "OpenHIM API authentication scheme.",
+          "type": "string",
+          "enum": ["basic", "token"],
+          "default": "basic",
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_CONFIG_PATH": {
+          "description": "Mediator registration JSON file; unset registers the built-in de-identification mediator.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_CORE_URL": {
+          "description": "OpenHIM core API URL; required when the mediator is enabled and https:// unless insecure HTTP is allowed.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "url",
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS": {
+          "description": "Seconds between mediator heartbeats.",
+          "type": "number",
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "maximum": 30,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_MEDIATOR_ENABLED": {
+          "description": "Register the service as an OpenHIM mediator and send heartbeats.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_MEDIATOR_HOST": {
+          "description": "Host OpenHIM uses to reach the built-in mediator registration.",
+          "type": "string",
+          "default": "openmed-mediator",
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_MEDIATOR_PORT": {
+          "description": "Port OpenHIM uses to reach the built-in mediator registration.",
+          "type": "integer",
+          "default": 8080,
+          "minimum": 1,
+          "maximum": 65535,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_METHOD": {
+          "description": "De-identification method the mediator applies.",
+          "type": "string",
+          "enum": ["aadhaar_mask", "format_preserve", "hash", "mask", "remove", "replace", "shift_dates"],
+          "default": "replace",
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_PASSWORD": {
+          "description": "OpenHIM API password or token; required when the mediator is enabled.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_PASSWORD_FILE": {
+          "description": "File holding OPENMED_OPENHIM_PASSWORD, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_OPENHIM_PASSWORD",
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_POLICY": {
+          "description": "Bundled de-identification policy the mediator applies.",
+          "type": "string",
+          "default": "hipaa_safe_harbor",
+          "minLength": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_REQUEST_TIMEOUT_SECONDS": {
+          "description": "Timeout in seconds for OpenHIM core requests.",
+          "type": "number",
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_USERNAME": {
+          "description": "OpenHIM API user; required when the mediator is enabled.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        },
+        "OPENMED_OPENHIM_VERIFY_TLS": {
+          "description": "Verify the OpenHIM core TLS certificate.",
+          "type": "boolean",
+          "default": true,
+          "x-secret": false,
+          "x-module": "openmed.service.openhim_mediator"
+        }
+      }
+    },
+    "journey": {
+      "title": "Journey",
+      "description": "Journey store deployment, PostgreSQL connection and store deadline settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_JOURNEY_ARTIFACT_ROOT": {
+          "description": "Directory the Journey deployment tool writes artifacts under.",
+          "type": "string",
+          "default": "/artifacts",
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_POSTGRES_DSN": {
+          "description": "PostgreSQL connection string for the Journey store; it can carry credentials.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_POSTGRES_DSN_FILE": {
+          "description": "File holding OPENMED_JOURNEY_POSTGRES_DSN, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_JOURNEY_POSTGRES_DSN",
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_POSTGRES_SSLCERT": {
+          "description": "Client certificate file for the Journey PostgreSQL connection.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_POSTGRES_SSLKEY": {
+          "description": "Client private-key file for the Journey PostgreSQL connection.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_POSTGRES_SSLROOTCERT": {
+          "description": "CA certificate file that verifies the Journey PostgreSQL server.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_SCHEMA": {
+          "description": "PostgreSQL schema the Journey deployment tool uses.",
+          "type": "string",
+          "default": "openmed_journey",
+          "x-secret": false,
+          "x-module": "openmed.deploy.journey"
+        },
+        "OPENMED_JOURNEY_STORE_LOCK_WAIT_SECONDS": {
+          "description": "Cap in seconds on one Journey store lock wait.",
+          "type": "number",
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.structured.store.deadlines"
+        },
+        "OPENMED_JOURNEY_STORE_TIMEOUT_SECONDS": {
+          "description": "Cap in seconds on one Journey store operation.",
+          "type": "number",
+          "default": 30.0,
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.structured.store.deadlines"
+        }
+      }
+    },
+    "eval_datasets": {
+      "title": "Evaluation datasets",
+      "description": "Local paths to user-supplied evaluation data. Every path is supplied by the user and has no default; OpenMed never downloads, bundles or commits these corpora, and restricted datasets such as i2b2, n2c2 and MIMIC are evaluation-only.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_BIORED_PATH": {
+          "description": "Directory of BioRED relation data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2"
+        },
+        "OPENMED_CBLUE_PATH": {
+          "description": "Root directory of user-supplied, access-controlled CBLUE task data.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.cblue"
+        },
+        "OPENMED_CEGS_NGRID_PATH": {
+          "description": "Directory of CEGS N-GRID de-identification data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.cegs_ngrid"
+        },
+        "OPENMED_CHIP_CDN_PATH": {
+          "description": "Directory of user-supplied CHIP-CDN data from CBLUE.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.cblue"
+        },
+        "OPENMED_CMEEE_PATH": {
+          "description": "Directory of user-supplied CMeEE data from CBLUE.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.cmeee"
+        },
+        "OPENMED_I2B2_PATH": {
+          "description": "Directory of i2b2 2006 or 2014 de-identification data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2"
+        },
+        "OPENMED_I2B2_YEAR": {
+          "description": "i2b2 de-identification release the loader reads.",
+          "type": "integer",
+          "enum": [2006, 2014],
+          "default": 2014,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2"
+        },
+        "OPENMED_IMCS_V2_NER_PATH": {
+          "description": "Directory of user-supplied IMCS-V2-NER data from CBLUE.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.cblue"
+        },
+        "OPENMED_MADE_PATH": {
+          "description": "Directory of MADE 1.0 medication and ADE data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.made"
+        },
+        "OPENMED_MEDNLI_PATH": {
+          "description": "Directory of MedNLI data (PhysioNet credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.mednli"
+        },
+        "OPENMED_MIMIC_IV_BHC_PATH": {
+          "description": "Directory of MIMIC-IV brief hospital course data (PhysioNet credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.mimic_iv_bhc"
+        },
+        "OPENMED_N2C2_2018_PATH": {
+          "description": "Directory of n2c2 2018 relation data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2"
+        },
+        "OPENMED_N2C2_2018_TRACK2_PATH": {
+          "description": "Directory of n2c2 2018 Track 2 medication relation data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.n2c2_2018_track2"
+        },
+        "OPENMED_N2C2_2022_PATH": {
+          "description": "Directory of n2c2 2022 relation data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2"
+        },
+        "OPENMED_N2C2_PATH": {
+          "description": "Directory of n2c2 2018 Track 1 de-identification data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.n2c2_2018"
+        },
+        "OPENMED_NAAMAPADAM_PATH": {
+          "description": "Directory of user-supplied Naamapadam or IndicGLUE NER packs.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.naamapadam"
+        },
+        "OPENMED_SHAC_PATH": {
+          "description": "Directory of SHAC social-determinants data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.shac"
+        },
+        "OPENMED_THYME_PATH": {
+          "description": "Directory of THYME temporal relation data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.thyme"
+        },
+        "OPENMED_ZH_CLINICAL_NER_MODEL_DIR": {
+          "description": "Local Chinese clinical NER checkpoint directory for the evaluation suite; OpenMed never downloads these weights.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.suites.chinese_clinical_ner"
+        }
+      }
+    },
+    "integrations": {
+      "title": "Integrations",
+      "description": "Service-adjacent integrations: egress policy, the privacy proxy, the sidecar, webhook signing, terminology caches and out-of-process bridges.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_ACCEPT_MEDCAT_LICENSE": {
+          "description": "Acknowledge the Elastic License 2.0 terms before the out-of-process MedCAT bridge runs.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.interop.bridges.medcat"
+        },
+        "OPENMED_ACCEPT_SDCMICRO_LICENSE": {
+          "description": "Acknowledge the GPL-2.0 terms before the out-of-process sdcMicro bridge runs Rscript.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.interop.bridges.sdcmicro"
+        },
+        "OPENMED_ARX_COMMAND": {
+          "description": "Command that runs a user-installed ARX anonymization tool; unset leaves the ARX bridge unavailable.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.interop.bridges.arx_bridge"
+        },
+        "OPENMED_EGRESS_MODE": {
+          "description": "How outbound operations that no egress rule matches are treated.",
+          "type": "string",
+          "enum": ["deny", "enforce", "permissive"],
+          "default": "enforce",
+          "x-default-note": "permissive under the dev and test profiles.",
+          "x-secret": false,
+          "x-module": "openmed.service.egress"
+        },
+        "OPENMED_EGRESS_RULES": {
+          "description": "Inline egress rule document as JSON.",
+          "type": ["array", "object", "null"],
+          "default": null,
+          "x-env-format": "json",
+          "x-secret": false,
+          "x-module": "openmed.service.egress"
+        },
+        "OPENMED_EGRESS_RULES_FILE": {
+          "description": "File holding an egress rule document.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.egress"
+        },
+        "OPENMED_GROUNDING_CACHE_DIR": {
+          "description": "Terminology grounding vocabulary cache used by the service and MCP grounding tools.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-default-note": "unset uses OPENMED_CACHE_DIR/grounding, then ~/.cache/openmed/grounding.",
+          "x-secret": false,
+          "x-module": "openmed.service.app"
+        },
+        "OPENMED_ICD11_CACHE_DIR": {
+          "description": "Local ICD-11 API response cache directory.",
+          "type": "string",
+          "default": "~/.cache/openmed/icd11",
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.interop.icd11_api"
+        },
+        "OPENMED_ONCOTREE_PATH": {
+          "description": "Local OncoTree release JSON file supplied by the user.",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.clinical.oncotree"
+        },
+        "OPENMED_ONCOTREE_VERSION": {
+          "description": "Release version of the user-supplied OncoTree file, which does not carry one.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.clinical.oncotree"
+        },
+        "OPENMED_PRIVACY_PROXY_MAX_MESSAGES": {
+          "description": "Largest number of chat messages in one privacy-proxy request.",
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "maximum": 100000,
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_proxy.settings"
+        },
+        "OPENMED_PRIVACY_PROXY_MAX_REQUEST_BYTES": {
+          "description": "Largest privacy-proxy request body in bytes.",
+          "type": "integer",
+          "default": 16777216,
+          "minimum": 1,
+          "maximum": 268435456,
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_proxy.settings"
+        },
+        "OPENMED_PRIVACY_PROXY_MAX_STREAM_SECONDS": {
+          "description": "Longest privacy-proxy streaming response, in seconds.",
+          "type": "number",
+          "default": 300.0,
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_proxy.settings"
+        },
+        "OPENMED_PRIVACY_PROXY_MAX_TEXT_CHARS": {
+          "description": "Largest total message text in one privacy-proxy request, in characters.",
+          "type": "integer",
+          "default": 1000000,
+          "minimum": 1,
+          "maximum": 67108864,
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_proxy.settings"
+        },
+        "OPENMED_PRIVACY_PROXY_TRUSTED_HOSTS": {
+          "description": "Comma-separated allowed Host header values for the privacy proxy; the global '*' is rejected.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["localhost", "127.0.0.1", "[::1]"],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_proxy.settings"
+        },
+        "OPENMED_SIDECAR_HASH_SECRET": {
+          "description": "Secret that keys sidecar hashes; unset uses a random per-process secret.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.service.sidecar"
+        },
+        "OPENMED_SIDECAR_HASH_SECRET_FILE": {
+          "description": "File holding OPENMED_SIDECAR_HASH_SECRET, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_SIDECAR_HASH_SECRET",
+          "x-module": "openmed.service.sidecar"
+        },
+        "OPENMED_SIDECAR_MODEL": {
+          "description": "Model the de-identification sidecar loads.",
+          "type": "string",
+          "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+          "maxLength": 4096,
+          "x-secret": false,
+          "x-module": "openmed.service.sidecar"
+        },
+        "OPENMED_TERMINOLOGY_CACHE_DIR": {
+          "description": "Terminology snapshot cache directory.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-default-note": "unset uses OPENMED_CACHE_DIR/grounding/snapshots, then the XDG cache directory.",
+          "x-secret": false,
+          "x-module": "openmed.clinical.grounding.snapshot_cache"
+        },
+        "OPENMED_WEBHOOK_SIGNING_KEYRING_FILE": {
+          "description": "Webhook signing keyring file with rotating key generations.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.signing_keys"
+        },
+        "OPENMED_WEBHOOK_SIGNING_KEY_ID": {
+          "description": "Public identifier of the single webhook signing secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.service.signing_keys"
+        },
+        "OPENMED_WEBHOOK_SIGNING_SECRET": {
+          "description": "Webhook signing secret; set it, its file form, or a keyring file, never more than one.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.service.signing_keys"
+        },
+        "OPENMED_WEBHOOK_SIGNING_SECRET_FILE": {
+          "description": "File holding OPENMED_WEBHOOK_SIGNING_SECRET.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_WEBHOOK_SIGNING_SECRET",
+          "x-module": "openmed.service.signing_keys"
+        }
+      }
+    },
+    "runtime": {
+      "title": "Runtime",
+      "description": "Library runtime switches outside OpenMedConfig: caches, model loading and verification, telemetry and guards.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_CACHE_DIR": {
+          "description": "Root cache directory for grounding vocabularies, terminology snapshots and public evaluation datasets; not an OpenMedConfig override.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-default-note": "unset uses ~/.cache/openmed.",
+          "x-secret": false,
+          "x-module": "openmed.clinical.grounding.vocab"
+        },
+        "OPENMED_EVAL_CACHE_DIR": {
+          "description": "Evaluation report cache directory.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-default-note": "unset uses the XDG cache directory, then ~/.cache/openmed/eval.",
+          "x-secret": false,
+          "x-module": "openmed.eval.cache"
+        },
+        "OPENMED_INDIC_NER_MODEL": {
+          "description": "Model path or repository for Indic NER when no model is passed.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.core.pii_i18n"
+        },
+        "OPENMED_INJECTION_GUARD_MODE": {
+          "description": "Default prompt-injection guard mode: strict rejects flagged text, allow quarantines it.",
+          "type": "string",
+          "enum": ["allow", "strict"],
+          "default": "strict",
+          "x-secret": false,
+          "x-module": "openmed.agent.security.injection_guard"
+        },
+        "OPENMED_MAX_TEXT_BYTES": {
+          "description": "Largest UTF-8 text size in bytes accepted by the input gateway; invalid values fall back to the default.",
+          "type": "integer",
+          "default": 4000000,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.utils.gateway"
+        },
+        "OPENMED_MLX_COMPILE": {
+          "description": "Compile the MLX forward pass.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.mlx.inference"
+        },
+        "OPENMED_MLX_MMAP": {
+          "description": "Memory-map MLX weights; set 0, false, no or off for eager loading.",
+          "type": "boolean",
+          "default": true,
+          "x-secret": false,
+          "x-module": "openmed.mlx.models"
+        },
+        "OPENMED_MODEL_VERIFY_STRICT": {
+          "description": "Fail closed when a model has no registry integrity metadata.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.core.model_integrity"
+        },
+        "OPENMED_SECTION_MODEL": {
+          "description": "Learned clinical section classifier directory.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.clinical.sections.learned"
+        },
+        "OPENMED_SKIP_MODEL_VERIFY": {
+          "description": "Skip model integrity verification; deployment posture checks flag it.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.core.model_integrity"
+        },
+        "OPENMED_TELEMETRY_ENABLED": {
+          "description": "Opt in to core pipeline telemetry; it stays off unless enabled.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.core.telemetry"
+        },
+        "OPENMED_TRACE_DISCOVERY": {
+          "description": "Discover local trace stores automatically; 0, false, no, off or disabled turns it off.",
+          "type": "boolean",
+          "default": true,
+          "x-secret": false,
+          "x-module": "openmed.traces.discovery"
+        },
+        "OPENMED_TRACE_ROOTS": {
+          "description": "Extra trace stores as store_type=path entries separated by the platform path separator.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.traces.discovery"
+        },
+        "OPENMED_TRUSTED_REMOTE_CODE_MODELS": {
+          "description": "Comma-separated Hugging Face repositories added to the trust_remote_code allowlist.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.torch.privacy_filter"
+        }
+      }
+    },
+    "release": {
+      "title": "Release evidence",
+      "description": "Signing keys and thresholds for release, evaluation and audit evidence. Keys are secrets and declare no default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_ANNOTATION_KEY": {
+          "description": "HMAC key that hashes surfaces during annotation import.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.cli.annotation_interchange"
+        },
+        "OPENMED_AUDIT_KEY": {
+          "description": "HMAC key that verifies signed audit reports.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.cli.main"
+        },
+        "OPENMED_FEDERATED_EVAL_KEY": {
+          "description": "Key that signs federated leakage evaluation reports.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.harness"
+        },
+        "OPENMED_JOURNEY_RELEASE_KEY": {
+          "description": "HMAC key, at least 32 bytes, that signs Journey release packets.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.journey_release"
+        },
+        "OPENMED_KIT_RELEASE_KEY": {
+          "description": "HMAC key, at least 32 bytes, that signs kit release packets.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.kit_release"
+        },
+        "OPENMED_READINESS_KEY": {
+          "description": "Key that signs release-readiness reports; unset uses a local development key that is not secret.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.release_readiness"
+        },
+        "OPENMED_REDTEAM_MAX_BYPASS_RATE": {
+          "description": "Largest red-team bypass rate the gate accepts; unset applies no threshold.",
+          "type": ["number", "null"],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1,
+          "x-secret": false,
+          "x-module": "openmed.eval.redteam"
+        },
+        "OPENMED_RELATION_SCORECARD_KEY": {
+          "description": "Key that signs relation-extraction scorecards.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.harness"
+        },
+        "OPENMED_RELEASE_GATE_KEY": {
+          "description": "Key that signs release-gate reports; unset uses a local development key that is not secret.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.release_gates"
+        },
+        "OPENMED_SERVICE_RELEASE_KEY": {
+          "description": "HMAC key, at least 32 bytes, that signs service release packets.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.eval.service_release"
+        }
+      }
     }
+  },
+  "x-excluded-identifiers": {
+    "OPENMED_ADMISSION_REJECTED": "GraphQL error code returned to clients",
+    "OPENMED_ARX_UNAVAILABLE": "sentinel the ARX runner prints when ARX is missing",
+    "OPENMED_CANONICAL_HASH_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_CLINICAL_DISCLAIMER": "name of the exported clinical disclaimer constant, checked in __all__",
+    "OPENMED_CONFIDENCE_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_DEID": "DICOM implementation version name written to outputs",
+    "OPENMED_DEIDENTIFY": "default Snowflake UDF name",
+    "OPENMED_DEIDENTIFY_DESCRIPTOR": "name of an exported UDF descriptor constant",
+    "OPENMED_DERIVATION_HASH_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_DETECTOR_INPUT": "variable OpenMed exports to an external detector subprocess; OpenMed never reads it",
+    "OPENMED_DETECTOR_OUTPUT": "variable OpenMed exports to an external detector subprocess; OpenMed never reads it",
+    "OPENMED_DETECTOR_OUTPUT_DIR": "variable OpenMed exports to an external detector subprocess; OpenMed never reads it",
+    "OPENMED_EVIDENCE_ID_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_FACT_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_FACT_ID_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_FORBIDDEN": "GraphQL error code returned to clients",
+    "OPENMED_GRAPHQL_BATCH_UNSUPPORTED": "GraphQL error code returned to clients",
+    "OPENMED_GRAPHQL_LIMIT_EXCEEDED": "GraphQL error code returned to clients",
+    "OPENMED_GRAPHQL_TIMEOUT": "GraphQL error code returned to clients",
+    "OPENMED_HOSTILE_SENTINEL": "private fault-injection probe: the decoder isolation tests plant it to prove the sandbox strips the parent environment; not a setting",
+    "OPENMED_JOURNEY_EVENT_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_PROVENANCE_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_REASON_METADATA_KEY": "name of an exported gRPC metadata key constant",
+    "OPENMED_REQUEST_KEYS": "name of an exported request-key tuple constant",
+    "OPENMED_RESOLUTION_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_RESOLVER_ERROR": "GraphQL error code returned to clients",
+    "OPENMED_REVIEW_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_SDCMICRO_UNAVAILABLE": "sentinel the sdcMicro runner prints when the R package is missing",
+    "OPENMED_SNAPSHOT_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_SUBJECT_ID_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_SYNTH": "name of an exported synthetic-corpus constant",
+    "OPENMED_SYNTH1": "DICOM implementation version name of synthetic overlays",
+    "OPENMED_SYNTHETIC": "synthetic DICOM private creator and OMOP vocabulary id",
+    "OPENMED_SYNTHETIC_PERSON": "synthetic probe surface used by plugin conformance",
+    "OPENMED_SYNTH_DATASET_CARD": "name of an exported synthetic-corpus constant",
+    "OPENMED_SYNTH_DEFAULT_CORPUS_SIZE": "name of an exported synthetic-corpus constant",
+    "OPENMED_SYNTH_DEFAULT_SEED": "name of an exported synthetic-corpus constant",
+    "OPENMED_SYNTH_REFERENCE_MODEL": "name of an exported synthetic-corpus constant",
+    "OPENMED_SYSTEM_NAME": "name of an exported comparator system-name constant"
   }
 }
