@@ -3,6 +3,9 @@
 * ``check`` reads one JSON record, identifies its schema id and version,
   resolves a chain through the record migration registry, runs it in memory
   and prints the value-free migration report.
+* ``records --dry-run`` does the same for every ``.json`` and ``.jsonl``
+  record under a directory and prints aggregate counts per schema id, version
+  and outcome (see :mod:`openmed.cli.migrate_records`).
 
 Nothing is written: the input file is opened read-only and the migrated record
 is discarded. Output contains schema ids, versions, counts, digests and JSON
@@ -71,11 +74,26 @@ def add_migrate_command(subparsers: argparse._SubParsersAction) -> None:
     )
     check.set_defaults(handler=_handle_check)
 
+    from .migrate_records import add_records_arguments
+
+    records = commands.add_parser(
+        "records",
+        help="Dry-run migrations over a directory and print counts only.",
+    )
+    add_records_arguments(records)
+    records.set_defaults(handler=_handle_records)
+
 
 def _registry() -> MigratorRegistry:
     from openmed.core.record_migrations import default_registry
 
     return default_registry()
+
+
+def _handle_records(args: argparse.Namespace) -> int:
+    from .migrate_records import handle_records
+
+    return handle_records(args)
 
 
 def _handle_check(args: argparse.Namespace) -> int:
