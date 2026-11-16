@@ -86,8 +86,8 @@ class SettingDeclaration:
         bounds: Bound keywords such as ``minimum`` or ``enum``.
         env_format: How the environment string encodes the value (one of
             :data:`ENV_FORMATS`), or ``None`` for a plain scalar.
-        default_note: Free text describing a default that depends on other
-            settings or on the active profile.
+        default_note: Lower-case phrase that completes "Default: ..." for a
+            default that depends on other settings or on the active profile.
         config_key: ``OpenMedConfig`` field the setting maps onto, if any.
         secret_file_for: For a ``NAME_FILE`` companion, the secret setting
             whose value the file holds.
