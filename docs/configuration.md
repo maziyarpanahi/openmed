@@ -103,11 +103,17 @@ export OPENMED_TORCH_DEVICE=cuda:1
 named sections. The `core` section covers the variables above that map onto
 `OpenMedConfig` fields and references their type and bounds in
 `config.schema.json`; the `service` section covers every
-`OPENMED_SERVICE_*` variable the REST, gRPC and GraphQL service reads. Each
-declaration records the variable name, the JSON type of the parsed value, its
-default, its bounds, whether it holds a secret, and the owning module. Secret
-settings, such as `HF_TOKEN` or `OPENMED_SERVICE_AUTH_API_KEYS`, declare no
-default.
+`OPENMED_SERVICE_*` variable the REST, gRPC and GraphQL service reads. The
+`mcp`, `openhim`, `journey`, `eval_datasets`, `integrations`, `runtime` and
+`release` sections cover every other `OPENMED_*` variable the package reads.
+Each declaration records the variable name, the JSON type of the parsed value,
+its default, its bounds, whether it holds a secret, and the owning module.
+Secret settings, such as `HF_TOKEN` or `OPENMED_SERVICE_AUTH_API_KEYS`, declare
+no default. Evaluation dataset paths such as `OPENMED_I2B2_PATH` are marked
+user-supplied and have no default either: OpenMed never downloads or bundles
+restricted datasets. The schema's `x-excluded-identifiers` lists `OPENMED_*`
+names that only look like settings, such as FHIR system names and error codes,
+each with the reason.
 
 `openmed.core.settings_registry` returns these declarations without reading
 the environment, so its output is safe to render in documentation or audit
