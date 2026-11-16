@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject challengers that omit a critical recall measurement or a gate the
+  champion passed, preserving the missing-axis reason across signed comparison
+  record round trips (#4544).
 - Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
   `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
   links against it and no dependency ships it, so the tokenizer failed to load

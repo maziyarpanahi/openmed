@@ -283,6 +283,7 @@ class PromotionVerdict:
                 delta=float(item.get("delta", 0.0)),
                 outcome=str(item.get("outcome", TIE)),
                 tolerance=float(item.get("tolerance", 0.0)),
+                reason=item.get("reason"),
             )
             for item in data.get("ledger", [])
             if isinstance(item, Mapping)

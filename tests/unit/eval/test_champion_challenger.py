@@ -521,3 +521,23 @@ def test_challenger_missing_a_gate_the_champion_failed_does_not_block() -> None:
     verdict = compare_champion_challenger(champion, challenger)
 
     assert not any(e.axis == "gate.G3" for e in verdict.ledger)
+
+
+@pytest.mark.parametrize("missing_axis", ["recall", "gate"])
+def test_missing_axis_reason_survives_verified_record_roundtrip(missing_axis):
+    champion = _report(gate_results=(GateCheck("G3", True),))
+    challenger = _report(
+        per_label_recall={"SSN": 0.9999} if missing_axis == "recall" else None,
+        gate_results=(GateCheck("G3", True),) if missing_axis == "recall" else (),
+    )
+    verdict = compare_champion_challenger(champion, challenger)
+    restored = PromotionVerdict.from_dict(json.loads(verdict.to_json()))
+
+    assert restored.verify()
+    assert restored.to_json() == verdict.to_json()
+    assert any(entry.reason == "missing_in_challenger" for entry in restored.ledger)
+
+    tampered = verdict.to_dict()
+    entry = next(item for item in tampered["ledger"] if item.get("reason"))
+    entry["reason"] = "altered_reason"
+    assert not PromotionVerdict.from_dict(tampered).verify()
