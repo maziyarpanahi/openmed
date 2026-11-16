@@ -381,7 +381,7 @@ class _PIIExtractBatchJob:
 _SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 
 
-class ServiceTimeoutError(RuntimeError):
+class ServiceTimeoutError(RuntimeError, LegacyRootedError):
     """Raised when a request exceeds the configured service timeout."""
 
     def __init__(self, timeout_seconds: float):

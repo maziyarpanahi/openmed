@@ -44,6 +44,7 @@ from openmed.agent.permissions.revocation import (
 )
 from openmed.agent.workflows.recovery import EffectRecord, EffectState
 from openmed.agent.workflows.scheduler import CancellationSignal
+from openmed.core.errors import LegacyRootedError
 
 if TYPE_CHECKING:
     from .auth import AuthPrincipal
@@ -87,7 +88,7 @@ _ERROR_CODES: Final[frozenset[str]] = frozenset(
 )
 
 
-class ContinuationError(ValueError):
+class ContinuationError(ValueError, LegacyRootedError):
     """Fixed-code validation error that never echoes a rejected value.
 
     Args:
@@ -556,7 +557,7 @@ class ContinuationOutcome:
         }
 
 
-class ContinuationInterrupted(RuntimeError):
+class ContinuationInterrupted(RuntimeError, LegacyRootedError):
     """Raised when continued work must stop; carries only its outcome.
 
     Args:

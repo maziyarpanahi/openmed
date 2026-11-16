@@ -18,6 +18,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 from .correlation import ActionId, CorrelationIdError, RunId
 from .identifiers import (
     CapabilityId,
@@ -128,7 +130,7 @@ _IDENTIFIER_KINDS: Final[dict[AttributeKind, Any]] = {
 }
 
 
-class EventAttributeError(ValueError):
+class EventAttributeError(ValueError, LegacyRootedError):
     """Raised when event attributes fail closed validation.
 
     Args:

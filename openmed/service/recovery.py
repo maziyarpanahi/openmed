@@ -79,6 +79,7 @@ from openmed.core.aead_envelope import (
     EnvelopeVersionError,
 )
 from openmed.core.audit_chain import CHAIN_VERSION, AuditChain
+from openmed.core.errors import LegacyRootedError
 from openmed.core.key_provider import DataKey, EncryptionError, KeyProvider
 from openmed.core.registry_slots import REGISTRY_STATE_SCHEMA_VERSION
 from openmed.structured.store.migrations import LATEST_MIGRATION_VERSION, MIGRATIONS
@@ -317,7 +318,7 @@ class RecoveryKind(str, Enum):
     INCREMENTAL = "incremental"
 
 
-class RecoveryError(RuntimeError):
+class RecoveryError(RuntimeError, LegacyRootedError):
     """Value-free recovery failure carrying one controlled reason code.
 
     Attributes:

@@ -32,6 +32,7 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from openmed.core.errors import LegacyRootedError
 from openmed.guard.operational_limits import (
     JSON_STRUCTURE_EXCEEDED,
     JsonStructureLimitError,
@@ -189,7 +190,7 @@ def request_body_read_limits_from_env(
     )
 
 
-class RequestBodyTimeout(Exception):
+class RequestBodyTimeout(LegacyRootedError):
     """Raised when a request body misses its receive deadline.
 
     Attributes:

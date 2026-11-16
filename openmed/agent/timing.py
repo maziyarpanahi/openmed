@@ -8,11 +8,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _PATH_OR_URL_RE = re.compile(r"://|(^|[A-Za-z]):[\\/]|[\\/]|~")
 
 
-class TimingValidationError(ValueError):
+class TimingValidationError(ValueError, LegacyRootedError):
     """Raised when timing metadata fails closed validation."""
 
 

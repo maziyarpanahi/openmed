@@ -19,6 +19,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Pattern
 
+from openmed.core.errors import LegacyRootedError
+
 InjectionGuardMode = Literal["allow", "strict"]
 FindingSeverity = Literal["high", "critical"]
 
@@ -225,7 +227,7 @@ class GuardedInput:
         return [finding.to_dict() for finding in self.findings]
 
 
-class PromptInjectionDetected(ValueError):
+class PromptInjectionDetected(ValueError, LegacyRootedError):
     """Raised by strict mode before a flagged tool input reaches a handler."""
 
     def __init__(self, findings: Iterable[InjectionFinding]) -> None:

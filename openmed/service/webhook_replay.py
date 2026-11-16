@@ -37,6 +37,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, Union
 
+from openmed.core.errors import LegacyRootedError
+
 from ._state_files import atomic_write_private, exclusive_lock, read_bounded
 from .signing import (
     DEFAULT_MAX_SKEW_SECONDS,
@@ -146,7 +148,7 @@ _HTTP_STATUS = {
 }
 
 
-class ReplayLedgerError(RuntimeError):
+class ReplayLedgerError(RuntimeError, LegacyRootedError):
     """Value-free replay-ledger failure.
 
     Attributes:

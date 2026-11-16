@@ -36,6 +36,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
+from openmed.core.errors import LegacyRootedError
 from openmed.core.surrogate_vault import SurrogateSource, SurrogateVault
 from openmed.risk.kanon import enforce_kanon, kanon_report
 
@@ -62,11 +63,11 @@ _LANG = "en"
 _SUBJECT_FIELD = "__openmed_relational_subject__"
 
 
-class RelationalSchemaError(ValueError):
+class RelationalSchemaError(ValueError, LegacyRootedError):
     """The relational schema is inconsistent with the supplied tables."""
 
 
-class DanglingForeignKeyError(ValueError):
+class DanglingForeignKeyError(ValueError, LegacyRootedError):
     """A foreign key no longer joins after transformation.
 
     Raised instead of emitting a dataset in which any non-null child key has no
@@ -75,7 +76,7 @@ class DanglingForeignKeyError(ValueError):
     """
 
 
-class RelationalPrivacyError(ValueError):
+class RelationalPrivacyError(ValueError, LegacyRootedError):
     """A declared joined-view privacy policy cannot be satisfied safely."""
 
 

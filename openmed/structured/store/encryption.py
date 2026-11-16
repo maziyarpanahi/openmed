@@ -37,6 +37,7 @@ from openmed.core.aead_envelope import (
     is_text_envelope,
     read_envelope_header,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.key_provider import (
     DataKey,
     EncryptionError,
@@ -103,7 +104,7 @@ register_error_messages(
 )
 
 
-class JourneyEncryptionError(EncryptionError):
+class JourneyEncryptionError(EncryptionError, LegacyRootedError):
     """Value-free configuration, state, or payload encryption failure."""
 
     default_code = "journey_encryption_failed"

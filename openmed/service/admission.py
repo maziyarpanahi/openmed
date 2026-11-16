@@ -38,6 +38,8 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+from openmed.core.errors import LegacyRootedError
+
 if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
@@ -221,7 +223,7 @@ class AdmissionStats:
     active_principals: int
 
 
-class AdmissionRejected(RuntimeError):
+class AdmissionRejected(RuntimeError, LegacyRootedError):
     """A request could not be admitted within its bounds.
 
     Attributes:
@@ -276,7 +278,7 @@ class AdmissionSaturated(AdmissionRejected):
     grpc_status = "UNAVAILABLE"
 
 
-class AdmissionCancelled(RuntimeError):
+class AdmissionCancelled(RuntimeError, LegacyRootedError):
     """A blocking acquisition was abandoned because its caller cancelled."""
 
 

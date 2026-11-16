@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .artifact_reference import (
     ArtifactReference,
     ArtifactReferenceError,
@@ -65,7 +67,7 @@ class RequestedDecision(str, Enum):
     DECIDE_NEXT_STEP = "decide_next_step"
 
 
-class ReviewerHandoffError(ValueError):
+class ReviewerHandoffError(ValueError, LegacyRootedError):
     """Raised when a reviewer handoff packet fails closed validation.
 
     Args:

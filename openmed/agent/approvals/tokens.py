@@ -19,6 +19,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final, Protocol, TypeVar, cast
 
+from openmed.core.errors import LegacyRootedError
+
 APPROVAL_TOKEN_SCHEMA_VERSION: Final = "openmed.agent.approval_token.v2"
 LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION: Final = "openmed.agent.approval_token.v1"
 DEFAULT_APPROVAL_LIFETIME_SECONDS: Final = 900
@@ -56,7 +58,7 @@ _T = TypeVar("_T")
 _NonceSource = Callable[[int], bytes]
 
 
-class ApprovalTokenError(ValueError):
+class ApprovalTokenError(ValueError, LegacyRootedError):
     """Base class for value-free approval-token failures.
 
     Args:

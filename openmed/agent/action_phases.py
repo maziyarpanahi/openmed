@@ -6,6 +6,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Final, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 
 class ActionPhase(str, Enum):
     """Closed vocabulary for an action's execution lifecycle."""
@@ -53,7 +55,7 @@ ACTION_PHASE_TRANSITIONS: Final[Mapping[ActionPhase, Mapping[ActionPhase, bool]]
 )
 
 
-class ActionPhaseError(ValueError):
+class ActionPhaseError(ValueError, LegacyRootedError):
     """Raised when phase validation fails closed.
 
     Args:

@@ -47,6 +47,7 @@ from enum import Enum
 from typing import Any, Final
 from urllib.parse import urljoin, urlsplit
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import is_local_only
 from openmed.mcp.upstream_endpoint_policy import (
     AddressResolver,
@@ -216,7 +217,9 @@ class DecisionServerConflictError(DecisionServerError, DecisionConflictError):
     default_code = "decision_server_model_mismatch"
 
 
-class DecisionServerTimeoutError(DecisionServerError, TimeoutError):
+class DecisionServerTimeoutError(
+    DecisionServerError, TimeoutError, OSError, LegacyRootedError
+):
     """Raised when the server does not answer within the request timeout."""
 
     default_code = "backend_timeout"

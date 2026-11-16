@@ -15,6 +15,7 @@ from typing import Any
 from openmed.clinical.lab_values import derive_abnormal_flag
 from openmed.clinical.units import normalize_to, parse_measurement
 from openmed.clinical.vital_signs import structure_vital_sign
+from openmed.core.errors import LegacyRootedError
 from openmed.core.quality_gates import validate_entity_spans_strict
 
 PROFILE_SCHEMA_VERSION = "openmed.quality.profile.v1"
@@ -224,7 +225,7 @@ class _AthenaLookup:
         )
 
 
-class QualityGateError(ValueError):
+class QualityGateError(ValueError, LegacyRootedError):
     """Raised when an ETL quality floor rejects a batch."""
 
     def __init__(self, report: "QualityProfileReport") -> None:

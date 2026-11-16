@@ -24,6 +24,7 @@ from openmed.agent.identifiers import (
     GovernanceIdError,
     PolicyId,
 )
+from openmed.core.errors import LegacyRootedError
 
 ADVERSARIAL_SUITE_SCHEMA_VERSION: Final = "openmed.agent.adversarial_suite.v1"
 ADVERSARIAL_CAPABILITY: Final = (
@@ -89,7 +90,7 @@ class BoundaryDecision(str, Enum):
     ERROR = "error"
 
 
-class AdversarialSuiteValidationError(ValueError):
+class AdversarialSuiteValidationError(ValueError, LegacyRootedError):
     """Raised when suite input violates the closed fixture contract."""
 
     def __init__(self, code: str, field_name: str) -> None:
@@ -338,7 +339,7 @@ class AdversarialSuiteReport:
         )
 
 
-class AdversarialSuiteFailure(AssertionError):
+class AdversarialSuiteFailure(AssertionError, LegacyRootedError):
     """Raised when a suite report contains any failing case."""
 
     def __init__(self, report: AdversarialSuiteReport) -> None:

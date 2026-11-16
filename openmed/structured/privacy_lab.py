@@ -19,6 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 from openmed.risk.aggregate_dp import AggregateDPBudgetLedger
 from openmed.risk.membership import (
     MembershipSelfTestError,
@@ -55,7 +56,7 @@ __all__ = [
 ]
 
 
-class StructuredPrivacyLabError(ValueError):
+class StructuredPrivacyLabError(ValueError, LegacyRootedError):
     """Raised when a structured privacy lab cannot run safely."""
 
 

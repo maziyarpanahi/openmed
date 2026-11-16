@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 
 @dataclass(frozen=True)
 class AdmissionSnapshot:
@@ -17,7 +19,7 @@ class AdmissionSnapshot:
     shedding: bool
 
 
-class BackpressureError(RuntimeError):
+class BackpressureError(RuntimeError, LegacyRootedError):
     """Raised when the inference admission queue cannot accept more work."""
 
     def __init__(

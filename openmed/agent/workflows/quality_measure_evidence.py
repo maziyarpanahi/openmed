@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Final, cast
 
 from openmed.agent.outcomes import _bounded_governance_json
+from openmed.core.errors import LegacyRootedError
 
 QUALITY_MEASURE_EVIDENCE_SCHEMA: Final = (
     "openmed.agent.workflows.quality_measure_evidence.v1"
@@ -55,7 +56,7 @@ _PACKET_FIELDS: Final = frozenset(
 )
 
 
-class QualityMeasureEvidenceError(ValueError):
+class QualityMeasureEvidenceError(ValueError, LegacyRootedError):
     """A value-free packet validation or verification error."""
 
     def __init__(self, code: str, field_name: str | None = None) -> None:

@@ -46,6 +46,8 @@ from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.verification import Store
 
+from openmed.core.errors import LegacyRootedError
+
 StrPath = Union[str, "os.PathLike[str]"]
 ActivationHook = Callable[["TLSActivationMaterial"], Any]
 Clock = Callable[[], datetime]
@@ -143,7 +145,7 @@ _GENERATION_PREFIX = "tlsgen-"
 logger = logging.getLogger(__name__)
 
 
-class TLSCredentialError(ValueError):
+class TLSCredentialError(ValueError, LegacyRootedError):
     """Value-free refusal of TLS credential material.
 
     Attributes:

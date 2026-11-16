@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 from .outcomes import OutcomeClass, WorkflowOutcome
 
 RUN_SUMMARY_SCHEMA_VERSION = "openmed.agent.run_summary.v1"
@@ -41,7 +43,7 @@ _MAX_EVENT_DIGESTS = 128
 _MAX_SUMMARY_DIGESTS = 4_096
 
 
-class RunSummaryError(ValueError):
+class RunSummaryError(ValueError, LegacyRootedError):
     """Base error for invalid run-summary input."""
 
 

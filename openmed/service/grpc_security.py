@@ -37,6 +37,7 @@ from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 
 from openmed.core.config import PROFILE_ENV_VAR
+from openmed.core.errors import LegacyRootedError
 
 from .tls_reload import (
     DEFAULT_MIN_REMAINING_VALIDITY_SECONDS,
@@ -119,7 +120,7 @@ _DEFAULT_PROFILE = "prod"
 logger = logging.getLogger(__name__)
 
 
-class GrpcStartupError(RuntimeError):
+class GrpcStartupError(RuntimeError, LegacyRootedError):
     """Value-free refusal to start or bind a gRPC listener.
 
     Attributes:

@@ -25,6 +25,7 @@ from openmed.agent.workflows.recovery import (
     EffectState,
     derive_idempotency_key,
 )
+from openmed.core.errors import LegacyRootedError
 
 if TYPE_CHECKING:
     from .auth import AuthPrincipal
@@ -67,7 +68,7 @@ WORKFLOW_ERROR_STATUSES = MappingProxyType(
 )
 
 
-class WorkflowServiceError(ValueError):
+class WorkflowServiceError(ValueError, LegacyRootedError):
     """Closed HTTP diagnostic that never retains submitted values.
 
     Args:

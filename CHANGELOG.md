@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
   and returns `Cache-Control: no-store`, `Pragma: no-cache` and
   `Referrer-Policy: no-referrer` on every `/graphql` response (#3544).
+- Root every public `openmed.service`, `openmed.structured` and `openmed.agent` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling, and REST, MCP and agent error envelopes are unchanged, and each class gains a stable `code` (#5397).
 
 ### Fixed
 
