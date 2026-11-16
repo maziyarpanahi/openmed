@@ -193,7 +193,10 @@ a separate, explicit change.
 path component starting with `_`), collects the exception classes they expose
 under public names (warning categories excluded), and reports each by its
 qualified name only, `module:QualName`. Modules that cannot be imported because
-an optional dependency is missing are listed as skipped.
+an optional dependency is missing are listed as skipped. The package-wide scan
+is a `slow` test (pushes to `master` and `full-ci` pull requests); run
+`python scripts/release/check_error_roots.py` locally before opening a pull
+request that adds or moves an exception class.
 
 `tests/fixtures/error_roots/unrooted_allowlist.txt` names the exceptions that
 are not rooted yet. It only shrinks:
