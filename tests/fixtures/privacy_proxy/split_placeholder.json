@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "chunks": [
+    {"choices": [{"delta": {"content": "Contact <<OPENMED_"}}]},
+    {"choices": [{"delta": {"content": "PHI_NAME_A1B2C3D4_"}}]},
+    {"choices": [{"delta": {"content": "000001>>."}}]}
+  ]
+}

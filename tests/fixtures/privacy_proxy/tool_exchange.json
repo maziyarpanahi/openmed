@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "request": {
+    "model": "local-fixture",
+    "messages": [
+      {"role": "user", "content": "Look up Avery Example."},
+      {"role": "assistant", "content": null, "tool_calls": [
+        {"id": "call_synthetic_1", "type": "function", "function": {
+          "name": "lookup_contact", "arguments": "{\"name\":\"Avery Example\"}"
+        }}
+      ]},
+      {"role": "tool", "tool_call_id": "call_synthetic_1", "content": "Synthetic contact: 555-0100"}
+    ]
+  }
+}
