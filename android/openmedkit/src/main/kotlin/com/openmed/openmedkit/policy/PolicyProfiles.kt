@@ -1,5 +1,7 @@
 package com.openmed.openmedkit.policy
 
+import com.openmed.openmedkit.OpenMedCodedError
+import com.openmed.openmedkit.OpenMedErrorCode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -54,7 +56,20 @@ enum class PolicyAction(val wireName: String) {
 class PolicyProfileException(
     val code: String,
     val fieldPath: String = "$",
-) : IllegalArgumentException("$code at $fieldPath")
+) : IllegalArgumentException("$code at $fieldPath"), OpenMedCodedError {
+    /**
+     * `input_error` for invalid detections, `configuration_error` for an invalid
+     * surrogate key, `capability_error` for a missing kit capability, and
+     * `policy_error` for every other profile, taxonomy or override problem.
+     */
+    override val errorCode: OpenMedErrorCode
+        get() = when {
+            code.startsWith("detection_") -> OpenMedErrorCode.INPUT_ERROR
+            code == "surrogate_key_invalid" -> OpenMedErrorCode.CONFIGURATION_ERROR
+            code == "capability_missing" -> OpenMedErrorCode.CAPABILITY_ERROR
+            else -> OpenMedErrorCode.POLICY_ERROR
+        }
+}
 
 /** Threshold entry of a portable policy profile, in parts per million. */
 data class PolicyThreshold(
