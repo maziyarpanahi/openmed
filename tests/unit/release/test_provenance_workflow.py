@@ -108,6 +108,20 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
         encoding="utf-8"
     )
 
+    # The REST client publishes only after the same provenance verification,
+    # and its own verification never gates the PyPI upload.
+    rest_client_publish = jobs["rest-client-publish"]
+    assert rest_client_publish["needs"] == [
+        "provenance",
+        "npm-verify",
+        "rest-client-verify",
+    ]
+    assert rest_client_publish["permissions"]["id-token"] == "write"
+    assert "rest-client-verify" not in publish["needs"]
+    assert "npm publish --ignore-scripts --access public --provenance" in str(
+        rest_client_publish
+    )
+
 
 def test_publish_workflow_never_gates_pypi_upload_on_evidence():
     workflow = _load_workflow(PUBLISH_WORKFLOW)
@@ -118,6 +132,7 @@ def test_publish_workflow_never_gates_pypi_upload_on_evidence():
     # availability, so no registry upload may wait on the evidence job.
     assert "evidence" not in jobs["publish"]["needs"]
     assert "evidence" not in jobs["npm-publish"]["needs"]
+    assert "evidence" not in jobs["rest-client-publish"]["needs"]
 
     # The evidence job runs strictly after the PyPI upload it collects evidence for.
     assert evidence["needs"] == ["provenance", "publish"]
