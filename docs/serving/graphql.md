@@ -10,19 +10,22 @@ pip install "openmed[service]"
 python -m openmed.service.logging --host 127.0.0.1 --port 8000
 ```
 
-The schema has four root queries:
+The schema has five root queries:
 
 - `analyze` runs clinical entity analysis.
 - `deidentify` returns redacted text, entities, canonical spans, the selected
   policy profile, and aggregate risk facets.
 - `entityTypes` lists canonical labels and their policy categories without
   loading a model.
+- `capabilities` returns the value-free
+  [capability descriptor](../api/capabilities.md) without loading a model.
 - `journeyResources` provides policy-filtered Journey metadata.
 
 There are no mutations or subscriptions. When REST authentication is enabled,
 GraphQL uses the same principal and authorizes the entire document before
 running any resolver: `analyze` requires `analyze:write`, `deidentify` requires
-`pii:write`, and `journeyResources` requires `journey:read`. `entityTypes` has
+`pii:write`, `journeyResources` requires `journey:read`, and `capabilities`
+requires `models:read`, like REST `GET /v1/capabilities`. `entityTypes` has
 no additional field scope. Aliases, fragment spreads, and mixed-field requests
 cannot bypass this check. A denied document returns `data: null` and the
 value-free `OPENMED_FORBIDDEN` extension code, without partial results.
@@ -74,6 +77,28 @@ query Deidentify($input: DeidentifyInput!) {
       leakageRate
       reidentificationRate
       minimumK
+    }
+  }
+}
+```
+
+A client can read the server's capabilities before choosing an operation. The
+fields match the descriptor's JSON fields in camelCase, and `digest` equals the
+digest that REST and `openmed.core.capabilities.capability_descriptor()` report
+for the same runtime:
+
+```graphql
+query Capabilities {
+  capabilities {
+    digest
+    servedModels
+    surfaces {
+      name
+      available
+    }
+    schemaVersions {
+      name
+      version
     }
   }
 }
