@@ -599,6 +599,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Published JSON Schemas: api/schemas.md
       - Service Protocol Parity: api/protocol-parity.md
       - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
