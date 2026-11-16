@@ -1,12 +1,14 @@
 package com.openmed.openmedkit.intake
 
 import com.openmed.openmedkit.UnicodeOffsetContract
+import com.openmed.openmedkit.parity.ContractGateRule
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -19,6 +21,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [26])
 class DocumentEvidenceParityTest {
+    @get:Rule
+    val contractGate = ContractGateRule("document_intake_v1")
+
     private val corpus: JSONObject = loadFixture()
 
     @Test
@@ -196,12 +201,7 @@ class DocumentEvidenceParityTest {
     private fun bits(box: DocumentBox?): List<String> =
         requireNotNull(box).let { listOf(it.left, it.top, it.right, it.bottom).map(::bits) }
 
-    private fun loadFixture(): JSONObject {
-        val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream("document_intake_v1.json")) {
-            "shared document_intake_v1.json was not synced into Android test resources"
-        }
-        return stream.bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }
-    }
+    private fun loadFixture(): JSONObject = JSONObject(contractGate.fixtureText())
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map(::getJSONObject)
 

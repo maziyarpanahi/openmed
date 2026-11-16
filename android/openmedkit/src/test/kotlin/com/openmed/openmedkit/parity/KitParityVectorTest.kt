@@ -13,6 +13,7 @@ import com.openmed.openmedkit.policy.PolicyProfiles
 import com.openmed.openmedkit.toKitParityResult
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -37,6 +38,9 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class KitParityVectorTest {
+    @get:Rule
+    val contractGate = ContractGateRule("kit_parity_vectors")
+
     @Test
     fun vectorsDigestAndProfileMatchKotlinConstants() {
         val manifest = readJson(MANIFEST_FILE)
@@ -343,6 +347,9 @@ class KitParityVectorTest {
     private fun readJson(name: String): JSONObject = JSONObject(String(readBytes(name), Charsets.UTF_8))
 
     private fun readBytes(name: String): ByteArray {
+        if (name == VECTORS_FILE) {
+            return contractGate.fixtureBytes()
+        }
         val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream(name)) {
             "shared parity fixture $name was not registered as an Android test resource"
         }

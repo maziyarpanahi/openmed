@@ -10,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.BeforeClass
+import org.junit.Rule
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
@@ -23,6 +24,9 @@ import java.security.MessageDigest
  * reason codes only.
  */
 class TokenizerConformanceTest {
+    @get:Rule
+    val contractGate = ContractGateRule("tokenizer_conformance_v1")
+
     @Test
     fun conformanceAssetsMatchVectorsAndManifestDigests() {
         val vectors = readJson(VECTORS)
@@ -329,8 +333,11 @@ class TokenizerConformanceTest {
         return directory
     }
 
-    private fun readJson(name: String): JSONObject =
+    private fun readJson(name: String): JSONObject = if (name == VECTORS) {
+        JSONObject(contractGate.fixtureText())
+    } else {
         JSONObject(String(Files.readAllBytes(fixtureDirectory().resolve(name)), Charsets.UTF_8))
+    }
 
     private fun sha256(data: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
