@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Port patient-keyed date-shift offsets to the Android OpenMedKit: `DateShift.stableOffset`, `stableOffsetFromSeed` (any-size seeds) and ISO `shift` match Python `openmed.core.date_shift` on every vector in `date_shift_v1.json`, with JDK crypto only and value-free errors (#5416).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
