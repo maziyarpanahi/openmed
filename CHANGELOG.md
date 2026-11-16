@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Admit `openmed.multimodal.apple.v1` evidence packets in the `openmed` web package from the `openmed/multimodal` subpath: strict canonical parsing, the 64 KiB limit, WebCrypto SHA-256 evidence and clock-result digests, the shared refusal codes and typed, frozen asset, visual, transcript, provider and clock projections that keep values above 2^53 as `bigint`; validated against every case of the shared `multimodal_contract_v1.json` fixture (#5370).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
