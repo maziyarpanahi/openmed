@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
@@ -14,6 +15,7 @@ from strawberry.fastapi import BaseContext
 from strawberry.scalars import JSON
 from strawberry.types import Info
 
+from openmed.core.capabilities import capability_descriptor
 from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
@@ -48,6 +50,8 @@ GRAPHQL_FIELD_SCOPES = {
     "deidentify": ("pii:write",),
     "journeyResources": ("journey:read",),
     "entityTypes": (),
+    # Same read scope as REST GET /v1/capabilities and GET /models/loaded.
+    "capabilities": ("models:read",),
 }
 # Root fields that start model or heavy work, mirroring the REST route
 # policies of ``/analyze``, ``/pii/deidentify`` and ``/v1/journey/resources``.
@@ -566,6 +570,81 @@ class EntityType:
 
 
 @strawberry.type
+class CapabilityBackend:
+    """Whether one optional backend is installed."""
+
+    name: str
+    extra: str
+    available: bool
+
+
+@strawberry.type
+class CapabilitySurface:
+    """Whether the packages one OpenMed surface needs are installed."""
+
+    name: str
+    available: bool
+
+
+@strawberry.type
+class CapabilitySchemaVersion:
+    """The version of one canonical record schema."""
+
+    name: str
+    version: int
+
+
+@strawberry.type
+class Capabilities:
+    """The canonical, value-free capability descriptor of this server.
+
+    Field values come unchanged from the Python capability descriptor, so
+    ``digest`` equals the digest REST and the Python API report for the same
+    runtime. It never carries hostnames, paths or environment values.
+    """
+
+    schema: str
+    schema_version: int
+    backends: list[CapabilityBackend]
+    surfaces: list[CapabilitySurface]
+    served_models: list[str]
+    schema_versions: list[CapabilitySchemaVersion]
+    policy_profiles: list[str]
+    digest: str
+
+    @classmethod
+    def from_descriptor(cls, descriptor: Mapping[str, Any]) -> Capabilities:
+        """Project a capability descriptor onto the typed GraphQL object."""
+        return cls(
+            schema=str(descriptor["schema"]),
+            schema_version=int(descriptor["schema_version"]),
+            backends=[
+                CapabilityBackend(
+                    name=str(item["name"]),
+                    extra=str(item["extra"]),
+                    available=bool(item["available"]),
+                )
+                for item in descriptor["backends"]
+            ],
+            surfaces=[
+                CapabilitySurface(
+                    name=str(item["name"]), available=bool(item["available"])
+                )
+                for item in descriptor["surfaces"]
+            ],
+            served_models=[str(item) for item in descriptor["served_models"]],
+            schema_versions=[
+                CapabilitySchemaVersion(
+                    name=str(item["name"]), version=int(item["version"])
+                )
+                for item in descriptor["schema_versions"]
+            ],
+            policy_profiles=[str(item) for item in descriptor["policy_profiles"]],
+            digest=str(descriptor["digest"]),
+        )
+
+
+@strawberry.type
 class AnalyzePayload:
     """Typed result returned by the ``analyze`` query."""
 
@@ -700,6 +779,23 @@ class Query:
             EntityType(label=label, policy_label=policy_label_for(label))
             for label in sorted(CANONICAL_LABELS)
         ]
+
+    @strawberry.field
+    async def capabilities(
+        self, info: Info[OpenMedGraphQLContext, None]
+    ) -> Capabilities:
+        """Return the capability descriptor without loading a model."""
+        try:
+            descriptor = await asyncio.to_thread(
+                capability_descriptor,
+                served_models=info.context.runtime.served_model_ids(),
+            )
+            return Capabilities.from_descriptor(descriptor)
+        except Exception:
+            raise GraphQLError(
+                SAFE_RESOLVER_ERROR,
+                extensions={"code": "OPENMED_RESOLVER_ERROR"},
+            ) from None
 
     @strawberry.field
     async def journey_resources(

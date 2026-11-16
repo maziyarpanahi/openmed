@@ -319,6 +319,7 @@ def test_entity_types_and_introspection_are_available(client: TestClient) -> Non
     }
     assert field_names == {
         "analyze",
+        "capabilities",
         "deidentify",
         "entityTypes",
         "journeyResources",
@@ -490,3 +491,159 @@ def test_graphql_ide_is_limited_to_the_development_profile() -> None:
     assert graphql_ide_for_profile("dev") == "graphiql"
     assert graphql_ide_for_profile("prod") is None
     assert graphql_ide_for_profile("test") is None
+
+
+CAPABILITIES_QUERY = """
+query {
+  capabilities {
+    schema
+    schemaVersion
+    backends { name extra available }
+    surfaces { name available }
+    servedModels
+    schemaVersions { name version }
+    policyProfiles
+    digest
+  }
+}
+"""
+
+
+def _graphql_descriptor(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map the camelCase GraphQL projection back to descriptor field names."""
+    return {
+        "schema": payload["schema"],
+        "schema_version": payload["schemaVersion"],
+        "backends": payload["backends"],
+        "surfaces": payload["surfaces"],
+        "served_models": payload["servedModels"],
+        "schema_versions": payload["schemaVersions"],
+        "policy_profiles": payload["policyProfiles"],
+        "digest": payload["digest"],
+    }
+
+
+def test_capabilities_query_returns_the_python_descriptor_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openmed.core.capabilities import (
+        capability_descriptor,
+        capability_descriptor_digest,
+        validate_capability_descriptor,
+    )
+
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_SERVED_MODELS", "synthetic-org/synthetic-model,synthetic-a"
+    )
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post("/graphql", json={"query": CAPABILITIES_QUERY})
+        rest = client.get("/v1/capabilities").json()
+        served = app.state.runtime.served_model_ids()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "errors" not in payload
+    projected = _graphql_descriptor(payload["data"]["capabilities"])
+    expected = capability_descriptor(served_models=served)
+    assert projected == expected
+    assert projected["digest"] == expected["digest"] == rest["digest"]
+    assert capability_descriptor_digest(projected) == projected["digest"]
+    validate_capability_descriptor(projected)
+    assert projected["served_models"] == [
+        "synthetic-a",
+        "synthetic-org/synthetic-model",
+    ]
+
+
+def test_capabilities_field_scope_rejects_callers_without_models_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    from openmed.service.auth import hash_api_key
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [
+                {
+                    "id": "reader",
+                    "key_hash": hash_api_key("synthetic-reader"),
+                    "scopes": ["models:read"],
+                },
+                {
+                    "id": "wildcard",
+                    "key_hash": hash_api_key("synthetic-wildcard"),
+                    "scopes": ["models:*"],
+                },
+                {
+                    "id": "other",
+                    "key_hash": hash_api_key("synthetic-other"),
+                    "scopes": ["pii:write", "journey:read"],
+                },
+            ]
+        ),
+    )
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    query = {"query": "{ capabilities { digest } }"}
+    mixed = {
+        "query": (
+            '{ capabilities { digest } analyze(input: {text: "SYNTHETIC_MIXED"})'
+            " { text } }"
+        )
+    }
+    callers = {
+        "reader": {"X-API-Key": "synthetic-reader"},
+        "wildcard": {"X-API-Key": "synthetic-wildcard"},
+        "other": {"X-API-Key": "synthetic-other"},
+        "anonymous": {},
+    }
+
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        outcomes = {
+            name: client.post("/graphql", json=query, headers=headers)
+            for name, headers in callers.items()
+        }
+        mixed_response = client.post("/graphql", json=mixed, headers=callers["reader"])
+        rest_other = client.get("/v1/capabilities", headers=callers["other"])
+
+    for name in ("reader", "wildcard"):
+        digest = outcomes[name].json()["data"]["capabilities"]["digest"]
+        assert digest.startswith("sha256:"), name
+    denied = outcomes["other"].json()
+    assert denied["data"] is None
+    assert [error["extensions"]["code"] for error in denied["errors"]] == [
+        "OPENMED_FORBIDDEN"
+    ]
+    assert rest_other.status_code == 403
+    assert outcomes["anonymous"].status_code == 401
+    mixed_payload = mixed_response.json()
+    assert mixed_payload["data"] is None
+    assert any(
+        error["extensions"]["code"] == "OPENMED_FORBIDDEN"
+        for error in mixed_payload["errors"]
+    )
+    assert "SYNTHETIC_MIXED" not in mixed_response.text
+
+
+def test_capabilities_query_carries_no_paths_or_environment_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    sentinel = "synthetic-graphql-capability-sentinel"
+    model_dir = tmp_path / sentinel
+    model_dir.mkdir()
+    monkeypatch.setenv("HF_TOKEN", sentinel)
+    monkeypatch.setenv("OPENMED_CHINESE_USER_DICT", str(model_dir / "dict.txt"))
+    monkeypatch.setenv("OPENMED_CONFIG", str(model_dir / "config.toml"))
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post("/graphql", json={"query": CAPABILITIES_QUERY})
+
+    assert response.status_code == 200
+    assert "errors" not in response.json()
+    assert sentinel not in response.text
+    assert str(tmp_path) not in response.text
