@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Register the clinical review packet, review packet mapping, decision result and DP budget snapshot migrators in the stored-record migration registry, with a synthetic before/after fixture pair for every edge and the budget normalisation marked lossy (#5393).
 - Add `openmed.core.record_migrations`, a registry of stored-record migrators keyed by schema id and version that resolves unique chains, refuses duplicate, cyclic and ambiguous edges, and reports only the field paths a migration adds, moves, changes or drops (#5362).
 
 ## [4.0.0] - 2026-11-25
