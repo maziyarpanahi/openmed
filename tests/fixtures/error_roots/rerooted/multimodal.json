@@ -1,0 +1,3320 @@
+{
+  "classes": {
+    "openmed.multimodal.abstention:AbstentionValidationError": {
+      "code": "abstention_validation_error",
+      "mro": [
+        "openmed.multimodal.abstention:AbstentionValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.abstention:AbstentionValidationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.abstention:AbstentionValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.abstention:AbstentionValidationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.aecg:AecgError": {
+      "code": "aecg_error",
+      "mro": [
+        "openmed.multimodal.aecg:AecgError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.aecg:AecgError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.ambient_corrections:ReviewConflict": {
+      "code": "review_conflict",
+      "mro": [
+        "openmed.multimodal.ambient_corrections:ReviewConflict",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.apple_contract:AppleContractError": {
+      "code": "apple_contract_error",
+      "mro": [
+        "openmed.multimodal.apple_contract:AppleContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('invalid_multimodal_contract',)",
+          "call": 0,
+          "pickle_raises": "AttributeError",
+          "str": "invalid_multimodal_contract"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.arbitration.ocr_vlm_router:ArbitrationError": {
+      "code": "arbitration_error",
+      "mro": [
+        "openmed.multimodal.arbitration.ocr_vlm_router:ArbitrationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.arbitration.ocr_vlm_router:ArbitrationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.arbitration.ocr_vlm_router:ArbitrationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.arbitration.ocr_vlm_router:ArbitrationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.asr_audio_profile:AsrAudioProfileError": {
+      "code": "asr_audio_profile_error",
+      "mro": [
+        "openmed.multimodal.asr_audio_profile:AsrAudioProfileError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.asr_audio_profile:AsrAudioProfileError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.asr_hallucination:AsrHallucinationError": {
+      "code": "asr_hallucination_error",
+      "mro": [
+        "openmed.multimodal.asr_hallucination:AsrHallucinationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.asr_hallucination:AsrHallucinationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.asset_batch:AssetBatchError": {
+      "code": "asset_batch_error",
+      "mro": [
+        "openmed.multimodal.asset_batch:AssetBatchError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.asset_batch:AssetBatchError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.asset_batch:AssetBatchError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.asset_batch:AssetBatchError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.asset_limits:AssetLimitError": {
+      "code": "asset_limit_error",
+      "mro": [
+        "openmed.multimodal.asset_limits:AssetLimitError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.asset_limits:AssetLimitError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.asset_limits:AssetLimitError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.asset_limits:AssetLimitError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.asset_manifest:AssetManifestError": {
+      "code": "asset_manifest_error",
+      "mro": [
+        "openmed.multimodal.asset_manifest:AssetManifestError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.asset_manifest:AssetManifestError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.asset_manifest:AssetManifestError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.asset_manifest:AssetManifestError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.audio_format_summary:AudioFormatSummaryError": {
+      "code": "audio_format_summary_error",
+      "mro": [
+        "openmed.multimodal.audio_format_summary:AudioFormatSummaryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.audio_format_summary:AudioFormatSummaryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.audio_resample_plan:AudioResamplePlanError": {
+      "code": "audio_resample_plan_error",
+      "mro": [
+        "openmed.multimodal.audio_resample_plan:AudioResamplePlanError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.audio_resample_plan:AudioResamplePlanError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.audio_sample_conversion:AudioConversionError": {
+      "code": "audio_conversion_error",
+      "mro": [
+        "openmed.multimodal.audio_sample_conversion:AudioConversionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.audio_sample_conversion:AudioConversionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.audio_sample_conversion:AudioConversionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.audio_sample_conversion:AudioConversionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.audio_windows:AudioWindowError": {
+      "code": "audio_window_error",
+      "mro": [
+        "openmed.multimodal.audio_windows:AudioWindowError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.audio_windows:AudioWindowError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.batch_memory:BatchMemoryError": {
+      "code": "batch_memory_error",
+      "mro": [
+        "openmed.multimodal.batch_memory:BatchMemoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.batch_memory:BatchMemoryError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.batch_memory:BatchMemoryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.batch_memory:BatchMemoryError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.bmp_dimensions:BmpDimensionsError": {
+      "code": "bmp_dimensions_error",
+      "mro": [
+        "openmed.multimodal.bmp_dimensions:BmpDimensionsError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.bmp_dimensions:BmpDimensionsError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.box_normalization:AmbiguousBoxError": {
+      "code": "ambiguous_box_error",
+      "mro": [
+        "openmed.multimodal.box_normalization:AmbiguousBoxError",
+        "openmed.multimodal.box_normalization:BoxNormalizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('invalid OCR box: box interpretation is ambiguous',)",
+          "call": 0,
+          "pickle_args": "('invalid OCR box: invalid OCR box: box interpretation is ambiguous',)",
+          "pickle_str": "invalid OCR box: invalid OCR box: box interpretation is ambiguous",
+          "pickle_type": "openmed.multimodal.box_normalization:AmbiguousBoxError",
+          "str": "invalid OCR box: box interpretation is ambiguous"
+        },
+        {
+          "args": "('invalid OCR box: ambiguous synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid OCR box: invalid OCR box: ambiguous synthetic_reason',)",
+          "pickle_str": "invalid OCR box: invalid OCR box: ambiguous synthetic_reason",
+          "pickle_type": "openmed.multimodal.box_normalization:AmbiguousBoxError",
+          "str": "invalid OCR box: ambiguous synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.box_normalization:BoxNormalizationError": {
+      "code": "box_normalization_error",
+      "mro": [
+        "openmed.multimodal.box_normalization:BoxNormalizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid OCR box: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid OCR box: invalid OCR box: synthetic_reason',)",
+          "pickle_str": "invalid OCR box: invalid OCR box: synthetic_reason",
+          "pickle_type": "openmed.multimodal.box_normalization:BoxNormalizationError",
+          "str": "invalid OCR box: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.box_normalization:BoxValidationError": {
+      "code": "box_validation_error",
+      "mro": [
+        "openmed.multimodal.box_normalization:BoxValidationError",
+        "openmed.multimodal.box_normalization:BoxNormalizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid OCR box: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid OCR box: invalid OCR box: synthetic_reason',)",
+          "pickle_str": "invalid OCR box: invalid OCR box: synthetic_reason",
+          "pickle_type": "openmed.multimodal.box_normalization:BoxValidationError",
+          "str": "invalid OCR box: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.cache_key:MultimodalCacheKeyError": {
+      "code": "multimodal_cache_key_error",
+      "mro": [
+        "openmed.multimodal.cache_key:MultimodalCacheKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.cache_key:MultimodalCacheKeyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.cache_key:MultimodalCacheKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.cache_key:MultimodalCacheKeyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.code_regions:CodeDetectionError": {
+      "code": "code_detection_error",
+      "mro": [
+        "openmed.multimodal.code_regions:CodeDetectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.code_regions:CodeDetectionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.code_regions:CodeDetectionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.code_regions:CodeDetectionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.decoder_guard:DecoderGuardError": {
+      "code": "decoder_guard_error",
+      "mro": [
+        "openmed.multimodal.decoder_guard:DecoderGuardError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.decoder_guard:DecoderGuardError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.decoder_guard:DecoderGuardError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.decoder_guard:DecoderGuardError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.dicom:DicomDeidentificationError": {
+      "code": "dicom_deidentification_error",
+      "mro": [
+        "openmed.multimodal.dicom:DicomDeidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.dicom:DicomDeidentificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.dicom_sr_provenance:AmbiguousDicomSrItemPathError": {
+      "code": "ambiguous_dicom_sr_item_path_error",
+      "mro": [
+        "openmed.multimodal.dicom_sr_provenance:AmbiguousDicomSrItemPathError",
+        "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:AmbiguousDicomSrItemPathError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:AmbiguousDicomSrItemPathError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:AmbiguousDicomSrItemPathError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError": {
+      "code": "dicom_sr_provenance_error",
+      "mro": [
+        "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.dicom_sr_provenance:DicomSrProvenanceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.dicom_transfer_syntax:TransferSyntaxError": {
+      "code": "transfer_syntax_error",
+      "mro": [
+        "openmed.multimodal.dicom_transfer_syntax:TransferSyntaxError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.dicom_transfer_syntax:TransferSyntaxError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.dicom_waveform:DicomWaveformError": {
+      "code": "dicom_waveform_error",
+      "mro": [
+        "openmed.multimodal.dicom_waveform:DicomWaveformError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_dataset',)",
+          "call": 1,
+          "pickle_args": "('invalid_dataset',)",
+          "pickle_str": "invalid_dataset",
+          "pickle_type": "openmed.multimodal.dicom_waveform:DicomWaveformError",
+          "str": "invalid_dataset"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.digest:DigestLimitExceededError": {
+      "code": "digest_limit_exceeded_error",
+      "mro": [
+        "openmed.multimodal.digest:DigestLimitExceededError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.digest:DigestStreamError": {
+      "code": "digest_stream_error",
+      "mro": [
+        "openmed.multimodal.digest:DigestStreamError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.digest:DigestStreamError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.digest:DigestStreamError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.digest:DigestStreamError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.annotation_privacy:AnnotationPrivacyError": {
+      "code": "annotation_privacy_error",
+      "mro": [
+        "openmed.multimodal.ecg.annotation_privacy:AnnotationPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.evidence_windows:EvidenceWindowError": {
+      "code": "evidence_window_error",
+      "mro": [
+        "openmed.multimodal.ecg.evidence_windows:EvidenceWindowError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.ecg.evidence_windows:EvidenceWindowError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.ecg.evidence_windows:EvidenceWindowError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.ecg.evidence_windows:EvidenceWindowError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.interval_candidates:IntervalCandidateError": {
+      "code": "interval_candidate_error",
+      "mro": [
+        "openmed.multimodal.ecg.interval_candidates:IntervalCandidateError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.ecg.interval_candidates:IntervalCandidateError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.ecg.interval_candidates:IntervalCandidateError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.ecg.interval_candidates:IntervalCandidateError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.lead_layout:LeadLayoutError": {
+      "code": "lead_layout_error",
+      "mro": [
+        "openmed.multimodal.ecg.lead_layout:LeadLayoutError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.ecg.lead_layout:LeadLayoutError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.ecg.lead_layout:LeadLayoutError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.ecg.lead_layout:LeadLayoutError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.signal_quality:SignalQualityError": {
+      "code": "signal_quality_error",
+      "mro": [
+        "openmed.multimodal.ecg.signal_quality:SignalQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.ecg.signal_quality:SignalQualityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.ecg.signal_quality:SignalQualityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.ecg.signal_quality:SignalQualityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ecg.waveform:WaveformValidationError": {
+      "code": "waveform_validation_error",
+      "mro": [
+        "openmed.multimodal.ecg.waveform:WaveformValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.ecg.waveform:WaveformValidationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.ecg.waveform:WaveformValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.ecg.waveform:WaveformValidationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.edf:EdfError": {
+      "code": "edf_error",
+      "mro": [
+        "openmed.multimodal.edf:EdfError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.edf:EdfError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.evidence.fused_graph:FusedEvidenceError": {
+      "code": "fused_evidence_error",
+      "mro": [
+        "openmed.multimodal.evidence.fused_graph:FusedEvidenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.evidence.fused_graph:FusedEvidenceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.evidence.fused_graph:FusedEvidenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.evidence.fused_graph:FusedEvidenceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.exceptions:ArchiveDocumentError": {
+      "code": "archive_document_error",
+      "mro": [
+        "openmed.multimodal.exceptions:ArchiveDocumentError",
+        "openmed.multimodal.exceptions:UnsupportedDocumentError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason: 1',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason: 1: 1',)",
+          "pickle_str": "synthetic_reason: 1: 1",
+          "pickle_type": "openmed.multimodal.exceptions:ArchiveDocumentError",
+          "str": "synthetic_reason: 1"
+        },
+        {
+          "args": "('synthetic_reason: synthetic_detail',)",
+          "call": 2,
+          "pickle_args": "('synthetic_reason: synthetic_detail: 1',)",
+          "pickle_str": "synthetic_reason: synthetic_detail: 1",
+          "pickle_type": "openmed.multimodal.exceptions:ArchiveDocumentError",
+          "str": "synthetic_reason: synthetic_detail"
+        }
+      ]
+    },
+    "openmed.multimodal.exceptions:DocumentGraphError": {
+      "code": "document_graph_error",
+      "mro": [
+        "openmed.multimodal.exceptions:DocumentGraphError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.exceptions:DocumentGraphError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.exceptions:DocumentGraphError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.exceptions:DocumentGraphError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.exceptions:EncryptedDocumentError": {
+      "code": "encrypted_document_error",
+      "mro": [
+        "openmed.multimodal.exceptions:EncryptedDocumentError",
+        "openmed.multimodal.exceptions:DocumentGraphError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.exceptions:EncryptedDocumentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.exceptions:EncryptedDocumentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.exceptions:EncryptedDocumentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.exceptions:MalformedDocumentError": {
+      "code": "malformed_document_error",
+      "mro": [
+        "openmed.multimodal.exceptions:MalformedDocumentError",
+        "openmed.multimodal.exceptions:DocumentGraphError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.exceptions:MalformedDocumentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.exceptions:MalformedDocumentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.exceptions:MalformedDocumentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.exceptions:UnsupportedDocumentError": {
+      "code": "unsupported_document_error",
+      "mro": [
+        "openmed.multimodal.exceptions:UnsupportedDocumentError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.exceptions:UnsupportedDocumentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.exceptions:UnsupportedDocumentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.exceptions:UnsupportedDocumentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.frame_sampling_manifest:FrameSamplingManifestError": {
+      "code": "frame_sampling_manifest_error",
+      "mro": [
+        "openmed.multimodal.frame_sampling_manifest:FrameSamplingManifestError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.frame_sampling_manifest:FrameSamplingManifestError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.gif_dimensions:GifDimensionsError": {
+      "code": "gif_dimensions_error",
+      "mro": [
+        "openmed.multimodal.gif_dimensions:GifDimensionsError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.gif_dimensions:GifDimensionsError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.image:ImageRedactionVerificationError": {
+      "code": "image_redaction_verification_error",
+      "mro": [
+        "openmed.multimodal.image:ImageRedactionVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.image_geometry:ImageGeometryError": {
+      "code": "image_geometry_error",
+      "mro": [
+        "openmed.multimodal.image_geometry:ImageGeometryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.image_geometry:ImageGeometryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.image_header:ImageHeaderError": {
+      "code": "image_header_error",
+      "mro": [
+        "openmed.multimodal.image_header:ImageHeaderError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.image_header:ImageHeaderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.iso_bmff:BmffPreflightError": {
+      "code": "bmff_preflight_error",
+      "mro": [
+        "openmed.multimodal.iso_bmff:BmffPreflightError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.iso_bmff:BmffPreflightError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.manifest_profiles:ManifestProfileError": {
+      "code": "manifest_profile_error",
+      "mro": [
+        "openmed.multimodal.manifest_profiles:ManifestProfileError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.manifest_profiles:ManifestProfileError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.manifest_profiles:ManifestProfileError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.manifest_profiles:ManifestProfileError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.metadata_scrub:MetadataScrubError": {
+      "code": "metadata_scrub_error",
+      "mro": [
+        "openmed.multimodal.metadata_scrub:MetadataScrubError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.native_intake:NativeIntakeError": {
+      "code": "native_intake_error",
+      "mro": [
+        "openmed.multimodal.native_intake:NativeIntakeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('invalid native document intake input',)",
+          "call": 0,
+          "pickle_raises": "AttributeError",
+          "str": "invalid native document intake input"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.notices:MultimodalNoticeError": {
+      "code": "multimodal_notice_error",
+      "mro": [
+        "openmed.multimodal.notices:MultimodalNoticeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.notices:MultimodalNoticeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.notices:MultimodalNoticeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.notices:MultimodalNoticeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.ooxml_residual:OoxmlResidualError": {
+      "code": "ooxml_residual_error",
+      "mro": [
+        "openmed.multimodal.ooxml_residual:OoxmlResidualError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.orientation_preflight:OrientationPreflightError": {
+      "code": "orientation_preflight_error",
+      "mro": [
+        "openmed.multimodal.orientation_preflight:OrientationPreflightError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.orientation_preflight:OrientationPreflightError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_rotation:AmbiguousOrientationError": {
+      "code": "ambiguous_orientation_error",
+      "mro": [
+        "openmed.multimodal.page_rotation:AmbiguousOrientationError",
+        "openmed.multimodal.page_rotation:PageRotationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid page rotation: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid page rotation: invalid page rotation: synthetic_reason',)",
+          "pickle_str": "invalid page rotation: invalid page rotation: synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_rotation:AmbiguousOrientationError",
+          "str": "invalid page rotation: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_rotation:GeometryValidationError": {
+      "code": "geometry_validation_error",
+      "mro": [
+        "openmed.multimodal.page_rotation:GeometryValidationError",
+        "openmed.multimodal.page_rotation:PageRotationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid page rotation: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid page rotation: invalid page rotation: synthetic_reason',)",
+          "pickle_str": "invalid page rotation: invalid page rotation: synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_rotation:GeometryValidationError",
+          "str": "invalid page rotation: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_rotation:InvalidPageDimensionsError": {
+      "code": "invalid_page_dimensions_error",
+      "mro": [
+        "openmed.multimodal.page_rotation:InvalidPageDimensionsError",
+        "openmed.multimodal.page_rotation:PageRotationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid page rotation: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid page rotation: invalid page rotation: synthetic_reason',)",
+          "pickle_str": "invalid page rotation: invalid page rotation: synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_rotation:InvalidPageDimensionsError",
+          "str": "invalid page rotation: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_rotation:OutOfBoundsError": {
+      "code": "out_of_bounds_error",
+      "mro": [
+        "openmed.multimodal.page_rotation:OutOfBoundsError",
+        "openmed.multimodal.page_rotation:GeometryValidationError",
+        "openmed.multimodal.page_rotation:PageRotationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid page rotation: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid page rotation: invalid page rotation: synthetic_reason',)",
+          "pickle_str": "invalid page rotation: invalid page rotation: synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_rotation:OutOfBoundsError",
+          "str": "invalid page rotation: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_rotation:PageRotationError": {
+      "code": "page_rotation_error",
+      "mro": [
+        "openmed.multimodal.page_rotation:PageRotationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid page rotation: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('invalid page rotation: invalid page rotation: synthetic_reason',)",
+          "pickle_str": "invalid page rotation: invalid page rotation: synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_rotation:PageRotationError",
+          "str": "invalid page rotation: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.page_windows:PageBatchError": {
+      "code": "page_batch_error",
+      "mro": [
+        "openmed.multimodal.page_windows:PageBatchError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.page_windows:PageBatchError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.pdf_geometry:PdfGeometryError": {
+      "code": "pdf_geometry_error",
+      "mro": [
+        "openmed.multimodal.pdf_geometry:PdfGeometryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.pdf_geometry:PdfGeometryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.physiological_waveforms:WaveformContractError": {
+      "code": "waveform_contract_error",
+      "mro": [
+        "openmed.multimodal.physiological_waveforms:WaveformContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.physiological_waveforms:WaveformContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.physiological_waveforms:WaveformContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.physiological_waveforms:WaveformContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.preflight:PreflightError": {
+      "code": "preflight_error",
+      "mro": [
+        "openmed.multimodal.preflight:PreflightError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.preflight:PreflightError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.preflight:PreflightError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.preflight:PreflightError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.preprocessing:PreprocessingError": {
+      "code": "preprocessing_error",
+      "mro": [
+        "openmed.multimodal.preprocessing:PreprocessingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.preprocessing:PreprocessingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.preprocessing:PreprocessingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.preprocessing:PreprocessingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.privacy.mask_lineage:MaskLineageError": {
+      "code": "mask_lineage_error",
+      "mro": [
+        "openmed.multimodal.privacy.mask_lineage:MaskLineageError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.privacy.mask_lineage:MaskLineageError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.privacy.mask_lineage:MaskLineageError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.privacy.mask_lineage:MaskLineageError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.privacy.pixel_coverage:PixelCoverageError": {
+      "code": "pixel_coverage_error",
+      "mro": [
+        "openmed.multimodal.privacy.pixel_coverage:PixelCoverageError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.privacy.pixel_coverage:PixelCoverageError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.privacy.pixel_coverage:PixelCoverageError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.privacy.pixel_coverage:PixelCoverageError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.processing_diff:ProcessingDiffError": {
+      "code": "processing_diff_error",
+      "mro": [
+        "openmed.multimodal.processing_diff:ProcessingDiffError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.processing_diff:ProcessingDiffError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.processing_diff:ProcessingDiffError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.processing_diff:ProcessingDiffError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.processing_summary:ProcessingSummaryError": {
+      "code": "processing_summary_error",
+      "mro": [
+        "openmed.multimodal.processing_summary:ProcessingSummaryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.processing_summary:ProcessingSummaryError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.processing_summary:ProcessingSummaryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.processing_summary:ProcessingSummaryError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.provenance.clock_alignment:ClockAlignmentError": {
+      "code": "clock_alignment_error",
+      "mro": [
+        "openmed.multimodal.provenance.clock_alignment:ClockAlignmentError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.provenance.clock_alignment:ClockAlignmentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.provenance.clock_alignment:ClockAlignmentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.provenance.clock_alignment:ClockAlignmentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.provider_result:ProviderResultError": {
+      "code": "provider_result_error",
+      "mro": [
+        "openmed.multimodal.provider_result:ProviderResultError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.provider_result:ProviderResultError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.provider_result:ProviderResultError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.provider_result:ProviderResultError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.redaction_admission:RedactionAdmissionError": {
+      "code": "redaction_admission_error",
+      "mro": [
+        "openmed.multimodal.redaction_admission:RedactionAdmissionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason', None, None, None)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason', None, None, None)",
+          "pickle_str": "('synthetic_reason', None, None, None)",
+          "pickle_type": "openmed.multimodal.redaction_admission:RedactionAdmissionError",
+          "str": "('synthetic_reason', None, None, None)"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail', None, None)",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail', None, None)",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail', None, None)",
+          "pickle_type": "openmed.multimodal.redaction_admission:RedactionAdmissionError",
+          "str": "('synthetic_reason', 'synthetic_detail', None, None)"
+        }
+      ]
+    },
+    "openmed.multimodal.render_pdf:PdfLayoutFidelityError": {
+      "code": "pdf_layout_fidelity_error",
+      "mro": [
+        "openmed.multimodal.render_pdf:PdfLayoutFidelityError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.render_pdf:PdfRenderVerificationError": {
+      "code": "pdf_render_verification_error",
+      "mro": [
+        "openmed.multimodal.render_pdf:PdfRenderVerificationError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.render_raster:RasterExportError": {
+      "code": "raster_export_error",
+      "mro": [
+        "openmed.multimodal.render_raster:RasterExportError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.render_raster:RasterExportError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.render_raster:RasterExportError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.render_raster:RasterExportError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.runtime_session:RuntimeSessionError": {
+      "code": "runtime_session_error",
+      "mro": [
+        "openmed.multimodal.runtime_session:RuntimeSessionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.runtime_session:RuntimeSessionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.runtime_session:RuntimeSessionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.runtime_session:RuntimeSessionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.speech_endpoints:EndpointError": {
+      "code": "endpoint_error",
+      "mro": [
+        "openmed.multimodal.speech_endpoints:EndpointError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.speech_endpoints:EndpointError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.speech_endpoints:EndpointError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.speech_endpoints:EndpointError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.ambient.note_evidence:NoteEvidenceError": {
+      "code": "note_evidence_error",
+      "mro": [
+        "openmed.multimodal.streaming.ambient.note_evidence:NoteEvidenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.ambient.note_evidence:NoteEvidenceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.ambient.note_evidence:NoteEvidenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.ambient.note_evidence:NoteEvidenceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.ambient.speaker_roles:SpeakerRoleError": {
+      "code": "speaker_role_error",
+      "mro": [
+        "openmed.multimodal.streaming.ambient.speaker_roles:SpeakerRoleError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.ambient.speaker_roles:SpeakerRoleError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.ambient.speaker_roles:SpeakerRoleError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.ambient.speaker_roles:SpeakerRoleError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.privacy.audio_muting:AudioMutingError": {
+      "code": "audio_muting_error",
+      "mro": [
+        "openmed.multimodal.streaming.privacy.audio_muting:AudioMutingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_muting:AudioMutingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_muting:AudioMutingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_muting:AudioMutingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.privacy.audio_retention:AudioRetentionError": {
+      "code": "audio_retention_error",
+      "mro": [
+        "openmed.multimodal.streaming.privacy.audio_retention:AudioRetentionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_retention:AudioRetentionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_retention:AudioRetentionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.privacy.audio_retention:AudioRetentionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.privacy.withholding_buffer:WithholdingError": {
+      "code": "withholding_error",
+      "mro": [
+        "openmed.multimodal.streaming.privacy.withholding_buffer:WithholdingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.privacy.withholding_buffer:WithholdingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.privacy.withholding_buffer:WithholdingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.privacy.withholding_buffer:WithholdingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.providers:OfflineAsrError": {
+      "code": "offline_asr_error",
+      "mro": [
+        "openmed.multimodal.streaming.providers:OfflineAsrError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.providers:OfflineAsrError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.providers:OfflineAsrError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.providers:OfflineAsrError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.session:AmbientSessionError": {
+      "code": "ambient_session_error",
+      "mro": [
+        "openmed.multimodal.streaming.session:AmbientSessionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.session:AmbientSessionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.session:AmbientSessionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.session:AmbientSessionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.speech.diarization:DiarizationError": {
+      "code": "diarization_error",
+      "mro": [
+        "openmed.multimodal.streaming.speech.diarization:DiarizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.speech.diarization:DiarizationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.speech.diarization:DiarizationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.speech.diarization:DiarizationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.speech.providers:SpeechProviderError": {
+      "code": "speech_provider_error",
+      "mro": [
+        "openmed.multimodal.streaming.speech.providers:SpeechProviderError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.speech.providers:SpeechProviderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.speech.speaker_aliases:SpeakerAliasError": {
+      "code": "speaker_alias_error",
+      "mro": [
+        "openmed.multimodal.streaming.speech.speaker_aliases:SpeakerAliasError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.speech.speaker_aliases:SpeakerAliasError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.speech.speaker_aliases:SpeakerAliasError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.speech.speaker_aliases:SpeakerAliasError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.transcript.revision_ledger:RevisionLedgerError": {
+      "code": "revision_ledger_error",
+      "mro": [
+        "openmed.multimodal.streaming.transcript.revision_ledger:RevisionLedgerError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.transcript.revision_ledger:RevisionLedgerError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.transcript.revision_ledger:RevisionLedgerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.transcript.revision_ledger:RevisionLedgerError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.streaming.transcript.window_stitching:StitchingError": {
+      "code": "stitching_error",
+      "mro": [
+        "openmed.multimodal.streaming.transcript.window_stitching:StitchingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.streaming.transcript.window_stitching:StitchingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.streaming.transcript.window_stitching:StitchingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.streaming.transcript.window_stitching:StitchingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.tiff_metadata:TiffMetadataError": {
+      "code": "tiff_metadata_error",
+      "mro": [
+        "openmed.multimodal.tiff_metadata:TiffMetadataError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.tiff_metadata:TiffMetadataError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.trace_recovery:TraceRecoveryError": {
+      "code": "trace_recovery_error",
+      "mro": [
+        "openmed.multimodal.trace_recovery:TraceRecoveryError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('trace recovery failed: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('trace recovery failed: recovery_failed',)",
+          "pickle_str": "trace recovery failed: recovery_failed",
+          "pickle_type": "openmed.multimodal.trace_recovery:TraceRecoveryError",
+          "str": "trace recovery failed: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.transcript_holds:TranscriptHoldError": {
+      "code": "transcript_hold_error",
+      "mro": [
+        "openmed.multimodal.transcript_holds:TranscriptHoldError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.transcript_holds:TranscriptHoldError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.transcript_holds:TranscriptHoldError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.transcript_holds:TranscriptHoldError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.transcript_language:TranscriptLanguageError": {
+      "code": "transcript_language_error",
+      "mro": [
+        "openmed.multimodal.transcript_language:TranscriptLanguageError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.transcript_language:TranscriptLanguageError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.transcript_language:TranscriptLanguageError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.transcript_language:TranscriptLanguageError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.verify_pdf:RedactedTextRemovalError": {
+      "code": "redacted_text_removal_error",
+      "mro": [
+        "openmed.multimodal.verify_pdf:RedactedTextRemovalError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.verify_pdf:RedactionFidelityError": {
+      "code": "redaction_fidelity_error",
+      "mro": [
+        "openmed.multimodal.verify_pdf:RedactionFidelityError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.forms.field_grounding:FormGroundingError": {
+      "code": "form_grounding_error",
+      "mro": [
+        "openmed.multimodal.vision.forms.field_grounding:FormGroundingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.forms.field_grounding:FormGroundingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.forms.field_grounding:FormGroundingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.forms.field_grounding:FormGroundingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.handwriting.uncertainty:HandwritingReviewError": {
+      "code": "handwriting_review_error",
+      "mro": [
+        "openmed.multimodal.vision.handwriting.uncertainty:HandwritingReviewError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.handwriting.uncertainty:HandwritingReviewError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.handwriting.uncertainty:HandwritingReviewError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.handwriting.uncertainty:HandwritingReviewError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.pathology.slide_tiler:SlideTileError": {
+      "code": "slide_tile_error",
+      "mro": [
+        "openmed.multimodal.vision.pathology.slide_tiler:SlideTileError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.pathology.slide_tiler:SlideTileError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.pathology.slide_tiler:SlideTileError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.pathology.slide_tiler:SlideTileError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.pathology.tile_provenance:TileProvenanceError": {
+      "code": "tile_provenance_error",
+      "mro": [
+        "openmed.multimodal.vision.pathology.tile_provenance:TileProvenanceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.pathology.tile_provenance:TileProvenanceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.pathology.tile_provenance:TileProvenanceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.pathology.tile_provenance:TileProvenanceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.providers.base:VLMContractError": {
+      "code": "vlm_contract_error",
+      "mro": [
+        "openmed.multimodal.vision.providers.base:VLMContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.providers.base:VLMContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.providers.base:VLMContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.providers.base:VLMContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.runtime.resource_planner:VLMResourcePlannerError": {
+      "code": "vlm_resource_planner_error",
+      "mro": [
+        "openmed.multimodal.vision.runtime.resource_planner:VLMResourcePlannerError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.runtime.resource_planner:VLMResourcePlannerError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.runtime.resource_planner:VLMResourcePlannerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.runtime.resource_planner:VLMResourcePlannerError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.safety.instruction_injection:InstructionScreeningError": {
+      "code": "instruction_screening_error",
+      "mro": [
+        "openmed.multimodal.vision.safety.instruction_injection:InstructionScreeningError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.safety.instruction_injection:InstructionScreeningError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.safety.instruction_injection:InstructionScreeningError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.safety.instruction_injection:InstructionScreeningError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.vision.safety.quality_gate:ImageQualityError": {
+      "code": "image_quality_error",
+      "mro": [
+        "openmed.multimodal.vision.safety.quality_gate:ImageQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.multimodal.vision.safety.quality_gate:ImageQualityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.vision.safety.quality_gate:ImageQualityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.multimodal.vision.safety.quality_gate:ImageQualityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.multimodal.voice_embeddings:VoiceEmbeddingError": {
+      "code": "voice_embedding_error",
+      "mro": [
+        "openmed.multimodal.voice_embeddings:VoiceEmbeddingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.voice_embeddings:VoiceEmbeddingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.wav_metadata:WavMetadataError": {
+      "code": "wav_metadata_error",
+      "mro": [
+        "openmed.multimodal.wav_metadata:WavMetadataError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.wav_metadata:WavMetadataError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.webp_dimensions:WebpDimensionsError": {
+      "code": "webp_dimensions_error",
+      "mro": [
+        "openmed.multimodal.webp_dimensions:WebpDimensionsError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.webp_dimensions:WebpDimensionsError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.multimodal.wfdb:WfdbError": {
+      "code": "wfdb_error",
+      "mro": [
+        "openmed.multimodal.wfdb:WfdbError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.multimodal.wfdb:WfdbError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, BinaryIO, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_limits import (
     DESKTOP_V1,
@@ -142,7 +144,7 @@ _METADATA_PROFILES: Final = {
 }
 
 
-class PreflightError(ValueError):
+class PreflightError(ValueError, LegacyRootedError):
     """Raised for invalid preflight inputs; messages are stable categories."""
 
 

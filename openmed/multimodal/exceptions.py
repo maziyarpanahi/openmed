@@ -8,6 +8,7 @@ it builds on is standard-library only, so this stays lightweight.
 from __future__ import annotations
 
 from openmed.core.capabilities import MissingOptionalDependencyError
+from openmed.core.errors import LegacyRootedError
 
 
 class MissingDependencyError(MissingOptionalDependencyError):
@@ -42,7 +43,7 @@ class MissingDependencyError(MissingOptionalDependencyError):
         self.extra = None
 
 
-class UnsupportedDocumentError(ValueError):
+class UnsupportedDocumentError(ValueError, LegacyRootedError):
     """Raised when no handler is registered for a document's file type."""
 
 
@@ -60,7 +61,7 @@ class ArchiveDocumentError(UnsupportedDocumentError):
         super().__init__(f"{reason_code}: {count}")
 
 
-class DocumentGraphError(ValueError):
+class DocumentGraphError(ValueError, LegacyRootedError):
     """Raised when a document cannot be converted into a safe graph."""
 
 

@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TypeVar
 
+from openmed.core.errors import LegacyRootedError
+
 _T = TypeVar("_T")
 _REF = re.compile(r"[0-9a-f]{32}\Z")
 
 
-class AmbientSessionError(ValueError):
+class AmbientSessionError(ValueError, LegacyRootedError):
     """Controlled refusal without participant names or retained content."""
 
 

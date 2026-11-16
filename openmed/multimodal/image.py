@@ -17,6 +17,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable, Mapping, Sequence
 
+from openmed.core.errors import LegacyRootedError
+
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .code_regions import (
     CodeCoverageReport,
@@ -147,7 +149,7 @@ class ResidualPhiReport:
         }
 
 
-class ImageRedactionVerificationError(ValueError):
+class ImageRedactionVerificationError(ValueError, LegacyRootedError):
     """Raised when re-OCR verification finds residual PHI."""
 
     def __init__(self, report: ResidualPhiReport) -> None:

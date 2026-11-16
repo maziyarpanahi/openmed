@@ -15,6 +15,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterator
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_limits import MOBILE_V1, LimitProfile, evaluate_asset_limits
 from .image_header import ImageHeaderError, read_image_header
 from .media_type import MAX_MEDIA_TYPE_PREFIX_BYTES, detect_media_type
@@ -29,7 +31,7 @@ _HEADER_BYTES = 64 * 1024
 _HEADER_ITEMS = 4096
 
 
-class RedactionAdmissionError(ValueError):
+class RedactionAdmissionError(ValueError, LegacyRootedError):
     """A refusal containing controlled reason/field codes and numbers only.
 
     Attributes:

@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 from .code_regions import (
     CodeDetectionError,
     CodeDetectionPolicy,
@@ -24,7 +26,7 @@ from .code_regions import (
 from .render_pdf import _append_page, _import_optional, _page_content
 
 
-class RasterExportError(ValueError):
+class RasterExportError(ValueError, LegacyRootedError):
     """An export failed a resource, geometry, cancellation or encoding check."""
 
 

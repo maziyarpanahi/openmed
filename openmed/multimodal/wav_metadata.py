@@ -6,6 +6,8 @@ import struct
 from dataclasses import dataclass
 from typing import BinaryIO, Callable, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_WAV_HEADER_BYTES",
     "WAVE_FORMAT_IEEE_FLOAT",
@@ -24,7 +26,7 @@ _UINT16_MAX: Final[int] = (1 << 16) - 1
 _UINT32_MAX: Final[int] = (1 << 32) - 1
 
 
-class WavMetadataError(ValueError):
+class WavMetadataError(ValueError, LegacyRootedError):
     """Value-free failure raised for malformed or unsupported WAV metadata."""
 
     def __init__(self, category: str) -> None:

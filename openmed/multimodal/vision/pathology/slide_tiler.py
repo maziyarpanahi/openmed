@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Iterator
 
+from openmed.core.errors import LegacyRootedError
+
 SLIDE_TILE_SCHEMA_VERSION = "openmed.vision.slide_tiles.v1"
 MAX_LEVELS = 32
 MAX_TILES = 4096
@@ -20,7 +22,7 @@ MAX_MEMORY_BYTES = (1 << 63) - 1
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class SlideTileError(ValueError):
+class SlideTileError(ValueError, LegacyRootedError):
     """Value-free rejection before a partial plan or pixel allocation is returned."""
 
 

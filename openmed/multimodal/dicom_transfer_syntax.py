@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_FILE_META_BYTES",
     "DEFAULT_MAX_FILE_META_ELEMENTS",
@@ -270,7 +272,7 @@ class TransferSyntaxReport:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
 
 
-class TransferSyntaxError(ValueError):
+class TransferSyntaxError(ValueError, LegacyRootedError):
     """Value-free failure for invalid reader arguments.
 
     Content problems are reported through :class:`TransferSyntaxReport`; this

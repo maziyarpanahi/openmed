@@ -10,6 +10,8 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .digest import AssetDigest
 
 __all__ = [
@@ -61,7 +63,7 @@ _SUPPORTED_EXACT_MEDIA_TYPES = frozenset(
 _SUPPORTED_MEDIA_PREFIXES = ("audio/", "image/")
 
 
-class MultimodalCacheKeyError(ValueError):
+class MultimodalCacheKeyError(ValueError, LegacyRootedError):
     """Raised when cache-key metadata is unsafe or unsupported."""
 
 

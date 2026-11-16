@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 ENDPOINT_NOTICE = (
     "Non-diagnostic speech segmentation only; no speaker identity, consent or "
     "clinical meaning. Consequential use requires explicit reviewer confirmation."
@@ -39,7 +41,7 @@ class LocalActivityDetector(Protocol):
         ...
 
 
-class EndpointError(ValueError):
+class EndpointError(ValueError, LegacyRootedError):
     """Controlled, value-free endpoint failure."""
 
 

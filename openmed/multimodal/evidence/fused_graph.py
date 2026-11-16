@@ -14,6 +14,8 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 SCHEMA_VERSION = "openmed.multimodal.fused-evidence.v1"
 MAX_NODES = 1024
 MAX_EDGES = 4096
@@ -22,7 +24,7 @@ _OPAQUE_ID = re.compile(r"[0-9a-f]{32}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class FusedEvidenceError(ValueError):
+class FusedEvidenceError(ValueError, LegacyRootedError):
     """Invalid graph input, with no rejected values in the exception."""
 
 
