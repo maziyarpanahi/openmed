@@ -355,6 +355,13 @@ python scripts/parity/export_context_cues.py --check
 checks the gap rule, compares the cue table with the live lexicon and checks
 the digest. A cue edit that is not regenerated fails it.
 
+OpenMedKit for Swift ships a byte-identical copy of the cue table as
+`swift/OpenMedKit/Sources/OpenMedKit/Resources/clinical/context_cues_en_v1.json`
+and replays every case, gaps included, in `ClinicalAssertionParityTests`. Copy
+the regenerated table there too;
+`tests/unit/clinical/test_swift_context_cue_resource.py` fails while the Swift
+copy is stale.
+
 ## Axis To FHIR Mapping
 
 The context layer emits axis values. A FHIR exporter decides whether and how to
