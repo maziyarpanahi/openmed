@@ -1,0 +1,36 @@
+{
+  "name": "openmedkit-react-native-parity-example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React Native test app that proves OpenMedKitRN bridge parity against direct native OpenMedKit calls.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "react-native start",
+    "ios": "react-native run-ios --mode Release",
+    "android": "react-native run-android --mode release",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.parity.json"
+  },
+  "dependencies": {
+    "@openmed/openmedkit-react-native": "file:..",
+    "openmedkit-parity-probe": "file:./probe",
+    "react": "18.3.1",
+    "react-native": "0.77.3"
+  },
+  "devDependencies": {
+    "@babel/core": "7.26.0",
+    "@babel/preset-env": "7.26.0",
+    "@babel/runtime": "7.26.0",
+    "@react-native-community/cli": "15.0.1",
+    "@react-native-community/cli-platform-android": "15.0.1",
+    "@react-native-community/cli-platform-ios": "15.0.1",
+    "@react-native/babel-preset": "0.77.3",
+    "@react-native/metro-config": "0.77.3",
+    "@react-native/typescript-config": "0.77.3",
+    "@types/node": "22.10.2",
+    "@types/react": "18.3.18",
+    "typescript": "5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

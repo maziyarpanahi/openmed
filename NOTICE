@@ -76,6 +76,20 @@ shifting. The table records its source, retrieval date, local modifications,
 verification references, the MIT permission notice and a SHA-256 digest that
 the loader verifies.
 
+Name: LLVM libc++ shared runtime (libc++_shared.so)
+Source: Android NDK r28c (28.2.13676358), built from
+https://github.com/llvm/llvm-project/tree/main/libcxx
+License: Apache-2.0 WITH LLVM-exception; code contributed before the LLVM
+relicensing is also available under the University of Illinois/NCSA or MIT
+licenses (the NDK's NOTICE.toolchain carries the full texts)
+Usage: The OpenMedKit Android AAR packages the NDK's prebuilt libc++_shared.so,
+stripped, for arm64-v8a, armeabi-v7a, x86 and x86_64, because
+ai.djl.android:tokenizer-native links libdjl_tokenizer.so against it without
+shipping it. The Android build copies it from the NDK pinned in
+android/gradle/libs.versions.toml; no binary is committed. Apps that ship
+OpenMedKit Android redistribute it and should include its license in their
+open-source notices.
+
 Name: SHIELD clinical PHI corpus
 Source: https://github.com/susom/shield_dataset
 Paper: https://arxiv.org/abs/2605.03301

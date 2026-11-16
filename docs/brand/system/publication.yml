@@ -9,6 +9,7 @@ expected_routes:
   - docs/release/v3.3.0/index.html
   - docs/migration/3.2-to-3.3/index.html
   - docs/release/v3.2.0/index.html
+  - docs/migration/3.3-to-4.0/index.html
   - docs/migration/3.1-to-3.2/index.html
   - docs/migration/3.0-to-3.1/index.html
   - docs/agent/index.html
@@ -97,6 +98,7 @@ classification:
     - feature-map.md
     - release/v3.3.0.md
     - migration/3.2-to-3.3.md
+    - migration/3.3-to-4.0.md
     - release/v2.5.0.md
     - release/v2.2.0.md
     - release/v2.2-standards-matrix.md
@@ -111,6 +113,7 @@ classification:
     - cli/result-envelope.md
     - cli/help-drift.md
     - cli/machine-contract.md
+    - cli/service-recovery.md
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md
@@ -177,6 +180,7 @@ classification:
     - interop/fhir-transaction-compensation.md
     - interop/fhir-subscription-checkpoints.md
     - agent/workflow-recovery.md
+    - agent/restore-authority-reconciliation.md
     - interop/omop-rollback-manifests.md
     - interop/omop-rollback-schema.md
     - evaluation/governed-agent-fixtures.md
@@ -212,25 +216,43 @@ classification:
     - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
+    - serving/fair-admission.md
+    - recovery/diagnostic-bundle.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
+    - deploy/service-recovery.md
     - offline-install.md
     - install/standalone.md
     - install/smoke-check.md
     - serving/async-jobs.md
+    - serving/continuation-authorization.md
     - serving/request-signing.md
     - serving/grpc.md
     - serving/graphql.md
+    - serving/response-headers.md
     - serving/authentication.md
+    - security/auth-verifier-generations.md
     - serving/load-testing.md
+    - evaluation/resource-soak.md
     - serving/mtls.md
+    - security/policy-generations.md
+    - serving/security-profile.md
+    - deploy/security-posture.md
+    - serving/egress-policy.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md
+    - operations/runbooks/service-runbooks.md
+    - operations/runbooks/credential-compromise.md
+    - operations/runbooks/client-certificate-compromise.md
+    - operations/runbooks/disk-exhaustion.md
+    - operations/runbooks/store-corruption.md
+    - deploy/upgrades.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
+    - deploy/reference-deployment.md
     - model-loader.md
     - models/bundled-offline.md
     - clinical/clinical-brief.md
@@ -358,6 +380,9 @@ classification:
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
+    - models/portable-bundle.md
+    - models/bundle-cache.md
+    - models/portable-bundle-calibration.md
     - models/journey-specialist-pack.md
     - model-registry.md
     - ner-families.md
@@ -378,6 +403,7 @@ classification:
     - interop/annotation-interchange.md
     - interop/v3-golden-journey.md
     - release/v3.0-journey-release-gate.md
+    - release/v4.0-service-release-gate.md
     - structured/clinical-fact-normalization.md
     - structured/fact-reconciliation.md
     - structured/terminology-cache.md
@@ -536,6 +562,7 @@ classification:
     - multimodal/pptx-redaction.md
     - multimodal/xlsx-cell-redaction.md
     - multimodal/redaction-mask-lineage.md
+    - multimodal/native-redaction-export.md
     - multimodal/image-header-preflight.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
@@ -546,6 +573,7 @@ classification:
     - multimodal/ocr-streaming.md
     - multimodal/box-normalization.md
     - multimodal/page-rotation.md
+    - multimodal/native-document-intake.md
     - multimodal/pixel-phi-coverage.md
     - multimodal/ocr-vlm-disagreements.md
     - multimodal/vision/quality-abstention.md
@@ -622,6 +650,7 @@ classification:
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
+    - api/protocol-parity.md
     - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md
@@ -647,6 +676,7 @@ classification:
     - languages/code-switch-projection.md
     - languages/translation-guard.md
     - runtimes/browser-extension.md
+    - runtimes/browser-offline-install.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
     - pii-smart-merging.md
@@ -661,6 +691,7 @@ classification:
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
+    - security/required-audit.md
     - security/redaction-diff.md
     - security/policy-composition.md
     - security/evidence-integrity.md
@@ -668,6 +699,7 @@ classification:
     - security/key-management.md
     - security/key-custody-metadata.md
     - security/audit-key-rotation.md
+    - security/audit-continuity.md
     - security/encrypted-surrogate-vault.md
     - security/access-review.md
     - security/surrogate-key-providers.md
@@ -763,6 +795,9 @@ classification:
     - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
+    - openmedkit-support-matrix.md
+    - openmedkit-device-qualification.md
+    - release/v4.0-kit-release-gate.md
     - maple-on-device.md
     - mlx-backend.md
     - performance-mps.md
@@ -778,12 +813,17 @@ classification:
     - runtimes/android-accelerators.md
     - android-tokenization.md
     - android-parity.md
+    - android-keystore-secrets.md
     - on-device-segmenters.md
     - coreml-export.md
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
+    - tokenizer-conformance.md
+    - runtimes/device-capabilities.md
+    - mobile/managed-model-bundles.md
+    - migration/openmedkit-installed-packages.md
     - faq.md
     - troubleshooting.md
     - onboarding.md
@@ -794,7 +834,9 @@ classification:
     - contributing/reproducible-dependencies.md
     - security/policy-impact.md
     - security/license-inventory.md
+    - security/kit-license-inventory.md
     - compliance/multimodal-dependency-licenses.md
+    - security/export-redistribution.md
     - security/exception-taxonomy.md
     - security/budget-migrations.md
     - security/policy-simulation.md
@@ -804,8 +846,10 @@ classification:
     - security/threat-model.md
     - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
+    - security/service-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/threat-model-multimodal-ambient.md
+    - security/openmedkit-threat-model.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
     - security/policy-migrations.md

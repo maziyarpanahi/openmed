@@ -25,6 +25,9 @@ SCHEMA_NAMES = (
     "relation",
     "code",
     "provenance",
+    "service_job_record",
+    "service_webhook_payload",
+    "service_error_envelope",
 )
 ACTION_KEEP = "keep"
 ACTION_FORMAT_PRESERVE = "format_preserve"

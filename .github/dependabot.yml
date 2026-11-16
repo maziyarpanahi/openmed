@@ -42,3 +42,83 @@ updates:
       pre-commit-hooks:
         patterns:
           - "*"
+
+  # OpenMedKit platform kits. Minor and patch version updates are grouped per
+  # ecosystem; major updates and security updates open their own pull requests.
+  - package-ecosystem: "npm"
+    directories:
+      - "/js/openmedkit-electron"
+      - "/js/openmedkit-react-native"
+      - "/js/openmedkit-tauri"
+      - "/js/openmedkit-web"
+      - "/clients/typescript"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    groups:
+      npm-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # A Gradle update must also refresh the committed gradle.lockfile files and
+  # gradle/verification-metadata.xml, or the Android build fails. Regenerate
+  # them on the pull request branch; see docs/security/dependency-policy.md.
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    groups:
+      gradle-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "swift"
+    directories:
+      - "/"
+      - "/swift/OpenMedKit"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:30"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    groups:
+      swift-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "cargo"
+    directory: "/js/openmedkit-tauri/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "11:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    groups:
+      cargo-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

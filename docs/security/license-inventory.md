@@ -6,6 +6,10 @@ and every optional integration except the `dev` extra. Version constraints stay
 in `pyproject.toml`; this file records the locally reviewed SPDX-like license
 expression and the extras that use each distribution.
 
+Export toolchains, the Swift, Android and JavaScript kit runtime libraries,
+model-license propagation and the never-bundle list are covered in
+[Export Toolchains, Artifact Licenses and Redistribution](export-redistribution.md).
+
 The inventory gate is intentionally offline. Run it from the repository root:
 
 ```bash
@@ -17,6 +21,12 @@ distribution is missing here or has an unknown or restricted license without an
 explicit policy exception. Add a reviewed row before adding a dependency. Do
 not paste package metadata, URLs, credentials, or application data into this
 inventory.
+
+The portable kits (Swift, Android, JavaScript, Tauri and Flutter) have their
+own review tables in the [OpenMedKit dependency license
+inventory](kit-license-inventory.md), gated offline by
+`python scripts/licenses/kit_inventory.py` with the same permissive allowlist
+and restricted classes.
 
 The `extract-msg` row is intentionally restricted: it is allowed only for the
 `email-msg-gpl` extra's documented out-of-process bridge, and remains excluded
@@ -65,6 +75,7 @@ a dependency also declared in another extra.
 | `gliner2` | `gliner2`; reviewed wheel LICENSE (2.1.0) | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
+| `grpcio-health-checking` | `service` | `Apache-2.0` |
 | `h2` | `beam, prefect` | `MIT` |
 | `hanlp` | `zh-hanlp` | `Apache-2.0` |
 | `haystack-ai` | `haystack` | `Apache-2.0` |

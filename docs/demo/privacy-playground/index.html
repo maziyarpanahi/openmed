@@ -38,6 +38,7 @@
     <meta name="twitter:image" content="https://openmed.life/og.png" />
     <meta name="twitter:image:alt" content="OpenMed local-first healthcare NLP" />
     <link rel="icon" href="../../assets/openmed-favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
     <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
     <title>OpenMed privacy playground</title>
@@ -200,6 +201,64 @@
             are aggregate; source values are never placed in a report or log.
           </p>
         </section>
+
+        <section
+          id="offline-card"
+          class="card full"
+          aria-labelledby="offline-heading"
+          data-offline-state="not-prepared"
+        >
+          <h2 id="offline-heading">Offline install</h2>
+          <p class="note">
+            Optionally keep a verified copy of this playground for offline
+            use. Only the versioned static files in the published asset
+            manifest are stored, each after its SHA-256 digest matches. Text
+            you enter, results, and requests are never stored.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">Offline copy status</caption>
+              <tbody>
+                <tr>
+                  <th scope="row">Offline copy</th>
+                  <td id="offline-state">Not prepared</td>
+                </tr>
+                <tr>
+                  <th scope="row">Generation</th>
+                  <td id="offline-generation">None</td>
+                </tr>
+                <tr>
+                  <th scope="row">Storage</th>
+                  <td id="offline-storage">Not requested</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="actions">
+            <button id="offline-prepare" type="button">Prepare offline use</button>
+            <button id="offline-update" class="secondary" type="button" hidden>
+              Check for update
+            </button>
+            <button id="offline-switch" type="button" hidden>
+              Switch to verified update
+            </button>
+            <button id="offline-repair" type="button" hidden>
+              Repair offline copy
+            </button>
+            <button id="offline-remove" class="secondary" type="button" hidden>
+              Remove offline copy
+            </button>
+          </div>
+          <p id="offline-status" class="status" role="status" aria-live="polite">
+            Offline use is off until you prepare it.
+          </p>
+          <p class="note">
+            Reopen the playground without a query string to run it offline. See
+            the
+            <a href="/docs/runtimes/browser-offline-install/">offline install guide</a>
+            for the update, repair, and storage behavior.
+          </p>
+        </section>
       </div>
 
       <p class="note">
@@ -217,5 +276,6 @@
 
     <script src="../../javascripts/openmed-standalone.js"></script>
     <script type="module" src="./app.js"></script>
+    <script type="module" src="./offline.js"></script>
   </body>
 </html>

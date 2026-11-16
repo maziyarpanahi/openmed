@@ -1,0 +1,14 @@
+{
+  "name": "openmedkit-installed-consumer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Installs packed OpenMedKit npm tarballs outside the source tree and checks them offline.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:web": "node --test test/web-esm.test.mjs test/web-cjs.test.cjs"
+  }
+}

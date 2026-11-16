@@ -3,6 +3,7 @@ package com.openmed.openmedkit.cache
 import com.openmed.openmedkit.catalog.ModelCatalogEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -78,6 +79,74 @@ class ModelCacheTest {
         assertFalse(cache.isAvailable(second))
         assertTrue(cache.isAvailable(third))
         assertEquals(10L, cache.totalSizeBytes())
+    }
+
+    @Test
+    fun leasedModelsSurviveEvictionAndBudgetTrimmingUntilReleased() {
+        val clock = MutableClock()
+        val cache = ModelCache(
+            rootDirectory = temporaryFolder.newFolder("cache"),
+            cacheBudgetBytes = 12L,
+            clock = clock,
+        )
+        val first = catalogEntry("OpenMed/first")
+        val second = catalogEntry("OpenMed/second")
+        val third = catalogEntry("OpenMed/third")
+        store(cache, first, "first")
+        val lease = requireNotNull(cache.acquireLease(first))
+        val sharedLease = requireNotNull(cache.acquireLease(first))
+
+        assertTrue(cache.isLeased(first.repoId))
+        assertEquals(cache.modelDirectory(first.repoId), lease.directory)
+        assertFalse(cache.evict(first.repoId))
+        assertTrue(cache.isAvailable(first))
+
+        clock.advance()
+        store(cache, second, "second")
+        clock.advance()
+        store(cache, third, "third")
+
+        assertTrue(cache.isAvailable(first))
+        assertFalse(cache.isAvailable(second))
+        assertTrue(cache.isAvailable(third))
+
+        lease.close()
+        lease.close()
+        assertFalse(lease.isOpen)
+        assertTrue(cache.isLeased(first.repoId))
+        sharedLease.close()
+        assertFalse(cache.isLeased(first.repoId))
+        assertTrue(cache.evict(first.repoId))
+    }
+
+    @Test
+    fun leasesRequireAVerifiedEntry() {
+        val cache = ModelCache(temporaryFolder.newFolder("cache"))
+        val entry = catalogEntry("OpenMed/tiny-onnx")
+
+        assertNull(cache.acquireLease(entry))
+
+        cache.storeReadyModel(
+            repoId = entry.repoId,
+            sourceDirectory = stagedModel("tampered", "model.onnx" to "12345"),
+            expectedIntegrityHash = entry.reproducibilityHash,
+            actualIntegrityHash =
+                "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+            revisionSha = "abc123",
+        )
+
+        assertNull(cache.acquireLease(entry))
+        assertFalse(cache.isLeased(entry.repoId))
+    }
+
+    private fun store(cache: ModelCache, entry: ModelCatalogEntry, name: String) {
+        cache.storeReadyModel(
+            repoId = entry.repoId,
+            sourceDirectory = stagedModel(name, "model.onnx" to "12345"),
+            expectedIntegrityHash = entry.reproducibilityHash,
+            actualIntegrityHash = entry.reproducibilityHash,
+            revisionSha = name,
+        )
     }
 
     private fun catalogEntry(repoId: String): ModelCatalogEntry =

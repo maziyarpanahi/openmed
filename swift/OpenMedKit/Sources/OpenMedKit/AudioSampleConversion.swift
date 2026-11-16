@@ -7,13 +7,13 @@ public enum AudioSampleConversionError: String, Error {
 }
 
 /// An explicit channel policy for local sample conversion.
-public enum AudioConversionChannelPolicy: String {
+public enum AudioConversionChannelPolicy: String, Sendable {
     case preserve, meanMono
 }
 
 /// The integer-exact frame plan consumed by the on-device adapter.
-public struct AudioSampleConversionPlan {
-    public enum Rounding { case floor, nearestEven, ceiling }
+public struct AudioSampleConversionPlan: Sendable {
+    public enum Rounding: Sendable { case floor, nearestEven, ceiling }
     public let sourceRate: Int
     public let targetRate: Int
     public let sourceFrames: Int
@@ -44,7 +44,7 @@ public struct AudioSampleConversionPlan {
 }
 
 /// Local PCM16 provider input limits; no inference or cloud transport is included.
-public struct AudioSampleConversionProfile {
+public struct AudioSampleConversionProfile: Sendable {
     public let rates: Set<Int>
     public let channels: Set<Int>
     public let minDuration: Double
@@ -72,7 +72,7 @@ public struct AudioSampleConversionProfile {
 }
 
 /// Audio-free lineage. Rational frame boundaries remain exact until presentation.
-public struct AudioSampleConversionReport {
+public struct AudioSampleConversionReport: Sendable {
     public let plan: AudioSampleConversionPlan
     public let sourceChannels: Int
     public let targetChannels: Int

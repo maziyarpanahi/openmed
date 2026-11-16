@@ -27,6 +27,11 @@ baseline. Optional GitHub metadata requests are fulfilled deterministically with
 the site's offline response in tests, so initial page loads make no uncontrolled
 external network requests.
 
+The installable-playground spec runs on Chromium only. It stages a private
+copy of the privacy playground behind its own fault-injecting server and
+allows service workers for its contexts; see
+`docs/runtimes/browser-offline-install.md`.
+
 Failure screenshots, videos, traces, console/network evidence, and the HTML
 report are written below `output/playwright/` and uploaded by the Pages
 workflow for 14 days. Reviewed baselines live under

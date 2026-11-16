@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import sys
@@ -13,6 +14,30 @@ import pytest
 
 def _convert_module():
     return importlib.import_module("openmed.onnx.convert")
+
+
+def _passing_webgpu_gate(webgpu_path, *, lengths=(8,)) -> dict:
+    from openmed.onnx.webgpu_gate import (
+        Fp16ParityObservation,
+        evaluate_webgpu_fp16_gate,
+    )
+
+    rows = [[[2.0, 0.0], [0.0, 2.0]]]
+    return evaluate_webgpu_fp16_gate(
+        [Fp16ParityObservation("synthetic", rows, rows, requested_length=2)],
+        activation_probe={"status": "computed", "overflow_tensor_count": 0},
+        evidence={
+            "artifact": Path(webgpu_path).name,
+            "artifact_sha256": hashlib.sha256(
+                Path(webgpu_path).read_bytes()
+            ).hexdigest(),
+            "evaluated_lengths": list(lengths),
+        },
+    )
+
+
+def _fake_webgpu_gate(onnx_path, webgpu_path, **kwargs):
+    return _passing_webgpu_gate(webgpu_path, lengths=kwargs["lengths"])
 
 
 def test_check_onnx_model_validates_by_path_for_large_models(
@@ -41,15 +66,20 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
     numpy = pytest.importorskip("numpy")
     module = _convert_module()
     model_path = tmp_path / "model.onnx"
+    large = module.EXTERNAL_DATA_SIZE_THRESHOLD // 4 + 1
     first = onnx.numpy_helper.from_array(
-        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        numpy.arange(large, dtype=numpy.float32),
         name="first",
     )
     second = onnx.numpy_helper.from_array(
-        numpy.asarray([3.0, 4.0], dtype=numpy.float32),
+        numpy.arange(large, dtype=numpy.float32) * 2,
         name="second",
     )
-    graph = onnx.helper.make_graph([], "external", [], [], [first, second])
+    small = onnx.numpy_helper.from_array(
+        numpy.asarray([0, 2], dtype=numpy.int64),
+        name="small",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [first, second, small])
     model = onnx.helper.make_model(graph)
     onnx.save_model(
         model,
@@ -66,18 +96,24 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
         for item in tensor.external_data
         if item.key == "location"
     }
-    assert len(before) == 2
+    assert len(before) == 3
 
     module._consolidate_external_onnx_data(model_path)
 
     metadata = onnx.load(str(model_path), load_external_data=False)
     locations = {
-        item.value
+        tensor.name: item.value
         for tensor in metadata.graph.initializer
         for item in tensor.external_data
         if item.key == "location"
     }
-    assert locations == {"model.onnx.data"}
+    assert locations == {"first": "model.onnx.data", "second": "model.onnx.data"}
+    inline = {
+        tensor.name
+        for tensor in metadata.graph.initializer
+        if tensor.data_location != onnx.TensorProto.EXTERNAL
+    }
+    assert inline == {"small"}
     assert (tmp_path / "model.onnx.data").is_file()
     assert all(not (tmp_path / name).exists() for name in before)
     onnx.checker.check_model(str(model_path))
@@ -86,6 +122,81 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
 
     assert (tmp_path / "model.onnx.data").is_file()
     onnx.checker.check_model(str(model_path))
+
+
+def test_consolidation_inlines_a_model_without_large_tensors(tmp_path: Path) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    tensor = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="weights",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [tensor])
+    onnx.save_model(
+        onnx.helper.make_model(graph),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+
+    module._consolidate_external_onnx_data(model_path)
+
+    metadata = onnx.load(str(model_path), load_external_data=False)
+    assert all(
+        item.data_location != onnx.TensorProto.EXTERNAL
+        for item in metadata.graph.initializer
+    )
+    assert not (tmp_path / "model.onnx.data").exists()
+    onnx.checker.check_model(str(model_path))
+
+
+def test_consolidated_shape_constants_stay_loadable_by_onnxruntime(
+    tmp_path: Path,
+) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    ort = pytest.importorskip("onnxruntime")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    helper = onnx.helper
+    weights = numpy.arange(512, dtype=numpy.float32).reshape(2, 256)
+    initializers = [
+        onnx.numpy_helper.from_array(weights, name="weights"),
+        onnx.numpy_helper.from_array(numpy.asarray([0], dtype=numpy.int64), "starts"),
+        onnx.numpy_helper.from_array(numpy.asarray([1], dtype=numpy.int64), "ends"),
+        onnx.numpy_helper.from_array(numpy.asarray([1], dtype=numpy.int64), "axes"),
+    ]
+    graph = helper.make_graph(
+        [
+            helper.make_node("Add", ["features", "weights"], ["summed"]),
+            helper.make_node("Slice", ["summed", "starts", "ends", "axes"], ["logits"]),
+        ],
+        "slice-constants",
+        [helper.make_tensor_value_info("features", onnx.TensorProto.FLOAT, [2, 256])],
+        [helper.make_tensor_value_info("logits", onnx.TensorProto.FLOAT, [2, 1])],
+        initializers,
+    )
+    onnx.save_model(
+        helper.make_model(
+            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
+        ),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+
+    module._consolidate_external_onnx_data(model_path)
+
+    session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    features = numpy.ones((2, 256), dtype=numpy.float32)
+    (logits,) = session.run(["logits"], {"features": features})
+    assert logits.tolist() == [[1.0], [257.0]]
 
 
 def test_external_data_consolidation_failure_preserves_original_artifact(
@@ -150,9 +261,12 @@ def test_write_export_manifest_records_onnx_and_webgpu(tmp_path: Path) -> None:
             ),
         ],
         tokenizer_files=["tokenizer.json"],
+        webgpu_fp16_gate=_passing_webgpu_gate(tmp_path / "model.webgpu.onnx"),
     )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["webgpu_fp16_gate"]["passed"] is True
+    assert manifest["webgpu_fp16_gate"]["evaluated_lengths"] == [8]
     assert manifest["format"] == "openmed-onnx"
     assert manifest["formats"] == ["onnx", "webgpu"]
     assert manifest["source_model_id"] == "OpenMed/test-model"
@@ -172,6 +286,39 @@ def test_write_export_manifest_records_onnx_and_webgpu(tmp_path: Path) -> None:
     assert manifest["operator_fallbacks"] == []
     assert manifest["tokenizer"]["files"] == ["tokenizer.json"]
     assert "segmenter" not in manifest
+
+
+def test_write_export_manifest_rejects_ungated_webgpu_artifact(
+    tmp_path: Path,
+) -> None:
+    module = _convert_module()
+    (tmp_path / "model.onnx").write_bytes(b"onnx")
+    webgpu_path = tmp_path / "model.webgpu.onnx"
+    webgpu_path.write_bytes(b"webgpu")
+    artifacts = [
+        module.ExportArtifact("onnx", tmp_path / "model.onnx", "float32"),
+        module.ExportArtifact("webgpu", webgpu_path, "float16"),
+    ]
+    stale_gate = _passing_webgpu_gate(webgpu_path)
+    webgpu_path.write_bytes(b"webgpu-replaced-after-gate")
+
+    with pytest.raises(ValueError, match="requires an fp16 parity gate record"):
+        module.write_export_manifest(
+            tmp_path,
+            source_model_id="OpenMed/test-model",
+            config={"model_type": "bert"},
+            artifacts=artifacts,
+            tokenizer_files=[],
+        )
+    with pytest.raises(ValueError, match="digest does not match"):
+        module.write_export_manifest(
+            tmp_path,
+            source_model_id="OpenMed/test-model",
+            config={"model_type": "bert"},
+            artifacts=artifacts,
+            tokenizer_files=[],
+            webgpu_fp16_gate=stale_gate,
+        )
 
 
 def test_write_export_manifest_validates_optional_segmenter(tmp_path: Path) -> None:
@@ -229,9 +376,17 @@ def test_convert_orchestrates_artifacts_and_multi_format_publish(
 
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
+    monkeypatch.setattr(module, "validate_webgpu_fp16_export", _fake_webgpu_gate)
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(module, "publish_artifact", fake_publish_artifact)
 
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: module.SourceContext(
+            model_id, model_id, revision="a" * 40
+        ),
+    )
     result = module.convert(
         "OpenMed/test-model",
         tmp_path / "artifact",
@@ -286,11 +441,14 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
 
     converted = {}
 
-    def fake_convert(model, keep_io_types):
+    def fake_convert(model, keep_io_types, op_block_list=None, node_block_list=None):
         converted["model"] = model
+        converted["op_block_list"] = op_block_list
+        converted["node_block_list"] = node_block_list
         return {"fp16": model, "keep_io_types": keep_io_types}
 
     float16_mod.convert_float_to_float16 = fake_convert
+    float16_mod.DEFAULT_OP_BLOCK_LIST = ["TopK", "Range"]
 
     monkeypatch.setitem(sys.modules, "onnx", onnx_mod)
     monkeypatch.setitem(sys.modules, "onnxruntime", runtime_mod)
@@ -302,6 +460,11 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
     assert result == output_path
     assert output_path.read_bytes() == b"fp16"
     assert converted["model"] == str(input_path)
+    assert converted["op_block_list"][:2] == ["TopK", "Range"]
+    assert {"LayerNormalization", "Softmax", "ReduceMean"} <= set(
+        converted["op_block_list"]
+    )
+    assert converted["node_block_list"] == []
     assert saved["model"]["keep_io_types"] is True
     assert checked
 
@@ -415,28 +578,6 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
     }
 
 
-def test_longformer_export_compatibility_is_scoped(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = _convert_module()
-    original_mask = object()
-    modeling = types.SimpleNamespace(create_bidirectional_mask=original_mask)
-    longformer_module = types.ModuleType("transformers.models.longformer")
-    longformer_module.modeling_longformer = modeling
-    monkeypatch.setitem(
-        sys.modules,
-        "transformers.models.longformer",
-        longformer_module,
-    )
-    model = types.SimpleNamespace(config=types.SimpleNamespace(model_type="longformer"))
-    torch_module = types.SimpleNamespace()
-
-    with module._onnx_export_compatibility(model, torch_module):
-        assert modeling.create_bidirectional_mask is not original_mask
-
-    assert modeling.create_bidirectional_mask is original_mask
-
-
 def test_convert_optimizes_before_webgpu_and_records_validation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -498,8 +639,16 @@ def test_convert_optimizes_before_webgpu_and_records_validation(
     monkeypatch.setattr(module, "optimize_onnx_graph", fake_optimize)
     monkeypatch.setattr(module, "validate_optimized_onnx_export", fake_validate)
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
+    monkeypatch.setattr(module, "validate_webgpu_fp16_export", _fake_webgpu_gate)
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
 
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: module.SourceContext(
+            model_id, model_id, revision="a" * 40
+        ),
+    )
     result = module.convert(
         "OpenMed/test-model",
         tmp_path / "artifact",

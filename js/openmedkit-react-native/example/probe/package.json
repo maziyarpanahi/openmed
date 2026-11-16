@@ -1,0 +1,14 @@
+{
+  "name": "openmedkit-parity-probe",
+  "version": "0.1.0",
+  "description": "Example-only native module that calls OpenMedKit directly for React Native bridge parity runs.",
+  "private": true,
+  "license": "Apache-2.0",
+  "files": [
+    "android/build.gradle",
+    "android/src/main",
+    "ios",
+    "openmedkit-parity-probe.podspec",
+    "react-native.config.js"
+  ]
+}

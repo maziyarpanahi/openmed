@@ -77,7 +77,7 @@
                 "health"
               ]
             },
-            "description": "Overall service health summary (status, service name, version, profile)."
+            "description": "Overall service health summary (status and service name; version and profile only in the dev profile)."
           },
           "response": []
         },

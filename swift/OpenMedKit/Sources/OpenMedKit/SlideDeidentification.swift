@@ -5,6 +5,7 @@ import Foundation
 public struct SlideDeidError: Error, LocalizedError, Sendable {
     public let category: String
     public var errorDescription: String? { category }
+    fileprivate init(category: String) { self.category = category }
 }
 
 /// Device budgets shared with the Python TIFF-family implementation.

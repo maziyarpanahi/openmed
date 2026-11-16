@@ -1,0 +1,186 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/service/fault-plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMedServiceFaultPlan",
+  "description": "Test-only, seeded fault plan for service fault-injection matrices. Plans contain identifiers, enums and numbers only; no payloads, paths or secrets.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "seed", "cases"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "plan_id": {"$ref": "#/$defs/token"},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "token": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at_call": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "seeded": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_call", "max_call"],
+          "properties": {
+            "min_call": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "max_call": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        },
+        "persistent": {"type": "boolean"}
+      },
+      "oneOf": [
+        {"required": ["at_call"], "not": {"required": ["seeded"]}},
+        {"required": ["seeded"], "not": {"required": ["at_call"]}}
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,31}$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "number", "minimum": 0, "maximum": 1000000},
+          {"type": "boolean"},
+          {"$ref": "#/$defs/code"}
+        ]
+      }
+    },
+    "known_gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "reason_code"],
+      "properties": {
+        "issue": {"type": "integer", "minimum": 1},
+        "reason_code": {"$ref": "#/$defs/code"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "component",
+        "category",
+        "fault",
+        "injection_point",
+        "phase",
+        "trigger",
+        "expected_outcome"
+      ],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/token"},
+        "component": {"$ref": "#/$defs/token"},
+        "category": {
+          "enum": [
+            "disk",
+            "clock",
+            "process",
+            "network",
+            "cancellation",
+            "corrupted_state"
+          ]
+        },
+        "fault": {
+          "enum": [
+            "enospc",
+            "eio",
+            "partial_write",
+            "fsync_failure",
+            "clock_skew",
+            "clock_jump_forward",
+            "clock_jump_backward",
+            "monotonic_stall",
+            "process_kill",
+            "connection_refused",
+            "timeout",
+            "connection_reset",
+            "egress_denied",
+            "cancellation",
+            "truncated_state",
+            "garbled_state"
+          ]
+        },
+        "injection_point": {"$ref": "#/$defs/token"},
+        "phase": {"enum": ["before_commit", "during_commit", "after_commit"]},
+        "trigger": {"$ref": "#/$defs/trigger"},
+        "parameters": {"$ref": "#/$defs/parameters"},
+        "expected_outcome": {
+          "enum": [
+            "no_effect",
+            "retryable",
+            "quarantined",
+            "rolled_back",
+            "committed_exactly_once"
+          ]
+        },
+        "require_no_residue": {"type": "boolean"},
+        "known_gap": {"$ref": "#/$defs/known_gap"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"category": {"const": "disk"}}},
+          "then": {
+            "properties": {
+              "fault": {"enum": ["enospc", "eio", "partial_write", "fsync_failure"]}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category": {"const": "clock"}}},
+          "then": {
+            "properties": {
+              "fault": {
+                "enum": [
+                  "clock_skew",
+                  "clock_jump_forward",
+                  "clock_jump_backward",
+                  "monotonic_stall"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category": {"const": "process"}}},
+          "then": {"properties": {"fault": {"enum": ["process_kill"]}}}
+        },
+        {
+          "if": {"properties": {"category": {"const": "network"}}},
+          "then": {
+            "properties": {
+              "fault": {
+                "enum": [
+                  "connection_refused",
+                  "timeout",
+                  "connection_reset",
+                  "egress_denied"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category": {"const": "cancellation"}}},
+          "then": {"properties": {"fault": {"enum": ["cancellation"]}}}
+        },
+        {
+          "if": {"properties": {"category": {"const": "corrupted_state"}}},
+          "then": {
+            "properties": {
+              "fault": {"enum": ["truncated_state", "garbled_state"]}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

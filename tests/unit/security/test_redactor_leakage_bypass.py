@@ -281,7 +281,7 @@ def test_ac04_fullwidth_card_is_redacted_end_to_end():
     fullwidth = SYNTHETIC_CARD.translate(_FULLWIDTH_DIGITS)
     assert fullwidth != SYNTHETIC_CARD
     output = _deidentify_with_blind_model(f"card {fullwidth}")
-    assert "credit_debit_card" in output.lower()
+    assert "[CREDIT_CARD]" in output
     assert fullwidth not in output
     assert not any("０" <= char <= "９" for char in output)
 

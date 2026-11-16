@@ -43,8 +43,9 @@ inference when the asset budget is exceeded.
 compiled model and tokenizer are directories, the label map and required
 tokenizer files are regular files, and no asset is a symbolic link. Hidden
 files count toward the asset budget. The runtime uses the tokenizer folder with
-`allowNetworkAccess: false`, so missing assets fail closed instead of falling
-back to a download.
+`allowNetworkAccess: false`, which is also the OpenMedKit default, so missing
+assets fail closed with `OpenMedTokenizerError.missingLocalAssets` instead of
+falling back to a download.
 
 ## Add the Share extension
 

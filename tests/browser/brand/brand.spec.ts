@@ -579,9 +579,11 @@ async function waitForSearchReady(page: Page): Promise<void> {
         .translations?.["search.result.placeholder"] as string | undefined,
   );
   expect(placeholder, "search ready placeholder").toBeTruthy();
+  // Each locale's worker rebuilds the whole index (about 7.3 MB in v4.0), which
+  // a shared CI runner's Firefox can take longer than 20 s to finish.
   await expect(page.locator(".md-search-result__meta")).toHaveText(
     placeholder as string,
-    { timeout: 20_000 },
+    { timeout: 40_000 },
   );
 }
 
@@ -1308,6 +1310,8 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   baseURL,
   page,
 }) => {
+  // Four locale switches each wait for the search index to rebuild.
+  test.slow();
   await page.setViewportSize({ width: 1440, height: 900 });
   await prepareTheme(page, "system-light");
   const audit = monitorPage(page, baseURL);
