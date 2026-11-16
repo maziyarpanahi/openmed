@@ -311,6 +311,19 @@ prepared model both throw `TaskPackException(NOT_PREPARED)`. Pass
 detected identifiers are redaction candidates that still need review.
 Diagnostics go through `SafeLog` only and never contain input text.
 
+### Medication mentions
+
+`MedicationPack` prepares a PharmaDetect candidate the same way and
+`extract(text)` returns `MedicationMention` values: the normalized `label`
+(`CHEMICAL`; the models emit `CHEM`), Unicode scalar `start` and `end`
+offsets, the `confidence` and the source `modelId`. Labels that do not
+normalize to `CHEMICAL` are dropped. The pack is extraction-only: no result
+type has a dose, interaction, recommendation or action field, and the pack
+never triggers a follow-up action. Every result carries the notice
+"Reports medication mentions and their offsets only. It never gives dosing
+advice and never triggers an action." (`result.notice`, key
+`openmed.notice.medication.extraction_only`); show it with the mentions.
+
 ## Offline-first deployment
 
 Separate model preparation from document processing. There are two supported
