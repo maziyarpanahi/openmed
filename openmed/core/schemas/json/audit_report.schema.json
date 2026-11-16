@@ -1,0 +1,258 @@
+{
+  "$defs": {
+    "context_descriptor": {
+      "additionalProperties": false,
+      "description": "Offsets, length and hash of the text beside a span.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/offset"
+        },
+        "length": {
+          "$ref": "#/$defs/offset"
+        },
+        "start": {
+          "$ref": "#/$defs/offset"
+        },
+        "text_hash": {
+          "$ref": "#/$defs/sha256_hash"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "length",
+        "text_hash"
+      ],
+      "type": "object"
+    },
+    "detector": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "model_format": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "model_id",
+        "model_format",
+        "commit",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "offset": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sha256_hash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "signature": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "HMAC-SHA256"
+        },
+        "key_id": {
+          "type": "string"
+        },
+        "value": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "algorithm",
+        "value"
+      ],
+      "type": "object"
+    },
+    "span": {
+      "additionalProperties": false,
+      "description": "One detected span: half-open offsets, labels, sources, scores, the applied action, the surrogate and a SHA-256 hash of the span text. Closed, so a raw `text` key is rejected.",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "canonical_label": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "context": {
+          "additionalProperties": false,
+          "properties": {
+            "after": {
+              "$ref": "#/$defs/context_descriptor"
+            },
+            "before": {
+              "$ref": "#/$defs/context_descriptor"
+            }
+          },
+          "type": "object"
+        },
+        "end": {
+          "$ref": "#/$defs/offset"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "label": {
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "start": {
+          "$ref": "#/$defs/offset"
+        },
+        "surrogate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text_hash": {
+          "$ref": "#/$defs/sha256_hash"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "label",
+        "canonical_label",
+        "sources",
+        "confidence",
+        "threshold",
+        "action",
+        "surrogate",
+        "text_hash",
+        "evidence",
+        "context"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://openmed.dev/schemas/v1/audit_report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Signed, reproducible de-identification report produced by openmed.core.audit.AuditReport.to_dict(). It records the policy, the resolved profile, detector provenance, the safety sweep, per-span offsets, labels, actions and SHA-256 text hashes, thresholds, residual risk, input and output hashes, the repro_hash and an optional HMAC-SHA256 signature. It never carries source text: span objects and context descriptors are closed, so raw-text keys such as `text` are rejected. This is the whole-report document; audit.schema.json describes one OpenMedAuditEvent. Reports do not embed schema_version; the property is declared for registry consistency and the contract version travels in schema-fingerprints.json.",
+  "properties": {
+    "deidentified_text_hash": {
+      "$ref": "#/$defs/sha256_hash"
+    },
+    "detectors": {
+      "items": {
+        "$ref": "#/$defs/detector"
+      },
+      "type": "array"
+    },
+    "document_length": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "grounding": {
+      "description": "Optional grounding provenance; present only when non-empty.",
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "input_hash": {
+      "$ref": "#/$defs/sha256_hash"
+    },
+    "manifest_hash": {
+      "$ref": "#/$defs/sha256_hash"
+    },
+    "openmed_version": {
+      "type": "string"
+    },
+    "policy": {
+      "type": "string"
+    },
+    "repro_hash": {
+      "$ref": "#/$defs/sha256_hash"
+    },
+    "residual_risk": {
+      "type": "object"
+    },
+    "resolved_profile": {
+      "type": "object"
+    },
+    "safety_sweep": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "signature": {
+      "description": "null for an unsigned report.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/signature"
+        }
+      ]
+    },
+    "spans": {
+      "items": {
+        "$ref": "#/$defs/span"
+      },
+      "type": "array"
+    },
+    "thresholds": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "policy",
+    "resolved_profile",
+    "detectors",
+    "safety_sweep",
+    "spans",
+    "thresholds",
+    "residual_risk",
+    "openmed_version",
+    "manifest_hash",
+    "document_length",
+    "input_hash",
+    "deidentified_text_hash",
+    "repro_hash",
+    "signature"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedAuditReport",
+  "type": "object"
+}

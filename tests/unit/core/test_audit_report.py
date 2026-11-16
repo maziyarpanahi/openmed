@@ -7,6 +7,7 @@ import hmac
 import json
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from openmed.core.audit import (
     AuditReport,
@@ -14,10 +15,28 @@ from openmed.core.audit import (
     AuditSpan,
     DetectorInfo,
     hash_text,
+    load_audit_report_schema,
     recompute_repro_hash,
     stable_hash,
     verify_repro_hash,
 )
+
+REPORT_VALIDATOR = Draft202012Validator(load_audit_report_schema())
+# Synthetic manifest digest: the schema pins every hash field to sha256:<hex>.
+MANIFEST_HASH = hash_text("synthetic manifest")
+
+
+@pytest.fixture(autouse=True)
+def _every_serialized_report_matches_the_published_schema(monkeypatch):
+    """Validate every report this module serializes against the schema."""
+    serialize = AuditReport.to_dict
+
+    def validated_to_dict(self: AuditReport) -> dict:
+        payload = serialize(self)
+        REPORT_VALIDATOR.validate(payload)
+        return payload
+
+    monkeypatch.setattr(AuditReport, "to_dict", validated_to_dict)
 
 
 def _report() -> AuditReport:
@@ -71,7 +90,7 @@ def _report() -> AuditReport:
             },
         },
         openmed_version="1.5.5",
-        manifest_hash="sha256:manifest",
+        manifest_hash=MANIFEST_HASH,
         document_length=len(text),
         input_hash=hash_text(text),
         deidentified_text_hash=hash_text("Patient [NAME] called [PHONE]."),
@@ -698,7 +717,7 @@ def _multi_span_report(spans: list[AuditSpan]) -> AuditReport:
             },
         },
         openmed_version="1.5.5",
-        manifest_hash="sha256:manifest",
+        manifest_hash=MANIFEST_HASH,
         document_length=len(text),
         input_hash=hash_text(text),
         deidentified_text_hash=hash_text(
@@ -868,3 +887,140 @@ def test_legacy_signed_report_with_unsorted_spans_still_verifies():
     assert [span["start"] for span in json.loads(payload)["spans"]] == [44, 8, 24]
     assert verify_repro_hash(json.loads(payload))
     assert AuditReport.from_json(payload).verify(key)
+
+
+# --- Published AuditReport JSON Schema ---------------------------------------
+
+
+def _schema_errors(payload: dict) -> list[str]:
+    return [error.validator for error in REPORT_VALIDATOR.iter_errors(payload)]
+
+
+def _failed_keywords(payload: dict) -> set[str]:
+    """Return every failing keyword, including those inside ``oneOf`` branches."""
+    pending = list(REPORT_VALIDATOR.iter_errors(payload))
+    keywords: set[str] = set()
+    while pending:
+        error = pending.pop()
+        keywords.add(str(error.validator))
+        pending.extend(error.context or [])
+    return keywords
+
+
+def test_signed_and_unsigned_reports_validate_against_the_schema():
+    unsigned = _report().to_dict()
+    signed = _report().sign("release-key", key_id="test-key").to_dict()
+    multi = _multi_span_report(_example_spans()).to_dict()
+    legacy = _legacy_signed_report_with_unsorted_spans("release-key").to_dict()
+
+    assert unsigned["signature"] is None
+    assert signed["signature"]["algorithm"] == "HMAC-SHA256"
+    for payload in (unsigned, signed, multi, legacy):
+        assert _schema_errors(payload) == []
+        assert _schema_errors(json.loads(json.dumps(payload))) == []
+
+
+def test_report_with_grounding_provenance_validates():
+    report = _report()
+    report.grounding = [{"system": "synthetic", "code": "S-1", "start": 8, "end": 16}]
+    report.__post_init__()
+
+    payload = report.to_dict()
+
+    assert payload["grounding"]
+    assert _schema_errors(payload) == []
+
+
+def _set_span(field: str, value):
+    def mutate(payload: dict) -> None:
+        payload["spans"][0][field] = value
+
+    return mutate
+
+
+def _set_signature(field: str, value):
+    def mutate(payload: dict) -> None:
+        payload["signature"][field] = value
+
+    return mutate
+
+
+@pytest.mark.parametrize(
+    ("mutate", "validator"),
+    [
+        (_set_span("text", "John Doe"), "additionalProperties"),
+        (_set_span("start", -1), "minimum"),
+        (_set_span("end", -3), "minimum"),
+        (_set_span("start", 1.5), "type"),
+        (_set_span("text_hash", "John Doe"), "pattern"),
+        (_set_signature("algorithm", "HMAC-SHA1"), "const"),
+        (_set_signature("value", "John Doe"), "pattern"),
+        (
+            lambda payload: payload.update(original_text="John Doe"),
+            "additionalProperties",
+        ),
+        (lambda payload: payload.update(document_length=-1), "minimum"),
+        (lambda payload: payload.update(input_hash="John Doe"), "pattern"),
+        (
+            lambda payload: payload["spans"][0]["context"].update(
+                before={"start": 0, "end": 8, "length": 8, "text": "Patient "}
+            ),
+            "additionalProperties",
+        ),
+        (
+            lambda payload: payload["detectors"][0].update(raw_text="John Doe"),
+            "additionalProperties",
+        ),
+        (lambda payload: payload.pop("repro_hash"), "required"),
+    ],
+)
+def test_schema_rejects_raw_text_negative_offsets_and_unknown_algorithms(
+    mutate, validator
+):
+    payload = _report().sign("release-key").to_dict()
+    assert _schema_errors(payload) == []
+
+    mutate(payload)
+
+    assert validator in _failed_keywords(payload)
+
+
+def test_schema_is_versioned_registered_and_in_the_fingerprint_snapshot():
+    from openmed.core.schemas import (
+        SCHEMA_NAMES,
+        load_schema,
+        load_schema_snapshot,
+    )
+
+    schema = load_audit_report_schema()
+
+    Draft202012Validator.check_schema(schema)
+    assert schema == load_schema("audit_report")
+    assert schema["$id"] == "https://openmed.dev/schemas/v1/audit_report.schema.json"
+    assert schema["schema_version"] == 1
+    assert schema["properties"]["schema_version"]["const"] == 1
+    assert "schema_version" not in schema["required"]
+    assert "audit_report" in SCHEMA_NAMES
+    assert load_schema_snapshot()["audit_report"]["schema_version"] == 1
+    # The per-span event schema is a different document.
+    assert load_schema("audit")["title"] == "OpenMedAuditEvent"
+    assert schema["title"] == "OpenMedAuditReport"
+    assert schema["additionalProperties"] is False
+    assert schema["$defs"]["span"]["additionalProperties"] is False
+
+
+def test_schema_fields_track_the_serialized_report():
+    schema = load_audit_report_schema()
+    defs = schema["$defs"]
+    report = _report().sign("release-key")
+    payload = report.to_dict()
+
+    assert set(schema["properties"]) - {"schema_version", "grounding"} == set(payload)
+    assert set(schema["required"]) == set(payload)
+    assert set(defs["span"]["properties"]) == set(payload["spans"][0])
+    assert set(defs["span"]["required"]) == set(payload["spans"][0])
+    assert set(defs["detector"]["properties"]) == set(payload["detectors"][0])
+    assert set(defs["signature"]["properties"]) == set(payload["signature"])
+    context = payload["spans"][0]["context"]
+    assert set(context) == {"before", "after"}
+    assert set(defs["context_descriptor"]["properties"]) == set(context["before"])
