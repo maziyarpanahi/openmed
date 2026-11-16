@@ -241,6 +241,8 @@ final class ConcurrencySafetyTests: XCTestCase {
         requireSendable(WFDBSignal.self)
         requireSendable(WFDBAnnotations.self)
         requireSendable(WFDBRecord.self)
+        requireSendable(OpenMedModelDownloadProgress.self)
+        requireSendable(OpenMedModelDownloadTask.self)
     }
 
     func testDefaultPIIPatternsAreSharedSafelyAcrossTasks() async {
@@ -635,6 +637,48 @@ final class ConcurrencySafetyTests: XCTestCase {
         observation.cancel()
     }
 
+    func testDownloadProgressReporterKeepsTotalsOrderedUnderContention() async {
+        let (stream, continuation) = AsyncStream.makeStream(of: OpenMedModelDownloadProgress.self)
+        let reporter = OpenMedDownloadProgressReporter(continuation: continuation)
+        reporter.plan(files: contention)
+        DispatchQueue.concurrentPerform(iterations: contention) { index in
+            reporter.fileFinished("file-\(index)", sizeBytes: 3, transferredBytes: 3)
+        }
+        continuation.finish()
+
+        var events: [OpenMedModelDownloadProgress] = []
+        for await event in stream { events.append(event) }
+        XCTAssertEqual(events.count, contention)
+        // Events are yielded under the reporter's lock, so totals never go backwards.
+        XCTAssertEqual(events.map(\.filesDone), Array(1...contention))
+        XCTAssertEqual(events.map(\.totalBytesDone), (1...contention).map { Int64($0 * 3) })
+        XCTAssertTrue(events.allSatisfy { $0.filesTotal == contention })
+    }
+
+    func testFileTransferSessionServesConcurrentDownloads() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ConcurrentTransferURLProtocol.self]
+        let transfers = OpenMedFileTransferSession(configuration: configuration)
+        defer { transfers.invalidate() }
+
+        let sizes = try await withThrowingTaskGroup(of: (Int, Int).self) { group in
+            for index in 0..<16 {
+                group.addTask {
+                    let url = URL(string: "https://transfer-stub.invalid/file-\(index)")!
+                    let (staged, response) = try await transfers.download(URLRequest(url: url)) { _, _ in }
+                    defer { try? FileManager.default.removeItem(at: staged) }
+                    XCTAssertEqual(response.statusCode, 200)
+                    return (index, try Data(contentsOf: staged).count)
+                }
+            }
+            var sizes: [Int: Int] = [:]
+            for try await (index, size) in group { sizes[index] = size }
+            return sizes
+        }
+
+        XCTAssertEqual(sizes, Dictionary(uniqueKeysWithValues: (0..<16).map { ($0, ($0 + 1) * 512) }))
+    }
+
     func testPortableBundlePatternsMatchTheSameFromEveryTask() async {
         let cases: [(PortableBundlePattern, String, Bool)] = [
             (.sha256, "sha256:" + String(repeating: "a", count: 64), true),
@@ -868,3 +912,19 @@ final class ConcurrencySafetyTests: XCTestCase {
         }
     }
 #endif
+
+/// Serves `(n + 1) * 512` bytes for `file-n`, for concurrent transfer tests.
+private final class ConcurrentTransferURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url, let index = Int(url.lastPathComponent.dropFirst("file-".count)) else { return }
+        let data = Data(repeating: UInt8(index), count: (index + 1) * 512)
+        let response = HTTPURLResponse(
+            url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Length": "\(data.count)"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
