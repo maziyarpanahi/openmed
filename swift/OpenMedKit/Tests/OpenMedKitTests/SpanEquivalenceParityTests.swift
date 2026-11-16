@@ -12,7 +12,7 @@
     /// The Kotlin counterpart is `SpanEquivalenceTest` in
     /// `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/`.
     /// Failure messages carry case identifiers, labels, and offsets only.
-    final class SpanEquivalenceParityTests: XCTestCase {
+    final class SpanEquivalenceParityTests: ContractGateTestCase {
         func testFixtureSchemaAndDigestAreCurrent() throws {
             let manifest = try loadManifest()
             let fixture = try loadFixture()
@@ -358,7 +358,7 @@
         private static func fixtureBytes(_ name: String) throws -> Data {
             var url = URL(fileURLWithPath: #filePath)
             for _ in 0..<5 { url.deleteLastPathComponent() }
-            return try Data(contentsOf: url.appending(path: "fixtures/parity").appending(path: name))
+            return try ContractGateReporter.read(url.appending(path: "fixtures/parity").appending(path: name))
         }
 
         private func decoder() -> JSONDecoder {

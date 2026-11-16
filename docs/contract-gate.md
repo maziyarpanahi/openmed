@@ -15,8 +15,11 @@ failing cell is visible instead of hidden inside a runtime's own test log.
 | `tests/fixtures/parity/contract_gate.json` | The manifest: every parity file, its digest, version, case groups and runtime cells |
 | `tests/fixtures/parity/contract_gate_result.schema.json` | JSON Schema (Draft 2020-12) for one runtime's result file |
 | `scripts/release/contract_gate.py` | `verify`, `run-python`, `validate-result`, `aggregate` and `refresh` |
+| `swift/OpenMedKit/Tests/OpenMedKitTests/ContractGateReporter.swift` | The Swift reporter: an XCTest helper that writes `swift.json` |
+| `scripts/release/contract_gate_swift.py` | Runs the Swift consumer classes once and checks `swift.json` |
 | `.github/workflows/contract-gate.yml` | The blocking `Contract gate` check: runtime result jobs plus the aggregation |
 | `tests/unit/release/test_contract_gate.py` | Gate tests with synthetic fixtures and negative controls |
+| `tests/unit/release/test_contract_gate_swift.py`, `ContractGateReporterTests.swift` | Swift runner and reporter tests over synthetic checkouts |
 
 ## Manifest
 
@@ -60,8 +63,8 @@ the `command` that writes them, or `pending` with a `tracking` issue while its
 reporter is being built. A `required` cell of an `active` runtime must name at
 least one consumer. A `required` cell of a `pending` runtime may have an empty
 `consumers` list: the cell is still part of the contract and the runtime's
-reporter has to cover it when it becomes active. Today only Python is active;
-the Swift, Kotlin and web reporters are tracked in #5327, #5328 and #5329.
+reporter has to cover it when it becomes active. Today Python and Swift are
+active; the Kotlin and web reporters are tracked in #5328 and #5329.
 
 ## Case ids
 
@@ -134,6 +137,9 @@ python scripts/release/contract_gate.py verify
 # Run the Python consumers and write results/python.json.
 python scripts/release/contract_gate.py run-python --results-dir results
 
+# Run the Swift consumer classes and write results/swift.json (macOS).
+python scripts/release/contract_gate_swift.py --results-dir results
+
 # Validate any runtime's result files against the schema.
 python scripts/release/contract_gate.py validate-result results/*.json
 
@@ -201,7 +207,9 @@ manifest's own reasons only.
 `.github/workflows/contract-gate.yml` runs on every push and pull request to
 `master`, `main` and `release/v*` with no path filter, so the check always
 reports. The `python-results` job runs `run-python` and uploads
-`contract-gate-result-python`. The `contract-gate` job runs even when a runtime
+`contract-gate-result-python`; the `swift-results` job builds the root Swift
+package's tests on macOS, runs `contract_gate_swift.py` and uploads
+`contract-gate-result-swift`. The `contract-gate` job runs even when a runtime
 job failed, downloads every `contract-gate-result-*` artifact, runs
 `aggregate`, appends the summary to the job summary and uploads it as the
 `contract-gate-summary` artifact. A runtime job that fails to produce its file
@@ -233,3 +241,48 @@ lands, add a job to `.github/workflows/contract-gate.yml` that uploads
 `contract-gate-result-<runtime>` and add it to the `contract-gate` job's
 `needs`; in the same change set the runtime's `reporter` to `active` with its
 `command` and fill in the consumers of every required cell.
+
+## Swift reporter
+
+OpenMedKit's reporter is an XCTest helper,
+`swift/OpenMedKit/Tests/OpenMedKitTests/ContractGateReporter.swift`. It is
+off unless `OPENMED_CONTRACT_GATE_RESULTS_DIR` is set, so `swift test` behaves
+as before. When the variable names a directory, the reporter rewrites
+`<dir>/swift.json` after every test that consumed a fixture.
+
+A Swift consumer adopts it in two steps, without changing its assertions:
+
+1. The test class subclasses `ContractGateTestCase`, which brackets every test
+   so the reporter knows which test is running.
+2. The test reads its fixture with `ContractGateReporter.read(url)` instead of
+   `Data(contentsOf:)`. The reporter hashes the bytes the test actually read,
+   so a stale copy shows up as `stale_digest`. Only reads of a manifest fixture
+   from one of the consumer files the manifest lists for that fixture count.
+
+A test that read a fixture covers every case of it. A test can narrow that by
+wrapping a case's assertions in
+`contractCase("<group key>/<item id>", of: "<fixture id>") { ... }`: it then
+covers only the cases it scoped, a failure recorded inside a scope fails that
+case, and a failure outside every scope fails all of the fixture's cases. A
+case passes when at least one covering test passed it and none failed it,
+the same rule as the Python runner. The Offset, multimodal and speech parity
+tests scope each case; the other consumers cover their fixture as a whole.
+
+The reporter writes the Python runner's reason codes (`consumer_failed`,
+`consumer_error` for an error thrown inside a scope, `consumer_skipped`,
+`case_not_exercised`, `consumer_not_collected`, `consumer_missing` and
+`fixture_unreadable`) and two fixture-level codes of its own:
+`fixture_digest_inconsistent` when tests read different bytes of one fixture
+in a run, and `case_id_unknown` when a test scoped a case id the fixture does
+not define. An unknown id is never written; a failure under it fails every
+case of the fixture.
+
+`python scripts/release/contract_gate_swift.py --results-dir <dir>` derives
+the XCTest filter from the `ContractGateTestCase` subclasses in the declared
+Swift consumer files, runs `swift test` once with the results directory set,
+and checks `swift.json` against the result schema. It discards the
+`swift test` console output, as `run-python` does for pytest; run
+`swift test --filter <class>` directly for assertion details. It accepts
+`--package-path`, `--scratch-path` and `--skip-build` for local builds,
+`--print-filter` to print the filter, and `--check` to exit 1 when a case did
+not pass. Tests must run serially in one process: do not pass `--parallel`.

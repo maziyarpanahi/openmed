@@ -25,7 +25,7 @@ private func mappedReport(text: String, regions: [(Range<Int>, DocumentIntakeBox
     return DocumentIntakeMapper.map(sourceDigest: exportDigest, pages: [.rendered(geometry, recognition)])
 }
 
-final class DocumentRedactionContractTests: XCTestCase {
+final class DocumentRedactionContractTests: ContractGateTestCase {
     private func box(_ left: Double, _ top: Double, _ right: Double, _ bottom: Double) -> DocumentIntakeBox {
         DocumentIntakeBox(left: left, top: top, right: right, bottom: bottom)
     }
@@ -85,7 +85,7 @@ final class DocumentRedactionContractTests: XCTestCase {
     func testForwardTransformReproducesSharedIntakeVectors() throws {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
-        let data = try Data(contentsOf: root.appending(path: "tests/fixtures/parity/document_intake_v1.json"))
+        let data = try ContractGateReporter.read(root.appending(path: "tests/fixtures/parity/document_intake_v1.json"))
         let corpus = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         var checked = 0
         for row in try XCTUnwrap(corpus["cases"] as? [[String: Any]]) {

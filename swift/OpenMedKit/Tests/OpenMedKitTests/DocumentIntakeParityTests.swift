@@ -3,11 +3,11 @@ import XCTest
 
 @testable import OpenMedKit
 
-final class DocumentIntakeParityTests: XCTestCase {
+final class DocumentIntakeParityTests: ContractGateTestCase {
     private func corpus() throws -> [String: Any] {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
-        let data = try Data(contentsOf: root.appending(path: "tests/fixtures/parity/document_intake_v1.json"))
+        let data = try ContractGateReporter.read(root.appending(path: "tests/fixtures/parity/document_intake_v1.json"))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 

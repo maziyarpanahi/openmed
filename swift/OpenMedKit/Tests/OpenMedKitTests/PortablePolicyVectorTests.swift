@@ -10,7 +10,7 @@ import XCTest
 ///
 /// Failure messages carry case identifiers, field names, and reason codes
 /// only.
-final class PortablePolicyVectorTests: XCTestCase {
+final class PortablePolicyVectorTests: ContractGateTestCase {
     static let vectorsPath = "tests/fixtures/parity/portable_policy_vectors.json"
     static let androidPolicies = "android/openmedkit/src/main/assets/policies"
     static let swiftPolicies = "swift/OpenMedKit/Sources/OpenMedKit/Resources/policies"
@@ -274,7 +274,7 @@ final class PortablePolicyVectorTests: XCTestCase {
     private static func repositoryBytes(_ path: String) throws -> Data {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { url.deleteLastPathComponent() }
-        return try Data(contentsOf: url.appending(path: path))
+        return try ContractGateReporter.read(url.appending(path: path))
     }
 
     private static func bytes(hex: String) -> Data {

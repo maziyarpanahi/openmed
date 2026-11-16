@@ -3,11 +3,11 @@ import XCTest
 
 @testable import OpenMedKit
 
-final class MultimodalContractParityTests: XCTestCase {
+final class MultimodalContractParityTests: ContractGateTestCase {
     private func fixture() throws -> [String: Any] {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
-        let data = try Data(contentsOf: root.appending(path: "tests/fixtures/parity/multimodal_contract_v1.json"))
+        let data = try ContractGateReporter.read(root.appending(path: "tests/fixtures/parity/multimodal_contract_v1.json"))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
@@ -26,58 +26,60 @@ final class MultimodalContractParityTests: XCTestCase {
         XCTAssertEqual(corpus["synthetic_only"] as? Bool, true)
         for row in try XCTUnwrap(corpus["cases"] as? [[String: Any]]) {
             let id = try XCTUnwrap(row["id"] as? String)
-            let wire = Data(try XCTUnwrap(row["wire"] as? String).utf8)
-            let packet = try MultimodalPacket.fromJSON(wire)
-            let expected = try XCTUnwrap(row["expected"] as? [String: Any])
-            XCTAssertEqual(packet.evidenceDigest, row["digest"] as? String, id)
-            XCTAssertEqual(packet.toJSON(), wire, id)
-            XCTAssertEqual(packet.projection.kind.rawValue, expected["kind"] as? String, id)
-            switch packet.projection {
-            case .asset(let asset):
-                if let width = expected["width"] as? Int64 { XCTAssertEqual(asset.width, width, id) }
-                if let duration = expected["duration"] as? Double { XCTAssertEqual(asset.durationSeconds, duration, id) }
-                if let bytes = expected["bytes"] as? String { XCTAssertEqual(String(asset.byteSize), bytes, id) }
-            case .visual(let visual):
-                if let box = expected["box"] as? [Double] {
-                    let actual = try XCTUnwrap(visual.displayBox, id)
-                    XCTAssertEqual([actual.left, actual.top, actual.right, actual.bottom], box, id)
-                } else {
-                    XCTAssertNil(visual.displayBox, id)
-                }
-                if let text = expected["synthetic_text"] as? String {
-                    let span = try XCTUnwrap(visual.scalarSpan, id)
-                    let scalars = Array(text.unicodeScalars)
-                    XCTAssertEqual(String(String.UnicodeScalarView(scalars[Int(span.start)..<Int(span.end)])), "😀é", id)
-                }
-            case .transcript(let transcript):
-                XCTAssertEqual(transcript.finalized, expected["finalized"] as? Bool, id)
-                if let bounds = expected["sample_bounds"] as? [Int64] {
-                    let actual = try XCTUnwrap(transcript.sampleBounds, id)
-                    XCTAssertEqual([actual.start, actual.end], bounds, id)
-                } else {
-                    XCTAssertNil(transcript.sampleBounds, id)
-                    XCTAssertNil(transcript.currentScalarSpan, id)
-                }
-                if let bounds = expected["current_span"] as? [Int64] {
-                    let actual = try XCTUnwrap(transcript.currentScalarSpan, id)
-                    XCTAssertEqual([actual.start, actual.end], bounds, id)
-                }
-            case .provider(let result):
-                XCTAssertEqual(result.outcome.rawValue, expected["outcome"] as? String, id)
-                XCTAssertEqual(result.abstention?.rawValue, expected["reason"] as? String, id)
-                if result.outcome != .success { XCTAssertNil(result.outputDigest, id) }
-            case .clock(let clock):
-                XCTAssertEqual(clock.state.rawValue, expected["state"] as? String, id)
-                if let bounds = expected["overlap"] as? [Int64] {
-                    let actual = try XCTUnwrap(clock.guaranteedOverlap, id)
-                    XCTAssertEqual([actual.start, actual.end], bounds, id)
-                } else if let bounds = expected["overlap_strings"] as? [String] {
-                    let actual = try XCTUnwrap(clock.guaranteedOverlap, id)
-                    XCTAssertEqual([String(actual.start), String(actual.end)], bounds, id)
-                } else {
-                    XCTAssertNil(clock.guaranteedOverlap, id)
-                    XCTAssertNil(clock.targetStart, id)
-                    XCTAssertNil(clock.targetEnd, id)
+            try contractCase("cases/\(id)", of: "multimodal_contract_v1") {
+                let wire = Data(try XCTUnwrap(row["wire"] as? String).utf8)
+                let packet = try MultimodalPacket.fromJSON(wire)
+                let expected = try XCTUnwrap(row["expected"] as? [String: Any])
+                XCTAssertEqual(packet.evidenceDigest, row["digest"] as? String, id)
+                XCTAssertEqual(packet.toJSON(), wire, id)
+                XCTAssertEqual(packet.projection.kind.rawValue, expected["kind"] as? String, id)
+                switch packet.projection {
+                case .asset(let asset):
+                    if let width = expected["width"] as? Int64 { XCTAssertEqual(asset.width, width, id) }
+                    if let duration = expected["duration"] as? Double { XCTAssertEqual(asset.durationSeconds, duration, id) }
+                    if let bytes = expected["bytes"] as? String { XCTAssertEqual(String(asset.byteSize), bytes, id) }
+                case .visual(let visual):
+                    if let box = expected["box"] as? [Double] {
+                        let actual = try XCTUnwrap(visual.displayBox, id)
+                        XCTAssertEqual([actual.left, actual.top, actual.right, actual.bottom], box, id)
+                    } else {
+                        XCTAssertNil(visual.displayBox, id)
+                    }
+                    if let text = expected["synthetic_text"] as? String {
+                        let span = try XCTUnwrap(visual.scalarSpan, id)
+                        let scalars = Array(text.unicodeScalars)
+                        XCTAssertEqual(String(String.UnicodeScalarView(scalars[Int(span.start)..<Int(span.end)])), "😀é", id)
+                    }
+                case .transcript(let transcript):
+                    XCTAssertEqual(transcript.finalized, expected["finalized"] as? Bool, id)
+                    if let bounds = expected["sample_bounds"] as? [Int64] {
+                        let actual = try XCTUnwrap(transcript.sampleBounds, id)
+                        XCTAssertEqual([actual.start, actual.end], bounds, id)
+                    } else {
+                        XCTAssertNil(transcript.sampleBounds, id)
+                        XCTAssertNil(transcript.currentScalarSpan, id)
+                    }
+                    if let bounds = expected["current_span"] as? [Int64] {
+                        let actual = try XCTUnwrap(transcript.currentScalarSpan, id)
+                        XCTAssertEqual([actual.start, actual.end], bounds, id)
+                    }
+                case .provider(let result):
+                    XCTAssertEqual(result.outcome.rawValue, expected["outcome"] as? String, id)
+                    XCTAssertEqual(result.abstention?.rawValue, expected["reason"] as? String, id)
+                    if result.outcome != .success { XCTAssertNil(result.outputDigest, id) }
+                case .clock(let clock):
+                    XCTAssertEqual(clock.state.rawValue, expected["state"] as? String, id)
+                    if let bounds = expected["overlap"] as? [Int64] {
+                        let actual = try XCTUnwrap(clock.guaranteedOverlap, id)
+                        XCTAssertEqual([actual.start, actual.end], bounds, id)
+                    } else if let bounds = expected["overlap_strings"] as? [String] {
+                        let actual = try XCTUnwrap(clock.guaranteedOverlap, id)
+                        XCTAssertEqual([String(actual.start), String(actual.end)], bounds, id)
+                    } else {
+                        XCTAssertNil(clock.guaranteedOverlap, id)
+                        XCTAssertNil(clock.targetStart, id)
+                        XCTAssertNil(clock.targetEnd, id)
+                    }
                 }
             }
         }
@@ -86,9 +88,11 @@ final class MultimodalContractParityTests: XCTestCase {
     func testSharedNegativeControlsFailBeforeConsumption() throws {
         for row in try XCTUnwrap(fixture()["negative_cases"] as? [[String: Any]]) {
             let id = try XCTUnwrap(row["id"] as? String)
-            let wire = Data(try XCTUnwrap(row["wire"] as? String).utf8)
-            XCTAssertThrowsError(try MultimodalPacket.fromJSON(wire), id) { error in
-                XCTAssertEqual((error as? MultimodalContractRefusal)?.rawValue, row["reason"] as? String, id)
+            try contractCase("negative_cases/\(id)", of: "multimodal_contract_v1") {
+                let wire = Data(try XCTUnwrap(row["wire"] as? String).utf8)
+                XCTAssertThrowsError(try MultimodalPacket.fromJSON(wire), id) { error in
+                    XCTAssertEqual((error as? MultimodalContractRefusal)?.rawValue, row["reason"] as? String, id)
+                }
             }
         }
     }

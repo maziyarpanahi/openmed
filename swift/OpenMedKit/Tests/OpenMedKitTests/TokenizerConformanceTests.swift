@@ -11,7 +11,7 @@ import XCTest
     /// shared synthetic vectors in `tests/fixtures/parity/tokenizer` before any
     /// inference comparison. Diagnostics carry case ids, field names, indices
     /// and reason codes only.
-    final class TokenizerConformanceTests: XCTestCase {
+    final class TokenizerConformanceTests: ContractGateTestCase {
         private static let runtime = "swift-transformers"
         private static let contractVersion = "openmed.tokenizer-conformance.v1"
         private static let fields = [
@@ -479,8 +479,8 @@ import XCTest
         private func loadVectors() throws -> Vectors {
             try JSONDecoder().decode(
                 Vectors.self,
-                from: Data(
-                    contentsOf: fixtureDirectory().appending(path: "tokenizer_conformance_v1.json")
+                from: ContractGateReporter.read(
+                    fixtureDirectory().appending(path: "tokenizer_conformance_v1.json")
                 )
             )
         }
