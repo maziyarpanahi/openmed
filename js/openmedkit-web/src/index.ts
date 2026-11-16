@@ -4,6 +4,7 @@ import {
   loadOnnxModel,
   loadTokenClassificationPipeline,
 } from "./model-loader";
+import { OpenMedError } from "./errors";
 import { resolveOfflineOnly } from "./offline";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
@@ -135,6 +136,8 @@ export { OpenMedOfflineError, isOfflineOnly, setOfflineOnly } from "./offline";
 export type { OpenMedOfflineErrorCode } from "./offline";
 export { OPENMED_ERROR_CODES, OPENMED_ERROR_CODE_RETRYABLE } from "./error-codes";
 export type { OpenMedErrorCode } from "./error-codes";
+export { OpenMedError, openMedErrorCode } from "./errors";
+export type { OpenMedErrorOptions } from "./errors";
 export {
   DECISION_ADVISORY,
   DECISION_COMPATIBILITY_POLICY,
@@ -477,7 +480,10 @@ function optionKey(value: unknown, seen = new Set<object>()): string {
       return `identity:${identity(object)}`;
     }
     if (Object.getOwnPropertySymbols(object).length > 0) {
-      throw new Error("OpenMed loader options do not support symbol keys");
+      throw new OpenMedError(
+        "configuration_error",
+        "OpenMed loader options do not support symbol keys",
+      );
     }
     seen.add(object);
     const key = Array.isArray(value)
@@ -489,7 +495,10 @@ function optionKey(value: unknown, seen = new Set<object>()): string {
     return key;
   }
   if (typeof value === "symbol") {
-    throw new Error("OpenMed loader options do not support symbol values");
+    throw new OpenMedError(
+      "configuration_error",
+      "OpenMed loader options do not support symbol values",
+    );
   }
   return JSON.stringify([typeof value, Object.is(value, -0) ? "-0" : String(value)]);
 }
@@ -501,7 +510,7 @@ async function disposeOwned(entry: OwnedPipeline): Promise<void> {
       await new Promise<void>(resolve => { entry.drained = resolve; });
     }
     try { await pipeline.dispose?.(); } catch {
-      throw new Error("OpenMed pipeline disposal failed");
+      throw new OpenMedError("internal_error", "OpenMed pipeline disposal failed");
     }
   })();
 }
@@ -511,7 +520,7 @@ export async function disposeDefaultPipelines(): Promise<void> {
   ownedPipelines.clear();
   const results = await Promise.allSettled(entries.map(disposeOwned));
   if (results.some(result => result.status === "rejected")) {
-    throw new Error("OpenMed pipeline disposal failed");
+    throw new OpenMedError("internal_error", "OpenMed pipeline disposal failed");
   }
 }
 async function acquireOwned(model: string, options: ExtractPiiOptions): Promise<OwnedPipeline> {
@@ -543,7 +552,7 @@ export async function extractPii(
       ? await ephemeralHashSecret()
       : new Uint8Array(toBytes(options.hashSecret));
   if (hashSecret.byteLength === 0) {
-    throw new Error("hashSecret must not be empty");
+    throw new OpenMedError("configuration_error", "hashSecret must not be empty");
   }
   const model = options.model ?? DEFAULT_MODEL_ID;
   const owned = options.pipeline === undefined ? await acquireOwned(model, options) : undefined;
@@ -677,7 +686,7 @@ export async function hmacTextHash(
   const payload = toBytes(surface);
   const key = new Uint8Array(toBytes(secret));
   if (key.byteLength === 0) {
-    throw new Error("hashSecret must not be empty");
+    throw new OpenMedError("configuration_error", "hashSecret must not be empty");
   }
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
