@@ -486,6 +486,77 @@ def test_health_resource_reports_only_version_and_loaded_model_count() -> None:
     assert not set(model_names) & set(payload)
 
 
+class _ServingRuntime(_Runtime):
+    """Runtime double that also reports operator-selected served model ids."""
+
+    def __init__(self, served: tuple[str, ...]) -> None:
+        super().__init__()
+        self._served = served
+
+    def served_model_ids(self) -> tuple[str, ...]:
+        return self._served
+
+
+def _read_capabilities(runtime: _Runtime) -> tuple[Any, dict[str, Any]]:
+    server = _server(runtime)
+    listed = {
+        str(resource.uri): resource for resource in asyncio.run(server.list_resources())
+    }
+    contents = asyncio.run(server.read_resource("openmed://capabilities"))
+    assert len(contents) == 1
+    return listed["openmed://capabilities"], json.loads(contents[0].content)
+
+
+def test_capabilities_resource_validates_and_matches_the_python_digest() -> None:
+    from openmed.core.capabilities import (
+        capability_descriptor,
+        capability_descriptor_digest,
+        validate_capability_descriptor,
+    )
+
+    served = ("synthetic-org/synthetic-model", "synthetic-a")
+    resource, payload = _read_capabilities(_ServingRuntime(served))
+
+    assert resource.mimeType == "application/json"
+    validate_capability_descriptor(payload)
+    expected = capability_descriptor(served_models=served)
+    assert payload == expected
+    assert payload["digest"] == expected["digest"]
+    assert capability_descriptor_digest(payload) == payload["digest"]
+    assert payload["served_models"] == ["synthetic-a", "synthetic-org/synthetic-model"]
+
+
+def test_capabilities_resource_without_served_ids_matches_python() -> None:
+    from openmed.core.capabilities import capability_descriptor
+
+    _, payload = _read_capabilities(_Runtime())
+
+    assert payload["served_models"] == []
+    assert payload["digest"] == capability_descriptor()["digest"]
+
+
+def test_capabilities_resource_carries_no_paths_or_environment_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    sentinel = "synthetic-mcp-capability-sentinel"
+    monkeypatch.setenv("HF_TOKEN", sentinel)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / sentinel))
+    monkeypatch.setenv("OPENMED_CHINESE_USER_DICT", str(tmp_path / "dict.txt"))
+    served = (
+        "synthetic-org/synthetic-model",
+        str(tmp_path / sentinel / "local-model"),
+        "~/synthetic-home-model",
+    )
+
+    _, payload = _read_capabilities(_ServingRuntime(served))
+    text = json.dumps(payload)
+
+    assert payload["served_models"] == ["synthetic-org/synthetic-model"]
+    assert sentinel not in text
+    assert str(tmp_path) not in text
+    assert "synthetic-home-model" not in text
+
+
 def test_remote_server_wires_protected_resource_auth_and_per_tool_scope() -> None:
     resource_url = "https://mcp.synthetic.test/mcp"
     config = MCPAuthorizationConfig(
