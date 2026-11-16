@@ -25,6 +25,9 @@ from urllib.parse import urlsplit
 
 SCHEMA_VERSION: Final[int] = 1
 SUPPORTED_PYTHON: Final[str] = ">=3.11"
+_ALLOWED_SUPPORTED_PYTHON: Final[frozenset[str]] = frozenset(
+    {SUPPORTED_PYTHON, ">=3.12"}
+)
 MATRIX_DOCUMENTATION_PATH: Final[str] = "docs/integrations/matrix.md"
 MAX_CAPABILITIES: Final[int] = 256
 
@@ -113,6 +116,7 @@ class IntegrationCapability:
         test_guarantee: The kind of offline test evidence recorded for the
             surface.
         description: PHI-free summary suitable for a status page or report.
+        supported_python: Minimum Python version required by the integration runtime.
     """
 
     name: str
@@ -261,7 +265,7 @@ def _assert_capability_report_safe(capability: IntegrationCapability) -> None:
         )
         and capability.policy in _ALLOWED_POLICIES
         and capability.test_guarantee in _ALLOWED_TEST_GUARANTEES
-        and capability.supported_python == SUPPORTED_PYTHON
+        and capability.supported_python in _ALLOWED_SUPPORTED_PYTHON
         and _safe_report_text(capability.description)
         and bool(capability.documentation)
         and bool(capability.tests)
@@ -397,10 +401,15 @@ class CapabilityMatrix:
             documentation = ", ".join(
                 _markdown_doc_link(path) for path in capability.documentation
             )
+            python_requirement = (
+                f" (Python `{capability.supported_python}`)"
+                if capability.supported_python != SUPPORTED_PYTHON
+                else ""
+            )
             lines.append(
                 "| "
                 f"`{_markdown_cell(capability.name)}` | "
-                f"{_markdown_cell(capability.surface)} | "
+                f"{_markdown_cell(capability.surface)}{python_requirement} | "
                 f"{requirements} | "
                 f"`{_markdown_cell(capability.policy)}` | "
                 f"`{_markdown_cell(capability.test_guarantee)}` "
@@ -447,6 +456,7 @@ def _capability(
     tests: tuple[str, ...],
     policy: str = "local-only",
     test_guarantee: str = "offline-unit",
+    supported_python: str = SUPPORTED_PYTHON,
     description: str,
 ) -> IntegrationCapability:
     """Build one concise entry for the canonical matrix."""
@@ -462,6 +472,7 @@ def _capability(
         policy=policy,
         test_guarantee=test_guarantee,
         description=description,
+        supported_python=supported_python,
     )
 
 
@@ -685,6 +696,17 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         documentation=("docs/feature-map.md",),
         tests=("tests/unit/integrations/test_log_redactor.py",),
         description="Local structured-event redaction before log emission.",
+    ),
+    _capability(
+        "medspacy_context",
+        "medspaCy ConText",
+        "openmed.interop.medspacy_context",
+        extra="medspacy",
+        dependencies=("medspacy>=1.3.1,<2",),
+        documentation=("docs/feature-map.md",),
+        tests=("tests/unit/interop/test_medspacy_context_adapter.py",),
+        supported_python=">=3.12",
+        description="Local ConText annotations for canonical clinical spans.",
     ),
     _capability(
         "omop",
@@ -1030,7 +1052,7 @@ def validate_capability_matrix(
             errors.append(f"{prefix}.policy is unsupported")
         if entry.test_guarantee not in _ALLOWED_TEST_GUARANTEES:
             errors.append(f"{prefix}.test_guarantee is unsupported")
-        if entry.supported_python != SUPPORTED_PYTHON:
+        if entry.supported_python not in _ALLOWED_SUPPORTED_PYTHON:
             errors.append(f"{prefix}.supported_python is unsupported")
         if not entry.documentation:
             errors.append(f"{prefix}.documentation is empty")

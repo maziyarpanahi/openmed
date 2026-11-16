@@ -5,7 +5,9 @@ This page is the human-readable view of the machine-readable
 the integration module, optional requirements, network or resource policy, and
 the offline test files that provide its current support evidence.
 
-All rows support Python `>=3.11`. A `core` requirement means the surface uses
+Rows support Python `>=3.11` unless noted otherwise. The `medspacy_context`
+runtime requires Python `>=3.12`; conversion of an already-processed document
+remains available on Python `>=3.11`. A `core` requirement means the surface uses
 OpenMed's base dependencies and does not require an optional extra. Optional
 requirements are copied from the matching `pyproject.toml` extra; they are
 install-time metadata, not runtime imports performed by the matrix.
@@ -57,6 +59,7 @@ constraints, and PHI-free descriptions.
 | `langgraph` | LangGraph | `langgraph>=0.2,<2` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_graph_orchestration.py` | [Feature Map](../feature-map.md) |
 | `llamaindex` | LlamaIndex | `llama-index-core>=0.10,<1` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_llamaindex_redaction.py` | [LlamaIndex Redaction Transform](llamaindex.md) |
 | `log_redactor` | Structured log redaction | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/integrations/test_log_redactor.py` | [Feature Map](../feature-map.md) |
+| `medspacy_context` | medspaCy ConText (Python `>=3.12`) | `medspacy>=1.3.1,<2` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_medspacy_context_adapter.py` | [Feature Map](../feature-map.md) |
 | `omop` | OMOP/CDM | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_omop_cdm_loader.py` | [Feature Map](../feature-map.md) |
 | `openmrs` | OpenMRS REST and FHIR2 | `httpx>=0.27` | `configured-network` | `offline-unit` (1 test file) | `tests/unit/interop/test_openmrs_adapter.py` | [OpenMRS Adapter](../openmrs-adapter.md) |
 | `pandas` | pandas DataFrame | `pandas>=2.0` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_dataframe_accessor.py` | [Feature Map](../feature-map.md) |
