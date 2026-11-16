@@ -72,6 +72,72 @@
       "conformance OpenMedIntents.OpenMedIntentsPackage: AppIntentsPackage",
       "struct OpenMedIntents.OpenMedIntentsPackage"
     ],
+    "OpenMedIntents.OpenMedPIISummary": [
+      "conformance OpenMedIntents.OpenMedPIISummary: AppEntity",
+      "conformance OpenMedIntents.OpenMedPIISummary: AppValue",
+      "conformance OpenMedIntents.OpenMedPIISummary: CustomLocalizedStringResourceConvertible",
+      "conformance OpenMedIntents.OpenMedPIISummary: DisplayRepresentable",
+      "conformance OpenMedIntents.OpenMedPIISummary: Identifiable",
+      "conformance OpenMedIntents.OpenMedPIISummary: InstanceDisplayRepresentable",
+      "conformance OpenMedIntents.OpenMedPIISummary: PersistentlyIdentifiable",
+      "conformance OpenMedIntents.OpenMedPIISummary: Sendable",
+      "conformance OpenMedIntents.OpenMedPIISummary: TransientAppEntity",
+      "conformance OpenMedIntents.OpenMedPIISummary: TypeDisplayRepresentable",
+      "struct OpenMedIntents.OpenMedPIISummary"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.counts": [
+      "static func OpenMedIntents.OpenMedPIISummary.counts(_: OpenMedKit.PolicyDeidentificationResult) -> [(label: Swift.String, count: Swift.Int)]"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.displayRepresentation": [
+      "var OpenMedIntents.OpenMedPIISummary.displayRepresentation: AppIntents.DisplayRepresentation { get }"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.identifierCount": [
+      "var OpenMedIntents.OpenMedPIISummary.identifierCount: Swift.Int { get set }"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.init": [
+      "OpenMedIntents.OpenMedPIISummary.init() -> OpenMedIntents.OpenMedPIISummary",
+      "OpenMedIntents.OpenMedPIISummary.init(_: OpenMedKit.PolicyDeidentificationResult) -> OpenMedIntents.OpenMedPIISummary"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.labelCounts": [
+      "var OpenMedIntents.OpenMedPIISummary.labelCounts: [Swift.String] { get set }"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.redactedText": [
+      "var OpenMedIntents.OpenMedPIISummary.redactedText: Swift.String { get set }"
+    ],
+    "OpenMedIntents.OpenMedPIISummary.typeDisplayRepresentation": [
+      "static var OpenMedIntents.OpenMedPIISummary.typeDisplayRepresentation: AppIntents.TypeDisplayRepresentation { get }"
+    ],
+    "OpenMedIntents.PIISummaryIntent": [
+      "conformance OpenMedIntents.PIISummaryIntent: AppIntent",
+      "conformance OpenMedIntents.PIISummaryIntent: PersistentlyIdentifiable",
+      "conformance OpenMedIntents.PIISummaryIntent: Sendable",
+      "struct OpenMedIntents.PIISummaryIntent"
+    ],
+    "OpenMedIntents.PIISummaryIntent.description": [
+      "static var OpenMedIntents.PIISummaryIntent.description: AppIntents.IntentDescription? { get }"
+    ],
+    "OpenMedIntents.PIISummaryIntent.init": [
+      "OpenMedIntents.PIISummaryIntent.init() -> OpenMedIntents.PIISummaryIntent",
+      "OpenMedIntents.PIISummaryIntent.init(text: Swift.String, policyName: Swift.String = default) -> OpenMedIntents.PIISummaryIntent"
+    ],
+    "OpenMedIntents.PIISummaryIntent.openAppWhenRun": [
+      "static var OpenMedIntents.PIISummaryIntent.openAppWhenRun: Swift.Bool { get }"
+    ],
+    "OpenMedIntents.PIISummaryIntent.parameterSummary": [
+      "static var OpenMedIntents.PIISummaryIntent.parameterSummary: some AppIntents.ParameterSummary { get }"
+    ],
+    "OpenMedIntents.PIISummaryIntent.perform": [
+      "func OpenMedIntents.PIISummaryIntent.perform() async throws -> some AppIntents.ReturnsValue<OpenMedIntents.OpenMedPIISummary>"
+    ],
+    "OpenMedIntents.PIISummaryIntent.policyName": [
+      "var OpenMedIntents.PIISummaryIntent.policyName: Swift.String { get set }"
+    ],
+    "OpenMedIntents.PIISummaryIntent.text": [
+      "var OpenMedIntents.PIISummaryIntent.text: Swift.String { get set }"
+    ],
+    "OpenMedIntents.PIISummaryIntent.title": [
+      "static var OpenMedIntents.PIISummaryIntent.title: Foundation.LocalizedStringResource { get }"
+    ],
     "OpenMedIntents.RedactTextIntent": [
       "conformance OpenMedIntents.RedactTextIntent: AppIntent",
       "conformance OpenMedIntents.RedactTextIntent: PersistentlyIdentifiable",
