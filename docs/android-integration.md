@@ -325,6 +325,24 @@ that notice. The synthetic vectors in
 `tests/fixtures/parity/clinical_entity_pack_v1.json` fix the expected output
 for the Kotlin and Swift pack tests.
 
+Each `ClinicalEntity` also carries its ConText `assertion`: `negation`
+(`affirmed`, `negated`), `uncertainty` (`certain`, `uncertain`),
+`temporality` (`recent`, `historical`, `hypothetical`) and `experiencer`
+(`patient`, `family`, `other`), with the string codes of the Python
+`assert_context`. Negated, uncertain, hypothetical and non-patient mentions
+are flagged, never dropped. `ClinicalContext` ports the English path:
+case-insensitive, token-bounded, longest-first cues from the bundled
+`clinical/context_cues_en_v1.json`, pseudo-negation masking with odd/even
+negation counting, cue direction and scope terminators, sentence bounds and
+clause-scoped experiencer cues. Pass sentence bounds as Unicode scalar
+`ScalarSpan`s with `extract(text, threshold, language, sentences)`; without
+them a regex splitter is used. A non-English `language` returns the entities
+with `assertion = null` and `assertionReason = "unsupported_language"`. The
+port reproduces `tests/fixtures/parity/clinical_assertion_v1.json` exactly,
+including the recorded Python behavior where `and` or `or` ends a negation
+scope (`cough` in `Denies fever and cough.` stays affirmed). The axes are
+advisory annotations for review, not clinical decisions.
+
 ## Offline-first deployment
 
 Separate model preparation from document processing. There are two supported
