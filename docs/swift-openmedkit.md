@@ -967,6 +967,7 @@ path, to a role-based case.
 | `OpenMedZeroShotError` | `unsupportedArtifact` with task and family values from the OpenMedKit MLX vocabulary (for example `token-classification` and `bert`), `missingPromptSpec` (a `prompt_spec` field name), `emptyInput`. |
 | `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
 | `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
+| `OpenMedModelCatalogError` | `resourceMissing`, `invalidEncoding`, `invalidEntry(line:)` (a 1-based line number, never the row). |
 | `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
 | String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
 
