@@ -356,24 +356,6 @@ class _LegacyCode:
         return _snake_case_code(error_class.__name__)
 
 
-class _LegacyMessage:
-    """Non-data ``message`` fallback: the builtin ``str()`` of the error."""
-
-    def __get__(self, instance: object, owner: Optional[type] = None) -> Any:
-        if instance is None:
-            return self
-        return str(instance)
-
-
-class _LegacyDetails:
-    """Non-data ``details`` fallback: legacy errors carry no structured details."""
-
-    def __get__(self, instance: object, owner: Optional[type] = None) -> Any:
-        if instance is None:
-            return self
-        return {}
-
-
 class LegacyRootedError(OpenMedError):
     """Compatibility root for exceptions that predate :class:`OpenMedError`.
 
@@ -392,13 +374,16 @@ class LegacyRootedError(OpenMedError):
       as before. ``LegacyRootedError`` and :class:`OpenMedError` sit directly
       in front of ``Exception``;
     * attributes the class or its instances already define, including
-      ``code``, ``message`` and ``details``, keep their values.
+      ``code`` and ``to_dict``, keep their values, and no other attribute is
+      added: ``hasattr(error, "message")`` and ``hasattr(error, "details")``
+      answer as before. Instances get no new instance attributes, so
+      ``vars(error)`` and pickled state are unchanged too.
 
     :attr:`code` is the nearest explicit ``code`` class attribute or, when
     none exists, the snake_case class name (see :func:`legacy_error_code`).
-    :attr:`message` falls back to ``str(error)`` and :attr:`details` to an
-    empty mapping. Instances are not given new instance attributes, so
-    ``vars(error)`` and pickled state are unchanged.
+    :meth:`to_dict` reports that code, ``str(error)`` as the message, and
+    empty details, because attributes of a legacy class were never reviewed
+    against the PHI-safe details contract.
 
     The REST and MCP adapters keep the transport mapping these errors had
     before they were rooted; moving them onto the taxonomy envelopes is a
@@ -406,8 +391,6 @@ class LegacyRootedError(OpenMedError):
     """
 
     code = _LegacyCode()  # type: ignore[assignment]
-    message = _LegacyMessage()  # type: ignore[assignment]
-    details = _LegacyDetails()  # type: ignore[assignment]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize exactly as the builtin base would.
@@ -429,21 +412,17 @@ class LegacyRootedError(OpenMedError):
         """Return a JSON-ready error object.
 
         Args:
-            include_details: Include the structured details mapping.
+            include_details: Include the (always empty) details mapping, for
+                parity with :meth:`OpenMedError.to_dict`.
 
         Returns:
-            A mapping with ``code``, ``message`` and, when requested,
-            ``details`` fields.
+            A mapping with ``code``, ``message`` (``str(error)``) and, when
+            requested, an empty ``details`` mapping.
         """
 
-        message = self.message
-        payload: dict[str, Any] = {
-            "code": self.code,
-            "message": message if isinstance(message, str) else str(self),
-        }
+        payload: dict[str, Any] = {"code": self.code, "message": str(self)}
         if include_details:
-            details = self.details
-            payload["details"] = dict(details) if isinstance(details, Mapping) else {}
+            payload["details"] = {}
         return payload
 
 

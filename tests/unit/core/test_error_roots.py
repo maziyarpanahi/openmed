@@ -318,8 +318,6 @@ def test_rerooted_classes_gain_to_dict_without_new_details(twins) -> None:
     _, rooted = twins
 
     error = rooted.SampleValueError("synthetic_reason")
-    assert error.message == "synthetic_reason"
-    assert error.details == {}
     assert error.to_dict() == {
         "code": "sample_value_error",
         "message": "synthetic_reason",
@@ -334,12 +332,33 @@ def test_rerooted_classes_gain_to_dict_without_new_details(twins) -> None:
         "'synthetic_key'"
     )
 
+    # Legacy attributes are never promoted into the structured payload: they
+    # were not written against the PHI-safe details contract.
     owned = rooted.SampleMessageError("synthetic_message")
+    assert owned.details == {"field": "synthetic_field"}
     assert owned.to_dict() == {
         "code": "sample_message_error",
         "message": "synthetic_message",
-        "details": {"field": "synthetic_field"},
+        "details": {},
     }
+
+
+def test_rerooting_adds_only_code_and_to_dict(twins) -> None:
+    legacy, rooted = twins
+
+    for name in _SAMPLE_NAMES:
+        legacy_error = getattr(legacy, name)("synthetic_reason")
+        rooted_error = getattr(rooted, name)("synthetic_reason")
+        for attribute in ("message", "details", "envelope", "payload"):
+            assert hasattr(rooted_error, attribute) == (
+                hasattr(legacy_error, attribute)
+            ), (name, attribute)
+        added = {
+            attribute
+            for attribute in set(dir(rooted_error)) - set(dir(legacy_error))
+            if not attribute.startswith("__")
+        }
+        assert added <= {"code", "to_dict"}, (name, added)
 
 
 def test_legacy_root_used_directly_behaves_like_exception() -> None:
