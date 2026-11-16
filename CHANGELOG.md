@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add the portable identifier validator subset to OpenMedKit Swift: `OpenMedIdentifierValidators` ports the Luhn, SSN, NPI, IBAN, Aadhaar, UK NHS, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN validators from Python, returns value-free `Bool` verdicts, and `IdentifierValidatorParityTests` matches every `identifier_validators_v1.json` vector; detection patterns are unchanged (#5419).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
