@@ -50,6 +50,32 @@ if case .visual(let evidence) = packet.projection {
 
 `MultimodalProjection` exposes typed asset, visual, transcript, provider and clock values. Construction of the containing packet is validated; no public initializer accepts an unchecked projection. Swift code that produces visual evidence, such as [native document intake](native-document-intake.md), uses `MultimodalPacket.visual(...)`: it derives the display geometry, serializes canonically and admits the result through `fromJSON`, so it produces the same bytes and digest as Python's `project_visual`. `toJSON()` preserves the exact admitted bytes, and `evidenceDigest` is the same lowercase SHA-256 returned by Python. Generic Codable decoding is not an alternative admission path.
 
+## Android admission
+
+The Android OpenMedKit admits the same packets through `com.openmed.openmedkit.multimodal.MultimodalPacket`. Admission runs the same checks in the same order as Python, so every packet produces the same `evidenceDigest` and every refusal the same code.
+
+```kotlin
+import com.openmed.openmedkit.multimodal.MultimodalPacket
+import com.openmed.openmedkit.multimodal.MultimodalPacketException
+import com.openmed.openmedkit.multimodal.MultimodalVisual
+
+// wire is the canonical packet received from a trusted local source boundary.
+try {
+    val packet = MultimodalPacket.fromJson(wire)
+    when (val projection = packet.projection) {
+        is MultimodalVisual -> {
+            val sourceBox = projection.sourceBox // provenance
+            val displayBox = projection.displayBox // validated rotation only
+        }
+        else -> Unit
+    }
+} catch (refusal: MultimodalPacketException) {
+    // refusal.refusal.code is one of the five codes below; nothing else is attached.
+}
+```
+
+The projections are `MultimodalAsset`, `MultimodalVisual`, `MultimodalTranscript`, `MultimodalProvider` and `MultimodalClockAlignment`. The asset projection carries the shared Android `AssetManifest` with the opaque `asset_ref` as its identifier, and the provider projection carries the shared Android `ProviderResultEnvelope`. Their existing validation applies unchanged. Floats are decoded only from the hex form, and integers and clock bounds use exact arithmetic. `toJson()` returns a copy of the admitted bytes. A `MultimodalPacketException` message is the refusal code only, with no cause. Android has no packet factory or local adapter seam yet.
+
 Python's `LocalMultimodalAdapter` and Swift's `LocalMultimodalAdapter` provide injected local execution seams. `run_local_adapter` / `LocalMultimodalExecution.run` reject a non-local declaration or an unsupported projection kind before invoking the adapter. A returned provider outcome must bind `input_digest` to the request packet's `evidence_digest`. Missing models, resource limits and validation failures use the existing provider result vocabulary; they never become successful empty outputs. Actual model execution, cancellation, resource enforcement and source custody remain responsibilities of the injected implementation. A declaration is not a network sandbox.
 
 ## Wire identity and validation
@@ -78,6 +104,8 @@ The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.js
 python -m pytest tests/unit/multimodal/test_apple_contract.py -q
 cd swift/OpenMedKit
 swift test --disable-automatic-resolution --filter MultimodalContractParityTests
+cd ../../android
+./gradlew :openmedkit:testDebugUnitTest --tests '*MultimodalContractParityTest'
 ```
 
 Package dependencies must already be resolved and cached for an offline build. The tests themselves need no model weights, network access, microphone or real clinical data. The Swift workflow also runs when the shared fixture changes. These checks establish contract parity; they do not qualify any VLM/ASR model or complete application.
