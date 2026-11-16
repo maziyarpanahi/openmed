@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Key opt-in result-cache entries on the model revision and a model generation
+  counter, and clear the cache when a registry promotion, pointer flip or
+  rollback changes the served weights, so a model that keeps its name no longer
+  returns the previous weights' cached results (#4538).
 - Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
   `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
   links against it and no dependency ships it, so the tokenizer failed to load
