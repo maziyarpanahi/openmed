@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `scripts/release/schema_release_diff.py`, which compares every packaged JSON Schema with the last `v*` release tag straight from Git, classifies it as added, removed, compatible, version bump or breaking, and fails the release gates on breaks or removals that lack a reviewed allowlist entry with a reason and target version (#5333).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
