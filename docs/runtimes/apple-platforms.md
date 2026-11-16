@@ -113,6 +113,13 @@ do {
 `OpenMed.clearRuntimeMemoryCache()` is a no-op where MLX cannot run, so
 CoreML-only callers such as the share extension can call it on the Simulator.
 
+## Shortcuts and App Intents
+
+The `OpenMedIntents` product adds on-device "Redact Text with OpenMed" and
+"Summarize PII with OpenMed" actions for Shortcuts. They use a model that is
+already cached, never download one, and return only redacted text and label
+counts. See [OpenMedKit App Intents](apple-app-intents.md).
+
 ## Build and validation
 
 The Swift workflow performs the normal macOS tests, the iOS simulator build,
