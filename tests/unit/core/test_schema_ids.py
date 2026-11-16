@@ -21,9 +21,7 @@ def _assert_unique_schema_ids(schema_paths: Iterable[Path]) -> None:
         paths_by_id.setdefault(schema_id, []).append(path)
 
     duplicates = {
-        schema_id: paths
-        for schema_id, paths in paths_by_id.items()
-        if len(paths) > 1
+        schema_id: paths for schema_id, paths in paths_by_id.items() if len(paths) > 1
     }
     problems = [
         f"duplicate $id {schema_id!r}: {', '.join(str(path) for path in paths)}"
