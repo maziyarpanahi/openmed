@@ -123,3 +123,95 @@ the protocol error flag and `is_error`:
 MCP security, authorization, consent, and tool-schema errors keep their
 existing specialized codes. They do not include the rejected input or upstream
 exception text.
+
+## Rerooting legacy exceptions
+
+Many public exceptions predate this taxonomy and derive straight from a
+builtin such as `ValueError` or `RuntimeError`. They join the contract through
+`openmed.core.errors.LegacyRootedError`, a compatibility subclass of
+`OpenMedError` that changes nothing callers already observe:
+
+```python
+from openmed.core.errors import LegacyRootedError
+
+
+class AecgError(ValueError, LegacyRootedError):
+    """Raised when a synthetic aECG document is malformed."""
+```
+
+A rerooted class:
+
+- is caught by `except OpenMedError` and by every handler for its builtin
+  bases;
+- accepts any positional arguments, including none, and keeps `args`,
+  `str()`, `repr()`, pickling and copying byte-identical to the builtin
+  behavior;
+- keeps its method resolution order: `LegacyRootedError` and `OpenMedError`
+  are inserted directly in front of `Exception`, so `except` ordering,
+  `isinstance` checks and MRO-based dispatch tables resolve as before;
+- gains a class-level `code`, a `message` that falls back to `str(error)`,
+  empty `details`, and `to_dict()`. A `code`, `message` or `details` the class
+  or its instances already define wins, and no instance attribute is added.
+
+### Rules
+
+1. Put the builtin base first and `LegacyRootedError` last:
+   `class AecgError(ValueError, LegacyRootedError)`. Subclasses of a rerooted
+   class are rooted automatically.
+2. Replace a bare `Exception` base with the root itself:
+   `class ToolError(LegacyRootedError)`. Python rejects
+   `class ToolError(Exception, LegacyRootedError)`.
+3. A class that combines a rerooted parent with another builtin base lists
+   that builtin's ancestors before the root, for example
+   `class AecgKeyError(AecgError, KeyError, LookupError, LegacyRootedError)`.
+   Otherwise the roots would land in front of `LookupError`.
+4. The stable `code` is the nearest explicit `code` class attribute or, when
+   there is none, the snake_case class name (`AecgError` reports
+   `aecg_error`). Existing explicit codes, and the codes subclasses inherit
+   from them, never change. Set `code` explicitly to keep a code across a
+   class rename. `openmed.core.errors.legacy_error_code()` returns the code a
+   class reports, including before it is rerooted.
+5. Messages stay value-free: rerooting does not make a message that echoes
+   input acceptable, because `to_dict()` exposes `str(error)`.
+
+`LegacyRootedError` is not part of `ERROR_CODES`, and rerooted classes do not
+move onto the taxonomy envelopes: the REST service and MCP tools keep the
+status codes and envelopes these errors had before they were rooted, and agent
+error envelopes map them as before. Moving a class onto a taxonomy envelope is
+a separate, explicit change.
+
+### The unrooted-exception gate
+
+`tests/unit/core/test_error_roots.py` runs
+`scripts/release/check_error_roots.py`, which imports every public module (no
+path component starting with `_`), collects the exception classes they expose
+under public names (warning categories excluded), and reports each by its
+qualified name only, `module:QualName`. Modules that cannot be imported because
+an optional dependency is missing are listed as skipped.
+
+`tests/fixtures/error_roots/unrooted_allowlist.txt` names the exceptions that
+are not rooted yet. It only shrinks:
+
+- a public exception that is neither rooted nor allowlisted fails the gate, so
+  new exceptions must be rooted from the start;
+- an entry whose class is now rooted, or no longer public, fails the gate as
+  stale until its line is deleted;
+- every `LegacyRootedError` subclass must keep the roots directly in front of
+  `Exception` and report a valid code.
+
+To reroot a package:
+
+```bash
+# 1. Before editing, record each class's MRO, code and behavior on synthetic
+#    arguments.
+python scripts/release/check_error_roots.py --record openmed.multimodal \
+  --record-output tests/fixtures/error_roots/rerooted/multimodal.json
+# 2. Add LegacyRootedError to the classes, then delete the now-stale lines.
+python scripts/release/check_error_roots.py --prune
+```
+
+Commit the snapshot with a parametrized test that replays it through
+`replay_snapshot()` from the same script: the rerooted classes must report the
+recorded code and keep the recorded MRO (ignoring the two roots), `args`,
+`str()` and pickling results. Snapshots contain synthetic tokens, class names
+and exception type names only.
