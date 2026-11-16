@@ -69,6 +69,67 @@ test("a sidecar killed mid-request becomes a clean host error", async () => {
   );
 });
 
+test("artifact refusals keep only the code and a safe reason", async () => {
+  for (const [code, reason, message] of [
+    [
+      "SIDECAR_ARTIFACT_MISMATCH",
+      "model_file_digest_mismatch",
+      "An OpenMed sidecar artifact does not match its manifest.",
+    ],
+    [
+      "SIDECAR_ARTIFACT_MISSING",
+      "sidecar_missing",
+      "A required OpenMed sidecar artifact is missing.",
+    ],
+    [
+      "SIDECAR_ARTIFACT_INCOMPATIBLE",
+      "platform_mismatch",
+      "The OpenMed sidecar bundle is not compatible with this host.",
+    ],
+    [
+      "SIDECAR_MANIFEST_INVALID",
+      "manifest_not_canonical",
+      "The OpenMed sidecar manifest is missing or invalid.",
+    ],
+    [
+      "SIDECAR_NOT_RUNNING",
+      "host_terminated",
+      "The OpenMed sidecar has been stopped by the host.",
+    ],
+  ] as const) {
+    const client = new OpenMedTauriClient(async () => {
+      throw {
+        code,
+        reason,
+        message: "/private/rowan@example.test/models/config.json changed",
+      };
+    });
+    await assert.rejects(client.ping(), (error: unknown) => {
+      assert.ok(error instanceof OpenMedSidecarError);
+      assert.equal(error.code, code);
+      assert.equal(error.reason, reason);
+      assert.equal(error.message, message);
+      assert.ok(!error.message.includes("rowan@example.test"));
+      return true;
+    });
+  }
+});
+
+test("reasons that are not stable codes are dropped", async () => {
+  const client = new OpenMedTauriClient(async () => {
+    throw {
+      code: "SIDECAR_PROTOCOL",
+      reason: "Synthetic patient Rowan Hale",
+    };
+  });
+  await assert.rejects(client.ping(), (error: unknown) => {
+    assert.ok(error instanceof OpenMedSidecarError);
+    assert.equal(error.code, "SIDECAR_PROTOCOL");
+    assert.equal(error.reason, undefined);
+    return true;
+  });
+});
+
 test("renderer input cannot select a model path", async () => {
   let invocationCount = 0;
   const client = new OpenMedTauriClient(async () => {

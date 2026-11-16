@@ -243,3 +243,129 @@ def test_span_attribute_guard_drops_unapproved_text_keys() -> None:
         "openmed.entity.count": 1,
         "openmed.entity.labels": ["NAME"],
     }
+
+
+# Synthetic MRN-like sentinel embedded in every rejected request id.
+REQUEST_ID_SENTINEL = "MRN-SYNTH-884213"
+
+
+def _rendered_span_text(spans: list[Any]) -> str:
+    lines = []
+    for span in spans:
+        lines.append(span.name)
+        lines.extend(f"{key}={value}" for key, value in span.attributes.items())
+        for event in span.events:
+            lines.append(event.name)
+            lines.extend(
+                f"{key}={value}" for key, value in (event.attributes or {}).items()
+            )
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize(
+    "inbound",
+    [
+        REQUEST_ID_SENTINEL + "-" + "x" * 8010,
+        REQUEST_ID_SENTINEL + "-" + "b" * 112,
+        (REQUEST_ID_SENTINEL + "-\u00e9").encode("utf-8"),
+        REQUEST_ID_SENTINEL + "\r\nX-Injected: 1",
+        "req-ok," + REQUEST_ID_SENTINEL,
+        "req-ok " + REQUEST_ID_SENTINEL,
+    ],
+    ids=["oversized", "one_over_limit", "non_ascii", "crlf", "comma", "space"],
+)
+def test_non_conforming_request_id_never_reaches_span_attributes(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+    inbound: str | bytes,
+) -> None:
+    def fake_analyze(text: str, **kwargs: Any) -> dict[str, Any]:
+        del text
+        return {"text": "", "entities": [], "model_name": kwargs["model_name"]}
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/analyze",
+            headers={REQUEST_ID_HEADER: inbound},
+            json={"text": "short synthetic note", "model_name": "test-model"},
+        )
+
+    assert response.status_code == 200
+    request_id = response.headers[REQUEST_ID_HEADER]
+    spans = list(span_exporter.get_finished_spans())
+    request_span = _span_by_name(spans, "openmed.service.request")
+    assert request_span.attributes["openmed.request_id"] == request_id
+    assert REQUEST_ID_SENTINEL not in request_id
+    assert REQUEST_ID_SENTINEL not in _rendered_span_text(spans)
+
+
+def test_conforming_request_id_is_preserved_on_request_span(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inbound = "req-" + "a" * 124
+
+    def fake_analyze(text: str, **kwargs: Any) -> dict[str, Any]:
+        del text
+        return {"text": "", "entities": [], "model_name": kwargs["model_name"]}
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/analyze",
+            headers={REQUEST_ID_HEADER: inbound},
+            json={"text": "short synthetic note", "model_name": "test-model"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers[REQUEST_ID_HEADER] == inbound
+    request_span = _span_by_name(
+        list(span_exporter.get_finished_spans()),
+        "openmed.service.request",
+    )
+    assert request_span.attributes["openmed.request_id"] == inbound
+
+
+def test_failed_stages_record_only_the_error_type(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failing_extract_pii(text: str, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError(f"backend rejected {text}")
+
+    monkeypatch.setattr(openmed, "extract_pii", failing_extract_pii)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/pii/extract",
+            json={"text": PHI_TEXT, "model_name": "test-pii-model"},
+        )
+
+    assert response.status_code == 500
+    spans = list(span_exporter.get_finished_spans())
+    # Retries may run the pipeline stage more than once.
+    pipeline_spans = [
+        span for span in spans if span.name == "openmed.service.pii_extract_pipeline"
+    ]
+    assert pipeline_spans
+    for pipeline_span in pipeline_spans:
+        assert pipeline_span.attributes["openmed.error.type"] == "RuntimeError"
+        assert pipeline_span.status.status_code.name == "ERROR"
+    assert all(not span.events for span in spans)
+    descriptions = "\n".join(str(span.status.description) for span in spans)
+    assert [item for item in PHI_SUBSTRINGS if item in descriptions] == []

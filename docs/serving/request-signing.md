@@ -1,8 +1,9 @@
 # HMAC Request Signing
 
 OpenMed provides a shared HMAC-SHA256 scheme for callers that need request
-integrity and replay protection. It is available for inbound request
-verification and is also used by async job webhooks.
+integrity and replay protection. The REST service can require it on selected
+routes (see [Require Signatures on Service Routes](#require-signatures-on-service-routes)),
+and async job webhooks use the same scheme.
 
 This is an application-level integrity check. Keep using HTTPS, service
 authentication, and a secret manager; request signing does not replace them.
@@ -121,10 +122,266 @@ expected peak number of signed requests per window. The cache is local to one
 process; deployments that require cross-process replay protection need an
 external nonce store, which is outside this feature's scope.
 
+## Require Signatures on Service Routes
+
+The REST service can require valid signatures on chosen routes. It is off by
+default. When it is off, no middleware is installed and every route behaves as
+before.
+
+Write the shared secret to a file readable only by the service account, then
+name the file and the routes:
+
+```bash
+OPENMED_SERVICE_REQUEST_SIGNING_SECRET_FILE=/run/secrets/openmed-signing-key \
+OPENMED_SERVICE_REQUEST_SIGNING_ROUTES="POST /jobs,GET /jobs/{job_id}" \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `OPENMED_SERVICE_REQUEST_SIGNING_ROUTES` | unset (off) | Comma-separated `METHOD /route-template` entries that must be signed |
+| `OPENMED_SERVICE_REQUEST_SIGNING_SECRET_FILE` | unset | File that holds the shared secret |
+| `OPENMED_SERVICE_REQUEST_SIGNING_MAX_SKEW_SECONDS` | `300` | Accepted clock skew; also the nonce replay window |
+| `OPENMED_SERVICE_REQUEST_SIGNING_NONCE_CACHE_SIZE` | `10000` | Maximum active nonces held by one process |
+
+Route entries use the route template, not a concrete path. `GET /jobs/{job_id}`
+covers `/jobs/abc` and `/jobs/xyz`. The same template also guards `HEAD`
+requests to it. Requests to routes that are not listed pass through unchanged
+and their bodies are not read.
+
+The secret file is read once at startup. Leading and trailing whitespace,
+such as a final newline, is removed. The secret must be 32 to 4096 bytes.
+The service refuses to start when:
+
+- routes are set without a secret file, or a secret file without routes;
+- the secret file is missing, unreadable, empty, too short, or too long;
+- an entry is malformed or names an unknown or unregistered route template;
+- a skew or cache-size value is not a positive integer.
+
+Startup errors name only the setting. They never include the file path, the
+route entry, or the secret.
+
+### Failure Codes
+
+A rejected request never reaches the route handler. Failures use the standard
+service error envelope with `details: null`, the request ID, and a
+`WWW-Authenticate: OPENMED-HMAC-SHA256` header:
+
+| Status | Code | Cause |
+| --- | --- | --- |
+| `401` | `signature_missing` | One or more of the three signature headers is absent |
+| `401` | `signature_invalid` | Malformed or duplicate headers, or the HMAC does not match the method, target, timestamp, nonce, or body |
+| `401` | `signature_stale` | The timestamp is outside the skew window |
+| `401` | `signature_replayed` | The nonce was already accepted inside its window |
+| `503` | `service_busy` | The nonce cache is full of active entries, so the request is refused |
+| `413` | `payload_too_large` | A signed route body exceeds the service request-byte limit |
+
+Responses, logs, and metrics never contain signatures, nonces, secrets, or
+body content. The service does not write a separate log line for signature
+failures; the access log records the route template and status, never the
+raw target or headers.
+
+### Middleware Order
+
+Signature checks run after the request-body limits and before routing:
+
+1. The request-size limit (`OPENMED_SERVICE_MAX_REQUEST_BYTES`) and the
+   model-route body limit reject oversized bodies first.
+2. The signing middleware buffers the body, verifies it, and replays the
+   identical bytes to the handler.
+3. Tracing, readiness, metrics, throttling, authentication, trusted-host
+   checks, and routing then run as usual.
+
+Because signatures are checked before authentication, an unsigned request to
+a signed route gets `signature_missing` even when it also lacks credentials.
+Signature failures are not counted by the authentication failure rate limiter
+or by the request metrics.
+
+The signed target is the path and query exactly as the OpenMed process
+receives them. If a proxy rewrites the path, sign the rewritten path.
+
+### Nonce Cache Limits
+
+Each service process keeps its own in-memory nonce cache:
+
+- It holds at most `OPENMED_SERVICE_REQUEST_SIGNING_NONCE_CACHE_SIZE` active
+  nonces. A nonce stays active until its timestamp plus the skew window has
+  passed.
+- It never evicts an active nonce to make room. When it is full, new signed
+  requests get `503 service_busy` until older entries expire. Size it for the
+  peak number of signed requests per window, per process.
+- It is lost on restart. A request captured shortly before a restart can be
+  replayed once against the new process while its timestamp is still fresh.
+
+Replay protection is per process. With several replicas or worker processes,
+each one has its own cache, so the same signed request can be accepted once
+by each process. Use sticky routing or a single worker when that matters.
+A shared nonce store is out of scope; webhook delivery and key rotation are
+covered separately.
+
 ## Signed Webhooks
 
-Async job callbacks use this same canonical scheme with method `POST`, the
-callback URL's exact path and query, and the canonical JSON bytes sent on the
-wire. Receivers can pass the callback request directly to
-`verify_request_signature`. See [Async REST Jobs & Webhooks](async-jobs.md) for
-delivery and retry behavior.
+Async job callbacks are signed with the version 2 webhook-delivery contract,
+which wraps the version 1 canonical string above without changing it. It lets a
+receiver tell one logical delivery from its retries, reject a retransmitted
+attempt even after a restart, and keep verifying during a key rotation. See
+[Async REST Jobs & Webhooks](async-jobs.md) for delivery and retry behavior.
+
+### Delivery Headers
+
+Every attempt carries:
+
+- `X-OpenMed-Event`: event type, such as `job.done`
+- `X-OpenMed-Delivery-Id`: opaque id, identical on every retry of one delivery
+- `X-OpenMed-Attempt`: attempt number, `1`, `2`, ...
+- `X-OpenMed-Timestamp`: Unix time of this attempt
+- `X-OpenMed-Nonce`: fresh one-time value for this attempt
+- `X-OpenMed-Webhook-Signature`: `v2,kid=<key id>,sha256=<64 lowercase hex>`
+
+The key id names the key generation that signed the attempt; it is never key
+material. A job webhook signed with the per-job `secret` uses a key id derived
+from that secret (`hk_` followed by 24 hex characters: the first 12 bytes of
+HMAC-SHA256 keyed by the secret over `OPENMED-SIGNING-KEY-ID-V1`), so a
+receiver that holds the secret derives the same id with
+`openmed.service.signing_keys.derive_key_id`.
+
+For receivers that still verify version 1, each attempt also carries the V1
+`X-OpenMed-Signature: sha256=<hex>` header, computed with the same key. Senders
+that call `deliver_webhook` directly can turn it off with
+`include_legacy_signature=False`.
+
+### Version 2 Canonical String
+
+```text
+OPENMED-WEBHOOK-HMAC-SHA256-V2
+key-id:<KEY ID>
+event:<EVENT TYPE>
+delivery-id:<DELIVERY ID>
+attempt:<ATTEMPT NUMBER>
+<THE VERSION 1 CANONICAL STRING>
+```
+
+The signature is the lowercase hexadecimal HMAC-SHA256 of those UTF-8 bytes.
+Test vector, for receivers in other languages:
+
+| Input | Value |
+| --- | --- |
+| secret | `synthetic-webhook-secret` |
+| method, path | `POST`, `/callbacks/openmed?source=jobs` |
+| timestamp, nonce | `1800000000`, `synthetic-attempt-nonce` |
+| body | `{"event":"job.done","job_id":"synthetic-job","status":"done"}` |
+| key id, event | `webhooks-2026-11`, `job.done` |
+| delivery id, attempt | `dlv_00000000000000000000000000000001`, `2` |
+| signature | `bf5c4494b17722c287c69ecf8b1c8ffa5425067eeafbadc80ffc57d08bc529a3` |
+
+### Verify and De-duplicate Deliveries
+
+`openmed.service.webhook_replay.WebhookReceiver` checks the headers, freshness,
+key state, and HMAC, then claims the attempt in a durable `FileReplayLedger`:
+
+```python
+import os
+
+from openmed.service.signing_keys import SigningKeyring
+from openmed.service.webhook_replay import FileReplayLedger, WebhookReceiver
+
+receiver = WebhookReceiver(
+    keyring=SigningKeyring.single(os.environ["OPENMED_WEBHOOK_SECRET"]),
+    ledger=FileReplayLedger(
+        "/var/lib/receiver/openmed-webhooks.json",
+        integrity_key=bytes.fromhex(os.environ["RECEIVER_LEDGER_KEY_HEX"]),
+    ),
+)
+
+
+def handle(method, path_and_query, body, headers):
+    verification = receiver.verify(method, path_and_query, body, headers)
+    if verification.accepted:
+        try:
+            apply_effect(body)  # your idempotent side effect
+        except Exception:
+            receiver.release(verification)  # let a later retry claim it
+            raise
+        receiver.mark_applied(verification)
+    return verification.http_status
+```
+
+Generate the ledger integrity key once (for example
+`secrets.token_bytes(32).hex()`) and keep it separate from webhook secrets.
+`verify` never raises for hostile input and returns one typed outcome:
+
+| Outcome | Meaning | Suggested status |
+| --- | --- | --- |
+| `accepted` | New delivery; apply it, then call `mark_applied` | 200 |
+| `duplicate` | A fresh retry of a delivery already claimed or applied | 200 |
+| `replayed` | A retransmitted attempt or reused nonce | 409 |
+| `stale` | Timestamp outside the window (default 300 seconds) | 401 |
+| `bad_signature` | Missing, malformed, or mismatched signature headers | 401 |
+| `unknown_key` | Unknown key id, or a key that is not active yet | 401 |
+| `retired_key` | Retired key, or a retiring key after its overlap | 401 |
+| `unavailable` | Ledger or keyring integrity or capacity not established | 503 |
+
+`reason` gives a controlled code for each outcome, such as `delivery_applied`
+or `ledger_integrity_failed`. Delivery and key fields are filled in only after
+the signature verifies. A failed verification never writes to the ledger, so a
+forged request cannot use up a genuine delivery id, and a wrong secret produces
+the same `bad_signature` result as any other mismatch.
+
+The ledger is one `0600` JSON file replaced atomically on every change, with a
+sibling `.lock` file that serializes receivers across threads and processes,
+so two workers cannot both claim one delivery. It stores only HMAC digests of
+delivery ids, attempts, and nonces, plus key ids, attempt numbers, states, and
+timestamps, and an HMAC over the whole file detects tampering. It fails closed
+with `unavailable` when the file is corrupt, signed with another key, rolled
+back or deleted while the receiver runs, or full of unexpired entries
+(`max_entries`, default 10,000). Attempt and nonce records expire with the
+freshness window; delivery records expire after `delivery_ttl_seconds`
+(default 24 hours), which is the receiver's idempotency horizon.
+
+Requests that carry only the V1 header are rejected with
+`signature_version_unsupported` unless the receiver is built with
+`accept_legacy_v1=True`. Legacy requests then get nonce replay protection but
+no retry de-duplication, because V1 has no delivery id.
+
+### Rotate Signing Keys
+
+A `SigningKeyringFile` holds one complete key generation: exactly one `active`
+key, `retiring` keys that verify until `verify_until`, and `retired` key ids
+that are refused. Point `OPENMED_WEBHOOK_SIGNING_KEYRING_FILE` at it, or use
+`OPENMED_WEBHOOK_SIGNING_SECRET` or `OPENMED_WEBHOOK_SIGNING_SECRET_FILE` (with
+an optional `OPENMED_WEBHOOK_SIGNING_KEY_ID`) for a single static key, and load
+it with `signing_keyring_from_env()`.
+
+```json
+{
+  "format": "openmed.signing-keyring",
+  "schema_version": 1,
+  "generation": 2,
+  "rotated_at": 1800000000,
+  "keys": [
+    {"key_id": "webhooks-2026-11", "state": "active",
+     "secret_file": "webhooks-2026-11.key", "not_before": 1800000000},
+    {"key_id": "webhooks-2026-10", "state": "retiring",
+     "secret_env": "WEBHOOKS_2026_10_SECRET", "verify_until": 1800086400},
+    {"key_id": "webhooks-2026-09", "state": "retired"}
+  ]
+}
+```
+
+Each active or retiring key names one secret source: `secret_file` (resolved
+next to the keyring file), `secret_env`, or inline `secret_b64`. A generation
+that is malformed, or whose referenced secret is missing, is rejected as a
+whole. `SigningKeyringFile.rotate(new_secret=..., overlap_seconds=...)`
+writes the next generation in one atomic replace: the new key becomes active,
+the previous active key becomes retiring for the overlap window (at most seven
+days), and the previously retiring key is retired. An interrupted rotation
+leaves the previous complete generation in place. A loaded resolver refuses to
+move back to an older generation, or to a different file with the same
+generation number, and keeps using the generation it has; pass
+`min_generation` to carry that floor across restarts.
+
+When the sender and receiver keep separate keyring files, rotate the receiver
+first so that it already trusts the new key, then rotate the sender before the
+receiver's overlap window ends. In-flight retries signed with the old key keep
+verifying until then. Rotation receipts and `SigningKeyring.describe()` hold
+only generations, key ids, states, and timestamps.

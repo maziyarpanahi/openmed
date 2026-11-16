@@ -16,6 +16,7 @@ MODEL_FILENAMES = {
     "int8": "model_int8.onnx",
 }
 DEFAULT_VARIANT_ORDER = ("int8", "fp32", "fp16")
+DECODER_PROFILE_FILENAME = "openmed-decoder-profile.json"
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,21 @@ class OnnxModel:
         )
         self.config = _read_json(self.artifact_dir / "config.json")
         self.id2label = _read_id2label(self.artifact_dir, self.config)
+        # Qualified exports (for example ModernBERT) reject unqualified
+        # variants, providers, unknown families, and stale adapter versions
+        # before a runtime session exists.
+        self.qualification = _check_qualified_artifact(
+            self.artifact_dir,
+            self.model_path,
+            providers=providers,
+        )
+        # Families with a canonical decoder (Privacy Filter) ship a decoder
+        # profile; predictions then use that decoder instead of argmax.
+        self.decoder_profile = _load_bundle_decoder_profile(
+            self.artifact_dir,
+            self.id2label,
+            expected_sha256=(self.qualification or {}).get("decoder_profile_sha256"),
+        )
         np, ort, auto_tokenizer = _load_runtime_dependencies()
         self._np = np
         self.tokenizer = tokenizer or auto_tokenizer.from_pretrained(
@@ -217,6 +233,17 @@ class OnnxModel:
             if len(input_shape) > 1 and isinstance(input_shape[1], int)
             else None
         )
+        qualified_max = (self.qualification or {}).get("max_sequence_length")
+        self._qualified_max_length = (
+            int(qualified_max) if isinstance(qualified_max, int) else None
+        )
+        # Longformer graphs take a global attention mask filled by the
+        # qualified policy; unqualified graphs fall back to local attention.
+        self._global_attention_policy = str(
+            (self.qualification or {}).get("global_attention") or "none"
+        )
+        windowing = (self.qualification or {}).get("windowing")
+        self._windowing = windowing if isinstance(windowing, Mapping) else None
 
     @classmethod
     def from_pretrained(
@@ -389,15 +416,39 @@ class OnnxModel:
                 self.config.get("max_position_embeddings"),
                 getattr(self.tokenizer, "model_max_length", None),
                 self._fixed_sequence_length,
+                self._qualified_max_length,
             )
             if isinstance(value, int) and 2 < value < 10**7
         ]
         model_limit = min(limits) if limits else 512
-        window_size = min(model_limit, 512) if max_length is None else max_length
+        windowing = self._windowing
+        declared_window = (
+            int(windowing["window_tokens"]) if windowing is not None else None
+        )
+        if max_length is not None:
+            window_size = max_length
+        elif declared_window is not None:
+            # Qualified long-document exports default to the evidenced window.
+            window_size = min(model_limit, declared_window)
+        else:
+            window_size = min(model_limit, 512)
         _positive_integer("max_length", window_size)
+        qualified_limit = self._qualified_max_length
+        if qualified_limit is not None and window_size > qualified_limit:
+            from openmed.eval.export_qualification import (
+                ExportQualificationError,
+                ExportReason,
+            )
+
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_SEQUENCE_LENGTH)
         if window_size > model_limit:
             raise ValueError("max_length exceeds the model token limit")
-        overlap = min(96, max(0, (window_size - 2) // 4)) if stride is None else stride
+        if stride is None and windowing is not None and window_size == declared_window:
+            overlap = int(windowing["overlap_tokens"])
+        elif stride is None:
+            overlap = min(96, max(0, (window_size - 2) // 4))
+        else:
+            overlap = stride
         if (
             isinstance(overlap, bool)
             or not isinstance(overlap, int)
@@ -433,6 +484,16 @@ class OnnxModel:
                                 "tokenizer returned invalid source offsets"
                             )
                         token_counts[index] = max(token_counts[index], token_index + 1)
+            if windowing is not None and token_counts[index] > int(
+                windowing["max_document_tokens"]
+            ):
+                # Bounded exports never truncate: refuse the whole request.
+                from openmed.eval.export_qualification import (
+                    ExportQualificationError,
+                    ExportReason,
+                )
+
+                raise ExportQualificationError(ExportReason.SEQUENCE_TOO_LONG)
             windows.extend(encoded_windows)
             counts[index] = len(encoded_windows)
             if len(windows) > max_windows:
@@ -506,6 +567,7 @@ class OnnxModel:
                     self.id2label,
                     text,
                     threshold=threshold,
+                    decoder_profile=self.decoder_profile,
                 )
             results.append(
                 OnnxPrediction(
@@ -540,6 +602,22 @@ class OnnxModel:
             size = len(window.input_ids)
             for name in encoded:
                 encoded[name][row, :size] = getattr(window, name)
+        if "global_attention_mask" in self.input_names:
+            # Fill the explicit Longformer input from the qualified policy;
+            # padding positions are never global.
+            global_mask = self._np.zeros(shape, dtype=self._np.int64)
+            if self._global_attention_policy == "first_token":
+                global_mask[:, 0] = 1
+            elif self._global_attention_policy != "none":
+                from openmed.eval.export_qualification import (
+                    ExportQualificationError,
+                    ExportReason,
+                )
+
+                raise ExportQualificationError(
+                    ExportReason.UNSUPPORTED_GLOBAL_ATTENTION
+                )
+            encoded["global_attention_mask"] = global_mask
         return self._build_feed(encoded)
 
     def __call__(
@@ -567,6 +645,93 @@ class OnnxModel:
             dtype = _numpy_input_dtype(self._np, inputs_by_name[name])
             feed[name] = self._np.asarray(value, dtype=dtype)
         return feed
+
+
+def _check_qualified_artifact(
+    artifact_dir: Path,
+    model_path: Path,
+    *,
+    providers: Sequence[str],
+) -> dict[str, Any] | None:
+    """Apply a bundled qualification report, when present, before inference."""
+
+    from openmed.eval.export_qualification import (
+        EXPORT_QUALIFICATION_FILENAME,
+        check_qualified_request,
+        load_qualification_report,
+    )
+    from openmed.torch.export_adapters import require_registered_adapter
+
+    report_path = artifact_dir / EXPORT_QUALIFICATION_FILENAME
+    if not report_path.is_file():
+        return None
+    report = load_qualification_report(report_path)
+    if report.get("task", "token-classification") != "token-classification":
+        # GLiNER and GLiClass bundles load through ZeroShotOnnxModel.
+        from openmed.eval.export_qualification import (
+            ExportQualificationError,
+            ExportReason,
+        )
+
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_TASK)
+    # Only families with a reviewed adapter at the recorded version may load.
+    require_registered_adapter(report.get("family"), report.get("adapter_version"))
+    try:
+        relative = model_path.resolve().relative_to(artifact_dir.resolve())
+        artifact = relative.as_posix()
+    except ValueError:
+        artifact = model_path.name
+    variant = check_qualified_request(
+        report,
+        runtime="onnx",
+        artifact=artifact,
+        providers=list(providers),
+    )
+    contract = report.get("io_contract") or {}
+    summary = {
+        "family": report.get("family"),
+        "variant": variant.get("name"),
+        "claim": variant.get("claim"),
+        "max_sequence_length": contract.get("max_sequence_length"),
+    }
+    global_attention = contract.get("global_attention")
+    if isinstance(global_attention, Mapping):
+        summary["global_attention"] = global_attention.get("policy")
+    if isinstance(contract.get("windowing"), Mapping):
+        summary["windowing"] = dict(contract["windowing"])
+    decoder = report.get("decoder")
+    if isinstance(decoder, Mapping) and decoder.get("sha256"):
+        summary["decoder_profile_sha256"] = decoder["sha256"]
+    return summary
+
+
+def _load_bundle_decoder_profile(
+    artifact_dir: Path,
+    id2label: Mapping[int, str],
+    *,
+    expected_sha256: str | None = None,
+) -> dict[str, Any] | None:
+    """Load and verify a bundled decoder profile, when the bundle has one."""
+
+    from openmed.eval.export_qualification import (
+        ExportQualificationError,
+        ExportReason,
+        label_map_identity,
+    )
+
+    profile_path = artifact_dir / DECODER_PROFILE_FILENAME
+    if not profile_path.is_file():
+        if expected_sha256:
+            raise ExportQualificationError(ExportReason.ARTIFACT_MISSING)
+        return None
+    from openmed.torch.privacy_filter_export import load_decoder_profile
+
+    profile = load_decoder_profile(profile_path)
+    if expected_sha256 and profile.get("sha256") != expected_sha256:
+        raise ExportQualificationError(ExportReason.ARTIFACT_DIGEST_MISMATCH)
+    if label_map_identity(id2label)["sha256"] != profile.get("label_map_sha256"):
+        raise ExportQualificationError(ExportReason.LABEL_MAP_MISMATCH)
+    return profile
 
 
 def load_onnx_model(
@@ -784,7 +949,28 @@ def _decode_entities(
     text: str,
     *,
     threshold: float,
+    decoder_profile: Mapping[str, Any] | None = None,
 ) -> list[OnnxEntity]:
+    if decoder_profile is not None:
+        from openmed.torch.privacy_filter_export import decode_privacy_filter_logits
+
+        return [
+            OnnxEntity(
+                label=str(span["label"]),
+                score=float(span["score"]),
+                start=int(span["start"]),
+                end=int(span["end"]),
+                text=text[int(span["start"]) : int(span["end"])],
+            )
+            for span in decode_privacy_filter_logits(
+                logits.tolist(),
+                [(int(item[0]), int(item[1])) for item in offsets],
+                text,
+                id2label=id2label,
+                biases=decoder_profile["viterbi"]["biases"],
+                confidence_threshold=threshold,
+            )
+        ]
     shifted = logits - logits.max(axis=-1, keepdims=True)
     probabilities = np.exp(shifted)
     probabilities /= probabilities.sum(axis=-1, keepdims=True)

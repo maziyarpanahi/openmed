@@ -1,0 +1,47 @@
+// Example-only Android library: the direct OpenMedKit probe for the parity app.
+//
+// It must link the same OpenMedKit Android artifact as the OpenMedKitRN bridge,
+// so it reads the same `rootProject.ext.openmedkitAndroidDependency` override
+// the bridge's packaging (#4478) uses, with the same default.
+
+def safeExtGet(String name, Object fallback) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+    namespace "com.openmed.openmedkit.parityprobe"
+    compileSdk safeExtGet("compileSdkVersion", 35)
+
+    defaultConfig {
+        minSdk 26
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven {
+        url "https://jitpack.io"
+        content {
+            includeGroup "com.github.maziyarpanahi"
+        }
+    }
+}
+
+dependencies {
+    implementation "com.facebook.react:react-android:${safeExtGet("reactNativeVersion", "0.77.3")}"
+    implementation safeExtGet("openmedkitAndroidDependency", "com.github.maziyarpanahi:openmed:v3.2.0")
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${safeExtGet("kotlinxCoroutinesVersion", "1.8.1")}"
+}

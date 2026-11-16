@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from openmed.core.export_provenance import SourceContext
+
 
 def _export_module():
     return importlib.import_module("openmed.onnx.openvino_export")
@@ -259,6 +261,11 @@ def test_convert_openvino_profile_records_ir_artifact_and_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     reference = np.array([[[0.9, 0.1]]], dtype=np.float32)
     export_calls = []
 

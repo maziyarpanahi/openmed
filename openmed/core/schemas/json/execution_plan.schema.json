@@ -1,0 +1,407 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/runtimes/execution-plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed execution plan",
+  "description": "Value-free resolver result: an ordered list of declared (runtime, provider) steps or an explicit unsupported reason, with invalidation digests. No step is remote, and no device identifier is present.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assumptions",
+    "bounds",
+    "bundle_content_id",
+    "constraints_digest",
+    "local_only",
+    "plan_key",
+    "profile_digest",
+    "reason",
+    "resolver_version",
+    "root_runtime",
+    "schema",
+    "schema_version",
+    "skipped",
+    "status",
+    "steps",
+    "verification_digest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.execution_plan"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "resolver_version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "unsupported"
+      ]
+    },
+    "reason": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "remote_execution_unsupported",
+            "bundle_revoked",
+            "bundle_unverified",
+            "bundle_files_unverified",
+            "sdk_incompatible",
+            "execution_metadata_invalid",
+            "no_eligible_runtime",
+            "runtime_not_eligible",
+            "artifact_revoked",
+            "format_unsupported",
+            "platform_unsupported",
+            "os_version_unknown",
+            "os_version_unsupported",
+            "precision_unsupported",
+            "precision_disallowed",
+            "memory_insufficient",
+            "storage_insufficient",
+            "model_tier_exceeded",
+            "sequence_limit_exceeded",
+            "sequence_limit_undeclared",
+            "operator_set_unknown",
+            "operator_set_unsupported",
+            "feature_unavailable",
+            "evidence_missing",
+            "provider_unavailable",
+            "provider_disallowed",
+            "energy_policy_excluded",
+            "not_declared_fallback",
+            "fallback_bound_reached"
+          ]
+        }
+      ]
+    },
+    "local_only": {
+      "const": true
+    },
+    "bundle_content_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "profile_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "constraints_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "verification_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "plan_key": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "root_runtime": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        }
+      ]
+    },
+    "steps": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accelerator",
+          "artifact_sha256",
+          "evidence",
+          "format",
+          "max_sequence_length",
+          "min_memory_bytes",
+          "precision",
+          "provider",
+          "role",
+          "runtime_id",
+          "runtime_index",
+          "tier"
+        ],
+        "properties": {
+          "accelerator": {
+            "enum": [
+              "cpu",
+              "gpu",
+              "npu"
+            ]
+          },
+          "artifact_sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "evidence": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          },
+          "format": {
+            "enum": [
+              "coreml",
+              "mlx",
+              "onnx",
+              "ort",
+              "pytorch",
+              "transformersjs"
+            ]
+          },
+          "max_sequence_length": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1048576
+              }
+            ]
+          },
+          "min_memory_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "precision": {
+            "enum": [
+              "bf16",
+              "fp16",
+              "fp32",
+              "int2",
+              "int4",
+              "int8"
+            ]
+          },
+          "provider": {
+            "enum": [
+              "coreml",
+              "cpu",
+              "metal",
+              "nnapi",
+              "qnn",
+              "wasm",
+              "webgpu"
+            ]
+          },
+          "role": {
+            "enum": [
+              "selected",
+              "provider_fallback",
+              "artifact_fallback"
+            ]
+          },
+          "runtime_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "runtime_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "tier": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "enum": [
+                  "nano",
+                  "tiny",
+                  "base"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "reason",
+          "runtime_id"
+        ],
+        "properties": {
+          "provider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "enum": [
+                  "coreml",
+                  "cpu",
+                  "metal",
+                  "nnapi",
+                  "qnn",
+                  "wasm",
+                  "webgpu"
+                ]
+              }
+            ]
+          },
+          "reason": {
+            "enum": [
+              "remote_execution_unsupported",
+              "bundle_revoked",
+              "bundle_unverified",
+              "bundle_files_unverified",
+              "sdk_incompatible",
+              "execution_metadata_invalid",
+              "no_eligible_runtime",
+              "runtime_not_eligible",
+              "artifact_revoked",
+              "format_unsupported",
+              "platform_unsupported",
+              "os_version_unknown",
+              "os_version_unsupported",
+              "precision_unsupported",
+              "precision_disallowed",
+              "memory_insufficient",
+              "storage_insufficient",
+              "model_tier_exceeded",
+              "sequence_limit_exceeded",
+              "sequence_limit_undeclared",
+              "operator_set_unknown",
+              "operator_set_unsupported",
+              "feature_unavailable",
+              "evidence_missing",
+              "provider_unavailable",
+              "provider_disallowed",
+              "energy_policy_excluded",
+              "not_declared_fallback",
+              "fallback_bound_reached"
+            ]
+          },
+          "runtime_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "device_sequence_limit_unknown",
+          "memory_budget_unknown",
+          "model_tier_limit_unknown",
+          "storage_budget_unknown"
+        ]
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deadline_ms",
+        "max_memory_bytes",
+        "max_steps"
+      ],
+      "properties": {
+        "deadline_ms": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400000
+            }
+          ]
+        },
+        "max_memory_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          ]
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "planned"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "type": "null"
+          },
+          "steps": {
+            "minItems": 1
+          },
+          "root_runtime": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "unsupported"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "steps": {
+            "maxItems": 0
+          },
+          "root_runtime": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

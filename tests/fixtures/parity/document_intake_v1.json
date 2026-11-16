@@ -1,0 +1,2813 @@
+{
+  "version": 1,
+  "schema": "openmed.multimodal.document-intake.v1",
+  "synthetic_only": true,
+  "page_separator": "\n\n",
+  "box_tolerance": 0.01,
+  "default_limits": {
+    "max_pages": 2048,
+    "max_regions_per_page": 4096,
+    "max_page_scalars": 65536
+  },
+  "outcomes": [
+    "complete",
+    "partial",
+    "refused"
+  ],
+  "reasons": [
+    "unsupported_document",
+    "document_locked",
+    "permission_denied",
+    "size_limit",
+    "empty_document",
+    "page_limit",
+    "page_missing",
+    "permission_lost",
+    "recognition_failed",
+    "resource_limit",
+    "ambiguous_transform",
+    "region_out_of_bounds",
+    "invalid_recognition"
+  ],
+  "page_statuses": [
+    "mapped",
+    "held"
+  ],
+  "cases": [
+    {
+      "id": "multipage_pdf",
+      "covers": [
+        "multipage",
+        "rotated"
+      ],
+      "source_digest": "98611cd70b9f0f8668f87b83afbb698a6ad515e9b3028a4354089685ffd83032",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 1224,
+            "height": 1584,
+            "text": "Synthetic Jane Roe\nVisit 2026-01-02",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  9
+                ],
+                "box": [
+                  144,
+                  144,
+                  324,
+                  180
+                ],
+                "truth": [
+                  72,
+                  72,
+                  162,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  10,
+                  14
+                ],
+                "box": [
+                  336,
+                  144,
+                  408,
+                  180
+                ],
+                "truth": [
+                  168,
+                  72,
+                  204,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  15,
+                  18
+                ],
+                "box": [
+                  420,
+                  144,
+                  474,
+                  180
+                ],
+                "truth": [
+                  210,
+                  72,
+                  237,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  19,
+                  24
+                ],
+                "box": [
+                  144,
+                  200,
+                  234,
+                  236
+                ],
+                "truth": [
+                  72,
+                  100,
+                  117,
+                  118
+                ]
+              },
+              {
+                "span": [
+                  25,
+                  35
+                ],
+                "box": [
+                  246,
+                  200,
+                  426,
+                  236
+                ],
+                "truth": [
+                  123,
+                  100,
+                  213,
+                  118
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 180,
+            "crop": null
+          },
+          "ocr": {
+            "width": 1224,
+            "height": 1584,
+            "text": "Plan follow-up",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  4
+                ],
+                "box": [
+                  1008,
+                  148,
+                  1080,
+                  184
+                ],
+                "truth": [
+                  72,
+                  700,
+                  108,
+                  718
+                ]
+              },
+              {
+                "span": [
+                  5,
+                  14
+                ],
+                "box": [
+                  834,
+                  148,
+                  996,
+                  184
+                ],
+                "truth": [
+                  114,
+                  700,
+                  195,
+                  718
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Synthetic Jane Roe\nVisit 2026-01-02\n\nPlan follow-up",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              35
+            ],
+            "node_ref": "d2a9f3aabbeecdd625d0806968248c9a",
+            "evidence_digest": "3c87904b60f00bbf530524c65368361a02e81ea627d3373946df9aece4e67283",
+            "display_width_f64": "4083200000000000",
+            "display_height_f64": "4088c00000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              37,
+              51
+            ],
+            "node_ref": "22ba8cf646a9e241595482277baf77b1",
+            "evidence_digest": "b4e8146ddab850cb8221cc21fc3321791d23e2a0ee8bd2ad08f0b2937a082f14",
+            "display_width_f64": "4083200000000000",
+            "display_height_f64": "4088c00000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              9
+            ],
+            "node_ref": "5f327cd17b5fd57a3561060ee52188f4",
+            "box_f64": [
+              "4052000000000000",
+              "4052000000000000",
+              "4064400000000000",
+              "4056800000000000"
+            ],
+            "display_box_f64": [
+              "4052000000000000",
+              "4052000000000000",
+              "4064400000000000",
+              "4056800000000000"
+            ],
+            "evidence_digest": "86f395c15d978b9569645d7849bafca2175ad31c4e0dfe8bac8f63ce9c60c129"
+          },
+          {
+            "page": 0,
+            "span": [
+              10,
+              14
+            ],
+            "node_ref": "b8918f95b1dcc73c1b26b07b0bc5a1a4",
+            "box_f64": [
+              "4065000000000000",
+              "4052000000000000",
+              "4069800000000000",
+              "4056800000000000"
+            ],
+            "display_box_f64": [
+              "4065000000000000",
+              "4052000000000000",
+              "4069800000000000",
+              "4056800000000000"
+            ],
+            "evidence_digest": "3f5a8b14974f5c2fe1334c60896b6f3d1dcbdec84ab8bea4ee2db7bf70d52b76"
+          },
+          {
+            "page": 0,
+            "span": [
+              15,
+              18
+            ],
+            "node_ref": "8f66e7ba02a89e7aeb9b256460bda001",
+            "box_f64": [
+              "406a400000000000",
+              "4052000000000000",
+              "406da00000000000",
+              "4056800000000000"
+            ],
+            "display_box_f64": [
+              "406a400000000000",
+              "4052000000000000",
+              "406da00000000000",
+              "4056800000000000"
+            ],
+            "evidence_digest": "801bf53d1ecabe6bd0c4df010b0fb4de8262d05dada6f558940216e24de88ac2"
+          },
+          {
+            "page": 0,
+            "span": [
+              19,
+              24
+            ],
+            "node_ref": "cbb36e13ecd75fcaca86ef20f818110e",
+            "box_f64": [
+              "4052000000000000",
+              "4059000000000000",
+              "405d400000000000",
+              "405d800000000000"
+            ],
+            "display_box_f64": [
+              "4052000000000000",
+              "4059000000000000",
+              "405d400000000000",
+              "405d800000000000"
+            ],
+            "evidence_digest": "37bfc40223ec437d10fd55b75018b42ca9b9115cccc0418f862980a64d872014"
+          },
+          {
+            "page": 0,
+            "span": [
+              25,
+              35
+            ],
+            "node_ref": "a164fb680b9e052fa5ebded144433025",
+            "box_f64": [
+              "405ec00000000000",
+              "4059000000000000",
+              "406aa00000000000",
+              "405d800000000000"
+            ],
+            "display_box_f64": [
+              "405ec00000000000",
+              "4059000000000000",
+              "406aa00000000000",
+              "405d800000000000"
+            ],
+            "evidence_digest": "7b5999bac2f1d2aa2357501e8160377eec47c49c750bb00330f0d5be61bed630"
+          },
+          {
+            "page": 1,
+            "span": [
+              37,
+              41
+            ],
+            "node_ref": "cd4928bdd29631b408c9df07bb30415d",
+            "box_f64": [
+              "4052000000000000",
+              "4085e00000000000",
+              "405b000000000000",
+              "4086700000000000"
+            ],
+            "display_box_f64": [
+              "407f800000000000",
+              "4052800000000000",
+              "4080e00000000000",
+              "4057000000000000"
+            ],
+            "evidence_digest": "0a2ae3a4737e061e5791b1ce3e8c6a8fffbe3f6835393d3aa0fc1fee991ea41c"
+          },
+          {
+            "page": 1,
+            "span": [
+              42,
+              51
+            ],
+            "node_ref": "ff057d36df39f1c752a96d410daabc73",
+            "box_f64": [
+              "405c800000000000",
+              "4085e00000000000",
+              "4068600000000000",
+              "4086700000000000"
+            ],
+            "display_box_f64": [
+              "407a100000000000",
+              "4052800000000000",
+              "407f200000000000",
+              "4057000000000000"
+            ],
+            "evidence_digest": "3f2f879fc5e2768c9c882e43af523ba27bdbc35f88b4f32f78ab15f3af12d280"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              25,
+              35
+            ],
+            "node_refs": [
+              "a164fb680b9e052fa5ebded144433025"
+            ]
+          },
+          {
+            "span": [
+              30,
+              41
+            ],
+            "node_refs": [
+              "a164fb680b9e052fa5ebded144433025",
+              "cd4928bdd29631b408c9df07bb30415d"
+            ]
+          },
+          {
+            "span": [
+              35,
+              37
+            ],
+            "node_refs": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "rotated_pdf_90",
+      "covers": [
+        "rotated"
+      ],
+      "source_digest": "64b7e29ad2d96baf31805a2f9e40b22c2cc3b27b059a426dc006871096a8d738",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 90,
+            "crop": null
+          },
+          "ocr": {
+            "width": 1584,
+            "height": 1224,
+            "text": "Rotated note\nSynthetic",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  7
+                ],
+                "box": [
+                  1404,
+                  144,
+                  1440,
+                  270
+                ],
+                "truth": [
+                  72,
+                  72,
+                  135,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  8,
+                  12
+                ],
+                "box": [
+                  1404,
+                  282,
+                  1440,
+                  354
+                ],
+                "truth": [
+                  141,
+                  72,
+                  177,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  13,
+                  22
+                ],
+                "box": [
+                  1348,
+                  144,
+                  1384,
+                  306
+                ],
+                "truth": [
+                  72,
+                  100,
+                  153,
+                  118
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Rotated note\nSynthetic",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              22
+            ],
+            "node_ref": "6dc20115da98958f552bfce6b8c8b2a1",
+            "evidence_digest": "98d5323919789b2a3118d6ae54ca920b9a3e4d9dcddca652bdef94dc7bce2a42",
+            "display_width_f64": "4088c00000000000",
+            "display_height_f64": "4083200000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              7
+            ],
+            "node_ref": "0f66b6e7bdf1c0d8023d2693dd686b21",
+            "box_f64": [
+              "4052000000000000",
+              "4052000000000000",
+              "4060e00000000000",
+              "4056800000000000"
+            ],
+            "display_box_f64": [
+              "4085f00000000000",
+              "4052000000000000",
+              "4086800000000000",
+              "4060e00000000000"
+            ],
+            "evidence_digest": "d8074681cb21664f0ecf8ec62ac2b4011ea032c5530541cd46cd4526cc4706ca"
+          },
+          {
+            "page": 0,
+            "span": [
+              8,
+              12
+            ],
+            "node_ref": "14f320ffee8bb805b623082816822bf1",
+            "box_f64": [
+              "4061a00000000000",
+              "4052000000000000",
+              "4066200000000000",
+              "4056800000000000"
+            ],
+            "display_box_f64": [
+              "4085f00000000000",
+              "4061a00000000000",
+              "4086800000000000",
+              "4066200000000000"
+            ],
+            "evidence_digest": "d4ce40520b38833aaa652e3a9338dee56a68124f88116568cf597bfc347cc58c"
+          },
+          {
+            "page": 0,
+            "span": [
+              13,
+              22
+            ],
+            "node_ref": "511c6606e7b89cfd8ed9cd6597a94247",
+            "box_f64": [
+              "4052000000000000",
+              "4059000000000000",
+              "4063200000000000",
+              "405d800000000000"
+            ],
+            "display_box_f64": [
+              "4085100000000000",
+              "4052000000000000",
+              "4085a00000000000",
+              "4063200000000000"
+            ],
+            "evidence_digest": "ff65d8a903170997d0d78da95d9db91828d109c3136e6a4aecae2da7216c4ef7"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              7
+            ],
+            "node_refs": [
+              "0f66b6e7bdf1c0d8023d2693dd686b21"
+            ]
+          },
+          {
+            "span": [
+              8,
+              22
+            ],
+            "node_refs": [
+              "14f320ffee8bb805b623082816822bf1",
+              "511c6606e7b89cfd8ed9cd6597a94247"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rotated_image_270",
+      "covers": [
+        "rotated"
+      ],
+      "source_digest": "68e3dbb5ce969a193e87dc7a8309a9c460f3bc8c33f70393ee1d6e84d050c148",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 400,
+            "height": 300,
+            "unit": "pixel",
+            "rotation": 270,
+            "crop": null
+          },
+          "ocr": {
+            "width": 300,
+            "height": 400,
+            "text": "Upright text",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  7
+                ],
+                "box": [
+                  30,
+                  290,
+                  50,
+                  360
+                ],
+                "truth": [
+                  40,
+                  30,
+                  110,
+                  50
+                ]
+              },
+              {
+                "span": [
+                  8,
+                  12
+                ],
+                "box": [
+                  30,
+                  240,
+                  50,
+                  280
+                ],
+                "truth": [
+                  120,
+                  30,
+                  160,
+                  50
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Upright text",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              12
+            ],
+            "node_ref": "e073d007c3a94130d44cbc10860f8dc6",
+            "evidence_digest": "c894ca8e2eeaccc83004ccc82346432b92ca2608c7f97e3b31cc93b5113b1ed1",
+            "display_width_f64": "4072c00000000000",
+            "display_height_f64": "4079000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              7
+            ],
+            "node_ref": "60607f0ac54b94d98ec01290fbc83706",
+            "box_f64": [
+              "4044000000000000",
+              "403e000000000000",
+              "405b800000000000",
+              "4049000000000000"
+            ],
+            "display_box_f64": [
+              "403e000000000000",
+              "4072200000000000",
+              "4049000000000000",
+              "4076800000000000"
+            ],
+            "evidence_digest": "c7b8265060949ad5f0bdbc04b350d098196a6eb8eec08720cfa9950d3bb8db50"
+          },
+          {
+            "page": 0,
+            "span": [
+              8,
+              12
+            ],
+            "node_ref": "731a9842bfad4d2ea765e3e45175f64d",
+            "box_f64": [
+              "405e000000000000",
+              "403e000000000000",
+              "4064000000000000",
+              "4049000000000000"
+            ],
+            "display_box_f64": [
+              "403e000000000000",
+              "406e000000000000",
+              "4049000000000000",
+              "4071800000000000"
+            ],
+            "evidence_digest": "0d68c9f7a34189a30fa50e5df40e2783619df283105bf8fc432ff1d77af9f524"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              8,
+              12
+            ],
+            "node_refs": [
+              "731a9842bfad4d2ea765e3e45175f64d"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cropped_pdf",
+      "covers": [
+        "cropped"
+      ],
+      "source_digest": "24db4b22f30065af2324b1d51c4184c0f91d3cbf6eb2686d4d43403709fe6484",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 0,
+            "crop": [
+              36,
+              72,
+              576,
+              720
+            ]
+          },
+          "ocr": {
+            "width": 1080,
+            "height": 1296,
+            "text": "Cropped region",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  7
+                ],
+                "box": [
+                  108,
+                  72,
+                  234,
+                  108
+                ],
+                "truth": [
+                  90,
+                  108,
+                  153,
+                  126
+                ]
+              },
+              {
+                "span": [
+                  8,
+                  14
+                ],
+                "box": [
+                  246,
+                  72,
+                  354,
+                  108
+                ],
+                "truth": [
+                  159,
+                  108,
+                  213,
+                  126
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Cropped region",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              14
+            ],
+            "node_ref": "7ebfa90ff792dbbd207c0c3eff243d43",
+            "evidence_digest": "e43e3669060826c3db41d5fea1db2160f331134acee809684819ae876828edb9",
+            "display_width_f64": "4083200000000000",
+            "display_height_f64": "4088c00000000000",
+            "crop_node_ref": "e4a2ff8079a14b74d66ac2c192b8ebf6",
+            "crop_evidence_digest": "43d1fb197765351cf138e4ffc7b7fea88bb18ac6738d2d0211d3dd23a2bb726c",
+            "crop_display_box_f64": [
+              "4042000000000000",
+              "4052000000000000",
+              "4082000000000000",
+              "4086800000000000"
+            ]
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              7
+            ],
+            "node_ref": "d005985b8a83af7e1c092d14cb368b5d",
+            "box_f64": [
+              "4056800000000000",
+              "405b000000000000",
+              "4063200000000000",
+              "405f800000000000"
+            ],
+            "display_box_f64": [
+              "4056800000000000",
+              "405b000000000000",
+              "4063200000000000",
+              "405f800000000000"
+            ],
+            "evidence_digest": "ae00d12af4a41455d94a5ddff8efd78ee1c1bde22ade065a750039194aed1a66"
+          },
+          {
+            "page": 0,
+            "span": [
+              8,
+              14
+            ],
+            "node_ref": "631e579efc8f3b14aa57545dc57727f8",
+            "box_f64": [
+              "4063e00000000000",
+              "405b000000000000",
+              "406aa00000000000",
+              "405f800000000000"
+            ],
+            "display_box_f64": [
+              "4063e00000000000",
+              "405b000000000000",
+              "406aa00000000000",
+              "405f800000000000"
+            ],
+            "evidence_digest": "0d861172219a18aa3f728ad3660f7417dbe69000253a462bcfb00dd2518a3f23"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              14
+            ],
+            "node_refs": [
+              "d005985b8a83af7e1c092d14cb368b5d",
+              "631e579efc8f3b14aa57545dc57727f8"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cropped_rotated_image",
+      "covers": [
+        "cropped",
+        "rotated"
+      ],
+      "source_digest": "a7ade8af694e7c6ace40de6b3ff24fa8aecad9e606a4d15495906453febe0b47",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 1000,
+            "height": 800,
+            "unit": "pixel",
+            "rotation": 90,
+            "crop": [
+              100,
+              50,
+              700,
+              450
+            ]
+          },
+          "ocr": {
+            "width": 400,
+            "height": 600,
+            "text": "Crop and turn",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  4
+                ],
+                "box": [
+                  320,
+                  50,
+                  350,
+                  130
+                ],
+                "truth": [
+                  150,
+                  100,
+                  230,
+                  130
+                ]
+              },
+              {
+                "span": [
+                  5,
+                  8
+                ],
+                "box": [
+                  320,
+                  140,
+                  350,
+                  190
+                ],
+                "truth": [
+                  240,
+                  100,
+                  290,
+                  130
+                ]
+              },
+              {
+                "span": [
+                  9,
+                  13
+                ],
+                "box": [
+                  320,
+                  200,
+                  350,
+                  270
+                ],
+                "truth": [
+                  300,
+                  100,
+                  370,
+                  130
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Crop and turn",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              13
+            ],
+            "node_ref": "8dfaa110e72a31fd126f05a11f24b91e",
+            "evidence_digest": "34cd46a67ce55bfd686203a2cabfbf6525f3c0a4c6243ca1ea097e4744d95367",
+            "display_width_f64": "4089000000000000",
+            "display_height_f64": "408f400000000000",
+            "crop_node_ref": "007b22b8a6b5b02b8f2e8cc0634a6315",
+            "crop_evidence_digest": "d011d48f9e7a95d57cd8e2a7cbce6a836b8fac3f92a8d7a97aad539734150968",
+            "crop_display_box_f64": [
+              "4075e00000000000",
+              "4059000000000000",
+              "4087700000000000",
+              "4085e00000000000"
+            ]
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              4
+            ],
+            "node_ref": "ad131209a2650db61722cc53c80f246b",
+            "box_f64": [
+              "4062c00000000000",
+              "4059000000000000",
+              "406cc00000000000",
+              "4060400000000000"
+            ],
+            "display_box_f64": [
+              "4084f00000000000",
+              "4062c00000000000",
+              "4085e00000000000",
+              "406cc00000000000"
+            ],
+            "evidence_digest": "31d2e65aa266a4111ed845721c4d37d42f8bf2beb1f33fe27892eb308df51d2c"
+          },
+          {
+            "page": 0,
+            "span": [
+              5,
+              8
+            ],
+            "node_ref": "8bd47cb3c25fd0c13dab818e7eb506a1",
+            "box_f64": [
+              "406e000000000000",
+              "4059000000000000",
+              "4072200000000000",
+              "4060400000000000"
+            ],
+            "display_box_f64": [
+              "4084f00000000000",
+              "406e000000000000",
+              "4085e00000000000",
+              "4072200000000000"
+            ],
+            "evidence_digest": "efe245a1e7e0e05633100d8cb59df611016db168ac46755d550ea0b26b48c4c2"
+          },
+          {
+            "page": 0,
+            "span": [
+              9,
+              13
+            ],
+            "node_ref": "0748cf66db06c2b70700bdf002fd4556",
+            "box_f64": [
+              "4072c00000000000",
+              "4059000000000000",
+              "4077200000000000",
+              "4060400000000000"
+            ],
+            "display_box_f64": [
+              "4084f00000000000",
+              "4072c00000000000",
+              "4085e00000000000",
+              "4077200000000000"
+            ],
+            "evidence_digest": "59e3a4b1640a8491094ddde3d98acf017780d4e3963fd000234418b0a93e7ba1"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              5,
+              8
+            ],
+            "node_refs": [
+              "8bd47cb3c25fd0c13dab818e7eb506a1"
+            ]
+          },
+          {
+            "span": [
+              9,
+              13
+            ],
+            "node_refs": [
+              "0748cf66db06c2b70700bdf002fd4556"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mixed_script_image",
+      "covers": [
+        "mixed-script"
+      ],
+      "source_digest": "b9046349afb101f429ad324faaa5c8b0d3cffa8673a8990f185b794eba4d6945",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 800,
+            "height": 200,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 800,
+            "height": 200,
+            "text": "Patient 患者 रवि 😀 José",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  7
+                ],
+                "box": [
+                  10,
+                  20,
+                  90,
+                  40
+                ],
+                "truth": [
+                  10,
+                  20,
+                  90,
+                  40
+                ]
+              },
+              {
+                "span": [
+                  8,
+                  10
+                ],
+                "box": [
+                  100,
+                  20,
+                  140,
+                  40
+                ],
+                "truth": [
+                  100,
+                  20,
+                  140,
+                  40
+                ]
+              },
+              {
+                "span": [
+                  11,
+                  14
+                ],
+                "box": [
+                  150,
+                  20,
+                  190,
+                  40
+                ],
+                "truth": [
+                  150,
+                  20,
+                  190,
+                  40
+                ]
+              },
+              {
+                "span": [
+                  15,
+                  16
+                ],
+                "box": [
+                  200,
+                  -1,
+                  220,
+                  40
+                ],
+                "truth": [
+                  200,
+                  0,
+                  220,
+                  40
+                ]
+              },
+              {
+                "span": [
+                  17,
+                  22
+                ],
+                "box": [
+                  230,
+                  20,
+                  290,
+                  40
+                ],
+                "truth": [
+                  230,
+                  20,
+                  290,
+                  40
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Patient 患者 रवि 😀 José",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              22
+            ],
+            "node_ref": "41f3cee5df9a2b8be8aae989309d3734",
+            "evidence_digest": "7e5316afb82d05b4b283efb962c2f3371923ffaa971c25f3bdd378f881f1013f",
+            "display_width_f64": "4089000000000000",
+            "display_height_f64": "4069000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              7
+            ],
+            "node_ref": "ddf10e628001dd7dac50477697c3407f",
+            "box_f64": [
+              "4024000000000000",
+              "4034000000000000",
+              "4056800000000000",
+              "4044000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4034000000000000",
+              "4056800000000000",
+              "4044000000000000"
+            ],
+            "evidence_digest": "363b9bc8334916f8144034cd3603be125b28fe2fb131d17ea5afebc0b5257bdc"
+          },
+          {
+            "page": 0,
+            "span": [
+              8,
+              10
+            ],
+            "node_ref": "ac1191ef3dfab58edaa084838f5796f8",
+            "box_f64": [
+              "4059000000000000",
+              "4034000000000000",
+              "4061800000000000",
+              "4044000000000000"
+            ],
+            "display_box_f64": [
+              "4059000000000000",
+              "4034000000000000",
+              "4061800000000000",
+              "4044000000000000"
+            ],
+            "evidence_digest": "d8556534c848ef2288f0c04a25f4a44a0c1dfae21aeee9d0658598b6c1188963"
+          },
+          {
+            "page": 0,
+            "span": [
+              11,
+              14
+            ],
+            "node_ref": "9fead1f5a0aedd9a53ce33a6fec83beb",
+            "box_f64": [
+              "4062c00000000000",
+              "4034000000000000",
+              "4067c00000000000",
+              "4044000000000000"
+            ],
+            "display_box_f64": [
+              "4062c00000000000",
+              "4034000000000000",
+              "4067c00000000000",
+              "4044000000000000"
+            ],
+            "evidence_digest": "4763c4715ce4d65fa022b649286c1ca016ad22abe2dae285ba2c2f6b5be110e5"
+          },
+          {
+            "page": 0,
+            "span": [
+              15,
+              16
+            ],
+            "node_ref": "e9b13f9c97a88465904cad04ea774e48",
+            "box_f64": [
+              "4069000000000000",
+              "0000000000000000",
+              "406b800000000000",
+              "4044000000000000"
+            ],
+            "display_box_f64": [
+              "4069000000000000",
+              "0000000000000000",
+              "406b800000000000",
+              "4044000000000000"
+            ],
+            "evidence_digest": "3afa9cfa999b595aa2f330565191d67a75309481856affa57724ee8b55490461"
+          },
+          {
+            "page": 0,
+            "span": [
+              17,
+              22
+            ],
+            "node_ref": "39dc9b728578fe536a53fc8d42b78077",
+            "box_f64": [
+              "406cc00000000000",
+              "4034000000000000",
+              "4072200000000000",
+              "4044000000000000"
+            ],
+            "display_box_f64": [
+              "406cc00000000000",
+              "4034000000000000",
+              "4072200000000000",
+              "4044000000000000"
+            ],
+            "evidence_digest": "c1e203f37316eb23062266e6a263c8690f4662ed6ce90079c94b57fce13356bd"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              15,
+              16
+            ],
+            "node_refs": [
+              "e9b13f9c97a88465904cad04ea774e48"
+            ]
+          },
+          {
+            "span": [
+              8,
+              14
+            ],
+            "node_refs": [
+              "ac1191ef3dfab58edaa084838f5796f8",
+              "9fead1f5a0aedd9a53ce33a6fec83beb"
+            ]
+          },
+          {
+            "span": [
+              17,
+              22
+            ],
+            "node_refs": [
+              "39dc9b728578fe536a53fc8d42b78077"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fractional_scale_pdf",
+      "covers": [
+        "rotated"
+      ],
+      "source_digest": "008cc30d6666e9360a3bb26e12010eb5e0c2445dbf7e86a0007b5153016b8aee",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0.48,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 90,
+            "crop": null
+          },
+          "ocr": {
+            "width": 1650,
+            "height": 1275,
+            "text": "Scaled render",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  6
+                ],
+                "box": [
+                  1462,
+                  150,
+                  1500,
+                  263
+                ],
+                "truth": [
+                  72,
+                  72,
+                  126,
+                  90
+                ]
+              },
+              {
+                "span": [
+                  7,
+                  13
+                ],
+                "box": [
+                  1462,
+                  275,
+                  1500,
+                  388
+                ],
+                "truth": [
+                  132,
+                  72,
+                  186,
+                  90
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "complete",
+        "reasons": [],
+        "text": "Scaled render",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              13
+            ],
+            "node_ref": "3564a7a9f382534e82eaf1d83e1e6056",
+            "evidence_digest": "9b9b76bc55465260b8775de7c2156187a5939a37f91210ddbc02ea3a82f125dd",
+            "display_width_f64": "4088c00000000000",
+            "display_height_f64": "4083200000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              6
+            ],
+            "node_ref": "b616db9348c5d64d8677ab40b391efb7",
+            "box_f64": [
+              "4052000000000000",
+              "4052000000000000",
+              "405f8f5c28f5c28f",
+              "40568f5c28f5c290"
+            ],
+            "display_box_f64": [
+              "4085ee147ae147ae",
+              "4052000000000000",
+              "4086800000000000",
+              "405f8f5c28f5c28f"
+            ],
+            "evidence_digest": "224056a5f80fb71617b7f735edd5b9f0f1dd4cd2e63fd44606617db23e88d969"
+          },
+          {
+            "page": 0,
+            "span": [
+              7,
+              13
+            ],
+            "node_ref": "a288e397d5eca5f8438a5325fd69d7b1",
+            "box_f64": [
+              "4060800000000000",
+              "4052000000000000",
+              "406747ae147ae148",
+              "40568f5c28f5c290"
+            ],
+            "display_box_f64": [
+              "4085ee147ae147ae",
+              "4060800000000000",
+              "4086800000000000",
+              "406747ae147ae148"
+            ],
+            "evidence_digest": "6e69feb891be8ec356a1ef99d81d540f00cab9668bc523504f8ef8687e61f40d"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              7,
+              13
+            ],
+            "node_refs": [
+              "a288e397d5eca5f8438a5325fd69d7b1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing_and_failed_pages",
+      "covers": [
+        "multipage",
+        "partial"
+      ],
+      "source_digest": "6affcedc7390e065ba38c3e8d917d6ba2a972b9f05588b558672be0845eabbe3",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "First",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  5
+                ],
+                "box": [
+                  10,
+                  10,
+                  50,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  50,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": "page_missing",
+          "geometry": null,
+          "ocr": null
+        },
+        {
+          "unavailable": "recognition_failed",
+          "geometry": null,
+          "ocr": null
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Last",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  4
+                ],
+                "box": [
+                  10,
+                  10,
+                  40,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  40,
+                  20
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "page_missing",
+          "recognition_failed"
+        ],
+        "text": "First\n\nLast",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              5
+            ],
+            "node_ref": "15f5c75b5a20d58ab38971bf63d0a401",
+            "evidence_digest": "cb177103bdb28cbbc800b65773fdc55dada46701b4521342285f075a772ccfdc",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "held",
+            "reason": "page_missing",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 2,
+            "status": "held",
+            "reason": "recognition_failed",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 3,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              7,
+              11
+            ],
+            "node_ref": "9688792b4afaa4e24e7384d95ab10e3b",
+            "evidence_digest": "40dafc46f1f99c72ef9e38640a500b4428fe843b8ce29501db7ff73843235937",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              5
+            ],
+            "node_ref": "1cf3abcc38b65ab97831121bc4a869e8",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4049000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4049000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "09174e455272bc14b50422520a7cca76d819d69fb5e2ad7f9622702eb69a50dd"
+          },
+          {
+            "page": 3,
+            "span": [
+              7,
+              11
+            ],
+            "node_ref": "36c0c89cd4f23cf4d6051c697ab934c9",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "87c8792682114e9b430344a618dd64cb41fae645d7ccfa594cd3431e393faf8f"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              5
+            ],
+            "node_refs": [
+              "1cf3abcc38b65ab97831121bc4a869e8"
+            ]
+          },
+          {
+            "span": [
+              7,
+              11
+            ],
+            "node_refs": [
+              "36c0c89cd4f23cf4d6051c697ab934c9"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "permission_lost",
+      "covers": [
+        "partial"
+      ],
+      "source_digest": "d8c8e772627b8cd5e6b847c83aa2718ed5dbde473c99eed19e5114e401b53c14",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Before",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  6
+                ],
+                "box": [
+                  10,
+                  10,
+                  60,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  60,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": "permission_lost",
+          "geometry": null,
+          "ocr": null
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "After",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  5
+                ],
+                "box": [
+                  10,
+                  10,
+                  50,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  50,
+                  20
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "permission_lost"
+        ],
+        "text": "Before",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              6
+            ],
+            "node_ref": "d7d2622cfd6e0b1777e5c80f6aaae8a9",
+            "evidence_digest": "c5ccc1581765b6ae275e3eb35144beab1ad4be6ad82e277a14ba52a89e9f23cb",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "held",
+            "reason": "permission_lost",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              6
+            ],
+            "node_ref": "39fe49b982cc0b5865f5899d49d02fcb",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "d64e31212645cab926932ce1e4e91a0cc363bdd82108fefa8c156f561704babc"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              6
+            ],
+            "node_refs": [
+              "39fe49b982cc0b5865f5899d49d02fcb"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ambiguous_transforms",
+      "covers": [
+        "partial"
+      ],
+      "source_digest": "531a1b40c09e95c3211ab85093d6694b8c0fea079c4de3719f0c4b11f746f6cc",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 45,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Tilted",
+            "regions": []
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Kept",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  4
+                ],
+                "box": [
+                  10,
+                  10,
+                  40,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  40,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": [
+              0,
+              0,
+              140,
+              100
+            ]
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Outside",
+            "regions": []
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "ambiguous_transform"
+        ],
+        "text": "Kept",
+        "pages": [
+          {
+            "page": 0,
+            "status": "held",
+            "reason": "ambiguous_transform",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              4
+            ],
+            "node_ref": "d3ac3bbb5a1676007b42d6e9a5f43dc4",
+            "evidence_digest": "2222cec908235e0354a166050df46e6fde5bc0db9f8da88b800a422627aef485",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 2,
+            "status": "held",
+            "reason": "ambiguous_transform",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 1,
+            "span": [
+              0,
+              4
+            ],
+            "node_ref": "294d1931338ea3da287fc8e7d012c269",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "c05cb9d7cf04533d43baebbb9815e33b6177449a117c24691ffa7786177c09da"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              4
+            ],
+            "node_refs": [
+              "294d1931338ea3da287fc8e7d012c269"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unrotated_render",
+      "covers": [
+        "refused"
+      ],
+      "source_digest": "b89db6e1a088114a952a73e4644dbae660a42bb23d562423cb68b5dd1a4d5d99",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 612,
+            "height": 792,
+            "unit": "point",
+            "rotation": 90,
+            "crop": null
+          },
+          "ocr": {
+            "width": 1224,
+            "height": 1584,
+            "text": "Swapped",
+            "regions": []
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "refused",
+        "reasons": [
+          "ambiguous_transform"
+        ],
+        "text": "",
+        "pages": [
+          {
+            "page": 0,
+            "status": "held",
+            "reason": "ambiguous_transform",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [],
+        "probes": []
+      }
+    },
+    {
+      "id": "region_out_of_bounds",
+      "covers": [
+        "partial"
+      ],
+      "source_digest": "41f284311bdb6292b81b2e619f2991e4ba04ccdfb884a6fc833559f154bdeb01",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Far edge",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  3
+                ],
+                "box": [
+                  90,
+                  10,
+                  140,
+                  30
+                ],
+                "truth": null
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Inside",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  6
+                ],
+                "box": [
+                  10,
+                  10,
+                  60,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  60,
+                  20
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "region_out_of_bounds"
+        ],
+        "text": "Inside",
+        "pages": [
+          {
+            "page": 0,
+            "status": "held",
+            "reason": "region_out_of_bounds",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              6
+            ],
+            "node_ref": "c323568e407c1b24267a028004fc8ece",
+            "evidence_digest": "a86c8c5f6d70d7f5afb9cac22cb341c64e424965a0693ea0d0aebb298442f322",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 1,
+            "span": [
+              0,
+              6
+            ],
+            "node_ref": "bbf6f015008473b6fc456e79ad95ac5f",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "db27daf9b9a37004b46a95b962bc18bf91014b0044e1dea996d90ce733056ebe"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              6
+            ],
+            "node_refs": [
+              "bbf6f015008473b6fc456e79ad95ac5f"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_recognition",
+      "covers": [
+        "refused"
+      ],
+      "source_digest": "5b150439c87e6377b65b4a88a7c434ca8f18ea7a2e6d8c3d4fb40d9de826a79b",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Short",
+            "regions": [
+              {
+                "span": [
+                  3,
+                  99
+                ],
+                "box": [
+                  10,
+                  10,
+                  40,
+                  20
+                ],
+                "truth": null
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "refused",
+        "reasons": [
+          "invalid_recognition"
+        ],
+        "text": "",
+        "pages": [
+          {
+            "page": 0,
+            "status": "held",
+            "reason": "invalid_recognition",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [],
+        "probes": []
+      }
+    },
+    {
+      "id": "page_limit",
+      "covers": [
+        "multipage",
+        "partial"
+      ],
+      "source_digest": "8acb3476691a1d627bd061af924d357ea34f44f9867dc86c136b9388b40ea5e9",
+      "refusal": null,
+      "limits": {
+        "max_pages": 2
+      },
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "One",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  3
+                ],
+                "box": [
+                  10,
+                  10,
+                  40,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  40,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Two",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  3
+                ],
+                "box": [
+                  10,
+                  10,
+                  40,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  40,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Three",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  5
+                ],
+                "box": [
+                  10,
+                  10,
+                  50,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  50,
+                  20
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "page_limit"
+        ],
+        "text": "One\n\nTwo",
+        "pages": [
+          {
+            "page": 0,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              3
+            ],
+            "node_ref": "98bcd6d1b916d75ebb690ef1f10caa5e",
+            "evidence_digest": "c6f780ab9bcf5c156834c356548ee9e14ab11528d4c933caa5f279d3dff7554b",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              5,
+              8
+            ],
+            "node_ref": "067da2e9b6663338890b583fe82d770c",
+            "evidence_digest": "ea14d9a06ee3270410d2a4937f5eaf9063bab9d2ea8471459a5a783bb0f79726",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 0,
+            "span": [
+              0,
+              3
+            ],
+            "node_ref": "0e237e48d47ebeaba0cc40d5e8eee4cf",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "07205717704fb5f56956195dd9de1eaca186d4004e253637b03262a57ff1869a"
+          },
+          {
+            "page": 1,
+            "span": [
+              5,
+              8
+            ],
+            "node_ref": "c1b3a35a98e1f527a8fc19d7bb7156a5",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "4044000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "c5caf2b90d3cdd41ef7d770db3fcd48bc3c99676d8305b44000f1d4e7e106f87"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              5,
+              8
+            ],
+            "node_refs": [
+              "c1b3a35a98e1f527a8fc19d7bb7156a5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "resource_limit",
+      "covers": [
+        "partial"
+      ],
+      "source_digest": "31cee29154506f3b5e7d5ad8b4fb34bdbd1647f4a1b7c8e6d9a3f8a9b33e9819",
+      "refusal": null,
+      "limits": {
+        "max_regions_per_page": 1
+      },
+      "tolerance": 0,
+      "pages": [
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Too many",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  3
+                ],
+                "box": [
+                  10,
+                  10,
+                  30,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  30,
+                  20
+                ]
+              },
+              {
+                "span": [
+                  4,
+                  8
+                ],
+                "box": [
+                  35,
+                  10,
+                  60,
+                  20
+                ],
+                "truth": [
+                  35,
+                  10,
+                  60,
+                  20
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "unavailable": null,
+          "geometry": {
+            "width": 100,
+            "height": 100,
+            "unit": "pixel",
+            "rotation": 0,
+            "crop": null
+          },
+          "ocr": {
+            "width": 100,
+            "height": 100,
+            "text": "Single",
+            "regions": [
+              {
+                "span": [
+                  0,
+                  6
+                ],
+                "box": [
+                  10,
+                  10,
+                  60,
+                  20
+                ],
+                "truth": [
+                  10,
+                  10,
+                  60,
+                  20
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "partial",
+        "reasons": [
+          "resource_limit"
+        ],
+        "text": "Single",
+        "pages": [
+          {
+            "page": 0,
+            "status": "held",
+            "reason": "resource_limit",
+            "text_span": null,
+            "node_ref": null,
+            "evidence_digest": null,
+            "display_width_f64": null,
+            "display_height_f64": null,
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          },
+          {
+            "page": 1,
+            "status": "mapped",
+            "reason": null,
+            "text_span": [
+              0,
+              6
+            ],
+            "node_ref": "5952db11ca3c5186064faa5db02e99e7",
+            "evidence_digest": "e3a3d361c07b71b66a8b24109e42e1b79f6ed0a2b1cd7b34d402cc93da672d95",
+            "display_width_f64": "4059000000000000",
+            "display_height_f64": "4059000000000000",
+            "crop_node_ref": null,
+            "crop_evidence_digest": null,
+            "crop_display_box_f64": null
+          }
+        ],
+        "regions": [
+          {
+            "page": 1,
+            "span": [
+              0,
+              6
+            ],
+            "node_ref": "6172fcebe9b33e01414a48b6a40a2179",
+            "box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "display_box_f64": [
+              "4024000000000000",
+              "4024000000000000",
+              "404e000000000000",
+              "4034000000000000"
+            ],
+            "evidence_digest": "aed34c8f5218c40e93b6c32de6e2db2bfb215bcde6c50bfdb22f0e3a045a9ba7"
+          }
+        ],
+        "probes": [
+          {
+            "span": [
+              0,
+              6
+            ],
+            "node_refs": [
+              "6172fcebe9b33e01414a48b6a40a2179"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "permission_denied",
+      "covers": [
+        "refused"
+      ],
+      "source_digest": "bc15c08c6be50c15c679cb30db6504cd7f2e34a55d19ca3462feac4a294e7ca8",
+      "refusal": "permission_denied",
+      "limits": null,
+      "tolerance": 0,
+      "pages": [],
+      "expected": {
+        "outcome": "refused",
+        "reasons": [
+          "permission_denied"
+        ],
+        "text": "",
+        "pages": [],
+        "regions": [],
+        "probes": []
+      }
+    },
+    {
+      "id": "document_locked",
+      "covers": [
+        "refused"
+      ],
+      "source_digest": "93e72a0bc43c39af3f71681c32bb54dd077a15f4b1c062f4e1412338434cbe7e",
+      "refusal": "document_locked",
+      "limits": null,
+      "tolerance": 0,
+      "pages": [],
+      "expected": {
+        "outcome": "refused",
+        "reasons": [
+          "document_locked"
+        ],
+        "text": "",
+        "pages": [],
+        "regions": [],
+        "probes": []
+      }
+    },
+    {
+      "id": "empty_document",
+      "covers": [
+        "refused"
+      ],
+      "source_digest": "77bad976b033d0038ab68eeca38d4b3f242e8add81b511f800529cdc7ef2cd89",
+      "refusal": null,
+      "limits": null,
+      "tolerance": 0,
+      "pages": [],
+      "expected": {
+        "outcome": "refused",
+        "reasons": [
+          "empty_document"
+        ],
+        "text": "",
+        "pages": [],
+        "regions": [],
+        "probes": []
+      }
+    }
+  ]
+}

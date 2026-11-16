@@ -590,7 +590,7 @@ def test_rest_graphql_and_sql_enforce_the_same_access_context(
     )
     assert rest.status_code == 200
     assert rest.json()["state"] == "denied"
-    assert rest.json()["code"] == "role_denied"
+    assert rest.json()["code"] == "role_not_granted"
     assert rest.json()["resources"] == []
 
     graphql = client.post(
@@ -601,7 +601,6 @@ def test_rest_graphql_and_sql_enforce_the_same_access_context(
                   journeyResources(
                     resourceType: FACT
                     role: "clinician"
-                    attributes: ["approved_device"]
                     consentState: "withdrawn"
                     exportPolicy: "metadata_only"
                   ) {

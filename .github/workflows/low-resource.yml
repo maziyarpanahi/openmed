@@ -9,6 +9,7 @@ on:
       - "openmed/**"
       - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "tests/fixtures/parity/tokenizer/**"
       - "uv.lock"
   push:
     branches: [master, 'release/v*' ]
@@ -18,6 +19,7 @@ on:
       - "openmed/**"
       - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "tests/fixtures/parity/tokenizer/**"
       - "uv.lock"
 
 permissions:
@@ -50,6 +52,11 @@ jobs:
 
       - name: Install CPU-only runtime
         run: uv sync --frozen --extra dev --extra onnx-runtime --python 3.11
+
+      - name: Verify portable tokenizer conformance before inference
+        run: |
+          .venv/bin/python -m pytest tests/unit/eval/test_tokenizer_conformance.py \
+            -q -p no:cacheprovider -k python_tokenizers_runtime -rs
 
       - name: Cache the official INT8 artifact
         run: |

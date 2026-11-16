@@ -1,0 +1,20 @@
+# Negative control: a root, privileged container with a writable root file
+# system, an added capability and a host path volume.
+securityContext:
+  privileged: true
+  allowPrivilegeEscalation: true
+  readOnlyRootFilesystem: false
+  runAsNonRoot: false
+  runAsUser: 0
+  capabilities:
+    drop: []
+    add:
+      - NET_ADMIN
+
+extraVolumes:
+  - name: tmp
+    emptyDir:
+      sizeLimit: 512Mi
+  - name: host-logs
+    hostPath:
+      path: /var/log

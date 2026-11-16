@@ -1,0 +1,671 @@
+{
+  "schema_version": 1,
+  "surface": "grpc",
+  "messages": [
+    {
+      "name": "openmed.service.v1.AnalyzeRequest",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "model_name",
+          "number": 2,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "confidence_threshold",
+          "number": 3,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "group_entities",
+          "number": 4,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "aggregation_strategy",
+          "number": 5,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "sentence_detection",
+          "number": 6,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "sentence_language",
+          "number": 7,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "sentence_clean",
+          "number": 8,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "use_fast_tokenizer",
+          "number": 9,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "keep_alive",
+          "number": 10,
+          "type": "string",
+          "proto3_optional": true
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.AnalyzeResponse",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "entities",
+          "number": 2,
+          "type": "message",
+          "type_name": "openmed.service.v1.EntityPrediction",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "model_name",
+          "number": 3,
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "number": 4,
+          "type": "string"
+        },
+        {
+          "name": "processing_time",
+          "number": 5,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "metadata",
+          "number": 6,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        },
+        {
+          "name": "spans",
+          "number": 7,
+          "type": "message",
+          "type_name": "openmed.service.v1.OpenMedSpan",
+          "cardinality": "repeated"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.DeidentifyRequest",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "method",
+          "number": 2,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "model_name",
+          "number": 3,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "confidence_threshold",
+          "number": 4,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "keep_year",
+          "number": 5,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "shift_dates",
+          "number": 6,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "date_shift_days",
+          "number": 7,
+          "type": "int32",
+          "proto3_optional": true
+        },
+        {
+          "name": "keep_mapping",
+          "number": 8,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "policy",
+          "number": 9,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "use_smart_merging",
+          "number": 10,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "use_safety_sweep",
+          "number": 11,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "lang",
+          "number": 12,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "normalize_accents",
+          "number": 13,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "keep_alive",
+          "number": 14,
+          "type": "string",
+          "proto3_optional": true
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.DeidentifyResponse",
+      "fields": [
+        {
+          "name": "original_text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "deidentified_text",
+          "number": 2,
+          "type": "string"
+        },
+        {
+          "name": "pii_entities",
+          "number": 3,
+          "type": "message",
+          "type_name": "openmed.service.v1.PIIEntity",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "method",
+          "number": 4,
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "number": 5,
+          "type": "string"
+        },
+        {
+          "name": "num_entities_redacted",
+          "number": 6,
+          "type": "int32"
+        },
+        {
+          "name": "metadata",
+          "number": 7,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        },
+        {
+          "name": "spans",
+          "number": 8,
+          "type": "message",
+          "type_name": "openmed.service.v1.OpenMedSpan",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "mapping",
+          "number": 9,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.DeidentifyStreamRequest",
+      "fields": [
+        {
+          "name": "request",
+          "number": 1,
+          "type": "message",
+          "type_name": "openmed.service.v1.DeidentifyRequest"
+        },
+        {
+          "name": "chunks",
+          "number": 2,
+          "type": "string",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "chunk_size",
+          "number": 3,
+          "type": "int32"
+        },
+        {
+          "name": "max_buffer",
+          "number": 4,
+          "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.DeidentifyStreamResponse",
+      "fields": [
+        {
+          "name": "redacted_text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "final",
+          "number": 2,
+          "type": "bool"
+        },
+        {
+          "name": "spans",
+          "number": 3,
+          "type": "message",
+          "type_name": "openmed.service.v1.OpenMedSpan",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "audit_record",
+          "number": 4,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.EntityPrediction",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "number": 2,
+          "type": "string"
+        },
+        {
+          "name": "confidence",
+          "number": 3,
+          "type": "double"
+        },
+        {
+          "name": "start",
+          "number": 4,
+          "type": "int64",
+          "proto3_optional": true
+        },
+        {
+          "name": "end",
+          "number": 5,
+          "type": "int64",
+          "proto3_optional": true
+        },
+        {
+          "name": "metadata",
+          "number": 6,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.ExtractRequest",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "model_name",
+          "number": 2,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "confidence_threshold",
+          "number": 3,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "use_smart_merging",
+          "number": 4,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "lang",
+          "number": 5,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "normalize_accents",
+          "number": 6,
+          "type": "bool",
+          "proto3_optional": true
+        },
+        {
+          "name": "keep_alive",
+          "number": 7,
+          "type": "string",
+          "proto3_optional": true
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.ExtractResponse",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "entities",
+          "number": 2,
+          "type": "message",
+          "type_name": "openmed.service.v1.EntityPrediction",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "model_name",
+          "number": 3,
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "number": 4,
+          "type": "string"
+        },
+        {
+          "name": "processing_time",
+          "number": 5,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "metadata",
+          "number": 6,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        },
+        {
+          "name": "spans",
+          "number": 7,
+          "type": "message",
+          "type_name": "openmed.service.v1.OpenMedSpan",
+          "cardinality": "repeated"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.OpenMedSpan",
+      "fields": [
+        {
+          "name": "schema_version",
+          "number": 1,
+          "type": "int32"
+        },
+        {
+          "name": "doc_id",
+          "number": 2,
+          "type": "string"
+        },
+        {
+          "name": "start",
+          "number": 3,
+          "type": "int64"
+        },
+        {
+          "name": "end",
+          "number": 4,
+          "type": "int64"
+        },
+        {
+          "name": "text_hash",
+          "number": 5,
+          "type": "string"
+        },
+        {
+          "name": "entity_type",
+          "number": 6,
+          "type": "string"
+        },
+        {
+          "name": "canonical_label",
+          "number": 7,
+          "type": "string"
+        },
+        {
+          "name": "policy_label",
+          "number": 8,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "regulatory_tags",
+          "number": 9,
+          "type": "string",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "score",
+          "number": 10,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "detector",
+          "number": 11,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "evidence",
+          "number": 12,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        },
+        {
+          "name": "action",
+          "number": 13,
+          "type": "string"
+        },
+        {
+          "name": "replacement",
+          "number": 14,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "reversible_id",
+          "number": 15,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "section",
+          "number": 16,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "metadata",
+          "number": 17,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        }
+      ]
+    },
+    {
+      "name": "openmed.service.v1.PIIEntity",
+      "fields": [
+        {
+          "name": "text",
+          "number": 1,
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "number": 2,
+          "type": "string"
+        },
+        {
+          "name": "entity_type",
+          "number": 3,
+          "type": "string"
+        },
+        {
+          "name": "start",
+          "number": 4,
+          "type": "int64",
+          "proto3_optional": true
+        },
+        {
+          "name": "end",
+          "number": 5,
+          "type": "int64",
+          "proto3_optional": true
+        },
+        {
+          "name": "confidence",
+          "number": 6,
+          "type": "double"
+        },
+        {
+          "name": "redacted_text",
+          "number": 7,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "canonical_label",
+          "number": 8,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "sources",
+          "number": 9,
+          "type": "string",
+          "cardinality": "repeated"
+        },
+        {
+          "name": "evidence",
+          "number": 10,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        },
+        {
+          "name": "threshold",
+          "number": 11,
+          "type": "double",
+          "proto3_optional": true
+        },
+        {
+          "name": "action",
+          "number": 12,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "surrogate",
+          "number": 13,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "reversible_id",
+          "number": 14,
+          "type": "string",
+          "proto3_optional": true
+        },
+        {
+          "name": "metadata",
+          "number": 15,
+          "type": "message",
+          "type_name": "google.protobuf.Struct"
+        }
+      ]
+    }
+  ],
+  "enums": [],
+  "services": [
+    {
+      "name": "openmed.service.v1.OpenMedService",
+      "methods": [
+        {
+          "name": "Analyze",
+          "request": "openmed.service.v1.AnalyzeRequest",
+          "response": "openmed.service.v1.AnalyzeResponse",
+          "client_streaming": false,
+          "server_streaming": false
+        },
+        {
+          "name": "Deidentify",
+          "request": "openmed.service.v1.DeidentifyRequest",
+          "response": "openmed.service.v1.DeidentifyResponse",
+          "client_streaming": false,
+          "server_streaming": false
+        },
+        {
+          "name": "Extract",
+          "request": "openmed.service.v1.ExtractRequest",
+          "response": "openmed.service.v1.ExtractResponse",
+          "client_streaming": false,
+          "server_streaming": false
+        },
+        {
+          "name": "StreamDeidentify",
+          "request": "openmed.service.v1.DeidentifyStreamRequest",
+          "response": "openmed.service.v1.DeidentifyStreamResponse",
+          "client_streaming": false,
+          "server_streaming": true
+        }
+      ]
+    }
+  ]
+}
