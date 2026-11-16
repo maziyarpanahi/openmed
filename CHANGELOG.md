@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Publish every packaged JSON Schema whose `$id` is on `openmed.life` at its `$id` URL on the docs site, byte-identical to the packaged file, with `schemas/index.json` listing every packaged schema once (`$id`, `schema_version`, sha256, source path); off-host `$id`s fail staging and `openmed.dev` ids are listed as unpublished (#5334).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
