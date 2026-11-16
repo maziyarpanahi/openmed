@@ -82,6 +82,44 @@ schema and the cross-field rules (sequential ranks, size cap, permissive
 licenses, known notice keys, canonical labels) and fails closed with a reason
 code such as `schema_invalid` or `rank_not_sequential`.
 
+## Web package
+
+The `openmed` web package exports `piiPack`. `piiPack.resolve()` returns the
+pack's `web` candidates in the order `resolve("pii", "web")` returns them, with
+the same fields plus each candidate's catalog `reproducibility_hash` and the
+notice text. It reads bundled data only. The candidates come from this
+manifest, joined at build time with the web ONNX model catalog
+(`openmed/catalog`). A candidate that is not a catalog row with the same
+license and parameter count fails the build, so the pack never names a model
+the catalog does not ship and the main entry never carries the catalog rows.
+
+```ts
+import { piiPack } from "openmed";
+
+const pack = await piiPack.load({ wasmPaths: "/ort/" });
+const spans = await pack.extract(text);
+showNotice(pack.notice);
+```
+
+`piiPack.load(options)` tries the candidates in rank order through the
+OpenMed ONNX loader and falls back to the next when one is not available.
+Without `allowRemoteModels: true` it loads from local files only
+(`localFilesOnly: true, allowRemoteModels: false`), refuses remote ONNX
+Runtime assets such as the default CDN `wasmPaths`, and never fetches; when no
+candidate is local it fails with `TaskPackError` code
+`local_model_unavailable`. With consent, a candidate may be downloaded, and
+`candidates_unavailable` means none loaded. Package-wide offline-only mode
+refuses the Hub ids with `remote_model_refused`. The default model candidate
+requests the package's pinned `DEFAULT_MODEL_REVISION`. Pass `pipeline` to
+use your own token-classification pipeline: `pack.extract()` then returns
+exactly what `extractPii()` returns for that pipeline. Inference stays on the
+device, the pack logs nothing, and its errors carry codes only.
+
+`scripts/web/build_web_task_packs.py` writes the bundled module
+`js/openmedkit-web/src/task-packs.generated.ts`; run it after regenerating
+this manifest or the web catalog, and `--check` fails when the module is
+stale.
+
 ## Regenerating the manifest
 
 Change a pack in `TASK_PACK_DECLARATIONS`, or refresh `models.jsonl`, then

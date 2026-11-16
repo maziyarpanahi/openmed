@@ -190,6 +190,25 @@ future major release will require explicit preparation: a local `model` path or
 a `pipeline` you load yourself. Prepare models that way now, and turn on
 offline-only mode to catch any download that remains.
 
+### PII Task Pack
+
+`piiPack` picks the PII model by job instead of by repository id, with the
+same ordered candidates as the Python, Swift and Android packs:
+
+```ts
+import { piiPack } from "openmed";
+
+const pack = await piiPack.load({ wasmPaths: "/ort/" }); // local files only
+const result = await pack.deidentify(text);
+showNotice(pack.notice); // your UI: show the review notice with the output
+```
+
+`piiPack.resolve()` lists the candidates without loading anything. `load()`
+tries them in rank order from local files only and fails with a
+`TaskPackError` (`local_model_unavailable`) rather than fetch; pass
+`allowRemoteModels: true` to let it download a candidate. Pass `pipeline` to
+run the pack over your own pipeline.
+
 ### Token Offsets
 
 Transformers.js token-classification output carries no character offsets.
