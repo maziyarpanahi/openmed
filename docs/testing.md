@@ -56,7 +56,7 @@ marker, because no release installs there:
 | Extra | Excluded on 3.15 | Why |
 | --- | --- | --- |
 | `dev`, `zh` | `opencc` | No 3.15 wheel and no upstream tracking issue ([OpenCC on PyPI](https://pypi.org/project/OpenCC/)). Chinese script conversion then returns text unchanged with `OpenCCUnavailableWarning` |
-| `dev` | `grpcio-tools` | Its first release with 3.15 wheels (1.84) requires protobuf 7, and the `service` extra pins protobuf below 7. gRPC at runtime is unaffected; regenerate stubs (`make grpc-proto`) on 3.14 or older |
+| `dev` | `grpcio-tools` | Its first release with 3.15 wheels (1.84) requires protobuf 7, and the `service` extra pins protobuf below 7. gRPC at runtime is unaffected. Regenerating stubs (`make grpc-proto`) and the stub-drift test `test_grpc_generated_stubs_are_current` need 3.14 or older |
 | `beam` | `apache-beam` | Every release caps numpy below 2.5, and numpy first ships 3.15 wheels in 2.5.2 ([apache/beam#40249](https://github.com/apache/beam/issues/40249)) |
 | `openvino` | `nncf` | Every release caps numpy below 2.5 ([NNCF on PyPI](https://pypi.org/project/nncf/)) |
 | `scispacy` | `scispacy` | scispacy 0.6 requires numpy below 2 ([allenai/scispacy#536](https://github.com/allenai/scispacy/issues/536)) |
