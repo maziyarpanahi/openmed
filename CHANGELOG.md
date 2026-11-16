@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Give `MapleResponseError` a stable `code` attribute drawn from the closed set
+  `MAPLE_RESPONSE_ERROR_CODES` (for example `invalid_json`, `invalid_span`,
+  `label_not_allowed`), so callers can branch on why a Maple response was
+  rejected without parsing the message. Messages and parsing behaviour are
+  unchanged, and unknown codes fall back to `invalid_response` (#5086).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
