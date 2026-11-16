@@ -67,7 +67,7 @@ final class OpenMedModelIntegrityTests: XCTestCase {
         let cases: [Case]
     }
 
-    private static let vectorsPath = "tests/fixtures/model_catalog/repro_hash_vectors.json"
+    private static let vectorsPath = "tests/fixtures/parity/model_repro_hash_v1.json"
     private static let repoID = "OpenMed/Synthetic-Pinned-mlx"
     private static let commit = "0123456789abcdef0123456789abcdef01234567"
     private static let lastModified = "2026-06-24T12:34:56.000Z"
