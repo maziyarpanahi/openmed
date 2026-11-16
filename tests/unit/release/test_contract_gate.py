@@ -259,8 +259,8 @@ def test_every_fixture_declares_each_runtime_with_reasons_for_exclusions() -> No
                 assert cell.reason and not cell.consumers
             else:
                 assert cell.reason is None
-    # The offset contract is required on web even though no web reporter
-    # reads it yet: the gate must show that cell as missing, not hide it.
+    # The offset contract stays required on web even though the web package
+    # fails cases of it today: the gate must show those failures, not hide them.
     assert manifest.fixture("offset_contract").cells["web"].status == "required"
 
 
@@ -1178,28 +1178,51 @@ def test_real_python_run_aggregates_end_to_end(tmp_path: Path) -> None:
         assert _cell(report, "beta", "python").state == "passed"
 
 
-def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
+def test_committed_manifest_aggregates_active_and_lists_pending_reporters(
     tmp_path: Path,
 ) -> None:
-    python = _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST)
-    path = tmp_path / "python.json"
-    _write_json(path, python)
+    active = [
+        runtime
+        for runtime, declaration in gate.load_manifest().runtimes.items()
+        if declaration.reporter == gate.REPORTER_ACTIVE
+    ]
+    paths = []
+    for runtime in active:
+        path = tmp_path / f"{runtime}.json"
+        _write_json(path, _passing_result(ROOT, runtime, gate.DEFAULT_MANIFEST))
+        paths.append(path)
 
-    report = gate.aggregate(results=[path])
+    report = gate.aggregate(results=paths)
     states = {(cell.runtime, cell.state) for cell in report.cells}
 
+    assert set(active) == {"python", "web"}
     assert report.passed
-    assert {state for runtime, state in states if runtime == "python"} == {"passed"}
-    for runtime in ("swift", "kotlin", "web"):
+    for runtime in active:
+        assert {state for name, state in states if name == runtime} <= {
+            "passed",
+            "not_applicable",
+        }
+    for runtime in ("swift", "kotlin"):
         assert {state for name, state in states if name == runtime} <= {
             "pending",
             "not_applicable",
         }
     missing = gate.aggregate()
     assert not missing.passed
-    assert {cell.codes for cell in missing.cells if cell.runtime == "python"} == {
-        ("missing_result",)
-    }
+    for runtime in active:
+        assert {
+            cell.codes
+            for cell in missing.cells
+            if cell.runtime == runtime and cell.state != "not_applicable"
+        } == {("missing_result",)}
+    # Without its result file, an active reporter fails the gate.
+    python_only = gate.aggregate(results=[tmp_path / "python.json"])
+    assert not python_only.passed
+    assert {
+        cell.state
+        for cell in python_only.cells
+        if cell.runtime == "web" and cell.state != "not_applicable"
+    } == {"missing"}
 
 
 def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
@@ -1235,3 +1258,30 @@ def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
     for runtime, declaration in manifest.runtimes.items():
         if declaration.reporter == gate.REPORTER_ACTIVE:
             assert f"{runtime}-results" in jobs, runtime
+    web_steps = {step.get("name"): step for step in jobs["web-results"]["steps"]}
+    assert (
+        "npm ci --prefix js/openmedkit-web"
+        in (web_steps["Install web package dependencies"]["run"])
+    )
+    assert "run contract-gate" in web_steps["Write the web result file"]["run"]
+    web_upload = web_steps["Upload the web result file"]
+    assert web_upload["if"] == "always()"
+    assert web_upload["with"]["name"] == "contract-gate-result-web"
+    assert web_upload["with"]["path"] == "contract-gate-results/web.json"
+
+
+def test_web_reporter_is_wired_into_the_web_package() -> None:
+    manifest = gate.load_manifest()
+    package = json.loads(
+        (ROOT / "js" / "openmedkit-web" / "package.json").read_text(encoding="utf-8")
+    )
+    reporter = "tests/web/test_contract_gate.spec.ts"
+
+    assert manifest.runtimes["web"].reporter == gate.REPORTER_ACTIVE
+    assert "run contract-gate" in (manifest.runtimes["web"].command or "")
+    assert "contract_gate_reporter.ts" in package["scripts"]["contract-gate"]
+    assert f"../../{reporter}" in package["scripts"]["test:node"]
+    for entry in manifest.fixtures:
+        cell = entry.cells["web"]
+        if cell.status == gate.STATUS_REQUIRED:
+            assert reporter in cell.consumers, entry.id

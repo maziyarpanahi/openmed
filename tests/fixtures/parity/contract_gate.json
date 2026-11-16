@@ -25,8 +25,8 @@
       "tracking": "#5328"
     },
     "web": {
-      "reporter": "pending",
-      "tracking": "#5329"
+      "reporter": "active",
+      "command": "npm --prefix js/openmedkit-web run contract-gate"
     }
   },
   "fixtures": [
@@ -68,7 +68,8 @@
         "web": {
           "status": "required",
           "consumers": [
-            "tests/web/test_decision_runtime.spec.ts"
+            "tests/web/test_decision_runtime.spec.ts",
+            "tests/web/test_contract_gate.spec.ts"
           ]
         }
       }
@@ -208,7 +209,8 @@
         "web": {
           "status": "required",
           "consumers": [
-            "tests/web/test_kit_parity.spec.ts"
+            "tests/web/test_kit_parity.spec.ts",
+            "tests/web/test_contract_gate.spec.ts"
           ]
         }
       }
@@ -320,7 +322,9 @@
         },
         "web": {
           "status": "required",
-          "consumers": []
+          "consumers": [
+            "tests/web/test_contract_gate.spec.ts"
+          ]
         }
       }
     },
@@ -366,7 +370,8 @@
         "web": {
           "status": "required",
           "consumers": [
-            "tests/web/test_portable_policy.spec.ts"
+            "tests/web/test_portable_policy.spec.ts",
+            "tests/web/test_contract_gate.spec.ts"
           ]
         }
       }
@@ -469,7 +474,8 @@
         "web": {
           "status": "required",
           "consumers": [
-            "tests/web/test_tokenizer_conformance.spec.ts"
+            "tests/web/test_tokenizer_conformance.spec.ts",
+            "tests/web/test_contract_gate.spec.ts"
           ]
         }
       }
