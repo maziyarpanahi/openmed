@@ -2340,6 +2340,15 @@ public final class com/openmed/openmedkit/download/ModelDownloadLogger$Companion
 	public final fun getNONE ()Lcom/openmed/openmedkit/download/ModelDownloadLogger;
 }
 
+public abstract interface class com/openmed/openmedkit/download/ModelDownloadProgressListener {
+	public static final field Companion Lcom/openmed/openmedkit/download/ModelDownloadProgressListener$Companion;
+	public abstract fun onProgress (IIJLjava/lang/Long;)V
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadProgressListener$Companion {
+	public final fun getNONE ()Lcom/openmed/openmedkit/download/ModelDownloadProgressListener;
+}
+
 public final class com/openmed/openmedkit/download/ModelDownloadResult {
 	public fun <init> (Ljava/lang/String;Ljava/io/File;JIZLjava/lang/String;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -2366,6 +2375,7 @@ public final class com/openmed/openmedkit/download/ModelDownloadStatus : java/la
 	public static final field DOWNLOAD_COMPLETE Lcom/openmed/openmedkit/download/ModelDownloadStatus;
 	public static final field DOWNLOAD_STARTED Lcom/openmed/openmedkit/download/ModelDownloadStatus;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getLifecycleEvent ()Ljava/lang/String;
 	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadStatus;
 	public static fun values ()[Lcom/openmed/openmedkit/download/ModelDownloadStatus;
 }
@@ -2377,6 +2387,8 @@ public final class com/openmed/openmedkit/download/ModelDownloader {
 	public synthetic fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;Lcom/openmed/openmedkit/download/ModelLifecycleSink;Lcom/openmed/openmedkit/download/ModelDownloadProgressListener;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;Lcom/openmed/openmedkit/download/ModelLifecycleSink;Lcom/openmed/openmedkit/download/ModelDownloadProgressListener;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun download (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
 	public static synthetic fun download$default (Lcom/openmed/openmedkit/download/ModelDownloader;Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
 }
@@ -2403,6 +2415,33 @@ public final class com/openmed/openmedkit/download/ModelIntegrity {
 
 public final class com/openmed/openmedkit/download/ModelIntegrityException : java/lang/RuntimeException {
 	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/openmed/openmedkit/download/ModelLifecycleEvent {
+	public static final field Companion Lcom/openmed/openmedkit/download/ModelLifecycleEvent$Companion;
+	public static final field SCHEMA_VERSION Ljava/lang/String;
+	public final fun getByteCount ()Ljava/lang/Long;
+	public final fun getDigest ()Ljava/lang/String;
+	public final fun getEvent ()Ljava/lang/String;
+	public final fun getFileCount ()Ljava/lang/Integer;
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getRepoId ()Ljava/lang/String;
+	public final fun getRevisionSha ()Ljava/lang/String;
+	public final fun getSchemaVersion ()Ljava/lang/String;
+	public final fun toJson ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/ModelLifecycleEvent$Companion {
+}
+
+public abstract interface class com/openmed/openmedkit/download/ModelLifecycleSink {
+	public static final field Companion Lcom/openmed/openmedkit/download/ModelLifecycleSink$Companion;
+	public abstract fun emit (Lcom/openmed/openmedkit/download/ModelLifecycleEvent;)V
+}
+
+public final class com/openmed/openmedkit/download/ModelLifecycleSink$Companion {
+	public final fun getNONE ()Lcom/openmed/openmedkit/download/ModelLifecycleSink;
 }
 
 public abstract interface class com/openmed/openmedkit/download/ModelTransferControl {
