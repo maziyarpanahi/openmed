@@ -27,7 +27,7 @@ import java.security.MessageDigest
  * manifest and file integrity checks pass.
  */
 class ModelDownloader(
-    private val cache: ModelCache,
+    internal val cache: ModelCache,
     private val client: HuggingFaceModelClient = HttpHuggingFaceModelClient(),
     private val logger: ModelDownloadLogger = ModelDownloadLogger.NONE,
 ) {

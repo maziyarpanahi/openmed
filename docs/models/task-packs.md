@@ -24,6 +24,7 @@ action. Kits must show the pack's notice with its output.
 | `openmed/core/schemas/json/task_pack.schema.json` | JSON Schema for the manifest; `#/$defs/task_pack` validates one pack |
 | `openmed/core/data/task_packs.json` | Generated manifest that kits consume |
 | `scripts/manifest/build_task_packs.py` | Offline generator with `--check` |
+| `android/openmedkit/src/main/assets/packs/task_packs.json` | Byte-identical copy read by the Kotlin packs ([Android task packs](../android-integration.md#task-packs)) |
 
 ## Runtimes and formats
 
