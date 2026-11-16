@@ -20,6 +20,15 @@ const SCHEMA_DIR = join(rootDir, "openmed", "core", "schemas", "json");
 const PACKAGE_DIR = join(rootDir, "js", "openmedkit-web");
 const TYPES_PATH = resolve(PACKAGE_DIR, "src", "types.ts");
 const GENERATED_PATH = resolve(PACKAGE_DIR, "src", "generated", "contract-types.ts");
+const EXAMPLES_PATH = join(
+  rootDir,
+  "tests",
+  "fixtures",
+  "contracts",
+  "core_contract_examples.json",
+);
+// In-memory only: never written to disk.
+const EXAMPLES_MODULE = resolve(PACKAGE_DIR, "src", "__contract_examples__.ts");
 // Resolve the compiler from the web package so its pinned devDependency is used.
 const ts = createRequire(join(PACKAGE_DIR, "package.json"))(
   "typescript",
@@ -38,10 +47,7 @@ async function spanSchema(): Promise<SpanSchema> {
   ) as SpanSchema;
 }
 
-/** Type-check `types.ts`, optionally rewriting the generated module first. */
-function typesDiagnostics(
-  rewriteGenerated?: (source: string) => string,
-): readonly TypeScript.Diagnostic[] {
+function compilerOptions(): TypeScript.CompilerOptions {
   const configPath = join(PACKAGE_DIR, "tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   assert.equal(config.error, undefined);
@@ -50,26 +56,73 @@ function typesDiagnostics(
     ts.sys,
     dirname(configPath),
   );
-  const options = { ...parsed.options, noEmit: true };
+  return { ...parsed.options, noEmit: true };
+}
+
+/** Type-check `root` with in-memory file contents; return its own diagnostics. */
+function diagnosticsFor(
+  root: string,
+  files: ReadonlyMap<string, string> = new Map(),
+): readonly TypeScript.Diagnostic[] {
+  const options = compilerOptions();
   const host = ts.createCompilerHost(options, true);
   const readSourceFile = host.getSourceFile.bind(host);
+  const fileExists = host.fileExists.bind(host);
+  host.fileExists = (fileName) => files.has(resolve(fileName)) || fileExists(fileName);
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreate) => {
-    if (rewriteGenerated !== undefined && resolve(fileName) === GENERATED_PATH) {
-      const original = ts.sys.readFile(fileName);
-      assert.ok(original !== undefined);
-      return ts.createSourceFile(
-        fileName,
-        rewriteGenerated(original),
-        languageVersion,
-        true,
-      );
+    const text = files.get(resolve(fileName));
+    if (text !== undefined) {
+      return ts.createSourceFile(fileName, text, languageVersion, true);
     }
     return readSourceFile(fileName, languageVersion, onError, shouldCreate);
   };
-  const program = ts.createProgram([TYPES_PATH], options, host);
+  const program = ts.createProgram([root], options, host);
+  assert.ok(program.getSourceFile(root), "type-check root was not loaded");
   return ts
     .getPreEmitDiagnostics(program)
-    .filter((item) => item.file !== undefined && resolve(item.file.fileName) === TYPES_PATH);
+    .filter((item) => item.file !== undefined && resolve(item.file.fileName) === root);
+}
+
+/** Type-check `types.ts`, optionally rewriting the generated module first. */
+function typesDiagnostics(
+  rewriteGenerated?: (source: string) => string,
+): readonly TypeScript.Diagnostic[] {
+  if (rewriteGenerated === undefined) {
+    return diagnosticsFor(TYPES_PATH);
+  }
+  const original = ts.sys.readFile(GENERATED_PATH);
+  assert.ok(original !== undefined);
+  return diagnosticsFor(TYPES_PATH, new Map([[GENERATED_PATH, rewriteGenerated(original)]]));
+}
+
+type Examples = Record<string, Record<string, unknown>[]>;
+
+/** Render the shared schema examples as constants typed by the generated types. */
+async function examplesModule(mutate?: (examples: Examples) => void): Promise<string> {
+  const fixture = JSON.parse(await readFile(EXAMPLES_PATH, "utf8")) as {
+    examples: Examples;
+  };
+  mutate?.(fixture.examples);
+  const lines = ['import type * as Contract from "./generated/contract-types";'];
+  for (const [schema, records] of Object.entries(fixture.examples)) {
+    const { title } = JSON.parse(
+      await readFile(join(SCHEMA_DIR, `${schema}.schema.json`), "utf8"),
+    ) as { title: string };
+    const typeName = `OpenMedContract${title.replace(/^OpenMed/, "")}`;
+    records.forEach((record, index) => {
+      lines.push(
+        `export const ${schema}_${index}: Contract.${typeName} = ${JSON.stringify(record)};`,
+      );
+    });
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function examplesDiagnostics(
+  mutate?: (examples: Examples) => void,
+): Promise<readonly TypeScript.Diagnostic[]> {
+  const source = await examplesModule(mutate);
+  return diagnosticsFor(EXAMPLES_MODULE, new Map([[EXAMPLES_MODULE, source]]));
 }
 
 function rewriteSpanInterface(
@@ -137,4 +190,28 @@ test("a changed schema field type fails the span contract guard", () => {
     ),
   );
   assert.ok(diagnostics.some((item) => item.code === CONSTRAINT_NOT_SATISFIED));
+});
+
+test("every shared schema example satisfies its generated type", async () => {
+  const source = await examplesModule();
+  assert.ok(source.includes(": Contract.OpenMedContractDataResidencyAttestation = "));
+  assert.deepEqual((await examplesDiagnostics()).map((item) => item.code), []);
+});
+
+test("generated types reject examples that break the schema", async () => {
+  const undeclared = await examplesDiagnostics((examples) => {
+    examples.span![0]!.synthetic_extra = true;
+  });
+  const missing = await examplesDiagnostics((examples) => {
+    delete examples.code![0]!.system;
+  });
+  const wrongType = await examplesDiagnostics((examples) => {
+    examples.audit![0]!.timestamp = 5;
+  });
+  const wrongEnum = await examplesDiagnostics((examples) => {
+    examples.action![0]!.action = "synthetic_action";
+  });
+  for (const diagnostics of [undeclared, missing, wrongType, wrongEnum]) {
+    assert.ok(diagnostics.length > 0);
+  }
 });

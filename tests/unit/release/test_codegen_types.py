@@ -22,6 +22,7 @@ GENERATED = ROOT / "js" / "openmedkit-web" / "src" / "generated" / "contract-typ
 WEB_TYPES = ROOT / "js" / "openmedkit-web" / "src" / "types.ts"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 MAKEFILE = ROOT / "Makefile"
+EXAMPLES = ROOT / "tests" / "fixtures" / "contracts" / "core_contract_examples.json"
 
 
 def _load(name: str, path: Path) -> ModuleType:
@@ -249,6 +250,45 @@ def test_missing_schema_fails_closed(tmp_path: Path) -> None:
         contract_schema.load_contract_model(schema_dir)
 
     assert (raised.value.code, raised.value.location) == ("schema_missing", "code#")
+
+
+def _examples() -> dict[str, list[dict[str, Any]]]:
+    fixture = json.loads(EXAMPLES.read_text(encoding="utf-8"))
+    assert fixture["schema"] == "openmed.core_contract_examples"
+    assert fixture["version"] == 1
+    return fixture["examples"]
+
+
+def test_contract_examples_cover_and_satisfy_every_core_schema() -> None:
+    from jsonschema import Draft202012Validator, FormatChecker
+
+    examples = _examples()
+
+    assert list(examples) == list(contract_schema.CORE_SCHEMAS)
+    for name, records in examples.items():
+        schema = json.loads(
+            (SCHEMA_DIR / contract_schema.schema_file_name(name)).read_text("utf-8")
+        )
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        assert records, name
+        for index, record in enumerate(records):
+            failures = [error.json_path for error in validator.iter_errors(record)]
+            assert failures == [], f"{name}[{index}] {failures}"
+
+
+def test_span_examples_cover_null_and_values_and_match_python_span() -> None:
+    from openmed.core.schemas import OpenMedSpan
+
+    records = _examples()["span"]
+    model = contract_schema.load_contract_model()
+    span = next(record for record in model.roots if record.schema == "span")
+
+    for field in span.fields:
+        if field.type.nullable:
+            seen = {record[field.name] is None for record in records}
+            assert seen == {True, False}, field.name
+    for record in records:
+        assert OpenMedSpan.from_dict(record).to_dict() == record
 
 
 def test_pattern_prefixes_become_template_literal_types() -> None:
