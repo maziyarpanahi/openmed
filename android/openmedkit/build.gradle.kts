@@ -217,6 +217,8 @@ android {
             resources.srcDir(repoRoot.resolve("fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/processing"))
+            // Synthetic core-contract examples decoded by ContractTypesTest.
+            resources.srcDir(repoRoot.resolve("tests/fixtures/contracts"))
         }
         getByName("androidTest") {
             java.srcDir("src/sharedTest/kotlin")
