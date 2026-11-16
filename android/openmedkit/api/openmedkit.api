@@ -4488,6 +4488,29 @@ public final class com/openmed/openmedkit/policy/PolicyThreshold {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract class com/openmed/openmedkit/receipt/ReceiptVerification {
+	public synthetic fun <init> (Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCode ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/receipt/ReceiptVerification$Rejected : com/openmed/openmedkit/receipt/ReceiptVerification {
+}
+
+public final class com/openmed/openmedkit/receipt/ReceiptVerification$Valid : com/openmed/openmedkit/receipt/ReceiptVerification {
+	public final fun getSpanOrder ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/receipt/ReceiptVerifier {
+	public static final field ALGORITHM Ljava/lang/String;
+	public static final field HASH_MISMATCH Ljava/lang/String;
+	public static final field INSTANCE Lcom/openmed/openmedkit/receipt/ReceiptVerifier;
+	public static final field MALFORMED Ljava/lang/String;
+	public static final field SIGNATURE_MISMATCH Ljava/lang/String;
+	public static final field UNSUPPORTED_ALGORITHM Ljava/lang/String;
+	public final fun verify (Ljava/lang/String;[B)Lcom/openmed/openmedkit/receipt/ReceiptVerification;
+}
+
 public final class com/openmed/openmedkit/secrets/AndroidKeystore : com/openmed/openmedkit/secrets/OpenMedKeystore {
 	public static final field AES_GCM Ljava/lang/String;
 	public static final field AES_KEY_BITS I
