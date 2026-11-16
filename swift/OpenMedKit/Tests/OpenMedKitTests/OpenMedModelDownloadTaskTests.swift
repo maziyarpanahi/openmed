@@ -113,10 +113,14 @@ final class OpenMedModelDownloadTaskTests: XCTestCase {
                 XCTAssertLessThanOrEqual(previous.bytesDone, next.bytesDone)
             }
         }
+        // URLSession may coalesce chunks that arrive together, so only require
+        // a byte-progress event with the declared length before completion.
+        // The cancellation test pins a mid-file event deterministically.
         let weights = events.filter { $0.fileName == "weights.safetensors" }
-        XCTAssertGreaterThan(weights.count, 2, "chunked transfers report intermediate progress")
+        XCTAssertGreaterThanOrEqual(weights.count, 2)
+        XCTAssertEqual(weights.first?.bytesTotal, 40_000)
+        XCTAssertEqual(weights.first?.filesDone, weights.last.map { $0.filesDone - 1 })
         XCTAssertEqual(weights.last?.bytesDone, 40_000)
-        XCTAssertTrue(weights.dropLast().contains { $0.bytesTotal == 40_000 && $0.bytesDone < 40_000 })
     }
 
     func testProgressCarriesNoURLTokenOrAbsolutePath() async throws {
@@ -145,6 +149,9 @@ final class OpenMedModelDownloadTaskTests: XCTestCase {
 
         var sawPartialWeights = false
         for await event in download.progress where event.fileName == "weights.safetensors" && event.bytesDone > 0 {
+            // The stub stalls after one chunk, so this event is mid-file.
+            XCTAssertLessThanOrEqual(event.bytesDone, Int64(ChunkedModelURLProtocol.chunkSize))
+            XCTAssertEqual(event.bytesTotal, 40_000)
             sawPartialWeights = true
             download.cancel()
         }
