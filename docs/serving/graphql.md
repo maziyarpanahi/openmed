@@ -119,6 +119,32 @@ classifies the live schema against the accepted baseline in
 fields, arguments and enum values, tightened input nullability, and new
 required arguments.
 
+## Canonical span fields
+
+The canonical fields of the `OpenMedSpan` type are generated from
+`openmed/core/schemas/json/span.schema.json` into
+`openmed/service/graphql_span_fields.py` by `scripts/codegen/span_graphql.py`,
+and the Strawberry type is built from that module. String, integer, number and
+boolean properties map to nullable `String`, `Int`, `Float` and `Boolean`;
+objects map to `JSON!` and arrays to non-null lists such as `[String!]!`.
+
+`label` and `text` are not part of the canonical span. They stay on the type
+for compatibility, marked `@deprecated` in the SDL. Use `canonicalLabel`
+instead of `label`, and `textHash` instead of `text`, which can carry the raw
+span surface. Removing them is a 5.0 decision. Their values, and every existing
+response shape, are unchanged.
+
+After changing the span schema, regenerate the module and the SDL:
+
+```bash
+.venv/bin/python scripts/codegen/span_graphql.py
+.venv/bin/python scripts/export_graphql_schema.py
+```
+
+`scripts/codegen/span_graphql.py --check`, which the unit tests also run, fails
+when the module is stale or when the live type and the schema disagree on a
+field name or type.
+
 ## Document, variable, and execution budgets
 
 Every GraphQL request is checked against a versioned `GraphQLLimits` contract
