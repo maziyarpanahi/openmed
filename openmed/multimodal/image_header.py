@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, BinaryIO, Callable, Final
 
+from openmed.core.errors import LegacyRootedError
+
 DEFAULT_MAX_IMAGE_HEADER_BYTES: Final[int] = 64 * 1024
 DEFAULT_MAX_IMAGE_PIXELS: Final[int] = 100_000_000
 DEFAULT_MAX_JPEG_MARKERS: Final[int] = 256
@@ -58,7 +60,7 @@ class ImageFormat(str, Enum):
     JPEG = "jpeg"
 
 
-class ImageHeaderError(ValueError):
+class ImageHeaderError(ValueError, LegacyRootedError):
     """Value-free failure for malformed or unsupported image headers."""
 
     def __init__(self, category: str) -> None:

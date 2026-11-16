@@ -19,6 +19,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import (
     MAX_MANIFEST_BYTE_SIZE,
     MAX_MANIFEST_COUNT,
@@ -78,7 +80,7 @@ _REASON_CODES: Final = frozenset(
 )
 
 
-class AssetBatchError(ValueError):
+class AssetBatchError(ValueError, LegacyRootedError):
     """Raised when a privacy-safe asset batch fails validation."""
 
 

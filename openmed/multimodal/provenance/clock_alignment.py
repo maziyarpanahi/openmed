@@ -10,6 +10,8 @@ from enum import Enum
 from fractions import Fraction
 from math import ceil, floor
 
+from openmed.core.errors import LegacyRootedError
+
 from ..audio_windows import AudioWindowPlan, plan_audio_windows
 from ..ecg.evidence_windows import EcgEvidenceWindows
 from ..ecg.interval_candidates import CandidateState
@@ -34,7 +36,7 @@ _BILLION = 1_000_000_000
 _MILLION = 1_000_000
 
 
-class ClockAlignmentError(ValueError):
+class ClockAlignmentError(ValueError, LegacyRootedError):
     """Fixed declaration error, without timestamps, content, paths or input values."""
 
 

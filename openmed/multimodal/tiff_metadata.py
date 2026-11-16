@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import BinaryIO, Final
 
+from openmed.core.errors import LegacyRootedError
+
 DEFAULT_MAX_TIFF_HEADER_BYTES: Final[int] = 64 * 1024
 DEFAULT_MAX_TIFF_PIXELS: Final[int] = 100_000_000
 DEFAULT_MAX_IFD_ENTRIES: Final[int] = 512
@@ -81,7 +83,7 @@ class TiffByteOrder(str, Enum):
     BIG = "big"
 
 
-class TiffMetadataError(ValueError):
+class TiffMetadataError(ValueError, LegacyRootedError):
     """Value-free failure for malformed or unsupported TIFF headers."""
 
     def __init__(self, category: str) -> None:

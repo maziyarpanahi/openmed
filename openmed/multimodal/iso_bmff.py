@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from openmed.core.errors import LegacyRootedError
+
 from .media_type import detect_media_type
 
 __all__ = ["BmffPreflightError", "HeifPreflight", "M4aPreflight", "preflight_iso_bmff"]
@@ -13,7 +15,7 @@ _UINT64_MAX = (1 << 64) - 1
 _IMAGE_ITEMS = {b"hvc1", b"av01", b"jpeg", b"grid", b"iovl", b"iden", b"unci"}
 
 
-class BmffPreflightError(ValueError):
+class BmffPreflightError(ValueError, LegacyRootedError):
     """A stable, value-free refusal; source strings are never interpolated."""
 
     def __init__(self, category: str) -> None:

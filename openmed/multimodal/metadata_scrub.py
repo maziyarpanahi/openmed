@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 from xml.etree import ElementTree
 
+from openmed.core.errors import LegacyRootedError
+
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
 _METADATA_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -162,7 +164,7 @@ class MetadataScrubResult:
         }
 
 
-class MetadataScrubError(ValueError):
+class MetadataScrubError(ValueError, LegacyRootedError):
     """Raised when verification finds residual disallowed metadata."""
 
     def __init__(self, report: ResidualMetadataReport) -> None:

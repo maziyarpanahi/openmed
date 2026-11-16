@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.lang_id_codemix import TokenLanguageIdentifier
 from openmed.core.language_pack import LanguagePack
 from openmed.core.language_router import LanguageIdentifier, LanguagePrediction
@@ -30,7 +31,7 @@ _TAG_SCRIPTS = frozenset(
 LanguageStatus = Literal["supported", "mixed", "unsupported", "uncertain"]
 
 
-class TranscriptLanguageError(ValueError):
+class TranscriptLanguageError(ValueError, LegacyRootedError):
     """A controlled, value-free failure at the transcript boundary."""
 
 

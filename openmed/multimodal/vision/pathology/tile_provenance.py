@@ -11,6 +11,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import Any, ClassVar
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.evidence import EvidenceNode, NodeKind, PageGeometry
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 from openmed.multimodal.vision.pathology.slide_tiler import (
@@ -33,7 +34,7 @@ _MAX_FEATURE_MAGNITUDE = 1e100
 _Matrix = tuple[Fraction, Fraction, Fraction, Fraction, Fraction, Fraction]
 
 
-class TileProvenanceError(ValueError):
+class TileProvenanceError(ValueError, LegacyRootedError):
     """Fixed invalid-lineage or incomplete-aggregation failure without payload values."""
 
 

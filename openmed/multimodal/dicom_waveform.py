@@ -15,6 +15,8 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .exceptions import MissingDependencyError
 
 DICOM_ECG_NOTICE = (
@@ -65,7 +67,7 @@ _MAX_ANNOTATIONS = 10_000
 _PARSER_LOCK = threading.RLock()
 
 
-class DicomWaveformError(ValueError):
+class DicomWaveformError(ValueError, LegacyRootedError):
     """Fail-closed rejection containing only a controlled reason code."""
 
     def __init__(self, reason_code: str) -> None:

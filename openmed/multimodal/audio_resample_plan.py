@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import MAX_MANIFEST_BYTE_SIZE
 
 __all__ = [
@@ -34,7 +36,7 @@ MAX_AUDIO_FRAMES: Final[int] = (1 << 32) - 1
 AUDIO_RESAMPLE_PLAN_SCHEMA_VERSION: Final = 1
 
 
-class AudioResamplePlanError(ValueError):
+class AudioResamplePlanError(ValueError, LegacyRootedError):
     """Value-free failure for invalid rates, frames, or plan arithmetic."""
 
     def __init__(self, category: str) -> None:

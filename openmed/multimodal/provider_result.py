@@ -16,6 +16,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason
 
 __all__ = [
@@ -67,7 +69,7 @@ _OPTIONAL_FIELDS: Final = frozenset(
 )
 
 
-class ProviderResultError(ValueError):
+class ProviderResultError(ValueError, LegacyRootedError):
     """Raised when provider-result metadata violates the safe envelope."""
 
 

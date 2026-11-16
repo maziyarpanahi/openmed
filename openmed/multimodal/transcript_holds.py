@@ -16,6 +16,7 @@ from enum import Enum
 from types import MappingProxyType
 
 from openmed.clinical.dosing_check import DoseRangeTableSource, check_dose_ranges
+from openmed.core.errors import LegacyRootedError
 
 POLICY_VERSION = 1
 TRANSCRIPT_HOLD_NOTICE = (
@@ -65,7 +66,7 @@ _MODIFIERS = frozenset(
 )
 
 
-class TranscriptHoldError(ValueError):
+class TranscriptHoldError(ValueError, LegacyRootedError):
     """A controlled, content-free hold validation or review conflict."""
 
 

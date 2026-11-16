@@ -30,6 +30,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .audio_windows import MAX_AUDIO_DURATION_MS
 from .provider_result import ProviderResultEnvelope, ProviderResultOutcome
@@ -189,7 +191,7 @@ def _sha256_json(payload: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("ascii")).hexdigest()
 
 
-class AsrHallucinationError(ValueError):
+class AsrHallucinationError(ValueError, LegacyRootedError):
     """Value-free failure with a stable ``category`` code.
 
     The message equals the category. Submitted values, hypothesis text and

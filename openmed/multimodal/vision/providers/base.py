@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import ClassVar, Protocol, runtime_checkable
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.abstention import AbstentionRecord, AbstentionStage
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
@@ -48,7 +49,7 @@ _MAX_TEXT_BYTES = 64 * 1024
 _MAX_EVIDENCE = 256
 
 
-class VLMContractError(ValueError):
+class VLMContractError(ValueError, LegacyRootedError):
     """Content-free failure at the local provider boundary."""
 
 

@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, BinaryIO, Protocol, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_limits import DESKTOP_V1, LimitProfile
 from .asset_manifest import AssetManifest
@@ -47,7 +49,7 @@ SpeechEmission = PartialHypothesis | FinalizedSegment
 ProtectedOutput = ExtractedDocument | VLMResult | tuple[SpeechEmission, ...]
 
 
-class RuntimeSessionError(ValueError):
+class RuntimeSessionError(ValueError, LegacyRootedError):
     """Value-free caller-contract or lifecycle error."""
 
 

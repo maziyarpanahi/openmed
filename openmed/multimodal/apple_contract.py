@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import AssetManifest
 from .evidence.fused_graph import EvidenceNode, NodeKind, PageGeometry, SpatialUnit
 from .page_rotation import PageTransform
@@ -52,7 +54,7 @@ class ContractRefusal(str, Enum):
     PROVENANCE = "incomplete_multimodal_provenance"
 
 
-class AppleContractError(ValueError):
+class AppleContractError(ValueError, LegacyRootedError):
     """Controlled Python/Swift interoperability error."""
 
     def __init__(self, reason: ContractRefusal = ContractRefusal.INVALID) -> None:

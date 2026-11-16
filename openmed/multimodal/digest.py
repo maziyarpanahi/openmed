@@ -6,6 +6,8 @@ import hashlib
 from dataclasses import dataclass
 from typing import BinaryIO, Callable
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "AssetDigest",
     "DigestLimitExceededError",
@@ -34,7 +36,7 @@ class AssetDigest:
             raise ValueError("byte_count must be a non-negative integer")
 
 
-class DigestLimitExceededError(ValueError):
+class DigestLimitExceededError(ValueError, LegacyRootedError):
     """Raised when an asset exceeds the configured byte limit."""
 
     category = "digest_size_limit"
@@ -47,7 +49,7 @@ class DigestLimitExceededError(ValueError):
         )
 
 
-class DigestStreamError(RuntimeError):
+class DigestStreamError(RuntimeError, LegacyRootedError):
     """Value-free error raised when a binary stream cannot be hashed safely."""
 
 

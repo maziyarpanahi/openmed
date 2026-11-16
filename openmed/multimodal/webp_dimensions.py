@@ -6,6 +6,8 @@ import struct
 from dataclasses import dataclass
 from typing import BinaryIO, Callable, Final, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_WEBP_HEADER_BYTES",
     "DEFAULT_MAX_WEBP_PIXELS",
@@ -20,7 +22,7 @@ _MAX_RIFF_SIZE: Final[int] = (1 << 32) - 10
 _MAX_CANVAS_PIXELS: Final[int] = (1 << 32) - 1
 
 
-class WebpDimensionsError(ValueError):
+class WebpDimensionsError(ValueError, LegacyRootedError):
     """Value-free failure for malformed, unsupported, or over-limit WebP headers."""
 
     def __init__(self, category: str) -> None:

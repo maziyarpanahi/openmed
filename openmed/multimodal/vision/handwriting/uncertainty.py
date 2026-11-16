@@ -8,6 +8,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.evidence import EvidenceNode, NodeKind
 from openmed.multimodal.vision.providers.base import Confidence
 
@@ -24,7 +25,7 @@ _MAX_BATCH = 128
 _MAX_BATCH_TEXT = 262_144
 
 
-class HandwritingReviewError(ValueError):
+class HandwritingReviewError(ValueError, LegacyRootedError):
     """Controlled failure without recognized text, source paths or reviewer names."""
 
 
