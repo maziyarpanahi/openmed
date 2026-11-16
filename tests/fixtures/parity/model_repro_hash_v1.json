@@ -133,6 +133,35 @@
       ],
       "released": "2026-10-11",
       "expected_hash": "sha256:8cd2a5f37bffbecfceb66e0327028590df35c6d901a256d203d5fd93e44395c9"
+    },
+    {
+      "id": "non-ascii-repo-id-uses-json-ascii-escapes",
+      "repo_id": "OpenMed/Synthetic-Repro-\u00dcn\u00efc\u00f8d\u00e9-\u03b1\u03b2-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-11-01T08:09:10.000Z",
+      "created_at": null,
+      "siblings": [
+        "config.json",
+        "\u00e9t\u00e9.json"
+      ],
+      "released": "2026-11-01",
+      "expected_hash": "sha256:6132cbd28ab551d53dfa047a2c0d2fab4a9c5866caea50e144379b6cd2d1d2bc"
+    },
+    {
+      "id": "supplementary-characters-sort-by-code-point-not-utf16",
+      "repo_id": "OpenMed/Synthetic-Repro-Iota-mlx",
+      "sha": "fedcba9876543210fedcba9876543210fedcba98",
+      "last_modified": "2026-11-02T08:09:10.000Z",
+      "created_at": null,
+      "siblings": [
+        "\ud83d\ude00.bin",
+        "\uff21.txt",
+        "\ue000.txt",
+        "z.txt",
+        "\ud800\udc00.bin"
+      ],
+      "released": "2026-11-02",
+      "expected_hash": "sha256:7d6983d04e261c938e88965b93432dcb49345b2a94eec795029ca48829c72952"
     }
   ]
 }

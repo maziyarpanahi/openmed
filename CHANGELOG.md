@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Make the Android `ModelIntegrity.reproducibilityHash` match Python and Swift byte for byte: escape every character outside printable ASCII as `\uXXXX` like Python's `json.dumps` and sort siblings by code point. Hashes change only for repository ids or file names outside printable ASCII. Move the shared vectors to `tests/fixtures/parity/model_repro_hash_v1.json`, add non-ASCII repository-id and supplementary-character ordering vectors, and recompute every vector in Python and Kotlin (#5398).
 - Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
   `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
   links against it and no dependency ships it, so the tokenizer failed to load

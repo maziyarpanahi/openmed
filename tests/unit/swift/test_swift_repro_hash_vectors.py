@@ -12,7 +12,7 @@ from openmed.core.model_integrity import _remote_reproducibility_hash
 from scripts.manifest.generate_manifest import _reproducibility_hash
 
 ROOT = Path(__file__).resolve().parents[3]
-VECTORS = ROOT / "tests" / "fixtures" / "model_catalog" / "repro_hash_vectors.json"
+VECTORS = ROOT / "tests" / "fixtures" / "parity" / "model_repro_hash_v1.json"
 
 
 def _cases() -> list[dict[str, Any]]:

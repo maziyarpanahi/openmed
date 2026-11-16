@@ -11,6 +11,7 @@ import types
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -20,6 +21,7 @@ from openmed.core.model_integrity import (
     ARTIFACT_MANIFEST_FILENAME,
     ARTIFACT_MANIFEST_SCHEMA,
     ModelIntegrityError,
+    _remote_reproducibility_hash,
     prepare_model_reference,
     sha256_file,
     verify_artifact_manifest,
@@ -28,6 +30,12 @@ from openmed.core.model_integrity import (
 )
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "model_integrity"
+REPRO_HASH_VECTORS = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "parity"
+    / "model_repro_hash_v1.json"
+)
 
 
 def _write_integrity_manifest(
@@ -404,3 +412,85 @@ def test_local_artifact_manifest_is_relocatable(tmp_path: Path) -> None:
         )
     with pytest.raises(ValueError):
         write_local_artifact_manifest(moved, model_id="m", reproducibility_hash="md5:x")
+
+
+def _repro_hash_cases() -> list[dict[str, Any]]:
+    document = json.loads(REPRO_HASH_VECTORS.read_text(encoding="utf-8"))
+    assert document["schema"] == "openmed.model_repro_hash_vectors"
+    assert document["version"] == 1
+    return document["cases"]
+
+
+def _remote_info(case: dict[str, Any], siblings: list[str] | None = None) -> Any:
+    def stamp(value: str | None) -> datetime | None:
+        return None if value is None else datetime.fromisoformat(value)
+
+    names = case["siblings"] if siblings is None else siblings
+    return SimpleNamespace(
+        id=case["repo_id"],
+        sha=case["sha"],
+        last_modified=stamp(case["last_modified"]),
+        created_at=stamp(case["created_at"]),
+        siblings=[SimpleNamespace(rfilename=name) for name in names],
+    )
+
+
+def test_shared_repro_hash_vectors_match_the_download_verifier() -> None:
+    """Python, Swift and Android recompute these exact hashes."""
+    for case in _repro_hash_cases():
+        stamp = case["last_modified"] or case["created_at"]
+        assert case["released"] == (stamp[:10] if stamp else None), case["id"]
+        actual = _remote_reproducibility_hash(_remote_info(case))
+        assert actual == case["expected_hash"], case["id"]
+
+
+def test_shared_repro_hash_vectors_cover_the_android_edges() -> None:
+    cases = {case["id"]: case for case in _repro_hash_cases()}
+    values = list(cases.values())
+
+    assert all(
+        case["repo_id"].startswith("OpenMed/Synthetic-Repro-") for case in values
+    )
+    assert any(case["sha"] is None for case in values)
+    assert any(case["released"] is None for case in values)
+    assert any(case["siblings"] != sorted(case["siblings"]) for case in values)
+    assert any(not case["repo_id"].isascii() for case in values)
+    assert any(not name.isascii() for case in values for name in case["siblings"])
+    # Python sorts by code point; a UTF-16 code-unit sort orders these differently.
+    assert any(
+        sorted(case["siblings"])
+        != sorted(case["siblings"], key=lambda name: name.encode("utf-16-be"))
+        for case in values
+    )
+    base = cases["unsorted-siblings-with-commit-and-date"]
+    changed = cases["changed-sibling-list-changes-the-hash"]
+    assert set(changed["siblings"]) > set(base["siblings"])
+    assert changed["expected_hash"] != base["expected_hash"]
+    fewer = _remote_reproducibility_hash(_remote_info(base, base["siblings"][:-1]))
+    assert fewer != base["expected_hash"]
+
+
+def test_non_ascii_repro_hash_vectors_require_ascii_escapes() -> None:
+    """Hashing raw UTF-8 instead of JSON escapes would miss every non-ASCII vector."""
+    non_ascii = [
+        case
+        for case in _repro_hash_cases()
+        if not case["repo_id"].isascii()
+        or not all(name.isascii() for name in case["siblings"])
+    ]
+    assert len(non_ascii) >= 3
+    for case in non_ascii:
+        stamp = case["last_modified"] or case["created_at"]
+        raw = json.dumps(
+            {
+                "repo_id": case["repo_id"],
+                "sha": case["sha"],
+                "released": stamp[:10] if stamp else None,
+                "siblings": sorted(case["siblings"]),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        unescaped = "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        assert unescaped != case["expected_hash"], case["id"]
