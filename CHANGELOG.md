@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, schema versions, policy profiles and a digest) at `GET /v1/capabilities`,
   built by `openmed.core.capabilities.capability_descriptor()` and typed in OpenAPI
   by the bundled descriptor schema (#5343).
+- Add a `GetCapabilities` RPC to `OpenMedService` that returns the canonical capability
+  descriptor as typed fields with its digest, authorized like `GET /v1/capabilities` (#5345).
 
 ## [4.0.0] - 2026-11-25
 

@@ -180,6 +180,9 @@
     "graphql": {
       "entityTypes": "Static canonical label catalog; no model work and no REST or gRPC equivalent.",
       "journeyResources": "Journey resource listing mirrors REST GET /v1/journey/resources and has no gRPC method; its principal binding is owned by #3549."
+    },
+    "grpc": {
+      "/openmed.service.v1.OpenMedService/GetCapabilities": "Value-free capability descriptor; mirrors REST GET /v1/capabilities with the same models:read scope and digest. Cross-surface operation parity is owned by #3548."
     }
   },
   "codes": {

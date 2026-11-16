@@ -35,9 +35,17 @@ The `OpenMedService` exposes:
 - `Extract`: unary equivalent of `POST /pii/extract`
 - `Deidentify`: unary equivalent of `POST /pii/deidentify`
 - `StreamDeidentify`: unary request with server-streamed redacted fragments
+- `GetCapabilities`: unary equivalent of `GET /v1/capabilities`, returning the
+  value-free [capability descriptor](../api/capabilities.md)
 
 Response messages include typed entity records and the canonical `OpenMedSpan`
 message shape for callers that consume schema-versioned span contracts.
+
+`GetCapabilities` takes an empty request and returns a `CapabilitiesResponse`
+whose fields mirror the descriptor JSON. Its `digest` equals the digest that
+REST and `openmed.core.capabilities.capability_descriptor()` report for the
+same runtime, so a client can compare surfaces without reading every field. It
+loads no model and never carries hostnames, paths or environment values.
 
 ## Start A Server
 
@@ -266,6 +274,7 @@ scope override:
 | `Extract` | `POST /pii/extract` | `pii:read` |
 | `Deidentify` | `POST /pii/deidentify` | `pii:write` |
 | `StreamDeidentify` | `POST /pii/deidentify/stream` | `pii:write` |
+| `GetCapabilities` | `GET /v1/capabilities` | `models:read` |
 
 All of these checks finish before any request text is parsed or any model
 runs. With neither service authentication nor a mutual-TLS listener, calls are

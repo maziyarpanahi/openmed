@@ -241,6 +241,7 @@ GRPC_RPC_ROUTES: Mapping[str, tuple[str, str]] = MappingProxyType(
         f"/{GRPC_SERVICE_NAME}/Extract": ("POST", "/pii/extract"),
         f"/{GRPC_SERVICE_NAME}/Deidentify": ("POST", "/pii/deidentify"),
         f"/{GRPC_SERVICE_NAME}/StreamDeidentify": ("POST", "/pii/deidentify/stream"),
+        f"/{GRPC_SERVICE_NAME}/GetCapabilities": ("GET", "/v1/capabilities"),
     }
 )
 
