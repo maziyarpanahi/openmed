@@ -311,6 +311,20 @@ prepared model both throw `TaskPackException(NOT_PREPARED)`. Pass
 detected identifiers are redaction candidates that still need review.
 Diagnostics go through `SafeLog` only and never contain input text.
 
+### Clinical entities
+
+`ClinicalEntityPack` prepares a DiseaseDetect candidate the same way and
+`extract(text)` runs `analyzeText` on it. A span is kept only when its model
+label normalizes, through the portable label taxonomy, to one of the pack's
+canonical labels (`CONDITION`, `DISEASE`, `PATHOLOGY`); every other label is
+dropped rather than guessed into a category. Each `ClinicalEntity` carries the
+`category`, Unicode scalar `start` and `end` offsets, the `confidence` and the
+source `modelId`, but no surface text. The pack reports condition mentions
+only: it does not diagnose, rank or recommend care, and its result carries
+that notice. The synthetic vectors in
+`tests/fixtures/parity/clinical_entity_pack_v1.json` fix the expected output
+for the Kotlin and Swift pack tests.
+
 ## Offline-first deployment
 
 Separate model preparation from document processing. There are two supported
