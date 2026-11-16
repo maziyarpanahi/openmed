@@ -80,7 +80,7 @@
           "type": "string",
           "default": "~/.config/openmed/config.toml",
           "x-env-format": "path",
-          "x-default-note": "The default directory follows XDG_CONFIG_HOME when it is set.",
+          "x-default-note": "the directory follows XDG_CONFIG_HOME when it is set.",
           "x-secret": false,
           "x-module": "openmed.core.config"
         },
@@ -125,7 +125,7 @@
         "OPENMED_PROFILE": {
           "$ref": "config.schema.json#/properties/profile",
           "default": null,
-          "x-default-note": "The REST service treats an unset profile as prod.",
+          "x-default-note": "the REST service treats an unset profile as prod.",
           "x-config-key": "profile",
           "x-secret": false,
           "x-module": "openmed.core.config"
@@ -141,7 +141,7 @@
           "$ref": "config.schema.json#/properties/device",
           "description": "Torch device override checked when the configured device is unset or auto.",
           "default": null,
-          "x-default-note": "Unset selects MPS, then CUDA, then CPU.",
+          "x-default-note": "unset selects MPS, then CUDA, then CPU.",
           "x-config-key": "device",
           "x-secret": false,
           "x-module": "openmed.torch.device"
@@ -363,7 +363,7 @@
           "type": "integer",
           "default": 256,
           "minimum": 1,
-          "x-default-note": "Defaults to OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE.",
+          "x-default-note": "the value of OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE.",
           "x-secret": false,
           "x-module": "openmed.service.runtime"
         },
@@ -372,7 +372,7 @@
           "type": "integer",
           "default": 128,
           "minimum": 0,
-          "x-default-note": "Defaults to half of OPENMED_SERVICE_BATCH_HIGH_WATERMARK.",
+          "x-default-note": "half of OPENMED_SERVICE_BATCH_HIGH_WATERMARK.",
           "x-secret": false,
           "x-module": "openmed.service.runtime"
         },
@@ -717,7 +717,7 @@
           "type": ["string", "null"],
           "enum": [null, "memory", "encrypted"],
           "default": null,
-          "x-default-note": "Unset keeps payloads in memory unless a key provider is supplied.",
+          "x-default-note": "unset keeps payloads in memory unless a key provider is supplied.",
           "x-secret": false,
           "x-module": "openmed.service.jobs"
         },
@@ -1231,7 +1231,7 @@
           "type": "string",
           "enum": ["dev", "prod"],
           "default": "prod",
-          "x-default-note": "Unset follows OPENMED_PROFILE: dev, test and fast select dev; anything else selects prod.",
+          "x-default-note": "unset follows OPENMED_PROFILE: dev, test and fast select dev; anything else selects prod.",
           "x-secret": false,
           "x-module": "openmed.service.security_profile"
         },
@@ -1241,7 +1241,7 @@
           "items": {"type": "string"},
           "default": null,
           "x-env-format": "csv",
-          "x-default-note": "Unset serves the built-in default models plus the preloaded ones.",
+          "x-default-note": "unset serves the built-in default models plus the preloaded ones.",
           "x-secret": false,
           "x-module": "openmed.service.runtime"
         },
