@@ -6,6 +6,10 @@
     <string>OpenMed PII Demo</string>
     <key>CFBundleIdentifier</key>
     <string>life.openmed.demo</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>OpenMed PII Demo uses the microphone for ambient capture. All processing stays on this device and nothing is uploaded.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>OpenMed PII Demo uses the camera to scan clinical documents before running local PII masking. All processing stays on this device and nothing is uploaded.</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
