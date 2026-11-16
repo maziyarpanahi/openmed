@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Declare portable PII, clinical-entity and medication task packs in one generated manifest (`openmed/core/data/task_packs.json`) with a JSON Schema, an offline `scripts/manifest/build_task_packs.py --check` generator and a download-free `openmed.core.task_packs.resolve(pack_id, runtime)`; the medication pack carries an extraction-only notice (#5379).
+- Add `MedicationPack` to OpenMedKit Swift: it resolves the `medication` task pack's Apple candidates from the bundled manifest, prepares one with explicit download consent, and returns `MedicationMention` values (scalar offsets, normalized `CHEMICAL` label, confidence, source model id) with the pack's extraction-only notice attached to every result; no result carries dosing, interaction or action fields (#5402).
 - Add `PIIPack` to OpenMedKit Swift: it resolves the `pii` task pack's Apple candidates from a bundled byte-identical `task_packs.json`, prepares the best cached one (downloading only with `allowDownload: true`), skips MLX candidates on the iOS Simulator with a typed `unsupportedOnSimulator` result, and returns offset-only spans and policy de-identification with the pack's review notice (#5380).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
