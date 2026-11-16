@@ -17,8 +17,8 @@
       "command": "python scripts/release/contract_gate.py run-python"
     },
     "swift": {
-      "reporter": "pending",
-      "tracking": "#5327"
+      "reporter": "active",
+      "command": "python scripts/release/contract_gate_swift.py"
     },
     "kotlin": {
       "reporter": "pending",

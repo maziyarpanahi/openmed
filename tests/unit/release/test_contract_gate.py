@@ -1178,28 +1178,39 @@ def test_real_python_run_aggregates_end_to_end(tmp_path: Path) -> None:
         assert _cell(report, "beta", "python").state == "passed"
 
 
-def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
+def test_committed_manifest_aggregates_active_and_lists_pending_reporters(
     tmp_path: Path,
 ) -> None:
-    python = _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST)
-    path = tmp_path / "python.json"
-    _write_json(path, python)
+    paths = []
+    for runtime in ("python", "swift"):
+        path = tmp_path / f"{runtime}.json"
+        _write_json(path, _passing_result(ROOT, runtime, gate.DEFAULT_MANIFEST))
+        paths.append(path)
 
-    report = gate.aggregate(results=[path])
+    report = gate.aggregate(results=paths)
     states = {(cell.runtime, cell.state) for cell in report.cells}
 
     assert report.passed
     assert {state for runtime, state in states if runtime == "python"} == {"passed"}
-    for runtime in ("swift", "kotlin", "web"):
+    assert {state for runtime, state in states if runtime == "swift"} == {
+        "passed",
+        "not_applicable",
+    }
+    for runtime in ("kotlin", "web"):
         assert {state for name, state in states if name == runtime} <= {
             "pending",
             "not_applicable",
         }
-    missing = gate.aggregate()
+    missing = gate.aggregate(results=paths[:1])
     assert not missing.passed
-    assert {cell.codes for cell in missing.cells if cell.runtime == "python"} == {
-        ("missing_result",)
-    }
+    assert {
+        cell.codes
+        for cell in missing.cells
+        if cell.runtime == "swift" and cell.state != "not_applicable"
+    } == {("missing_result",)}
+    assert {
+        cell.codes for cell in gate.aggregate().cells if cell.runtime == "python"
+    } == {("missing_result",)}
 
 
 def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
