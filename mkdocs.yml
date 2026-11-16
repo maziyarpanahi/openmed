@@ -315,6 +315,7 @@ nav:
               - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
+      - Model Lifecycle Events: models/lifecycle-events.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Signed Portable Model Bundles: models/portable-bundle.md
       - Crash-safe Bundle Generation Caches: models/bundle-cache.md

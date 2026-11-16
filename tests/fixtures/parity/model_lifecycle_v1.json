@@ -1,0 +1,645 @@
+{
+  "schema": "openmed.tests.model_lifecycle_parity",
+  "version": 1,
+  "synthetic": true,
+  "description": "Ordered openmed.model.lifecycle.v1 event sequences from the Python emitters. Repository ids, file names, contents and commit hashes are invented. Each scenario is replayed against an in-process fake Hub or a temporary cache. Events carry repo ids, commit hashes, counts, digests and reason codes only.",
+  "event_schema": "https://openmed.life/schemas/model_lifecycle_event.schema.json",
+  "event_schema_version": "openmed.model.lifecycle.v1",
+  "reference": "openmed.core.hf_hub.prefetch_model, openmed.core.model_cache_policy.ModelCachePolicy, openmed.core.model_lifecycle",
+  "event_types": [
+    "requested",
+    "fetching",
+    "verified",
+    "integrity_failed",
+    "ready",
+    "activated",
+    "rolled_back",
+    "evicted",
+    "failed"
+  ],
+  "event_fields": [
+    "schema_version",
+    "event",
+    "repo_id",
+    "revision_sha",
+    "file_count",
+    "byte_count",
+    "digest",
+    "reason"
+  ],
+  "reason_codes": [
+    "artifact_absent",
+    "commit_unverifiable",
+    "corrupt_file_unremovable",
+    "digest_mismatch",
+    "download_error",
+    "file_missing",
+    "integrity_retry_exhausted",
+    "integrity_unverifiable",
+    "metadata_invalid_filename",
+    "metadata_missing_digest",
+    "metadata_missing_size",
+    "no_matching_files",
+    "offline_cache_miss",
+    "revision_name_unsafe",
+    "size_mismatch"
+  ],
+  "sequences": [
+    {
+      "id": "prefetch_single_file",
+      "description": "Online prefetch of one file: requested, fetching, verified, ready.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1"
+          }
+        ]
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "verified",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "ready",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": null,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "prefetch_two_files",
+      "description": "Online prefetch of two files; ready sums both files.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1"
+          },
+          {
+            "filename": "model.safetensors",
+            "content": "synthetic-weights-0123456789"
+          }
+        ]
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "verified",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 28,
+          "digest": "sha256:24f59aecc18bcc17c7f21693bf08ee33d4d2645e72b7dc13961d1b99930b2e66",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "verified",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 28,
+          "digest": "sha256:24f59aecc18bcc17c7f21693bf08ee33d4d2645e72b7dc13961d1b99930b2e66",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "ready",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 2,
+          "byte_count": 47,
+          "digest": null,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "prefetch_pinned_commit",
+      "description": "A commit-hash revision is reported on requested.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1"
+          }
+        ]
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "verified",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "ready",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": null,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "prefetch_refetch_after_corruption",
+      "description": "The first download is corrupt; one forced re-fetch verifies.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1",
+            "corrupt_downloads": 1
+          }
+        ]
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "integrity_failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": "digest_mismatch"
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "verified",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "ready",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": null,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "prefetch_corruption_persists",
+      "description": "Both downloads are corrupt; the prefetch fails closed.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1",
+            "corrupt_downloads": 2
+          }
+        ]
+      },
+      "outcome": "download_integrity_error",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "integrity_failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": "digest_mismatch"
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "fetching",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "integrity_failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": 1,
+          "byte_count": 19,
+          "digest": "sha256:2a862746dc1f07064367445667a530eea645c42d7ea7f0ffaa432ba72d2d674c",
+          "reason": "digest_mismatch"
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": "integrity_retry_exhausted"
+        }
+      ]
+    },
+    {
+      "id": "prefetch_metadata_missing_digest",
+      "description": "The Hub reports no digest, so nothing is downloaded.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "online",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "metadata": "missing_digest",
+        "files": [
+          {
+            "filename": "config.json",
+            "content": "synthetic-config-v1"
+          }
+        ]
+      },
+      "outcome": "download_integrity_error",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": "metadata_missing_digest"
+        }
+      ]
+    },
+    {
+      "id": "offline_cache_hit",
+      "description": "Offline mode serves the cached snapshot; counts are not re-measured.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "offline_hit",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": []
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "ready",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "offline_cache_miss",
+      "description": "Offline mode with nothing cached fails without a network call.",
+      "scenario": {
+        "operation": "prefetch",
+        "mode": "offline_miss",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "revision": null,
+        "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "files": []
+      },
+      "outcome": "offline_mode_error",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "requested",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "failed",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": "offline_cache_miss"
+        }
+      ]
+    },
+    {
+      "id": "evict_least_recently_used",
+      "description": "Quota eviction removes the two least recently used artifacts.",
+      "scenario": {
+        "operation": "evict",
+        "quota_bytes": 13,
+        "artifacts": [
+          {
+            "name": "a.bin",
+            "content": "synthetic-a",
+            "last_accessed_ns": 1
+          },
+          {
+            "name": "b.bin",
+            "content": "synthetic-bb",
+            "last_accessed_ns": 2
+          },
+          {
+            "name": "c.bin",
+            "content": "synthetic-ccc",
+            "last_accessed_ns": 3
+          }
+        ]
+      },
+      "outcome": "evicted_2",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "evicted",
+          "repo_id": null,
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": 11,
+          "digest": "sha256:3b0a7ca3a01569f4af07368009f9b6480354618beb93b7241df7c3dcf22619f5",
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "evicted",
+          "repo_id": null,
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": 12,
+          "digest": "sha256:d5c3123fb70ac484e2da0957b6bc9a81e146727606b54a86de16e9c2b97ac4b0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "id": "evict_artifact_already_absent",
+      "description": "An artifact removed after planning is evicted with zero bytes freed.",
+      "scenario": {
+        "operation": "evict",
+        "quota_bytes": 0,
+        "artifacts": [
+          {
+            "name": "a.bin",
+            "content": "synthetic-a",
+            "last_accessed_ns": 1,
+            "deleted_after_plan": true
+          }
+        ]
+      },
+      "outcome": "evicted_1",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "evicted",
+          "repo_id": null,
+          "revision_sha": null,
+          "file_count": null,
+          "byte_count": 0,
+          "digest": "sha256:3b0a7ca3a01569f4af07368009f9b6480354618beb93b7241df7c3dcf22619f5",
+          "reason": "artifact_absent"
+        }
+      ]
+    },
+    {
+      "id": "activation_then_rollback",
+      "description": "The activation hooks: a new generation activates, then rolls back.",
+      "scenario": {
+        "operation": "activate",
+        "repo_id": "OpenMed/synthetic-lifecycle-model",
+        "steps": [
+          {
+            "hook": "activated",
+            "revision_sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+          },
+          {
+            "hook": "rolled_back",
+            "revision_sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "reason": "rollback_requested"
+          }
+        ]
+      },
+      "outcome": "ok",
+      "events": [
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "activated",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": null
+        },
+        {
+          "schema_version": "openmed.model.lifecycle.v1",
+          "event": "rolled_back",
+          "repo_id": "OpenMed/synthetic-lifecycle-model",
+          "revision_sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "file_count": null,
+          "byte_count": null,
+          "digest": null,
+          "reason": "rollback_requested"
+        }
+      ]
+    }
+  ]
+}
