@@ -183,9 +183,13 @@ class MapleResponseError(ValueError):
 
     default_code = "invalid_response"
 
-    def __init__(self, message: str, *, code: str | None = None) -> None:
-        super().__init__(message)
-        self.code = code if code in MAPLE_RESPONSE_ERROR_CODES else self.default_code
+    def __init__(self, *args: object, code: str | None = None) -> None:
+        super().__init__(*args)
+        self.code = (
+            code
+            if isinstance(code, str) and code in MAPLE_RESPONSE_ERROR_CODES
+            else self.default_code
+        )
 
 
 @dataclass(frozen=True)

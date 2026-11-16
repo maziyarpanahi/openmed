@@ -67,6 +67,8 @@ attribute is one of the stable values in
 `invalid_span` or `label_not_allowed`, so callers can branch on the reason
 without parsing the message. The code never contains model output; anything
 unrecognised is reported as `invalid_response`.
+The exception keeps the positional argument behavior of `ValueError`, including
+zero or multiple arguments; `code` is an optional keyword-only argument.
 
 ```python
 from openmed import MapleResponseError

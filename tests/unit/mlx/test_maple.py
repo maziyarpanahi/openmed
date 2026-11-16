@@ -430,3 +430,20 @@ def test_unknown_or_missing_code_falls_back_to_invalid_response():
     error = MapleResponseError("kept message", code="trailing_text")
     assert str(error) == "kept message"
     assert isinstance(error, ValueError)
+
+
+@pytest.mark.parametrize("args", [(), ("message",), ("message", 7)])
+def test_response_error_preserves_value_error_arguments(args):
+    import pickle
+
+    error = MapleResponseError(*args, code="invalid_json")
+    assert error.args == ValueError(*args).args
+    assert str(error) == str(ValueError(*args))
+    restored = pickle.loads(pickle.dumps(error))
+    assert restored.args == args
+    assert restored.code == "invalid_json"
+
+
+@pytest.mark.parametrize("code", [[], {}, 7])
+def test_non_string_reason_codes_fall_back(code):
+    assert MapleResponseError("message", code=code).code == "invalid_response"
