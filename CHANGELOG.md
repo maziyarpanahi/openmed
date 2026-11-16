@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Define one session lifecycle vocabulary (`openmed.session.lifecycle.v1`: `open`, `cancelling`, `finalized`, `cancelled`, `failed`, `closed`) with `session_lifecycle.schema.json`, a `lifecycle_state` projection and `check_lifecycle_transition()` on the Python runtime and streaming ASR sessions, a documented mapping from each existing enum and shared vectors in `tests/fixtures/parity/session_lifecycle_v1.json`; existing state values and reports are unchanged (#5354).
+- Report OpenMedKit Swift speech session states in the shared lifecycle vocabulary: `SpeechSessionState.lifecycleState` maps `finished` to `finalized`, `StreamingSpeechSession.lifecycleState` and `snapshot().lifecycleState` keep the first terminal state, `checkLifecycleTransition(to:)` throws `OpenMedSessionLifecycleError` with the shared reason code, and `SessionLifecycleParityTests` replays `session_lifecycle_v1.json`; native raw values and errors are unchanged (#5355).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
