@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Declare every `OPENMED_SERVICE_*` setting the service reads, plus the core `OpenMedConfig` environment variables, in a sectioned Draft 2020-12 `openmed/core/settings.schema.json` with type, default, bounds, secret flag and owning module, covered by the schema fingerprint snapshot and an AST scan of service environment reads; `openmed.core.settings_registry` returns the declarations without reading the environment (#5337).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
