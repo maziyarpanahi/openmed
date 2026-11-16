@@ -88,6 +88,8 @@ RPC_SCOPES = {
     "Deidentify": ("pii:write",),
     "StreamDeidentify": ("pii:write",),
 }
+# Discovery RPCs that do no model work and so take no admission permit.
+CONTROL_RPC_SCOPES = {"GetCapabilities": ("models:read",)}
 SYNTHETIC_TEXT = "Synthetic visit note for record SYNTH-MRN-000417."
 FULL_KEY = "synthetic-grpc-full-key-7f3a9c"
 NARROW_KEY = "synthetic-grpc-narrow-key-1b2c3d"
@@ -526,7 +528,8 @@ def test_rpc_policy_table_mirrors_rest_routes() -> None:
     policies = grpc_rpc_policies(ServiceAuthConfig())
 
     assert set(policies) == {
-        f"/openmed.service.v1.OpenMedService/{rpc}" for rpc in RPCS
+        f"/openmed.service.v1.OpenMedService/{rpc}"
+        for rpc in (*RPCS, *CONTROL_RPC_SCOPES)
     }
     for rpc in RPCS:
         method = f"/openmed.service.v1.OpenMedService/{rpc}"
@@ -535,6 +538,12 @@ def test_rpc_policy_table_mirrors_rest_routes() -> None:
         assert policies[method].scopes == ROUTE_POLICIES[route].scopes
         assert policies[method].requires_authentication is True
         assert policies[method].admission is True
+    for rpc, scopes in CONTROL_RPC_SCOPES.items():
+        method = f"/openmed.service.v1.OpenMedService/{rpc}"
+        route = GRPC_RPC_ROUTES[method]
+        assert policies[method].scopes == scopes == ROUTE_POLICIES[route].scopes
+        assert policies[method].requires_authentication is True
+        assert policies[method].admission is False
 
 
 def test_every_proto_rpc_has_a_declared_policy(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1249,3 +1258,52 @@ def test_policy_from_env_reads_rest_settings(
     )
     assert with_runtime.throttle.rate_limit_burst == 4
     assert isinstance(policy.limits, GrpcLimits)
+
+
+def test_get_capabilities_requires_the_rest_route_read_scope(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: service_runtime.ServiceRuntime,
+    spy: ModelSpy,
+) -> None:
+    callers = {
+        "anonymous": None,
+        "unknown_key": (("x-api-key", UNKNOWN_KEY),),
+        "models_read_key": (("x-api-key", NARROW_KEY),),
+        "model_scopes_key": (("x-api-key", FULL_KEY),),
+        "models_read_jwt": (
+            ("authorization", f"Bearer {make_jwt(jwt_claims('models:read'))}"),
+        ),
+        "models_wildcard_jwt": (
+            ("authorization", f"Bearer {make_jwt(jwt_claims('models:*'))}"),
+        ),
+        "other_jwt": (("authorization", f"Bearer {make_jwt(jwt_claims('pii:*'))}"),),
+    }
+
+    def call(stub: Any, metadata: Any) -> tuple[grpc.StatusCode, Optional[str]]:
+        try:
+            response = stub.GetCapabilities(
+                openmed_pb2.GetCapabilitiesRequest(),
+                metadata=metadata,
+                timeout=RPC_TIMEOUT,
+            )
+        except grpc.RpcError as exc:
+            return exc.code(), reason_of(exc)
+        assert response.digest.startswith("sha256:")
+        return grpc.StatusCode.OK, None
+
+    with serving(monkeypatch, runtime, auth_policy()) as served:
+        outcomes = {
+            name: call(served.stub(), metadata) for name, metadata in callers.items()
+        }
+
+    assert outcomes == {
+        "anonymous": failure_of(REASON_AUTHENTICATION_REQUIRED),
+        "unknown_key": failure_of(REASON_INVALID_CREDENTIALS),
+        "models_read_key": (grpc.StatusCode.OK, None),
+        "model_scopes_key": failure_of(REASON_INSUFFICIENT_SCOPE),
+        "models_read_jwt": (grpc.StatusCode.OK, None),
+        "models_wildcard_jwt": (grpc.StatusCode.OK, None),
+        "other_jwt": failure_of(REASON_INSUFFICIENT_SCOPE),
+    }
+    assert spy.calls == []
+    assert runtime._loader is None
