@@ -227,3 +227,195 @@ def test_saved_configuration_has_owner_only_posix_mode(tmp_path):
     path.chmod(0o644)
     save_config_to_file(OpenMedConfig(timeout=77), path)
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+# -- service settings -------------------------------------------------------------
+
+SERVICE_SENTINEL = "synthetic-service-sentinel-5341"
+
+
+def _service_snapshot() -> dict[str, str]:
+    return {
+        # Non-secret settings: one changed, one equal to its default, one blank.
+        "OPENMED_SERVICE_AUTH_ENABLED": "true",
+        "OPENMED_SERVICE_RATE_LIMIT_RPS": "0",
+        "OPENMED_SERVICE_TRUSTED_HOSTS": "localhost, 127.0.0.1,[::1]",
+        "OPENMED_SERVICE_LOG_LEVEL": "   ",
+        "OPENMED_SERVICE_OTLP_ENDPOINT": f"https://{SERVICE_SENTINEL}.invalid",
+        # Secrets: inline, mounted file, and both at once.
+        "OPENMED_SERVICE_AUTH_API_KEYS": f'[{{"key_hash": "{SERVICE_SENTINEL}"}}]',
+        "OPENMED_SERVICE_DIGEST_KEY_FILE": f"/run/secrets/{SERVICE_SENTINEL}",
+        "OPENMED_SERVICE_OTLP_HEADERS": f"authorization={SERVICE_SENTINEL}",
+        "OPENMED_SERVICE_OTLP_HEADERS_FILE": f"/run/secrets/{SERVICE_SENTINEL}-h",
+        # Unrelated variables are ignored.
+        "OPENMED_PROFILE": "prod",
+        "PATH": SERVICE_SENTINEL,
+    }
+
+
+def test_service_report_lists_every_declared_setting_without_values():
+    from openmed.core.config_provenance import (
+        SERVICE_CONFLICT_CATEGORIES,
+        SERVICE_PRECEDENCE,
+        resolve_service_configuration,
+    )
+    from openmed.core.settings_registry import declared_setting_names
+
+    report = resolve_service_configuration(_service_snapshot()).provenance_report
+
+    assert report["section"] == "service"
+    assert report["precedence"] == ["default", "environment", "secret_file"]
+    assert set(report["keys"]) == declared_setting_names("service")
+    for name, entry in report["keys"].items():
+        assert entry["source_class"] in SERVICE_PRECEDENCE, name
+        assert entry["conflict_category"] in SERVICE_CONFLICT_CATEGORIES, name
+        assert set(entry) == {
+            "source_class",
+            "conflict_category",
+            "sources",
+            "overridden_sources",
+            "secret",
+            "present",
+        }
+
+
+def test_service_report_classifies_sources_and_conflicts():
+    from openmed.core.config_provenance import (
+        CONFLICT_SECRET_SOURCES,
+        resolve_service_configuration,
+    )
+
+    keys = resolve_service_configuration(_service_snapshot()).provenance_report["keys"]
+
+    assert keys["OPENMED_SERVICE_AUTH_ENABLED"] == {
+        "source_class": "environment",
+        "conflict_category": CONFLICT_OVERRIDDEN,
+        "sources": ["default", "environment"],
+        "overridden_sources": ["default"],
+        "secret": False,
+        "present": True,
+    }
+    assert keys["OPENMED_SERVICE_RATE_LIMIT_RPS"]["conflict_category"] == (
+        CONFLICT_SAME_VALUE
+    )
+    assert keys["OPENMED_SERVICE_TRUSTED_HOSTS"]["conflict_category"] == (
+        CONFLICT_SAME_VALUE
+    )
+    # A blank value counts as unset, as the service parsers treat it.
+    assert keys["OPENMED_SERVICE_LOG_LEVEL"]["source_class"] == "default"
+    assert keys["OPENMED_SERVICE_METRICS_ENABLED"] == {
+        "source_class": "default",
+        "conflict_category": "none",
+        "sources": ["default"],
+        "overridden_sources": [],
+        "secret": False,
+        "present": False,
+    }
+
+    assert keys["OPENMED_SERVICE_AUTH_API_KEYS"] == {
+        "source_class": "environment",
+        "conflict_category": "none",
+        "sources": ["environment"],
+        "overridden_sources": [],
+        "secret": True,
+        "present": True,
+    }
+    assert keys["OPENMED_SERVICE_DIGEST_KEY"]["source_class"] == "secret_file"
+    assert keys["OPENMED_SERVICE_DIGEST_KEY"]["present"] is True
+    assert keys["OPENMED_SERVICE_OTLP_HEADERS"]["conflict_category"] == (
+        CONFLICT_SECRET_SOURCES
+    )
+    assert keys["OPENMED_SERVICE_OTLP_HEADERS"]["sources"] == [
+        "environment",
+        "secret_file",
+    ]
+    assert keys["OPENMED_SERVICE_AUTH_JWKS"] == {
+        "source_class": "default",
+        "conflict_category": "none",
+        "sources": ["default"],
+        "overridden_sources": [],
+        "secret": True,
+        "present": False,
+    }
+
+
+def test_service_report_never_contains_planted_values():
+    from openmed.core.config_provenance import resolve_service_configuration
+
+    provenance = resolve_service_configuration(_service_snapshot())
+
+    for rendered in (
+        json.dumps(provenance.provenance_report, sort_keys=True),
+        json.dumps(provenance.to_dict()),
+        provenance.to_json(),
+        repr(provenance),
+        str(provenance),
+        repr(provenance.entries),
+    ):
+        assert SERVICE_SENTINEL not in rendered
+        assert "/run/secrets" not in rendered
+
+
+def test_service_report_is_identical_for_reordered_snapshots():
+    from openmed.core.config_provenance import resolve_service_configuration
+
+    forward = _service_snapshot()
+    backward = dict(reversed(list(forward.items())))
+    assert list(forward) != list(backward)
+
+    first = resolve_service_configuration(forward)
+    second = resolve_service_configuration(environment=backward)
+
+    assert first.to_json() == second.to_json()
+    assert first.provenance_report == second.provenance_report
+    assert list(first.provenance_report["keys"]) == sorted(
+        first.provenance_report["keys"]
+    )
+
+
+def test_service_report_reads_the_process_environment_by_default(monkeypatch):
+    from openmed.core.config_provenance import resolve_service_configuration
+
+    monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "yes")
+    monkeypatch.delenv("OPENMED_SERVICE_AUTH_API_KEYS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_AUTH_API_KEYS_FILE", raising=False)
+
+    provenance = resolve_service_configuration()
+
+    assert provenance.entry("OPENMED_SERVICE_METRICS_ENABLED").source_class == (
+        "environment"
+    )
+    assert provenance.entry("OPENMED_SERVICE_AUTH_API_KEYS").source_class == ("default")
+    with pytest.raises(KeyError):
+        provenance.entry("OPENMED_SERVICE_NOT_DECLARED")
+
+
+def test_service_report_rejects_non_string_values_without_echoing_them():
+    from openmed.core.config_provenance import resolve_service_configuration
+
+    with pytest.raises(ConfigurationResolutionError) as exc_info:
+        resolve_service_configuration({"OPENMED_SERVICE_JOBS_WORKERS": 4096})
+    assert "4096" not in str(exc_info.value)
+    with pytest.raises(ConfigurationResolutionError):
+        resolve_service_configuration(environment={}, env={})
+
+
+def test_unparseable_service_values_report_as_overridden():
+    from openmed.core.config_provenance import resolve_service_configuration
+
+    keys = resolve_service_configuration(
+        {
+            "OPENMED_SERVICE_JOBS_WORKERS": "two",
+            "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES": "4GiB",
+            "OPENMED_SERVICE_THROTTLE_KEY": "GLOBAL",
+        }
+    ).provenance_report["keys"]
+
+    assert keys["OPENMED_SERVICE_JOBS_WORKERS"]["conflict_category"] == (
+        CONFLICT_OVERRIDDEN
+    )
+    budget = keys["OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"]
+    assert budget["conflict_category"] == CONFLICT_OVERRIDDEN
+    assert keys["OPENMED_SERVICE_THROTTLE_KEY"]["conflict_category"] == (
+        CONFLICT_SAME_VALUE
+    )
