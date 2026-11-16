@@ -163,6 +163,11 @@ def main() -> int:
             "js/openmedkit-web/package-lock.json",
             f'"version": "{expected_version}"',
         ),
+        ("clients/typescript/package.json", f'"version": "{expected_version}"'),
+        (
+            "clients/typescript/package-lock.json",
+            f'"version": "{expected_version}"',
+        ),
         (
             "swift/OpenMedDemo/OpenMedDemo/Info.plist",
             f"<string>{expected_version}</string>",
