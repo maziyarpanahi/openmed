@@ -368,131 +368,6 @@ def test_schema_is_read_only() -> None:
     assert "type Subscription" not in sdl
 
 
-def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
-    import json
-
-    from openmed.service.auth import hash_api_key
-    from openmed.service.graphql_schema import GRAPHQL_FIELD_SCOPES
-
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        json.dumps([{"key_hash": hash_api_key("synthetic-key"), "scopes": ["*"]}]),
-    )
-    monkeypatch.delitem(GRAPHQL_FIELD_SCOPES, "analyze")
-    app = create_app()
-    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(
-            "/graphql",
-            json={
-                "query": 'query { analyze(input: {text: "synthetic"}) { text } entityTypes { label } }'
-            },
-            headers={"X-API-Key": "synthetic-key"},
-        )
-    assert response.json()["data"] is None
-    assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
-    assert app.state.runtime._loader is None
-
-
-def test_get_queries_are_rejected_before_any_resolver_runs(
-    client: TestClient,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """A GET request cannot execute introspection or resolver work."""
-
-    sentinel = "Patient SECRET-PHI-471"
-    caplog.set_level(logging.DEBUG)
-    response = client.get(
-        "/graphql",
-        params={
-            "query": (
-                "query {"
-                "  __schema { queryType { fields { name } } }"
-                f'  analyze(input: {{ text: "{sentinel}" }}) {{ text }}'
-                "}"
-            )
-        },
-        headers={"Accept": "application/json"},
-    )
-
-    assert response.status_code == 400
-    assert "entityTypes" not in response.text
-    assert sentinel not in response.text
-    assert sentinel not in caplog.text
-    assert FakeLoader.instances == []
-
-
-def test_interactive_ide_is_disabled_outside_the_development_profile(
-    client: TestClient,
-) -> None:
-    response = client.get("/graphql", headers={"Accept": "text/html"})
-
-    assert response.status_code == 404
-    assert "graphiql" not in response.text.lower()
-
-
-def test_development_profile_serves_the_ide_and_keeps_operations_on_post(
-    development_client: TestClient,
-) -> None:
-    ide_response = development_client.get("/graphql", headers={"Accept": "text/html"})
-    assert ide_response.status_code == 200
-    assert "graphiql" in ide_response.text.lower()
-
-    rejected = development_client.get(
-        "/graphql",
-        params={"query": "{ entityTypes { label } }"},
-        headers={"Accept": "application/json"},
-    )
-    assert rejected.status_code == 400
-
-    accepted = development_client.post(
-        "/graphql", json={"query": "{ entityTypes { label } }"}
-    )
-    assert accepted.status_code == 200
-    assert accepted.json()["data"]["entityTypes"]
-
-
-def test_every_graphql_response_carries_the_privacy_headers(
-    client: TestClient,
-) -> None:
-    responses = {
-        "post": client.post("/graphql", json={"query": "{ entityTypes { label } }"}),
-        "get_query": client.get(
-            "/graphql",
-            params={"query": "{ entityTypes { label } }"},
-            headers={"Accept": "application/json"},
-        ),
-        "get_ide_disabled": client.get("/graphql", headers={"Accept": "text/html"}),
-        "unsupported_method": client.request(
-            "PUT", "/graphql", json={"query": "{ entityTypes { label } }"}
-        ),
-    }
-
-    assert responses["post"].status_code == 200
-    assert responses["get_query"].status_code == 400
-    assert responses["get_ide_disabled"].status_code == 404
-    assert responses["unsupported_method"].status_code == 405
-    for name, response in responses.items():
-        assert response.headers["cache-control"] == "no-store", name
-        assert response.headers["pragma"] == "no-cache", name
-        assert response.headers["referrer-policy"] == "no-referrer", name
-
-
-def test_privacy_headers_are_scoped_to_the_graphql_transport(
-    client: TestClient,
-) -> None:
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.headers.get("pragma") != "no-cache"
-
-
-def test_graphql_ide_is_limited_to_the_development_profile() -> None:
-    assert graphql_ide_for_profile("dev") == "graphiql"
-    assert graphql_ide_for_profile("prod") is None
-    assert graphql_ide_for_profile("test") is None
-
-
 SPAN_SNAPSHOT_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "graphql_openmed_span_snapshot.json"
 )
@@ -661,3 +536,128 @@ def test_full_span_selection_keeps_the_committed_response_shape(
 
     assert response.status_code == 200
     assert response.json() == json.loads(SPAN_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+
+
+def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
+    import json
+
+    from openmed.service.auth import hash_api_key
+    from openmed.service.graphql_schema import GRAPHQL_FIELD_SCOPES
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps([{"key_hash": hash_api_key("synthetic-key"), "scopes": ["*"]}]),
+    )
+    monkeypatch.delitem(GRAPHQL_FIELD_SCOPES, "analyze")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/graphql",
+            json={
+                "query": 'query { analyze(input: {text: "synthetic"}) { text } entityTypes { label } }'
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert response.json()["data"] is None
+    assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
+    assert app.state.runtime._loader is None
+
+
+def test_get_queries_are_rejected_before_any_resolver_runs(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A GET request cannot execute introspection or resolver work."""
+
+    sentinel = "Patient SECRET-PHI-471"
+    caplog.set_level(logging.DEBUG)
+    response = client.get(
+        "/graphql",
+        params={
+            "query": (
+                "query {"
+                "  __schema { queryType { fields { name } } }"
+                f'  analyze(input: {{ text: "{sentinel}" }}) {{ text }}'
+                "}"
+            )
+        },
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert "entityTypes" not in response.text
+    assert sentinel not in response.text
+    assert sentinel not in caplog.text
+    assert FakeLoader.instances == []
+
+
+def test_interactive_ide_is_disabled_outside_the_development_profile(
+    client: TestClient,
+) -> None:
+    response = client.get("/graphql", headers={"Accept": "text/html"})
+
+    assert response.status_code == 404
+    assert "graphiql" not in response.text.lower()
+
+
+def test_development_profile_serves_the_ide_and_keeps_operations_on_post(
+    development_client: TestClient,
+) -> None:
+    ide_response = development_client.get("/graphql", headers={"Accept": "text/html"})
+    assert ide_response.status_code == 200
+    assert "graphiql" in ide_response.text.lower()
+
+    rejected = development_client.get(
+        "/graphql",
+        params={"query": "{ entityTypes { label } }"},
+        headers={"Accept": "application/json"},
+    )
+    assert rejected.status_code == 400
+
+    accepted = development_client.post(
+        "/graphql", json={"query": "{ entityTypes { label } }"}
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["data"]["entityTypes"]
+
+
+def test_every_graphql_response_carries_the_privacy_headers(
+    client: TestClient,
+) -> None:
+    responses = {
+        "post": client.post("/graphql", json={"query": "{ entityTypes { label } }"}),
+        "get_query": client.get(
+            "/graphql",
+            params={"query": "{ entityTypes { label } }"},
+            headers={"Accept": "application/json"},
+        ),
+        "get_ide_disabled": client.get("/graphql", headers={"Accept": "text/html"}),
+        "unsupported_method": client.request(
+            "PUT", "/graphql", json={"query": "{ entityTypes { label } }"}
+        ),
+    }
+
+    assert responses["post"].status_code == 200
+    assert responses["get_query"].status_code == 400
+    assert responses["get_ide_disabled"].status_code == 404
+    assert responses["unsupported_method"].status_code == 405
+    for name, response in responses.items():
+        assert response.headers["cache-control"] == "no-store", name
+        assert response.headers["pragma"] == "no-cache", name
+        assert response.headers["referrer-policy"] == "no-referrer", name
+
+
+def test_privacy_headers_are_scoped_to_the_graphql_transport(
+    client: TestClient,
+) -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers.get("pragma") != "no-cache"
+
+
+def test_graphql_ide_is_limited_to_the_development_profile() -> None:
+    assert graphql_ide_for_profile("dev") == "graphiql"
+    assert graphql_ide_for_profile("prod") is None
+    assert graphql_ide_for_profile("test") is None
