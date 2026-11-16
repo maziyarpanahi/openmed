@@ -1867,6 +1867,32 @@ class DecisionCalibrationExample:
             raise DecisionError("calibration expected choices must be request options")
 
 
+CALIBRATION_BIN_COUNT = 10
+CONFIDENT_ERROR_THRESHOLD = 0.9
+
+
+def _binned_ece(pairs: Sequence[tuple[float, float]]) -> float | None:
+    """Equal-width binned ECE over ``(confidence, correct)`` pairs."""
+
+    if not pairs:
+        return None
+    bins: list[list[tuple[float, float]]] = [[] for _ in range(CALIBRATION_BIN_COUNT)]
+    for confidence, hit in pairs:
+        index = min(int(confidence * CALIBRATION_BIN_COUNT), CALIBRATION_BIN_COUNT - 1)
+        bins[max(index, 0)].append((confidence, hit))
+    total = len(pairs)
+    return sum(
+        len(members)
+        / total
+        * abs(
+            sum(c for c, _ in members) / len(members)
+            - sum(h for _, h in members) / len(members)
+        )
+        for members in bins
+        if members
+    )
+
+
 def evaluate_decision_calibration(
     examples: Sequence[DecisionCalibrationExample],
     *,
@@ -1903,6 +1929,13 @@ def evaluate_decision_calibration(
             if covered
             else 0.0
         )
+        pairs = [
+            (
+                float(item[0].confidence or 0.0),
+                1.0 if item in correct else 0.0,
+            )
+            for item in covered
+        ]
         slices.append(
             {
                 "slice": slice_name,
@@ -1911,6 +1944,22 @@ def evaluate_decision_calibration(
                 "coverage": len(covered) / len(records),
                 "accuracy": accuracy,
                 "expected_calibration_error": abs(average_confidence - accuracy),
+                "binned_expected_calibration_error": _binned_ece(pairs),
+                "brier_score": (
+                    sum((conf - hit) ** 2 for conf, hit in pairs) / len(pairs)
+                    if pairs
+                    else None
+                ),
+                "confident_error_rate": (
+                    sum(
+                        1
+                        for conf, hit in pairs
+                        if hit == 0.0 and conf >= CONFIDENT_ERROR_THRESHOLD
+                    )
+                    / len(pairs)
+                    if pairs
+                    else None
+                ),
                 "abstained": len(records) - len(covered),
             }
         )
