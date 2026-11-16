@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
+- Run the shared error-code vectors in OpenMedKit Swift: `PolicyError`, `OpenMedModelStoreError`, `OpenMedTokenizerError`, `OpenMedMLXRuntimeError` and MLX artifact load failures conform to the new `OpenMedCodedError` protocol and expose the portable `openMedErrorCode` next to their unchanged reason codes, and `ErrorCodeParityTests` runs every required Swift scenario in `error_codes_v1.json` (#5366).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 
 ### Changed
