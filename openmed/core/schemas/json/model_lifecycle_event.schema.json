@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/model_lifecycle_event.schema.json",
+  "title": "OpenMed model lifecycle event",
+  "description": "One value-free openmed.model.lifecycle.v1 event from model prefetch, verification, activation, rollback or cache eviction. It carries a Hub repository id, a resolved commit hash, file and byte counts, a content digest and a controlled reason code only: never a URL, token, filename, filesystem path or exception text. This is the event body; it is wrapped unchanged as the data of the platform lifecycle event envelope once that envelope is defined. tests/fixtures/parity/model_lifecycle_v1.json holds ordered event sequences.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event",
+    "repo_id",
+    "revision_sha",
+    "file_count",
+    "byte_count",
+    "digest",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {"const": "openmed.model.lifecycle.v1"},
+    "event": {
+      "enum": [
+        "requested",
+        "fetching",
+        "verified",
+        "integrity_failed",
+        "ready",
+        "activated",
+        "rolled_back",
+        "evicted",
+        "failed"
+      ]
+    },
+    "repo_id": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+          "not": {"pattern": "[^A-Za-z0-9._/-]"}
+        }
+      ]
+    },
+    "revision_sha": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$", "not": {"pattern": "[^0-9a-f]"}}
+      ]
+    },
+    "file_count": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+    "byte_count": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+    "digest": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^(sha256:[0-9a-f]{64}|git-sha1:[0-9a-f]{40})$",
+          "not": {"pattern": "[^0-9a-z:-]"}
+        }
+      ]
+    },
+    "reason": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$", "not": {"pattern": "[^a-z0-9_]"}}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"event": {"enum": ["integrity_failed", "rolled_back", "failed"]}}},
+      "then": {"properties": {"reason": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"event": {"enum": ["fetching", "verified", "integrity_failed"]}}},
+      "then": {
+        "properties": {
+          "file_count": {"const": 1},
+          "byte_count": {"type": "integer"},
+          "digest": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event": {"const": "evicted"}}},
+      "then": {"properties": {"byte_count": {"type": "integer"}}}
+    }
+  ]
+}
