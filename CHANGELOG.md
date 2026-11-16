@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `LegacyRootedError`, a compatibility root that lets existing builtin-based exceptions join `OpenMedError` with unchanged `args`, `str()`, MRO and transport mapping, plus a shrink-only gate for unrooted public exceptions (#5365).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
