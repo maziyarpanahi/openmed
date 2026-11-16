@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
+
+### Changed
+
+- Three Python failures now carry a stable error code. They keep their builtin base and message: an empty `hmac_secret` raises `ConfigurationError` (a `ValueError`), invalid `OpenMedSpan` offsets raise `InputError` (a `ValueError`), and a model missing from the cache in offline mode raises `OfflineModelUnavailableError`, an `OfflineModeError` that is also a `ModelLoadError` (#5331).
 
 ## [4.0.0] - 2026-11-25
 

@@ -204,6 +204,39 @@ typed enum per kit:
 public API but no kit behaviour uses them yet. Run the script with `--check`
 to verify the committed files; the unit tests do this.
 
+### Shared error-code vectors
+
+`tests/fixtures/parity/error_codes_v1.json` (`openmed.error_code_vectors`
+version 1) tells every runtime which failure must carry which code. It lists
+each portable code with its category, HTTP status, CLI exit code, retryable
+flag and the scenarios that expect it, plus offline scenarios with synthetic
+inputs:
+
+| Scenario | Code | Python trigger |
+| --- | --- | --- |
+| `empty_hash_secret` | `configuration_error` | `hmac_text_hash` or `Pipeline(hmac_secret="")` |
+| `invalid_offsets` | `input_error` | `OpenMedSpan` with `end < start` |
+| `unknown_policy_profile` | `policy_error` | `canonical_policy_name` |
+| `model_missing_offline` | `model_load_error` | `prefetch_model` in offline mode with an empty cache |
+| `invalid_sdk_config` | `configuration_error` | pending the portable SDK configuration loader (#5342) |
+
+Each scenario marks every runtime (`python`, `swift`, `kotlin`, `web`) as
+`required`, `pending` with the owning work, or `not_applicable` with a
+reason. A kit cell may name its entry point and what the kit raises today,
+which tells kit adoption what to map. Only the code is part of the contract;
+messages are not. `tests/unit/core/test_error_code_vectors.py` checks the
+fixture against the registry and runs the Python scenarios.
+
+Three Python failures used to raise a bare builtin and now carry a code. Each
+keeps its builtin base and its message, so existing handlers still catch it:
+
+- An empty `hmac_secret` raises `ConfigurationError` (a `ValueError`).
+- `OpenMedSpan` offsets that are negative or end before they start raise
+  `InputError` (a `ValueError`).
+- A model that is not cached while offline mode is on raises
+  `openmed.core.offline.OfflineModelUnavailableError`, an `OfflineModeError`
+  (a `RuntimeError`) that is also a `ModelLoadError`.
+
 ### Recorded divergences
 
 Where surfaces disagree today, the registry records the difference instead of
