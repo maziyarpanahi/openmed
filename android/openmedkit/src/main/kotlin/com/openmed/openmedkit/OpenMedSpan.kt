@@ -31,14 +31,19 @@ data class OpenMedSpan(
     val score: Float,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
+    // Invalid fields throw OpenMedArgumentException (input_error), an
+    // IllegalArgumentException whose message carries offsets but never text.
     init {
-        require(start >= 0) { "start must be a non-negative offset: $start" }
-        require(end >= start) { "end must be >= start: end=$end start=$start" }
-        require(score in 0.0f..1.0f) { "score must be in [0.0, 1.0]: $score" }
-        require(schemaVersion == SCHEMA_VERSION) {
-            "schemaVersion must be $SCHEMA_VERSION: $schemaVersion"
+        if (start < 0) invalid("start must be a non-negative offset: $start")
+        if (end < start) invalid("end must be >= start: end=$end start=$start")
+        if (score !in 0.0f..1.0f) invalid("score must be in [0.0, 1.0]: $score")
+        if (schemaVersion != SCHEMA_VERSION) {
+            invalid("schemaVersion must be $SCHEMA_VERSION: $schemaVersion")
         }
     }
+
+    private fun invalid(message: String): Nothing =
+        throw OpenMedArgumentException(OpenMedErrorCode.INPUT_ERROR, message)
 
     /**
      * Convert back to an [EntityPrediction], restoring [rawLabel] as the

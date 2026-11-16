@@ -1,5 +1,6 @@
 package com.openmed.openmedkit.artifact
 
+import com.openmed.openmedkit.OpenMedErrorCode
 import android.content.Context
 import com.openmed.openmedkit.cache.CachedArtifactRecord
 import com.openmed.openmedkit.cache.ModelCache
@@ -173,6 +174,14 @@ sealed class ArtifactAcquisitionResult {
     open val artifact: AcquiredArtifact? get() = null
     open val reason: ArtifactAcquisitionReason? get() = null
 
+    /**
+     * Portable registry code: `capability_error` when [Unsupported],
+     * `model_load_error` when [Failed] (including a cache miss without network
+     * consent), `internal_error` for an unexpected failure, and `null` when the
+     * artifact is ready or the request was cancelled.
+     */
+    open val errorCode: OpenMedErrorCode? get() = null
+
     sealed class Ready : ArtifactAcquisitionResult() {
         abstract override val artifact: AcquiredArtifact
     }
@@ -209,6 +218,7 @@ sealed class ArtifactAcquisitionResult {
         override val reason: ArtifactAcquisitionReason,
     ) : ArtifactAcquisitionResult() {
         override val state get() = ArtifactAcquisitionState.UNSUPPORTED
+        override val errorCode get() = OpenMedErrorCode.CAPABILITY_ERROR
     }
 
     class Cancelled internal constructor(
@@ -225,6 +235,12 @@ sealed class ArtifactAcquisitionResult {
         val httpStatus: Int? = null,
     ) : ArtifactAcquisitionResult() {
         override val state get() = ArtifactAcquisitionState.FAILED
+        override val errorCode
+            get() = if (reason == ArtifactAcquisitionReason.UNEXPECTED) {
+                OpenMedErrorCode.INTERNAL_ERROR
+            } else {
+                OpenMedErrorCode.MODEL_LOAD_ERROR
+            }
     }
 
     override fun toString(): String =
