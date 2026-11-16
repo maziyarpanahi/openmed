@@ -31,6 +31,7 @@ on:
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
+      - 'tests/fixtures/contracts/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -61,6 +62,7 @@ on:
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
+      - 'tests/fixtures/contracts/**'
   workflow_dispatch:
 
 permissions:
