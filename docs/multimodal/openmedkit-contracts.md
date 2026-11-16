@@ -88,7 +88,7 @@ Each session keeps its own enum and its serialized report. A read-only `lifecycl
 | `StreamState` (Python `StreamingAsrSession`) | `open`, `finalized`, `cancelled` | same names |
 | Swift `SpeechSessionState` (`StreamingSpeechSession`) | `open`, `finished`, `cancelled`, `failed` | `open`, `finalized`, `cancelled`, `failed` |
 
-The Swift projection itself is separate work (#5355); the table is the mapping it implements. `MultimodalSession.to_json()` still reports `SessionState` values, and `StreamingAsrSessionReport` still reports `StreamState` values.
+In Swift, `SpeechSessionState.lifecycleState` is that mapping; `SpeechSessionState` raw values are unchanged. `MultimodalSession.to_json()` still reports `SessionState` values, and `StreamingAsrSessionReport` still reports `StreamState` values.
 
 `check_lifecycle_transition(target)` on either Python session checks a transition from the current state without changing it. A rejected transition raises the session's existing value-free error, `RuntimeSessionError` or `SpeechProviderError`, whose message (and, for `SpeechProviderError`, `category`) is the reason code:
 
@@ -101,6 +101,19 @@ The Swift projection itself is separate work (#5355); the table is the mapping i
 | `transition_not_allowed` | Any other pair outside the table, including staying in the same state |
 
 `session_closed` and `session_cancelled` are the codes the streaming ASR session already raises when `finalize()` or `cancel()` is called after it ended. `MultimodalSession.cancel()` and `close()` stay idempotent on a terminal session.
+
+OpenMedKit Swift mirrors this with `OpenMedSessionLifecycleState` (the six states, `isTerminal`, `allowedTargets`, `transitionReason(to:)`, and `transitionReason(from:to:)` over state names, which gives `unknown_state` for a name such as `finished`) and `OpenMedSessionLifecycleError`, whose raw values are the reason codes above. `StreamingSpeechSession` adds:
+
+| Swift API | Behaviour |
+| --- | --- |
+| `lifecycleState`, `snapshot().lifecycleState` | The projected state. The first terminal state is kept, so `cancel()` after a failure still reports `failed` while `snapshot().state` keeps the native `cancelled` |
+| `checkLifecycleTransition(to:)` | Throws `OpenMedSessionLifecycleError` with the reason code when the vocabulary rejects the transition, without changing the session |
+
+The native guards are unchanged. `append()` or `finish()` after `finish()` throws `StreamingSpeechError.closed` (`speech_session_closed`). After a cancel they throw `.cancelled` (`speech_session_cancelled`), and after a failure they throw the stored failure reason. `cancel()` and `requestCancellation()` never throw: on a terminal session they leave the lifecycle state unchanged. Errors carry codes only, never transcript text. `SessionLifecycleParityTests` replays the vectors against the projection, the transition table and real sessions driven to `finalized`, `cancelled` and `failed`:
+
+```bash
+cd swift/OpenMedKit && swift test --filter SessionLifecycleParityTests
+```
 
 The shared vectors are `tests/fixtures/parity/session_lifecycle_v1.json`: the states, terminal states, transition table, reason codes, the native projections above, allowed sequences with the native actions that produce them on each Python session, and rejected transitions with their reason codes. `failed` has no Python producer, so its sequences are checked through the transition table only.
 
