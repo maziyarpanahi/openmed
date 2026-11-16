@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
+- Run the shared error-code vectors in the Android OpenMedKit: Kotlin failures expose the portable registry code as `errorCode` through `OpenMedCodedError` next to their unchanged reason codes (`PolicyProfileException`, `InferenceError`, the downloader exceptions, `ArtifactAcquisitionResult`, and the new `OpenMedArgumentException`, still an `IllegalArgumentException`, for invalid `OpenMedSpan` fields and an empty `hashSalt`), and `ErrorCodeParityTest` runs every required Kotlin scenario offline (#5367).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema

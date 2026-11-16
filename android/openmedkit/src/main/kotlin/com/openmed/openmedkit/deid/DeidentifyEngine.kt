@@ -1,5 +1,7 @@
 package com.openmed.openmedkit.deid
 
+import com.openmed.openmedkit.OpenMedArgumentException
+import com.openmed.openmedkit.OpenMedErrorCode
 import com.openmed.openmedkit.secrets.OpenMedSecretException
 import com.openmed.openmedkit.secrets.OpenMedSecretFailure
 import com.openmed.openmedkit.secrets.OpenMedSecretPolicy
@@ -289,7 +291,12 @@ class DeidentifyEngine private constructor(
         private val key = salt.copyOf()
 
         init {
-            require(key.isNotEmpty()) { "hashSalt must not be empty" }
+            if (key.isEmpty()) {
+                throw OpenMedArgumentException(
+                    OpenMedErrorCode.CONFIGURATION_ERROR,
+                    "hashSalt must not be empty",
+                )
+            }
             if (policy == HashKeyPolicy.STRICT && key.contentEquals(legacySalt())) {
                 throw OpenMedSecretException(OpenMedSecretFailure.PUBLIC_DEFAULT)
             }
