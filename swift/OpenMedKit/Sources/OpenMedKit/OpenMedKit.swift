@@ -147,6 +147,67 @@
             )
         }
 
+        /// Initialize OpenMed from a portable SDK configuration.
+        ///
+        /// Maps the configuration onto
+        /// ``init(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)``
+        /// with `allowNetworkAccess = !config.localOnly`, so the portable
+        /// default (`local_only: true`) loads tokenizer assets from local files
+        /// only and makes no network request. `confidence_threshold` and
+        /// `policy_profile` stay per-call settings; pass them to
+        /// ``extractPII(_:confidenceThreshold:useSmartMerging:)`` and
+        /// ``deidentify(_:policy:confidenceThreshold:useSmartMerging:)``.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - config: The portable SDK configuration.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public convenience init(
+            backend: OpenMedBackend,
+            config: OpenMedSDKConfig,
+            maxSeqLength: Int = 512,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) throws {
+            try self.init(
+                backend: backend,
+                maxSeqLength: maxSeqLength,
+                allowNetworkAccess: config.allowNetworkAccess,
+                tokenizerPin: tokenizerPin
+            )
+        }
+
+        /// Load OpenMed from a portable SDK configuration without blocking a
+        /// thread on tokenizer loading.
+        ///
+        /// Same mapping as ``init(backend:config:maxSeqLength:tokenizerPin:)``.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - config: The portable SDK configuration.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        /// - Returns: A ready runtime.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public static func load(
+            backend: OpenMedBackend,
+            config: OpenMedSDKConfig,
+            maxSeqLength: Int = 512,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) async throws -> OpenMed {
+            try await load(
+                backend: backend,
+                maxSeqLength: maxSeqLength,
+                allowNetworkAccess: config.allowNetworkAccess,
+                tokenizerPin: tokenizerPin
+            )
+        }
+
         /// Initialize OpenMed with a CoreML model and tokenizer.
         ///
         /// - Parameters:
