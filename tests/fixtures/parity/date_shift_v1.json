@@ -1,0 +1,920 @@
+{
+  "synthetic_only": true,
+  "version": 1,
+  "description": "Synthetic cross-runtime vectors for openmed.core.date_shift. Patient keys, seeds and secrets are invented test values.",
+  "algorithm": {
+    "patient_key_digest": "HMAC-SHA256(key=secret bytes, message=patient_key UTF-8 bytes)",
+    "seed_digest": "SHA-256(seed_domain bytes + ASCII bytes of seed_decimal)",
+    "seed_domain_hex": "6f70656e6d65642d646174652d73686966742d736565642d763100",
+    "seed_range": "seeds are arbitrary integers; some vectors lie outside the signed 64-bit range",
+    "seed_encoding": "seed_decimal is the canonical decimal text of the seed and is what seed_digest hashes; the numeric seed field is present only when |seed| <= 2^53 - 1, so every JSON reader parses it exactly",
+    "bucket": "unsigned big-endian digest integer mod (2 * max_days)",
+    "offset_days": "bucket - max_days if bucket < max_days else bucket - max_days + 1",
+    "shifted_date": "proleptic Gregorian source_date + offset_days days"
+  },
+  "secrets": [
+    {
+      "id": "test-secret-utf8",
+      "test_only": true,
+      "utf8": "openmed-date-shift-test-only-secret-v1",
+      "hex": "6f70656e6d65642d646174652d73686966742d746573742d6f6e6c792d7365637265742d7631"
+    },
+    {
+      "id": "test-secret-bytes",
+      "test_only": true,
+      "hex": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+    }
+  ],
+  "max_days_values": [
+    1,
+    7,
+    30,
+    365,
+    3650
+  ],
+  "patient_key_offsets": [
+    {
+      "id": "patient-001",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "c9dcff12b243a6538478e63aba5145e3ad2a0fe3a4130ba3580b090ffcaef086",
+      "offset_days": -1
+    },
+    {
+      "id": "patient-002",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "c9dcff12b243a6538478e63aba5145e3ad2a0fe3a4130ba3580b090ffcaef086",
+      "offset_days": -5
+    },
+    {
+      "id": "patient-003",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "c9dcff12b243a6538478e63aba5145e3ad2a0fe3a4130ba3580b090ffcaef086",
+      "offset_days": 9
+    },
+    {
+      "id": "patient-004",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "c9dcff12b243a6538478e63aba5145e3ad2a0fe3a4130ba3580b090ffcaef086",
+      "offset_days": -297
+    },
+    {
+      "id": "patient-005",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "c9dcff12b243a6538478e63aba5145e3ad2a0fe3a4130ba3580b090ffcaef086",
+      "offset_days": 69
+    },
+    {
+      "id": "patient-006",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "7cc93c72b44e57d83613fad4331b8a65e0770d072313da8fefdadcd6151b5c29",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-007",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "7cc93c72b44e57d83613fad4331b8a65e0770d072313da8fefdadcd6151b5c29",
+      "offset_days": -4
+    },
+    {
+      "id": "patient-008",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "7cc93c72b44e57d83613fad4331b8a65e0770d072313da8fefdadcd6151b5c29",
+      "offset_days": 28
+    },
+    {
+      "id": "patient-009",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "7cc93c72b44e57d83613fad4331b8a65e0770d072313da8fefdadcd6151b5c29",
+      "offset_days": 113
+    },
+    {
+      "id": "patient-010",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "7cc93c72b44e57d83613fad4331b8a65e0770d072313da8fefdadcd6151b5c29",
+      "offset_days": 2668
+    },
+    {
+      "id": "patient-011",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "364cec4f4b4590989d10ca9ab8a486d8bb7327678d8bd026fb7e183636451961",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-012",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "364cec4f4b4590989d10ca9ab8a486d8bb7327678d8bd026fb7e183636451961",
+      "offset_days": -4
+    },
+    {
+      "id": "patient-013",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "364cec4f4b4590989d10ca9ab8a486d8bb7327678d8bd026fb7e183636451961",
+      "offset_days": -13
+    },
+    {
+      "id": "patient-014",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "364cec4f4b4590989d10ca9ab8a486d8bb7327678d8bd026fb7e183636451961",
+      "offset_days": 123
+    },
+    {
+      "id": "patient-015",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "364cec4f4b4590989d10ca9ab8a486d8bb7327678d8bd026fb7e183636451961",
+      "offset_days": 1948
+    },
+    {
+      "id": "patient-016",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "ec537d30749e1aea15303b2d10eb9e2abf2226718b02fad5f9ee3c690679538f",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-017",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "ec537d30749e1aea15303b2d10eb9e2abf2226718b02fad5f9ee3c690679538f",
+      "offset_days": -4
+    },
+    {
+      "id": "patient-018",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "ec537d30749e1aea15303b2d10eb9e2abf2226718b02fad5f9ee3c690679538f",
+      "offset_days": 6
+    },
+    {
+      "id": "patient-019",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "ec537d30749e1aea15303b2d10eb9e2abf2226718b02fad5f9ee3c690679538f",
+      "offset_days": 31
+    },
+    {
+      "id": "patient-020",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "ec537d30749e1aea15303b2d10eb9e2abf2226718b02fad5f9ee3c690679538f",
+      "offset_days": -1795
+    },
+    {
+      "id": "patient-021",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "7d0bbb2c68818cf11235137cf26b1184a299c7c143203223852f93582cc400d1",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-022",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "7d0bbb2c68818cf11235137cf26b1184a299c7c143203223852f93582cc400d1",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-023",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "7d0bbb2c68818cf11235137cf26b1184a299c7c143203223852f93582cc400d1",
+      "offset_days": -17
+    },
+    {
+      "id": "patient-024",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "7d0bbb2c68818cf11235137cf26b1184a299c7c143203223852f93582cc400d1",
+      "offset_days": 159
+    },
+    {
+      "id": "patient-025",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "7d0bbb2c68818cf11235137cf26b1184a299c7c143203223852f93582cc400d1",
+      "offset_days": -2397
+    },
+    {
+      "id": "patient-026",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "d3314e5a2e7fde52887bf4c6875557179db043ffb55855420b34f3614f2b8417",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-027",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "d3314e5a2e7fde52887bf4c6875557179db043ffb55855420b34f3614f2b8417",
+      "offset_days": 7
+    },
+    {
+      "id": "patient-028",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "d3314e5a2e7fde52887bf4c6875557179db043ffb55855420b34f3614f2b8417",
+      "offset_days": 2
+    },
+    {
+      "id": "patient-029",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "d3314e5a2e7fde52887bf4c6875557179db043ffb55855420b34f3614f2b8417",
+      "offset_days": 57
+    },
+    {
+      "id": "patient-030",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "d3314e5a2e7fde52887bf4c6875557179db043ffb55855420b34f3614f2b8417",
+      "offset_days": 422
+    },
+    {
+      "id": "patient-031",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "digest_sha256_hex": "d0765a490c5f03ad8373b992f4565dd2d382402e704df50502eaa18018997eb1",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-032",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "digest_sha256_hex": "d0765a490c5f03ad8373b992f4565dd2d382402e704df50502eaa18018997eb1",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-033",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "digest_sha256_hex": "d0765a490c5f03ad8373b992f4565dd2d382402e704df50502eaa18018997eb1",
+      "offset_days": 8
+    },
+    {
+      "id": "patient-034",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "digest_sha256_hex": "d0765a490c5f03ad8373b992f4565dd2d382402e704df50502eaa18018997eb1",
+      "offset_days": -58
+    },
+    {
+      "id": "patient-035",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "digest_sha256_hex": "d0765a490c5f03ad8373b992f4565dd2d382402e704df50502eaa18018997eb1",
+      "offset_days": 308
+    },
+    {
+      "id": "patient-036",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 1,
+      "digest_sha256_hex": "afeb78bdd98160797e29502347b046629efd46ff14651449899edf838031a943",
+      "offset_days": 1
+    },
+    {
+      "id": "patient-037",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 7,
+      "digest_sha256_hex": "afeb78bdd98160797e29502347b046629efd46ff14651449899edf838031a943",
+      "offset_days": -2
+    },
+    {
+      "id": "patient-038",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 30,
+      "digest_sha256_hex": "afeb78bdd98160797e29502347b046629efd46ff14651449899edf838031a943",
+      "offset_days": 2
+    },
+    {
+      "id": "patient-039",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 365,
+      "digest_sha256_hex": "afeb78bdd98160797e29502347b046629efd46ff14651449899edf838031a943",
+      "offset_days": 157
+    },
+    {
+      "id": "patient-040",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 3650,
+      "digest_sha256_hex": "afeb78bdd98160797e29502347b046629efd46ff14651449899edf838031a943",
+      "offset_days": -2399
+    },
+    {
+      "id": "patient-041",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 1,
+      "digest_sha256_hex": "931797bb56dee26f2ab73d8abfd73d210c550f66a56fa6a0f0552adf67ab2974",
+      "offset_days": -1
+    },
+    {
+      "id": "patient-042",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 7,
+      "digest_sha256_hex": "931797bb56dee26f2ab73d8abfd73d210c550f66a56fa6a0f0552adf67ab2974",
+      "offset_days": -5
+    },
+    {
+      "id": "patient-043",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 30,
+      "digest_sha256_hex": "931797bb56dee26f2ab73d8abfd73d210c550f66a56fa6a0f0552adf67ab2974",
+      "offset_days": 15
+    },
+    {
+      "id": "patient-044",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 365,
+      "digest_sha256_hex": "931797bb56dee26f2ab73d8abfd73d210c550f66a56fa6a0f0552adf67ab2974",
+      "offset_days": 160
+    },
+    {
+      "id": "patient-045",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 3650,
+      "digest_sha256_hex": "931797bb56dee26f2ab73d8abfd73d210c550f66a56fa6a0f0552adf67ab2974",
+      "offset_days": -1666
+    }
+  ],
+  "seed_offsets": [
+    {
+      "id": "seed-001",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 1,
+      "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-002",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 7,
+      "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
+      "offset_days": -7
+    },
+    {
+      "id": "seed-003",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 30,
+      "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
+      "offset_days": 21
+    },
+    {
+      "id": "seed-004",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 365,
+      "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
+      "offset_days": -105
+    },
+    {
+      "id": "seed-005",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 3650,
+      "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
+      "offset_days": 1721
+    },
+    {
+      "id": "seed-006",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 1,
+      "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
+      "offset_days": 1
+    },
+    {
+      "id": "seed-007",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 7,
+      "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
+      "offset_days": 7
+    },
+    {
+      "id": "seed-008",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 30,
+      "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
+      "offset_days": -27
+    },
+    {
+      "id": "seed-009",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 365,
+      "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
+      "offset_days": 199
+    },
+    {
+      "id": "seed-010",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 3650,
+      "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
+      "offset_days": -1627
+    },
+    {
+      "id": "seed-011",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 1,
+      "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-012",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 7,
+      "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
+      "offset_days": 2
+    },
+    {
+      "id": "seed-013",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 30,
+      "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
+      "offset_days": 7
+    },
+    {
+      "id": "seed-014",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 365,
+      "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
+      "offset_days": -9
+    },
+    {
+      "id": "seed-015",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 3650,
+      "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
+      "offset_days": 2547
+    },
+    {
+      "id": "seed-016",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 1,
+      "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-017",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 7,
+      "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-018",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 30,
+      "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
+      "offset_days": 29
+    },
+    {
+      "id": "seed-019",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 365,
+      "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
+      "offset_days": 244
+    },
+    {
+      "id": "seed-020",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 3650,
+      "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
+      "offset_days": -852
+    },
+    {
+      "id": "seed-021",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 1,
+      "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-022",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 7,
+      "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
+      "offset_days": -7
+    },
+    {
+      "id": "seed-023",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 30,
+      "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
+      "offset_days": -22
+    },
+    {
+      "id": "seed-024",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 365,
+      "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
+      "offset_days": 124
+    },
+    {
+      "id": "seed-025",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 3650,
+      "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
+      "offset_days": 2679
+    },
+    {
+      "id": "seed-026",
+      "seed_decimal": "9223372036854775807",
+      "max_days": 1,
+      "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-027",
+      "seed_decimal": "9223372036854775807",
+      "max_days": 7,
+      "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-028",
+      "seed_decimal": "9223372036854775807",
+      "max_days": 30,
+      "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
+      "offset_days": 23
+    },
+    {
+      "id": "seed-029",
+      "seed_decimal": "9223372036854775807",
+      "max_days": 365,
+      "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
+      "offset_days": 318
+    },
+    {
+      "id": "seed-030",
+      "seed_decimal": "9223372036854775807",
+      "max_days": 3650,
+      "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
+      "offset_days": 2143
+    },
+    {
+      "id": "seed-031",
+      "seed_decimal": "-9223372036854775808",
+      "max_days": 1,
+      "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-032",
+      "seed_decimal": "-9223372036854775808",
+      "max_days": 7,
+      "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
+      "offset_days": 2
+    },
+    {
+      "id": "seed-033",
+      "seed_decimal": "-9223372036854775808",
+      "max_days": 30,
+      "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
+      "offset_days": -24
+    },
+    {
+      "id": "seed-034",
+      "seed_decimal": "-9223372036854775808",
+      "max_days": 365,
+      "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
+      "offset_days": -119
+    },
+    {
+      "id": "seed-035",
+      "seed_decimal": "-9223372036854775808",
+      "max_days": 3650,
+      "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
+      "offset_days": 2437
+    },
+    {
+      "id": "seed-036",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 1,
+      "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
+      "offset_days": -1
+    },
+    {
+      "id": "seed-037",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 7,
+      "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
+      "offset_days": 6
+    },
+    {
+      "id": "seed-038",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 30,
+      "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
+      "offset_days": -2
+    },
+    {
+      "id": "seed-039",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 365,
+      "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
+      "offset_days": 294
+    },
+    {
+      "id": "seed-040",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 3650,
+      "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
+      "offset_days": -802
+    },
+    {
+      "id": "seed-041",
+      "seed_decimal": "-9223372036854775809",
+      "max_days": 1,
+      "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
+      "offset_days": 1
+    },
+    {
+      "id": "seed-042",
+      "seed_decimal": "-9223372036854775809",
+      "max_days": 7,
+      "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
+      "offset_days": 1
+    },
+    {
+      "id": "seed-043",
+      "seed_decimal": "-9223372036854775809",
+      "max_days": 30,
+      "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
+      "offset_days": 22
+    },
+    {
+      "id": "seed-044",
+      "seed_decimal": "-9223372036854775809",
+      "max_days": 365,
+      "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
+      "offset_days": -24
+    },
+    {
+      "id": "seed-045",
+      "seed_decimal": "-9223372036854775809",
+      "max_days": 3650,
+      "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
+      "offset_days": 342
+    }
+  ],
+  "date_shifts": [
+    {
+      "id": "date-001",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "offset_days": -1,
+      "source_date": "2024-03-01",
+      "shifted_date": "2024-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-002",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 1,
+      "offset_days": 1,
+      "source_date": "2023-12-31",
+      "shifted_date": "2024-01-01",
+      "covers": "year_boundary"
+    },
+    {
+      "id": "date-003",
+      "patient_key": "SYNTH-PATIENT-0003",
+      "secret_id": "test-secret-utf8",
+      "max_days": 7,
+      "offset_days": -4,
+      "source_date": "2024-03-04",
+      "shifted_date": "2024-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-004",
+      "patient_key": "SYNTH-PATIENT-0004",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "offset_days": 6,
+      "source_date": "2000-02-23",
+      "shifted_date": "2000-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-005",
+      "patient_key": "SYNTH-PATIENT-0005",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "offset_days": -17,
+      "source_date": "2025-01-01",
+      "shifted_date": "2024-12-15",
+      "covers": "year_boundary"
+    },
+    {
+      "id": "date-006",
+      "patient_key": "SYNTH-PATIENT-0006",
+      "secret_id": "test-secret-utf8",
+      "max_days": 365,
+      "offset_days": 57,
+      "source_date": "2023-11-05",
+      "shifted_date": "2024-01-01",
+      "covers": "year_boundary"
+    },
+    {
+      "id": "date-007",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "offset_days": 69,
+      "source_date": "2027-12-22",
+      "shifted_date": "2028-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-008",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-utf8",
+      "max_days": 30,
+      "offset_days": 8,
+      "source_date": "2025-04-23",
+      "shifted_date": "2025-05-01",
+      "covers": "month_end"
+    },
+    {
+      "id": "date-009",
+      "patient_key": "SYNTH-PATIENT-0007-Ünïcødé-合成",
+      "secret_id": "test-secret-bytes",
+      "max_days": 30,
+      "offset_days": 15,
+      "source_date": "2023-02-14",
+      "shifted_date": "2023-03-01",
+      "covers": "non_leap_february"
+    },
+    {
+      "id": "date-010",
+      "patient_key": "SYNTH-PATIENT-0001",
+      "secret_id": "test-secret-bytes",
+      "max_days": 7,
+      "offset_days": -2,
+      "source_date": "2025-07-01",
+      "shifted_date": "2025-06-29",
+      "covers": "month_end"
+    },
+    {
+      "id": "date-011",
+      "patient_key": "SYNTH-PATIENT-0002",
+      "secret_id": "test-secret-utf8",
+      "max_days": 3650,
+      "offset_days": 2668,
+      "source_date": "2024-02-29",
+      "shifted_date": "2031-06-20",
+      "covers": "leap_day_source"
+    },
+    {
+      "id": "date-012",
+      "seed": 822,
+      "seed_decimal": "822",
+      "max_days": 30,
+      "offset_days": 29,
+      "source_date": "2100-01-31",
+      "shifted_date": "2100-03-01",
+      "covers": "non_leap_century"
+    },
+    {
+      "id": "date-013",
+      "seed": 0,
+      "seed_decimal": "0",
+      "max_days": 7,
+      "offset_days": -7,
+      "source_date": "2000-01-01",
+      "shifted_date": "1999-12-25",
+      "covers": "year_boundary"
+    },
+    {
+      "id": "date-014",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 365,
+      "offset_days": 199,
+      "source_date": "2019-08-14",
+      "shifted_date": "2020-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-015",
+      "seed": -1,
+      "seed_decimal": "-1",
+      "max_days": 30,
+      "offset_days": 7,
+      "source_date": "1900-02-22",
+      "shifted_date": "1900-03-01",
+      "covers": "non_leap_century"
+    },
+    {
+      "id": "date-016",
+      "seed": 2026,
+      "seed_decimal": "2026",
+      "max_days": 1,
+      "offset_days": -1,
+      "source_date": "2024-03-01",
+      "shifted_date": "2024-02-29",
+      "covers": "leap_day"
+    },
+    {
+      "id": "date-017",
+      "seed": 1,
+      "seed_decimal": "1",
+      "max_days": 365,
+      "offset_days": 199,
+      "source_date": "2020-02-29",
+      "shifted_date": "2020-09-15",
+      "covers": "leap_day_source"
+    },
+    {
+      "id": "date-018",
+      "seed_decimal": "9223372036854775808",
+      "max_days": 30,
+      "offset_days": -2,
+      "source_date": "2025-10-01",
+      "shifted_date": "2025-09-29",
+      "covers": "month_end"
+    }
+  ]
+}

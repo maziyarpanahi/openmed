@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Port patient-keyed date-shift offsets to the openmed web package: `stableDateShiftOffset()`, `stableDateShiftOffsetFromSeed()` and `shiftIsoDate()` match `openmed.core.date_shift` on every shared vector, with WebCrypto hashing, `BigInt` reduction, UTC proleptic-Gregorian date arithmetic and value-free `DateShiftError` codes (#5417).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
@@ -24,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add validated service security-policy generations: complete non-secret limit, authorization-policy and egress candidates activate atomically or are rejected with controlled findings, in-flight work stays pinned to one generation, and emergency tighten-only reloads apply at declared checkpoints (#3704).
 - Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
 - Make async `/jobs` work durable: workers claim jobs with expiring leases whose epoch fences every store write, coalesced checkpoints with chained output digests are the resume points, and the terminal state commits together with the final checkpoint and the webhook intent. Retryable failures back off within a bounded budget, poison or damaged work is quarantined until an authorized `DeidentifyJobQueue.replay()`, and a startup and periodic reconcile reclaims expired leases, resumes queued work, re-drives undelivered webhooks through the bounded dispatcher and fails corrupt recovery state closed. `POST /jobs` honours `Idempotency-Key` like the FHIR bulk starts, with keyed, owner-scoped digests (#3574).
+- Add synthetic cross-runtime date-shift vectors for the patient-keyed and
+  seeded offset helpers, covering non-ASCII patient keys, raw-byte secrets,
+  seeds beyond 64 bits, and leap-day, month-end and year-boundary shifted
+  dates, with a Python test that recomputes every vector and reports
+  mismatches by vector id only (#5413).
 
 ### Changed
 
