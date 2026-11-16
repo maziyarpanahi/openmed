@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Emit value-free `openmed.model.lifecycle.v1` events (`requested`, `fetching`, `verified`, `integrity_failed`, `ready`, `activated`, `rolled_back`, `evicted`, `failed`) from `prefetch_model` and `ModelCachePolicy` through an injectable `lifecycle_sink` whose default records nothing, with `model_lifecycle_event.schema.json`, activation and rollback hooks, a `reason` code on `DownloadIntegrityError`, and ordered vectors in `tests/fixtures/parity/model_lifecycle_v1.json` (#5353).
+- Report byte progress and shared lifecycle events from the Android `ModelDownloader`: a new constructor takes a `ModelLifecycleSink` (value-free `openmed.model.lifecycle.v1` bodies: `requested`, per-file `fetching`/`verified`/`integrity_failed`, `ready`, `failed` with a reason code) and a `ModelDownloadProgressListener` (monotonic per-file byte progress ending at the file size), a file that fails its size or digest check is fetched once more as in Python, `ModelDownloadStatus.lifecycleEvent` maps the legacy statuses, and `ModelDownloadLogger` is unchanged (#5391).
 
 ## [4.0.0] - 2026-11-25
 

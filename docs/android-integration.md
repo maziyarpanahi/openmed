@@ -56,8 +56,10 @@ license, and `byRepoId(...)` resolves a known entry.
 
 `ModelDownloader.download` is blocking, so run it on `Dispatchers.IO`. It emits
 `DOWNLOAD_STARTED`, `DOWNLOAD_COMPLETE`, or `CACHE_HIT` events through
-`ModelDownloadLogger`. These are lifecycle events, not byte-percentage updates;
-show an indeterminate progress indicator between start and completion.
+`ModelDownloadLogger`. These are coarse status events, not byte-percentage
+updates. For a determinate progress bar or for logs that line up with Python,
+use the lifecycle sink and progress listener described under
+[Lifecycle events and byte progress](#lifecycle-events-and-byte-progress).
 
 The downloader verifies the catalog reproducibility hash and available file
 checksums in a staging directory. It exposes the model as ready only after
@@ -115,6 +117,47 @@ network permission for this preparation step:
 ```
 
 Inference itself does not use that permission.
+
+### Lifecycle events and byte progress
+
+Pass a `ModelLifecycleSink` to receive the shared, value-free
+`openmed.model.lifecycle.v1` events that Python's `prefetch_model` emits (see
+[Model Lifecycle Events](models/lifecycle-events.md)). Pass a
+`ModelDownloadProgressListener` for per-file byte progress:
+
+```kotlin
+val downloader = ModelDownloader(
+    cache = cache,
+    lifecycleSink = ModelLifecycleSink { event -> auditLog(event.toJson()) },
+    progressListener = ModelDownloadProgressListener { index, count, bytes, size ->
+        onFileProgress(index, count, bytes, size)
+    },
+)
+```
+
+A download reports `requested`, then `ready` for a cache hit. Otherwise it
+reports `fetching` and `verified` for each file that has a published size and
+SHA-256, then `ready` with the file count and total bytes. A file that fails
+its size or digest check emits `integrity_failed` and is fetched once more. If
+it fails again, the download ends with `failed` and the reason
+`integrity_retry_exhausted`. A reproducibility-hash mismatch emits
+`integrity_failed` for the manifest (`file_count` 1, `byte_count` 0, `digest`
+the catalog hash) and then `failed` with `integrity_unverifiable`, and no file
+is downloaded or marked ready. Other failures end with `failed` and
+`no_matching_files`, `metadata_invalid_filename` or `download_error`. Files
+without a published SHA-256 are still checked by size, but emit no per-file
+event, because the event schema requires a digest.
+
+Events carry only the repository id, a 40- or 64-hex commit, counts, a digest
+and a reason code: never a URL, filename, path or exception text. Byte progress
+identifies a file by its index. For each file, the values only grow (a
+re-fetch after a failed check is not reported until it passes the bytes already
+reported) and end at the file size. `HttpHuggingFaceModelClient` reports bytes
+as they are written. A custom `HuggingFaceModelClient` that does not report
+them still produces `0` and the final size. Exceptions thrown by a sink or
+listener are ignored and never change the download outcome.
+`ModelDownloadStatus.lifecycleEvent` maps the legacy statuses onto the shared
+vocabulary.
 
 ## Locate and check the cache
 
