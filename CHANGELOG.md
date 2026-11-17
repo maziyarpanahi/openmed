@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add the portable identifier validator subset to the openmed web package on the `openmed/validators` subpath: Luhn, SSN, NPI, IBAN, Canadian SIN, UK NHS number, Aadhaar, Chinese resident ID, Dutch BSN, French NIR and Spanish DNI ports that match the Python references on every shared vector, never throw, and leave the main entry's bundle unchanged (#5421).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
