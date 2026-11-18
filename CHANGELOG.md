@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a deterministic, standard-library synthetic waist accelerometer fixture
+  with fall windows (including a low-impact fall), activity windows and
+  confounders (fast sit-down, lying down, stumble, jump, device drop), impact
+  onset, posture and stillness truth, and dropout gaps. Tests pin which
+  published threshold-detector stage each confounder defeats (#4761).
 - Add a standard-library synthetic side-view walker fixture for pose and gait
   tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
   double-support truth, asymmetry, far-leg occlusion, joint jitter and a
