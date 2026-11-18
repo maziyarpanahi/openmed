@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a body-signal model license provenance page listing code, weight and
+  training-data licenses, intended use and check dates for candidate pose,
+  audio, sleep and chest X-ray models, and marking models with unstated weight
+  licenses as user-supplied only (#4759).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
