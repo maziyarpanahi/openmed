@@ -9,6 +9,16 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
+from .audit_continuity import (
+    AuditContinuityError,
+    AuditContinuityRecoveryHook,
+    AuditContinuityStore,
+    ContinuityAnchorRef,
+    ContinuityManifest,
+    ContinuityVerificationReport,
+    record_restore_transition,
+    verify_continuity,
+)
 from .audit_key_rotation import (
     MAX_AUDIT_HMAC_KEY_BYTES,
     MIN_AUDIT_HMAC_KEY_BYTES,
@@ -267,6 +277,14 @@ __all__ = [
     "ChainVerificationResult",
     "append_to_chain_file",
     "verify_chain",
+    "AuditContinuityError",
+    "AuditContinuityRecoveryHook",
+    "AuditContinuityStore",
+    "ContinuityAnchorRef",
+    "ContinuityManifest",
+    "ContinuityVerificationReport",
+    "record_restore_transition",
+    "verify_continuity",
     "AuditKeyProvider",
     "AuditKeyRotationError",
     "AuditKeyRotationSigner",

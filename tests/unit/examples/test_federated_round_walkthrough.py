@@ -207,8 +207,11 @@ def test_metric_thresholds_discard_values_and_uncertainty_before_serialization(
 
 def test_serialization_matches_reviewed_goldens_and_default_is_json(capsys):
     report, status = example.run_example()
+    # Git can check out text fixtures with CRLF on Windows.
     expected_json = (FIXTURES / "federated_round_walkthrough.json").read_bytes()
     expected_markdown = (FIXTURES / "federated_round_walkthrough.md").read_bytes()
+    expected_json = expected_json.replace(b"\r\n", b"\n")
+    expected_markdown = expected_markdown.replace(b"\r\n", b"\n")
     assert (
         json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
     ).encode("utf-8") == expected_json

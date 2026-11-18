@@ -8,16 +8,26 @@ ARG BUILDPLATFORM
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
+ARG DEBIAN_SNAPSHOT=20261108T000000Z
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+    OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+    OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30
 
 WORKDIR /app
 
 # Keep the immutable base's Python runtime while using Debian's fixed SQLite
-# release. Runtime libraries stay exact and come from one Debian suite.
-RUN apt-get update \
+# release. The signed snapshot retains exact pins after live mirrors replace them.
+# Snapshot metadata expires; its signatures and package hashes stay required.
+RUN sed -i \
+        -e "s|http://deb.debian.org/debian-security|http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/|g" \
+        -e "s|http://deb.debian.org/debian|http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/|g" \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         "ca-certificates=20260816+nmu1" \
         "libbz2-1.0=1.0.8-6+b2" \
@@ -56,6 +66,18 @@ RUN python -m pip install --no-cache-dir --upgrade \
     && pip install --no-cache-dir ".[hf,journey,mcp,service]" \
     && python -m pip check \
     && python -m pip uninstall --yes pip
+
+# Run as the fixed non-root UID/GID 65532 shared with the distroless image,
+# the Compose profile and the Helm chart. Its cache directory is where the
+# Helm chart and Compose mount the persistent model cache.
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-log-init --create-home \
+        --home-dir /home/nonroot --shell /usr/sbin/nologin nonroot \
+    && install -d -o 65532 -g 65532 -m 0755 /home/nonroot/.cache
+
+ENV HOME=/home/nonroot
+
+USER 65532:65532
 
 EXPOSE 8080
 

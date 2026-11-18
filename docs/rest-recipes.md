@@ -97,8 +97,18 @@ Response:
 ```json
 {
   "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+Outside the `dev` profile, `/health` does not report the package version or
+profile. Read them from the authenticated `GET /service/metadata` operator
+route instead; send the same credentials as other authenticated calls:
+
+```json
+{
   "service": "openmed-rest",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "profile": "prod"
 }
 ```
@@ -563,7 +573,10 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=310.0) as client:
 
 `OpenMedAPIError` exposes the service error `code`, `message`, optional
 `details`, HTTP `status_code`, and the `request_id` from the response header (or
-the outgoing client request ID when the response has none). Use
+the outgoing client request ID when the response has none or it does not
+conform). Request IDs must match the shared grammar in
+[Request IDs](rest-service.md#request-ids); the client raises `ValueError`
+before sending a non-conforming `request_id`. Use
 `client.unload_all_models()` to drop every inactive model in one call.
 
 The `310`-second model-call timeout is intentionally just above the production

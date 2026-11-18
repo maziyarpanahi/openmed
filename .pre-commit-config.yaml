@@ -13,6 +13,9 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        # Kotlin binary-compatibility-validator dumps end with a blank line,
+        # and `apiCheck` compares them line by line.
+        exclude: ^android/.*/api/.*\.api$
       - id: check-yaml
         exclude: ^mkdocs\.yml$
       - id: check-added-large-files

@@ -58,6 +58,10 @@ def offline_env(monkeypatch):
         "OPENMED_SERVICE_MAX_REQUEST_BYTES",
     ):
         monkeypatch.delenv(name, raising=False)
+    # These tests exercise the opt-in route itself. Production profiles refuse
+    # every request until authentication is configured (security profile), so
+    # run under the test profile.
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
 
 
 def client(*, prefix="", **kwargs):

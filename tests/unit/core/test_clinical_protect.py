@@ -56,7 +56,7 @@ def test_pipeline_leaves_protected_term_unredacted_and_redacts_name():
 
     result = Pipeline(model_detector=model_detector, use_safety_sweep=False).run(text)
 
-    assert result.redacted_text == "Parkinson was discussed with [NAME]."
+    assert result.redacted_text == "Parkinson was discussed with [PERSON]."
     assert [
         (entity.text, entity.label)
         for entity in result.deidentification_result.pii_entities
@@ -122,7 +122,7 @@ def test_config_can_override_bundled_terms():
         use_safety_sweep=False,
     ).run(text)
 
-    assert result.redacted_text == "[NAME] and Ward Alpha were flagged."
+    assert result.redacted_text == "[PERSON] and Ward Alpha were flagged."
 
 
 def test_bundled_terms_load_without_restricted_license_content():

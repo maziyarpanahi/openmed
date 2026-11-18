@@ -3,22 +3,27 @@ package com.openmed.openmedkit.cache
 import android.content.Context
 import com.openmed.openmedkit.catalog.ModelCatalogEntry
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Offline-first app-private cache for downloaded OpenMed model artifacts.
  */
 class ModelCache(
-    private val rootDirectory: File,
+    internal val rootDirectory: File,
     private val cacheBudgetBytes: Long = DEFAULT_CACHE_BUDGET_BYTES,
     private val clock: ModelCacheClock = SystemModelCacheClock,
 ) {
@@ -36,6 +41,18 @@ class ModelCache(
         require(cacheBudgetBytes >= 0) { "cacheBudgetBytes must be non-negative" }
         rootDirectory.mkdirs()
     }
+
+    /**
+     * Crash-safe generation cache for signed portable bundles, stored under
+     * this cache's root and sharing its byte budget and clock by default.
+     * Legacy snapshot directories and bundle generations never touch each other.
+     */
+    fun bundleGenerations(
+        options: BundleCacheOptions = BundleCacheOptions(quotaBytes = cacheBudgetBytes, clock = clock),
+    ): BundleGenerationCache =
+        BundleGenerationCache(File(rootDirectory, BundleGenerationCache.DIRECTORY_NAME), options)
+
+    private val leaseCounts = mutableMapOf<String, Int>()
 
     @Synchronized
     fun isAvailable(repoId: String): Boolean =
@@ -59,15 +76,62 @@ class ModelCache(
         }
     }
 
+    /**
+     * Delete a cached model unless an open session holds a lease on it.
+     *
+     * @param repoId Repository identifier of the cached model.
+     * @return True when the model existed and was deleted; false when it was
+     * missing or is leased (leased models are never deleted underneath a run).
+     */
     @Synchronized
     fun evict(repoId: String): Boolean {
         val directory = modelDirectory(repoId)
+        if (isLeasedLocked(directory)) {
+            return false
+        }
         val existed = directory.exists()
         if (existed) {
             directory.deleteRecursively()
         }
         return existed
     }
+
+    /**
+     * Lease a verified cached model so it cannot be evicted while in use.
+     *
+     * The entry's integrity metadata is re-checked on every call. Budget
+     * trimming and [evict] skip leased models until every lease is closed.
+     *
+     * @param entry Catalog entry whose integrity hash must match.
+     * @return A lease, or null when no verified copy is cached.
+     */
+    @Synchronized
+    fun acquireLease(entry: ModelCatalogEntry): ModelCacheLease? {
+        if (!isAvailable(entry.repoId, entry.reproducibilityHash)) {
+            return null
+        }
+        val directory = modelDirectory(entry.repoId)
+        val key = directory.name
+        leaseCounts[key] = (leaseCounts[key] ?: 0) + 1
+        return ModelCacheLease(directory) { releaseLease(key) }
+    }
+
+    /** Whether an open lease currently protects [repoId] from eviction. */
+    @Synchronized
+    fun isLeased(repoId: String): Boolean = isLeasedLocked(modelDirectory(repoId))
+
+    @Synchronized
+    private fun releaseLease(key: String) {
+        val remaining = (leaseCounts[key] ?: return) - 1
+        if (remaining <= 0) {
+            leaseCounts.remove(key)
+        } else {
+            leaseCounts[key] = remaining
+        }
+    }
+
+    private fun isLeasedLocked(directory: File): Boolean =
+        (leaseCounts[directory.name] ?: 0) > 0
 
     fun modelDirectory(repoId: String): File =
         File(rootDirectory, cacheKey(repoId))
@@ -92,6 +156,136 @@ class ModelCache(
         revisionSha: String?,
     ): File {
         val destination = modelDirectory(repoId)
+        promote(sourceDirectory, destination)
+        writeReadyMetadata(
+            destination,
+            repoId,
+            expectedIntegrityHash,
+            actualIntegrityHash,
+            revisionSha,
+            artifact = null,
+        )
+        trimToBudget(protectedDirectory = destination)
+        return destination
+    }
+
+    /**
+     * Cache directory for one format-aware artifact identity.
+     *
+     * Artifact directories are keyed by the full identity (repository, revision,
+     * format, runtime, and digest), so ONNX and TFLite variants of one
+     * repository never overwrite each other. The resolved path must stay inside
+     * the cache root after symlink resolution.
+     */
+    @Synchronized
+    internal fun artifactDirectory(identity: String): File =
+        requireContained(File(rootDirectory, cacheKey(ARTIFACT_KEY_PREFIX + identity)))
+
+    /**
+     * Stable staging directory that keeps downloaded bytes for resume.
+     *
+     * Unlike [createStagingDirectory], the name derives from the artifact
+     * identity, so an interrupted or cancelled acquisition can continue with an
+     * HTTP Range request. Staging content is never reported as ready.
+     */
+    @Synchronized
+    internal fun resumableStagingDirectory(identity: String): File =
+        resumableStagingPath(identity).also { it.mkdirs() }
+
+    @Synchronized
+    internal fun hasResumableBytes(identity: String): Boolean {
+        val directory = resumableStagingPath(identity)
+        return directory.isDirectory &&
+            directory.walkTopDown().any { it.isFile && it.length() > 0L }
+    }
+
+    @Synchronized
+    internal fun storeReadyArtifact(
+        repoId: String,
+        identity: String,
+        sourceDirectory: File,
+        integrityHash: String,
+        revisionSha: String?,
+        artifact: CachedArtifactRecord,
+    ): File {
+        val destination = artifactDirectory(identity)
+        promote(sourceDirectory, destination)
+        destination.walkTopDown()
+            .filter { it.isFile && it.name != METADATA_FILE_NAME }
+            .forEach { it.setWritable(false, false) }
+        writeReadyMetadata(
+            destination,
+            repoId,
+            integrityHash,
+            integrityHash,
+            revisionSha,
+            artifact,
+        )
+        trimToBudget(protectedDirectory = destination)
+        return destination
+    }
+
+    /**
+     * Ready artifact record for [identity], or `null` when it is missing,
+     * partial, or no longer matches its recorded digest, file set, or sizes.
+     */
+    @Synchronized
+    internal fun readyArtifact(
+        identity: String,
+        expectedIntegrityHash: String,
+    ): CachedArtifactRecord? {
+        val directory = artifactDirectory(identity)
+        val metadata = readyMetadata(directory, expectedIntegrityHash) ?: return null
+        val artifact = metadata.artifact ?: return null
+        val filesIntact = artifact.files.all { file ->
+            val payload = artifactFile(directory, file.path)
+            payload != null && payload.isFile && payload.length() == file.sizeBytes
+        }
+        if (!filesIntact || artifact.files.sumOf { it.sizeBytes } != metadata.totalSizeBytes) {
+            return null
+        }
+        writeMetadata(
+            directory,
+            metadata.copy(lastAccessedEpochMillis = clock.nowEpochMillis()),
+        )
+        return artifact
+    }
+
+    /** Resolve a recorded artifact file, or `null` when it escapes [directory]. */
+    internal fun artifactFile(directory: File, relativePath: String): File? {
+        val file = File(directory, relativePath)
+        val canonicalDirectory = directory.canonicalFile.path + File.separator
+        return file.takeIf { it.canonicalFile.path.startsWith(canonicalDirectory) }
+    }
+
+    @Synchronized
+    internal fun evictArtifact(identity: String, includeStaging: Boolean): Boolean {
+        val directory = artifactDirectory(identity)
+        val existed = directory.exists()
+        directory.deleteRecursively()
+        if (includeStaging) {
+            resumableStagingPath(identity).deleteRecursively()
+        }
+        return existed
+    }
+
+    private fun resumableStagingPath(identity: String): File {
+        val stagingRoot = File(rootDirectory, STAGING_DIRECTORY_NAME)
+        stagingRoot.mkdirs()
+        return requireContained(
+            File(stagingRoot, RESUME_PREFIX + cacheKey(ARTIFACT_KEY_PREFIX + identity)),
+        )
+    }
+
+    private fun requireContained(file: File): File {
+        val canonicalRoot = rootDirectory.canonicalFile.path + File.separator
+        if (!file.canonicalFile.path.startsWith(canonicalRoot)) {
+            throw UnsafeModelPathException()
+        }
+        return file
+    }
+
+    private fun promote(sourceDirectory: File, destination: File) {
         if (destination.exists()) {
             destination.deleteRecursively()
         }
@@ -101,8 +295,16 @@ class ModelCache(
             sourceDirectory.copyRecursively(destination, overwrite = true)
             sourceDirectory.deleteRecursively()
         }
+    }
 
-        val totalSizeBytes = payloadSizeBytes(destination)
+    private fun writeReadyMetadata(
+        destination: File,
+        repoId: String,
+        expectedIntegrityHash: String,
+        actualIntegrityHash: String,
+        revisionSha: String?,
+        artifact: CachedArtifactRecord?,
+    ) {
         writeMetadata(
             destination,
             CacheMetadata(
@@ -111,13 +313,12 @@ class ModelCache(
                 expectedIntegrityHash = expectedIntegrityHash,
                 actualIntegrityHash = actualIntegrityHash,
                 revisionSha = revisionSha,
-                totalSizeBytes = totalSizeBytes,
+                totalSizeBytes = payloadSizeBytes(destination),
                 createdAtEpochMillis = clock.nowEpochMillis(),
                 lastAccessedEpochMillis = clock.nowEpochMillis(),
+                artifact = artifact,
             ),
         )
-        trimToBudget(protectedRepoId = repoId)
-        return destination
     }
 
     private fun isAvailable(
@@ -182,7 +383,7 @@ class ModelCache(
             ?.toList()
             ?: emptyList()
 
-    private fun trimToBudget(protectedRepoId: String?) {
+    private fun trimToBudget(protectedDirectory: File) {
         var totalSizeBytes = totalSizeBytes()
         if (totalSizeBytes <= cacheBudgetBytes) {
             return
@@ -194,7 +395,10 @@ class ModelCache(
             if (totalSizeBytes <= cacheBudgetBytes) {
                 return
             }
-            if (readyDirectory.metadata.repoId == protectedRepoId) {
+            if (
+                readyDirectory.directory == protectedDirectory ||
+                isLeasedLocked(readyDirectory.directory)
+            ) {
                 continue
             }
             val directorySizeBytes = payloadSizeBytes(readyDirectory.directory)
@@ -232,6 +436,7 @@ class ModelCache(
                     jsonObject.longValue("created_at_epoch_millis") ?: return null,
                 lastAccessedEpochMillis =
                     jsonObject.longValue("last_accessed_epoch_millis") ?: return null,
+                artifact = jsonObject["artifact"]?.let { readArtifact(it.jsonObject) },
             )
         } catch (_: RuntimeException) {
             null
@@ -250,8 +455,47 @@ class ModelCache(
             put("total_size_bytes", metadata.totalSizeBytes)
             put("created_at_epoch_millis", metadata.createdAtEpochMillis)
             put("last_accessed_epoch_millis", metadata.lastAccessedEpochMillis)
+            metadata.artifact?.let { artifact ->
+                val files = artifact.files.map { file ->
+                    JsonObject(
+                        mapOf(
+                            "path" to JsonPrimitive(file.path),
+                            "size_bytes" to JsonPrimitive(file.sizeBytes),
+                            "sha256" to JsonPrimitive(file.sha256),
+                        ),
+                    )
+                }
+                put(
+                    "artifact",
+                    JsonObject(
+                        mapOf(
+                            "format" to JsonPrimitive(artifact.format),
+                            "runtime" to JsonPrimitive(artifact.runtime),
+                            "content_digest" to JsonPrimitive(artifact.contentDigest),
+                            "files" to JsonArray(files),
+                        ),
+                    ),
+                )
+            }
         }
         metadataFile.writeText(payload.toString())
+    }
+
+    private fun readArtifact(jsonObject: JsonObject): CachedArtifactRecord? {
+        val files = jsonObject["files"]?.jsonArray?.map { element ->
+            val file = element.jsonObject
+            CachedArtifactFile(
+                path = file.stringValue("path") ?: return null,
+                sizeBytes = file.longValue("size_bytes") ?: return null,
+                sha256 = file.stringValue("sha256") ?: return null,
+            )
+        }
+        return CachedArtifactRecord(
+            format = jsonObject.stringValue("format") ?: return null,
+            runtime = jsonObject.stringValue("runtime") ?: return null,
+            contentDigest = jsonObject.stringValue("content_digest") ?: return null,
+            files = files?.takeIf { it.isNotEmpty() } ?: return null,
+        )
     }
 
     private fun JsonObject.stringValue(key: String): String? =
@@ -294,6 +538,7 @@ class ModelCache(
         val totalSizeBytes: Long,
         val createdAtEpochMillis: Long,
         val lastAccessedEpochMillis: Long,
+        val artifact: CachedArtifactRecord? = null,
     )
 
     companion object {
@@ -302,10 +547,56 @@ class ModelCache(
         private const val CACHE_DIRECTORY_NAME = "openmed-model-cache"
         private const val METADATA_FILE_NAME = "metadata.json"
         private const val STAGING_DIRECTORY_NAME = ".tmp"
+        private const val RESUME_PREFIX = "resume-"
+        private const val ARTIFACT_KEY_PREFIX = "artifact:"
         private const val STATUS_READY = "ready"
 
         private val json = Json {
             ignoreUnknownKeys = true
+        }
+    }
+}
+
+/** Verified file list recorded with a format-aware artifact. */
+internal class CachedArtifactRecord(
+    val format: String,
+    val runtime: String,
+    val contentDigest: String,
+    val files: List<CachedArtifactFile>,
+)
+
+/** One verified artifact file, relative to its artifact directory. */
+internal class CachedArtifactFile(
+    val path: String,
+    val sizeBytes: Long,
+    val sha256: String,
+)
+
+/** A model file or cache path that would resolve outside its cache root. */
+internal class UnsafeModelPathException :
+    IllegalArgumentException("model file path escapes cache directory")
+
+/**
+ * Open lease on a verified cached model directory.
+ *
+ * While any lease is open, [ModelCache.evict] and budget trimming leave the
+ * directory in place. Closing is idempotent.
+ *
+ * @property directory The leased model directory.
+ */
+class ModelCacheLease internal constructor(
+    val directory: File,
+    private val onClose: () -> Unit,
+) : Closeable {
+    private val open = AtomicBoolean(true)
+
+    /** Whether this lease is still open. */
+    val isOpen: Boolean
+        get() = open.get()
+
+    override fun close() {
+        if (open.compareAndSet(true, false)) {
+            onClose()
         }
     }
 }

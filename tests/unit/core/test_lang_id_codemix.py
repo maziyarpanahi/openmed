@@ -168,7 +168,7 @@ def test_pipeline_deidentifies_hinglish_identifier_with_english_route():
     ).run(text, method="mask")
 
     assert "246778325484" not in result.redacted_text
-    assert "[national_id]" in result.redacted_text
+    assert "[ID_NUM]" in result.redacted_text
 
 
 def test_named_entity_model_output_is_not_dropped_by_lid_routing(monkeypatch):

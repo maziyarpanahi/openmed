@@ -59,24 +59,44 @@ data class OcrResult(
     }
 }
 
-internal data class RecognizedOcrToken(
+/**
+ * Engine-neutral recognized word passed to [buildOcrResult] by OCR adapters.
+ */
+data class RecognizedOcrToken(
     val text: String,
     val confidence: Float,
     val bbox: OcrBoundingBox? = null,
     val page: Int = 0,
 )
 
-internal data class RecognizedOcrLine(
+/**
+ * Engine-neutral recognized line passed to [buildOcrResult] by OCR adapters.
+ */
+data class RecognizedOcrLine(
     val tokens: List<RecognizedOcrToken>,
     val bbox: OcrBoundingBox? = null,
 )
 
-internal data class RecognizedOcrBlock(
+/**
+ * Engine-neutral recognized block passed to [buildOcrResult] by OCR adapters.
+ */
+data class RecognizedOcrBlock(
     val lines: List<RecognizedOcrLine>,
     val bbox: OcrBoundingBox? = null,
 )
 
-internal fun buildOcrResult(
+/**
+ * Builds an [OcrResult] with stable token offsets from engine output.
+ *
+ * Blocks, lines, and tokens are ordered by page position (top, then left, then
+ * input order). Lines are joined with `\n`, blocks with a blank line, and
+ * tokens with a single space, so every OCR adapter produces the same offset map
+ * for the same recognized layout.
+ *
+ * @param blocks Recognized blocks in any order.
+ * @param metadata Value-free engine metadata, such as the engine name.
+ */
+fun buildOcrResult(
     blocks: List<RecognizedOcrBlock>,
     metadata: Map<String, String> = emptyMap(),
 ): OcrResult {

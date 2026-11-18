@@ -1,14 +1,12 @@
 package com.openmed.openmedkit.ocr
 
 import android.graphics.Bitmap
-import com.google.mlkit.vision.common.InputImage
-import com.openmed.openmedkit.initializeMlKitForTests
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -100,8 +98,7 @@ class OcrOffsetMapTest {
     @Test
     fun fakeAdapterReturnsEmptyResultWithoutRunningRecognizer() = runBlocking {
         val adapter = FakeOcrAdapter()
-        initializeMlKitForTests(RuntimeEnvironment.getApplication())
-        val image = InputImage.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), 0)
+        val image = OcrImage.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
 
         val result = adapter.recognize(image)
 
@@ -109,5 +106,6 @@ class OcrOffsetMapTest {
         assertTrue(result.tokens.isEmpty())
         assertEquals("fake", result.metadata["engine"])
         assertEquals(1, adapter.calls.size)
+        assertSame(image, adapter.calls.single())
     }
 }

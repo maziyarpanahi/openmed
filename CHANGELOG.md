@@ -7,15 +7,185 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added versioned JSON Schemas for the async job record, the terminal webhook
+  payload, and the REST error envelope, registered in the bundled schema
+  fingerprint snapshot, with drift tests that fail when a required field is
+  removed or an undeclared field appears (#3925).
+- Give `MapleResponseError` a stable `code` attribute drawn from the closed set
+  `MAPLE_RESPONSE_ERROR_CODES` (for example `invalid_json`, `invalid_span`,
+  `label_not_allowed`), so callers can branch on why a Maple response was
+  rejected without parsing the message. Messages and parsing behaviour are
+  unchanged, and unknown codes fall back to `invalid_response` (#5086).
+- Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
+- Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
+- Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
+- Add post-restore authorization reconciliation that opens a new recovery epoch, burns pre-restore approval nonces, rechecks recorded authority against current status, and holds or requires fresh review instead of reviving spent or revoked authority (#3707).
+- Add fail-closed required audit for declared service operations: durable intent/commit receipts on the action ledger, denied or reconcile-required outcomes when audit storage fails, and exactly-once reconciliation that never re-runs a committed effect (#3708).
+- Declare the v3.4 reference deployment, supported transports with their security posture, replica modes, durable components with recovery objectives, and unsupported deployments in a schema-validated file with a matching docs page (#3919).
+- Add a local `openmed service-recovery` operator CLI with read-only inspect, plan and verify commands and explicit apply commands that bind single-use approvals to the exact plan, active generation and state digest (#3703).
+- Add validated service security-policy generations: complete non-secret limit, authorization-policy and egress candidates activate atomically or are rejected with controlled findings, in-flight work stays pinned to one generation, and emergency tighten-only reloads apply at declared checkpoints (#3704).
+- Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
+- Make async `/jobs` work durable: workers claim jobs with expiring leases whose epoch fences every store write, coalesced checkpoints with chained output digests are the resume points, and the terminal state commits together with the final checkpoint and the webhook intent. Retryable failures back off within a bounded budget, poison or damaged work is quarantined until an authorized `DeidentifyJobQueue.replay()`, and a startup and periodic reconcile reclaims expired leases, resumes queued work, re-drives undelivered webhooks through the bounded dispatcher and fails corrupt recovery state closed. `POST /jobs` honours `Idempotency-Key` like the FHIR bulk starts, with keyed, owner-scoped digests (#3574).
+
+### Changed
+
+- Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).
+- The GraphQL endpoint now executes operations over `POST` only, keeps the
+  GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
+  and returns `Cache-Control: no-store`, `Pragma: no-cache` and
+  `Referrer-Policy: no-referrer` on every `/graphql` response (#3544).
+
 ### Fixed
 
 - Fail `helm template` and `helm install` of the service chart when
   `terminationGracePeriodSeconds` is not greater than
   `config.shutdownDrainSeconds` plus 5 seconds, so a longer drain timeout can
   no longer be cut off by Kubernetes mid-drain (#4556).
+- Key opt-in result-cache entries on the model revision and a model generation
+  counter, and clear the cache when a registry promotion, pointer flip or
+  rollback changes the served weights, so a model that keeps its name no longer
+  returns the previous weights' cached results (#4538).
+- Reject challengers that omit a critical recall measurement or a gate the
+  champion passed, preserving the missing-axis reason across signed comparison
+  record round trips (#4544).
+- Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
+  `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
+  links against it and no dependency ships it, so the tokenizer failed to load
+  on devices unless the host app happened to ship the runtime. The NDK is
+  pinned through `android.ndkVersion`; apps that already ship
+  `libc++_shared.so` need `packaging.jniLibs.pickFirsts += "**/libc++_shared.so"`.
+- Keep exact container runtime packages available through a signed Debian
+  snapshot, and recover release image SBOMs by verifying and scanning the
+  published image's immutable digest.
+- Require patched Soup Sieve for optional HTML/document dependencies and
+  Python 3.11.5 or newer, matching its supported Python patch level.
+- Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
+  headers before parsing.
+- Restored the Transformers.js runtime environment exactly after concurrent
+  model loads, so overlapping local and remote loads no longer leave
+  `allowLocalModels` or `allowRemoteModels` behind on the shared module object
+  (#3953).
+- Stop rewriting the local async job store after every document. Progress is
+  saved in coalesced checkpoints (at most 100 per job, at least 1 second
+  apart) while status changes and terminal results are saved immediately, so
+  bytes written grow linearly with job size. Failed writes roll back only the
+  affected record and still leave the previous store and no temporary file
+  (#3904).
+- Release the model reference when a streaming de-identification response
+  times out or the client disconnects mid-window. Cleanup no longer fails with
+  `generator already executing`; a still-running window keeps the reference
+  until it returns, then its output is discarded and the timeout or
+  cancellation is recorded as the request outcome (#3901).
+- Deliver async job webhooks on a bounded background executor so failing
+  receivers no longer hold job workers for hours. Delivery is recorded as
+  `pending` until it settles, capped by a server-side wall-time ceiling, and
+  backoff waits are cancelled on shutdown, which settles unfinished deliveries
+  as `abandoned` within a drain bound. `webhook_delivery` now stores only
+  controlled error codes, attempt counts and status codes (#3899).
+- Key service throttles by trusted proxy hops: `X-Forwarded-For` is honored only
+  from `OPENMED_SERVICE_TRUSTED_PROXIES` peers and resolved to the rightmost
+  untrusted address within `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`, so rotated
+  leftmost values no longer bypass rate or authentication-failure limits.
+  Without trusted proxies the header is ignored and the direct peer is used.
+  The authentication-failure limiter shares this resolution by default. Bound
+  limiter state with `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`, evicting only
+  fully refilled buckets and idle semaphores and falling back to a shared
+  overflow bucket; Helm exposes the new settings (#3900).
+- Enforce the declared JSON depth, node and longest-string limits on REST and
+  GraphQL request bodies with a streaming structural pre-scan in the shared
+  request-limit middleware. Violations return `json_structure_exceeded` with
+  only the limit category and ceiling before JSON decoding, Pydantic validation
+  or the route handler runs; `/cohort/resolve` documents a 250,000-value
+  ceiling for concept hierarchies (#3906).
+- Require verified PostgreSQL TLS for Journey stores in the production
+  profile. `PostgresJourneyStore.connect` and `openmed-journey` accept an
+  operator CA bundle and optional client certificate and key
+  (`sslrootcert`/`sslcert`/`sslkey`, `OPENMED_JOURNEY_POSTGRES_SSL*`), build a
+  verify-full context with host-name checks, and refuse plaintext or
+  non-verifying DSNs with `postgres_tls_required` before opening a socket.
+  Plaintext now needs an explicit `OPENMED_PROFILE=dev` or `test`; the Compose
+  bundle and Helm chart mount the CA bundle, and a value-free transport posture
+  is exported for deployment self-checks (#3915).
+- Reuse and explicitly dispose package-owned web inference pipelines. Release
+  settled and pending ONNX Runtime Web cached sessions once, draining active
+  native runs and preserving caller pipeline ownership (#3935).
 
-- Reject missing, repeated, or unsupported content types on the local privacy
-  proxy's chat routes before reading the request body (#5185).
+### Security
+
+- **Breaking:** evaluation reports no longer fall back to signing keys
+  published in the source, which let anyone forge a signature that verifies.
+  `run_relation_suite`, `run_suite(suite="relations")` and
+  `run_federated_leakage_eval` need `signing_key` or
+  `OPENMED_RELATION_SCORECARD_KEY` / `OPENMED_FEDERATED_EVAL_KEY`. Without
+  one, they raise `ValueError` before any fixture or detector runs. Treat
+  reports signed with the old built-in keys as unsigned.
+- **Breaking (Android):** `DeidentifyEngine` no longer keys `HASH`
+  replacements or span digests with the published
+  `openmed-android-deidentify-v1` salt. Hashing is keyed through an
+  `OpenMedSecretProvider` such as `AndroidKeystoreSecretProvider`, so the key
+  never sits in app memory. An engine built without a provider omits span
+  digests and refuses `HASH` with `OpenMedSecretException`. Pass
+  `LEGACY_PUBLIC_HASH_SALT` with `HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT` only
+  to reproduce digests made before 4.0.
+- **Breaking:** the public biomedical NER corpus loaders never run dataset
+  code from a repository. JNLPBA, Species-800 and BC2GM load Parquet files
+  pinned to a commit through the packaged `parquet` builder. BC5CDR and NCBI
+  Disease are published only as loading scripts, which `datasets` 4 and later
+  already refuse, so they need a local export. `BiomedicalNerSource` drops
+  `trust_remote_code` and gains `revision` and `data_dir`.
+- Bound inbound `X-Request-ID` values to `^[A-Za-z0-9_.:-]{1,128}$` in the REST
+  service. Oversized, non-ASCII or separator-bearing ids are replaced with a
+  random UUID before they reach response headers, error envelopes, access logs
+  or spans. The privacy proxy, privacy gateway and filters, and `OpenMedClient`
+  now share the one grammar in `openmed.service.request_id` (#3913).
+- Apply the shared trusted-host allowlist (loopback by default), opt-in API-key
+  or JWT auth and operational request-byte bound to the local privacy proxy
+  before any body parsing. Bound message count, total text characters and
+  streaming duration before redaction or transport calls, with controlled
+  `privacy_proxy_limit_exceeded` and `privacy_proxy_timeout` codes; refusals
+  carry no message text, placeholders or mappings (#3898).
+- Reject revoked REST mTLS client certificates from operator-supplied local CRL
+  files. CRL signatures are verified against the configured CA bundle at
+  startup, revocation and `nextUpdate` freshness (with a configurable grace
+  period) are checked per request before principal mapping, and invalid or
+  stale CRLs fail closed outside the `dev` and `test` profiles. Errors and logs
+  use only `client_certificate_revoked`, `crl_stale` and `crl_invalid`, never
+  subjects, SANs, serial numbers or file paths (#3922).
+- Hide REST discovery surfaces from unauthenticated production callers. Swagger
+  UI, ReDoc and the live `/openapi.json` are served only in the `dev` profile;
+  `OPENMED_SERVICE_OPENAPI_ENABLED=true` serves only `/openapi.json` behind
+  authentication elsewhere. Outside `dev`, `/health` returns status and service
+  name only, and version and profile move to the authenticated
+  `GET /service/metadata` route. The reference launcher no longer sends a
+  `server` header (#3911).
+- Add opt-in inbound HMAC signature enforcement for configured REST route
+  templates. Checks run after body limits and before routing, load the secret
+  from a file, fail closed at startup on bad settings and return value-free
+  `401` codes (`signature_missing`, `signature_invalid`, `signature_stale`,
+  `signature_replayed`); replay protection is per process (#3924).
+- Send `Cache-Control: no-store`, `Pragma: no-cache`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`
+  on every non-probe REST response, including NDJSON streams and error
+  envelopes for unhandled exceptions. Probe routes are unchanged, the
+  generated API documents declare `Cache-Control: no-cache`, and headers
+  already set, such as on `/graphql`, are never duplicated (#3912).
+
+## [3.3.0] - 2026-11-08
+
+See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
+
+### Fixed
+
+- Save evaluator rollout state and champion pointers atomically (#4949).
+- Probe the application readiness endpoint on loopback in the Docker Compose health check (#4662).
+- Normalize line endings before checking the OpenPHI-Vision fixture catalog digest, so the bundled fixtures load from Windows and Unix checkouts.
+- Keep synthetic federated example snapshots comparable across Windows and Unix checkouts.
+
+- Return HTTP 415 for missing, repeated, or unsupported content types on the local privacy proxy's chat routes before reading the request body (#5185).
 
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
@@ -23,6 +193,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without loading their runtimes during discovery (#3844).
 
 ### Added
+
+- Add value-free configuration provenance to the CLI (#5472), a reviewer disagreement schema (#5473), and an offline Node.js de-identification example (#5474).
+- Ship privacy manifests with OpenMedKit and its extension products, declare the scan demo's user-defaults access, and check Swift sources for undeclared required-reason APIs in CI (#3946, #4248).
+- Localize OpenMedKit share-extension controls, messages, policy names, and accessibility labels in English, Chinese, and Hindi. Update fonts and picker rows when Dynamic Type changes, preserve the selected policy, and keep controls and the scrollable text preview usable at accessibility sizes (#3955, #4229).
+- Add a metadata-only federated round walkthrough (#4130) and enforce native Tauri checks when relevant (#4129).
 
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
@@ -36,17 +211,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session-scoped opaque voice embedding handles in Python and OpenMedKit, with
   same-session similarity, value-free evidence, retention erasure callbacks and
   buffer destruction on pause, withdrawal, cancellation and finalization.
-  Serialization, persistence and cross-session comparison are refused.
+  Serialization, persistence and cross-session comparison are refused (#3818).
 
-- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
-  with digest-bound clinician confirmation, evidence/speaker references,
-  freshness and correction holds, and counts-only conversion-loss reports.
+- Export, validate, and import fixed, reviewed ambient notes as a bounded FHIR R4 document in Python and OpenMedKit. Bind confirmation to the reviewed digest and preserve evidence and speaker references, freshness checks, correction holds, and counts-only conversion-loss reports (#3837).
 
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
 
-- Experimental Android mirrors of multimodal asset manifests, profile references,
-  preflight findings, abstention records, and provider result envelopes with strict
-  content-free parsing and shared offline Python/Kotlin serialization vectors.
+- Add experimental Android mirrors of multimodal asset manifests, profile references, preflight findings, abstention records, and provider result envelopes, with strict content-free parsing and shared Python/Kotlin fixtures for v1 records and v1.1 waveform manifests (#3843, #3814).
 
 - Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
 
@@ -69,7 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
 
 - Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
-  parser fuzz coverage, with required-resource checks and a zero-skip gate.
+  parser fuzz coverage, with required-resource checks and a zero-skip gate (#3811).
 
 - Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
   two-patient packet fixtures with verified pixel/gold digests, critical flags,
@@ -94,7 +265,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate ambient capture on unanimous consent in Python and OpenMedKit, with explicit interruption/resume, non-renewable retention, revocable owned-memory references and draft-only review exports with conservative deletion accounting (#3208).
 
-- Add an isolated local MLX Whisper streaming provider with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
+- Add an isolated local MLX Whisper streaming provider on Apple Silicon through the optional `edge-asr` extra, with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
 
 - Flag ASR hypotheses over non-speech audio and repetition loops for review, using bounded provider statistics, voice-activity evidence and content-free decisions (#3815).
 
@@ -113,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
-- Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
+- Add a local SmolVLM2 adapter on Apple Silicon through the optional `edge-vlm` extra, with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
 
@@ -125,15 +296,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
   16, 212 and 80 with windowed integer outputs, streamed checksum verification,
-  value-safe metadata
-  and MIT annotation summaries, synthetic privacy fixtures and explicit human
-  review boundaries.
+  value-safe metadata and MIT annotation summaries, synthetic privacy fixtures
+  and explicit human review boundaries (#3827).
 
 - Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
 
 - Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
 
-- Support separately acquired d1-omni-600M for local text, image and English voice-command decisions; record revision-bound model license provenance separately from the Apache-2.0 adapter (#4263).
+- Run a pinned, user-supplied d1-omni-600M snapshot on CPU for local text, image, and English voice-command decisions. Record the model revision, license label, and license-file digest separately from the Apache-2.0 adapter (#4263).
 
 - Add bounded local speaker-diarization observations and an optional CPU adapter with explicit acoustic uncertainty, pinned caller-supplied artifacts, cancellation and alias lineage; clinical roles remain separate (#3676).
 
@@ -155,7 +325,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
   integer/scaled samples, withheld identification/date/annotation text, explicit
-  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff (#3826).
 
 - Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
   separate rhythm and representative-beat signals, withheld identifying
@@ -177,13 +347,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   core report byte parity, bounded manifests and bodies, and content-free errors
   and access logs (#3835).
 
-- Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
+- Add the opt-in, authenticated `POST /v1/systemone` route and Python client method. The route de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
 
 - Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
 
 - Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
   retention, provenance and review/export threats to enforcing code/tests or
-  tracked gaps, with offline dangling-reference and publication regression gates.
+  tracked gaps, with offline dangling-reference and publication regression gates (#3830).
 
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
@@ -220,7 +390,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
 
-- Carry verified local images and bounded video clips through decision requests and the loopback System One bridge; strip metadata before dispatch and keep media out of audit logs (#4261).
+- Carry verified local images and bounded video clips through Python and MCP decision requests and the System One bridge over loopback or a Unix socket. Strip metadata before dispatch and keep media out of audit logs (#4261).
 
 - Add an experimental CPU ONNX streaming speech adapter for pinned local character-CTC exports, with bounded timed hypotheses and content-free reports (#3842).
 
@@ -256,7 +426,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Offline critical transcript-token classification and value-free confirmation
   holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
-  reviewer receipts, guarded export permits and unchanged local dosing checks.
+  reviewer receipts, guarded export permits and unchanged local dosing checks (#3820).
 
 - Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
 
@@ -288,6 +458,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Require the typed `externalData` option for browser ONNX Runtime and WebGPU session loading. Reject remote or query-bearing shard locations, duplicate shard paths, and untyped `sessionOptions.externalData`. Check declared per-shard and configured total byte limits before creating a session, and include the shard declarations in the session cache key (#3934, #4249).
+
 - Enforce conservative, policy-selectable asset limits before Python image,
   PDF and DICOM pixel redaction decodes media, with bounded header reads,
   runtime page/frame guards and code-and-number-only admission errors (#3832).
@@ -302,26 +474,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
   label/overview outputs unless explicitly retained after verified pixel
   redaction and reviewer confirmation. Synthetic fixtures cover privacy and
-  hostile layout controls; structural removal does not certify pixel privacy.
+  hostile layout controls; structural removal does not certify pixel privacy (#3817).
 
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
-  token IDs. Callers must supply a local guard and asset provenance to release text.
+  token IDs. Callers must supply a local guard and asset provenance to release text (#3813).
 
 - Local barcode, QR and DataMatrix region detection across image, DICOM pixel
   and PDF raster redaction, with a caller-installed optional ZXing backend,
   deterministic fake, payload-free coverage reports, explicit unavailable
-  coverage policy and residual-code verification.
+  coverage policy and residual-code verification (#3816).
 
-- Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
+- Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation. [CVE-2026-49272](https://github.com/oauthlib/oauthlib/security/advisories/GHSA-3jp2-3mrg-2vxc)
 
-- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
-  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
-  printer settings and presentation template text; refuse unsupported hidden
-  carriers with category/count/digest evidence and preserve destinations (#3810).
+- Fail closed before publishing redacted DOCX, XLSX, and PPTX packages with uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails, printer settings, and presentation template text. Refuse unsupported hidden carriers with category, count, and digest evidence before touching the destination. Caller-supplied output streams must be seekable and writable, and successful exports replace and truncate existing stream contents (#3810).
 
 ### Changed
+
+- Decision result schemas accept a model-weight license label and an optional license-file digest bound to an immutable revision. GLiNER2 uses an explicit declaration or the loaded snapshot's local model card. Custom GLiNER2 and GLiClass revisions without a license declaration or applicable local evidence report `NOASSERTION` (#4263).
 
 - Use the stable 1.x release of the optional `yasbd-lib` sentence segmentation backend (#3596).
 
@@ -349,6 +520,10 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   See the [dependency migration guidance](docs/security/dependency-policy.md#python-311-floor-and-the-snowflake-filelock-override).
 
 ### Added
+
+- Record resolved source identity, available source license, toolchain versions
+  and exact file inventories for MLX, ONNX and CoreML exports, with an explicit
+  offline provenance verifier.
 
 - Document existing synthetic generators, offline examples, public exports and
   dataset provenance limits in a shared navigation group (#3896).
@@ -559,9 +734,13 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
   device-isolated caches, offline loading, exact spans, and disease-label
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
-- Ship privacy manifests with the OpenMedKit and extension products, declare
-  the scan demo's user defaults access, and fail CI when Swift sources use an
-  undeclared required-reason API (#3946).
+
+### Changed
+
+- Write independent CoreML package manifests using schema v2 while retaining
+  schema v1 conversion observations and sibling labels outside packages. Keep
+  v1/v2 segmenter validation compatible; move variable export observations out
+  of canonical artifact metadata. See [export provenance](docs/export-matrix.md#producer-provenance-and-offline-verification).
 
 ### Fixed
 
@@ -605,14 +784,6 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   extractor and retain native span offsets and confidence scores instead of
   attempting to use older `gliner` classes (#4329).
 
-### Security
-
-- Load ONNX Runtime Web external-data shards only through the typed
-  `externalData` option: reject remote and query-bearing shard locations and
-  untyped `sessionOptions.externalData`, enforce declared per-shard and total
-  byte limits before session creation, and key cached sessions by shard
-  (#3934).
-
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
@@ -645,15 +816,15 @@ clinical efficacy. Package publication remains a separate release action.
   unrepresentable calibration fails closed. Update deterministic expectations
   without restoring the invalid classical scale (#3724).
 
-### Added
+- Bound the FHIR Bulk Data and SMART ingestion job managers. Starts beyond
+  `OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS` return `503` `bulk_jobs_saturated`
+  with `Retry-After` before any task or output directory exists. Terminal
+  records expire after `OPENMED_SERVICE_BULK_JOB_TTL_SECONDS` and are capped by
+  `OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS`, oldest first; running jobs are never
+  evicted. Request tuning now has server ceilings, including a one-second
+  minimum poll interval; out-of-range values return `422` (#3909).
 
-- Localize OpenMedKit share-extension buttons, status/error messages, policy
-  display names, and accessibility labels/hints in English, Chinese, and Hindi.
-  Update fonts and picker rows on live Dynamic Type changes, preserve policy
-  selection, and keep controls reachable at accessibility sizes. Use internally
-  scrollable text previews, a policy menu with an option count and selection
-  checkmark, and distinct, full-width primary/secondary actions
-  (#3955).
+### Added
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
@@ -1094,6 +1265,12 @@ clinical efficacy. Package publication remains a separate release action.
   profile on every supported Python version. Reject basic, week-date, ordinal
   and compact-offset input with value-free errors while retaining supported
   extended values, caller timezone rules and golden digests.
+- Run REST trusted-host, CORS and header-only authentication checks before
+  request bodies are buffered or throttle tokens are spent. Preflights no
+  longer need credentials, error responses keep CORS headers for allowed
+  origins, and preflights allow `X-OpenMed-Priority` plus credential headers
+  when authentication is enabled while exposing `X-Request-ID` and
+  `Retry-After` (#3897).
 
 - Honor per-call ONNX revision overrides before configured and default revisions
   (#3504).
