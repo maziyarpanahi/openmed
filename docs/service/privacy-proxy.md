@@ -71,11 +71,13 @@ The error never contains the part's data or the caller's own `type` value.
 neither a string, `null` nor a list, such as a single part object, gets
 `message_content_invalid` instead.
 
-Clients that send images, audio or files must remove those parts, or redact
-them before calling the proxy. The message-count and text-length limits run
-first, so a request whose media pushes it over `max_text_chars` gets
-`413 text_length_exceeded` rather than this 400. Redacting media through the
-multimodal pipeline is not part of this route.
+This route never forwards an image, audio or file part, even one that was
+redacted beforehand, so clients must remove those parts. To include what a
+file or recording says, send it as text in a `text` part, which the proxy
+redacts like any other text. The message-count and text-length limits and the
+`X-Request-ID` check run first, so a request whose media pushes it over
+`max_text_chars` gets `413 text_length_exceeded` rather than this 400.
+Redacting media through the multimodal pipeline is not part of this route.
 
 Create the app with a local transport. The transport receives a copied request
 mapping whose text leaves contain deterministic `OPENMED_PHI` placeholders;
@@ -130,8 +132,9 @@ this order, and the first two read headers only:
 
 After parsing, the proxy checks the message count and the total characters
 across every text value it would redact, then the `X-Request-ID` header, then
-the content-part types. All of these run before the extractor or the transport
-is called. Streaming responses also have a wall-clock bound.
+the content-part types, before the request body is serialized to derive a
+request ID. All of these run before the extractor or the transport is called.
+Streaming responses also have a wall-clock bound.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |

@@ -118,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the part type and zero-based message index, before any redaction or
   transport call. These parts were previously run through the text detector
   and forwarded, so identifiers inside images, audio or documents reached the
-  transport. Remove media parts or redact them before calling the proxy.
+  transport. Media parts are refused even if redacted beforehand: remove them,
+  and send any content they hold as text in a `text` part.
   Message `content` that is not a string, `null` or a list now returns
   `400 message_content_invalid` (#5097).
 - **Breaking:** evaluation reports no longer fall back to signing keys

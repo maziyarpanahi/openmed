@@ -321,8 +321,11 @@ class PrivacyProxy:
         """
         normalized = _validate_request_payload(payload)
         _enforce_request_limits(normalized, self.limits)
-        request_id = _stable_request_id(normalized, request_id_header)
+        _validate_request_id_header(request_id_header)
+        # Classify parts before the body is serialized for the request ID, so
+        # a refused part never reaches that step (or its UTF-8 encoding).
         _refuse_unsupported_content_parts(normalized["messages"])
+        request_id = _stable_request_id(normalized, request_id_header)
         placeholder_map: dict[str, str] = {}
 
         def _redact(value: str, path: tuple[str, ...]) -> str:
@@ -829,13 +832,17 @@ def _reportable_content_part_type(part_type: Any) -> str:
     return _UNKNOWN_CONTENT_PART_TYPE
 
 
+def _validate_request_id_header(request_id_header: Optional[str]) -> None:
+    if request_id_header is not None and not is_valid_request_id(request_id_header):
+        raise PrivacyProxyRequestError(reason_code="request_id_invalid")
+
+
 def _stable_request_id(
     payload: Mapping[str, Any],
     request_id_header: Optional[str],
 ) -> str:
     if request_id_header is not None:
-        if not is_valid_request_id(request_id_header):
-            raise PrivacyProxyRequestError(reason_code="request_id_invalid")
+        _validate_request_id_header(request_id_header)
         source = f"header:{request_id_header}"
     else:
         source = _canonical_json(payload)

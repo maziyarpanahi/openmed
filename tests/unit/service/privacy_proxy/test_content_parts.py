@@ -421,3 +421,70 @@ def test_direct_prepare_refuses_without_redacting_or_changing_input(
     assert SENTINEL not in f"{error!s} {error!r}"
     assert payload == original
     recorder.assert_untouched()
+
+
+# JSON allows lone-surrogate escapes, which decode to text that cannot be
+# encoded as UTF-8. A refused part must be classified before anything tries.
+# These are the six-character JSON escapes, not Python surrogate literals.
+HIGH_SURROGATE_ESCAPE = "\\ud800"
+LOW_SURROGATE_ESCAPE = "\\udfff"
+LONE_SURROGATE_PARTS: dict[str, tuple[str, str]] = {
+    "media-data": (
+        '{"type": "image_url", "image_url": {"url": "data:,'
+        f'{SENTINEL}{HIGH_SURROGATE_ESCAPE}"}}}}',
+        "image_url",
+    ),
+    "type-value": (
+        f'{{"type": "{SENTINEL}{LOW_SURROGATE_ESCAPE}", "text": "Hi."}}',
+        "unknown",
+    ),
+}
+
+
+def _lone_surrogate_body(part_json: str) -> str:
+    return (
+        '{"model": "local-fixture", "messages": [{"role": "user", "content": '
+        '[{"type": "text", "text": "Hi."}, ' + part_json + "]}]}"
+    )
+
+
+@pytest.mark.parametrize("path", ["/v1/chat/completions", "/chat/completions"])
+def test_unencodable_unicode_in_a_refused_part_returns_the_refusal(
+    path: str, subtests: Any
+) -> None:
+    for case, (part_json, reported) in LONE_SURROGATE_PARTS.items():
+        with subtests.test(case=case):
+            recorder = Recorder()
+            with _client(recorder) as client:
+                # No X-Request-ID, so the request ID would come from the body.
+                response = client.post(
+                    path,
+                    content=_lone_surrogate_body(part_json).encode("ascii"),
+                    headers={"Content-Type": "application/json"},
+                )
+
+            assert response.status_code == 400
+            assert response.json() == _refusal(reported, 0)
+            assert SENTINEL not in response.text
+            recorder.assert_untouched()
+
+
+def test_direct_prepare_refuses_unencodable_unicode_parts(subtests: Any) -> None:
+    for case, (part_json, reported) in LONE_SURROGATE_PARTS.items():
+        with subtests.test(case=case):
+            recorder = Recorder()
+            proxy = PrivacyProxy(
+                transport=recorder.transport,
+                extractor=recorder.extractor,
+                tripwire_extractor=recorder.tripwire_extractor,
+            )
+            payload = json.loads(_lone_surrogate_body(part_json))
+
+            with pytest.raises(PrivacyProxyRequestError) as raised:
+                proxy.prepare(payload)
+
+            error = raised.value
+            assert error.reason_code == "unsupported_content_part"
+            assert (error.part_type, error.message_index) == (reported, 0)
+            assert SENTINEL not in f"{error!s} {error!r}"
+            recorder.assert_untouched()
