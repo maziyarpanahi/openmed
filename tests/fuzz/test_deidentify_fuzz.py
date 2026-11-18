@@ -414,9 +414,11 @@ def test_malformed_iscii_preserves_clinical_text_and_identifier_spans(subtests):
                 _assert_planted_spans_covered(
                     result.pii_entities, result.original_text, planted
                 )
+                # Mask placeholders name the canonical label, so NAME masks as
+                # [PERSON] (see ``_placeholder_label``).
                 _assert_text_equal(
                     result.deidentified_text,
-                    text.replace(value, "[NAME]"),
+                    text.replace(value, "[PERSON]"),
                     context="masked clinical text mismatch",
                 )
 
