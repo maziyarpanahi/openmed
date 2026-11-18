@@ -9,6 +9,9 @@
 
 # DJL's tokenizer Java surface binds to libdjl_tokenizer.so through JNI.
 -keep class ai.djl.huggingface.tokenizers.jni.** { *; }
+# libdjl_tokenizer.so throws this class by name; if R8 renames it, tokenizer
+# errors surface as JNI class-lookup failures instead.
+-keep class ai.djl.engine.EngineException { *; }
 
 # Keep the OpenMedKit inference seam available to reflective integrations.
 -keep class com.openmed.openmedkit.** implements com.openmed.openmedkit.OnnxTokenClassifier { *; }

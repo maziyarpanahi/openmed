@@ -12,6 +12,7 @@ from threading import RLock
 
 RESULT_CACHE = None
 _CACHE_LOCK = RLock()
+_MODEL_GENERATION = 0
 
 
 class ResultCache:
@@ -59,6 +60,40 @@ def get_result_cache(max_entries=128):
         return RESULT_CACHE
 
 
+def current_model_generation():
+    """Return the counter that changes whenever served model weights may change."""
+    with _CACHE_LOCK:
+        return _MODEL_GENERATION
+
+
+def notify_model_generation_change():
+    """Invalidate cached results after a model activation, promotion or rollback.
+
+    A model can keep its name while its weights change. Bumping the generation
+    makes every later cache key differ from keys built before the change, and the
+    shared cache is cleared as a second guard.
+
+    Returns:
+        The new model generation.
+    """
+    global _MODEL_GENERATION
+
+    with _CACHE_LOCK:
+        _MODEL_GENERATION += 1
+        if RESULT_CACHE is not None:
+            RESULT_CACHE.clear()
+        return _MODEL_GENERATION
+
+
+def _resolve_model_revision(params):
+    revision = params.get("revision")
+    if revision is None:
+        pipeline_kwargs = params.get("pipeline_kwargs")
+        if isinstance(pipeline_kwargs, dict):
+            revision = pipeline_kwargs.get("revision")
+    return revision
+
+
 def freeze_value(value):
     if isinstance(value, dict):
         return (
@@ -91,6 +126,8 @@ def make_cache_key(inquiry_type, params):
         normalized.get("model_name", normalized.get("model_id", "")),
     )
     normalized.pop("model_id", None)
+    normalized["model_revision"] = _resolve_model_revision(normalized)
+    normalized["model_generation"] = current_model_generation()
 
     for name in (
         "config",

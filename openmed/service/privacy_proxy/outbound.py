@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..request_id import is_valid_request_id
 from .inbound import InboundRestorationError, InboundRestorationState
 
 DEFAULT_CONTENT_TYPE = "application/json"
@@ -32,7 +33,6 @@ SUPPORTED_CONTENT_TYPES = frozenset({DEFAULT_CONTENT_TYPE})
 DEFAULT_MAX_STATES = 1024
 
 _MISSING = object()
-_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _TEXT_CONTENT_TYPES = frozenset({"text", "input_text", "output_text"})
 
 TextRedactor = Callable[[str], Any]
@@ -608,7 +608,7 @@ def _normalize_content_type(content_type: str) -> str:
 def _coerce_request_id(request_id: str | None) -> str:
     if request_id is None:
         return uuid.uuid4().hex
-    if not isinstance(request_id, str) or not _REQUEST_ID_PATTERN.fullmatch(request_id):
+    if not is_valid_request_id(request_id):
         raise OutboundPrivacyError(
             "request_id contains unsupported characters",
             reason_code="invalid_request_id",

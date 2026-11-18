@@ -1,0 +1,7 @@
+# Synthetic Journey profile: migration job, worker, artifact storage and the
+# default-deny NetworkPolicy, with an in-cluster PostgreSQL selector.
+journey:
+  enabled: true
+  networkPolicy:
+    databasePodSelector:
+      app: postgres

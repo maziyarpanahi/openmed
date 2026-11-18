@@ -1,9 +1,20 @@
 #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
-    import CryptoKit
     import Dispatch
     import Foundation
     import MLX
     import Tokenizers
+    import os
+
+    /// Deterministic in-process span source behind the public extraction path.
+    ///
+    /// The shared Swift-Kotlin parity tests inject a recognizer so the golden
+    /// fixture runs through `extractPII` and `deidentify` without loading a
+    /// model. The seam is internal rather than public API, loads no tokenizer
+    /// or model assets, and has no network path.
+    protocol OpenMedSpanRecognizer {
+        /// Return entities whose offsets are Unicode scalar offsets into `text`.
+        func recognize(_ text: String) throws -> [EntityPrediction]
+    }
 
     /// OpenMedKit — On-device clinical NLP for iOS and macOS.
     ///
@@ -27,6 +38,7 @@
             case coreML(NERPipeline)
             case mlx(MLXTokenClassificationPipeline)
             case privacyFilter(OpenMedPrivacyFilterPipeline)
+            case recognizer(any OpenMedSpanRecognizer)
         }
 
         private let runtime: Runtime
@@ -39,33 +51,195 @@
         /// large on-device models can first drop their runtime references, then call
         /// this helper so MLX returns cached Metal buffers instead of carrying them
         /// into the next model load.
+        ///
+        /// This is a no-op where MLX cannot run, such as the iOS Simulator, so
+        /// CoreML-only callers (for example the share extension) never reach
+        /// the MLX allocator there.
         public static func clearRuntimeMemoryCache() {
+            guard OpenMedMLXRuntimeSupport.isSupported else { return }
             Memory.clearCache()
         }
 
         /// Initialize OpenMed with an explicit backend.
-        public init(
+        ///
+        /// Tokenizer assets load from local files only by default. When they
+        /// are absent, initialization throws
+        /// ``OpenMedTokenizerError/missingLocalAssets`` without any network
+        /// request. The tokenizer is resolved before model weights load.
+        ///
+        /// This initializer blocks the calling thread while tokenizer assets
+        /// load. From async code, prefer
+        /// ``load(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)``;
+        /// the blocking bridge is deprecated in favour of it.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model. A verified
+        ///     cached copy is reused offline.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public convenience init(
             backend: OpenMedBackend,
             maxSeqLength: Int = 512,
-            allowNetworkAccess: Bool = true
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) throws {
+            let plan = try Self.tokenizerPlan(for: backend)
+            let tokenizer = try plan.request.map { request in
+                try Self.loadTokenizer(
+                    tokenizerName: request.name,
+                    tokenizerFolderURL: request.folderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: tokenizerPin
+                )
+            }
+            try self.init(
+                backend: backend,
+                artifact: plan.artifact,
+                tokenizer: tokenizer,
+                maxSeqLength: maxSeqLength
+            )
+        }
+
+        /// Load OpenMed with an explicit backend without blocking a thread on
+        /// tokenizer loading.
+        ///
+        /// Same acquisition rules as
+        /// ``init(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)``:
+        /// local assets only unless `allowNetworkAccess` is `true` and a
+        /// `tokenizerPin` is supplied.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        /// - Returns: A ready runtime.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public static func load(
+            backend: OpenMedBackend,
+            maxSeqLength: Int = 512,
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) async throws -> OpenMed {
+            let plan = try tokenizerPlan(for: backend)
+            var tokenizer: (any Tokenizer)?
+            if let request = plan.request {
+                tokenizer = try await loadTokenizerAsync(
+                    tokenizerName: request.name,
+                    tokenizerFolderURL: request.folderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: tokenizerPin
+                )
+            }
+            return try OpenMed(
+                backend: backend,
+                artifact: plan.artifact,
+                tokenizer: tokenizer,
+                maxSeqLength: maxSeqLength
+            )
+        }
+
+        /// Initialize OpenMed with a CoreML model and tokenizer.
+        ///
+        /// - Parameters:
+        ///   - modelURL: URL to the compiled CoreML model (`.mlmodelc` or `.mlpackage`).
+        ///   - id2labelURL: URL to the `id2label.json` label mapping file.
+        ///   - tokenizerName: Optional Hugging Face repository ID the tokenizer
+        ///     must belong to. There is no default; it never triggers a download.
+        ///   - tokenizerFolderURL: Local tokenizer asset directory.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        public convenience init(
+            modelURL: URL,
+            id2labelURL: URL,
+            tokenizerName: String? = nil,
+            tokenizerFolderURL: URL? = nil,
+            maxSeqLength: Int = 512,
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) throws {
+            try self.init(
+                backend: .coreML(
+                    modelURL: modelURL,
+                    id2labelURL: id2labelURL,
+                    tokenizerName: tokenizerName,
+                    tokenizerFolderURL: tokenizerFolderURL
+                ),
+                maxSeqLength: maxSeqLength,
+                allowNetworkAccess: allowNetworkAccess,
+                tokenizerPin: tokenizerPin
+            )
+        }
+
+        private struct TokenizerRequest {
+            let name: String?
+            let folderURL: URL?
+        }
+
+        private struct TokenizerPlan {
+            let request: TokenizerRequest?
+            let artifact: OpenMedMLXArtifact?
+        }
+
+        /// Decide which tokenizer the backend needs before any weights load.
+        private static func tokenizerPlan(for backend: OpenMedBackend) throws -> TokenizerPlan {
+            switch backend {
+            case .coreML(_, _, let tokenizerName, let tokenizerFolderURL):
+                return TokenizerPlan(
+                    request: TokenizerRequest(name: tokenizerName, folderURL: tokenizerFolderURL),
+                    artifact: nil
+                )
+            case .mlx(let modelDirectoryURL):
+                // Refuse an unsupported platform before reading the artifact.
+                try OpenMedMLXRuntimeSupport.requireSupported()
+                let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
+                if artifact.family == .openaiPrivacyFilter {
+                    return TokenizerPlan(request: nil, artifact: artifact)
+                }
+                guard MLXTokenClassificationPipeline.isRuntimeSupported else {
+                    throw OpenMedMLXRuntimeError.unsupportedPlatform
+                }
+                return TokenizerPlan(
+                    request: TokenizerRequest(
+                        name: artifact.tokenizerName,
+                        folderURL: artifact.tokenizerDirectoryURL
+                    ),
+                    artifact: artifact
+                )
+            }
+        }
+
+        private init(
+            backend: OpenMedBackend,
+            artifact: OpenMedMLXArtifact?,
+            tokenizer: (any Tokenizer)?,
+            maxSeqLength: Int
         ) throws {
             switch backend {
-            case .coreML(let modelURL, let id2labelURL, let tokenizerName, let tokenizerFolderURL):
+            case .coreML(let modelURL, let id2labelURL, _, _):
                 let pipeline = try NERPipeline(
                     modelURL: modelURL,
                     id2labelURL: id2labelURL,
                     maxSeqLength: maxSeqLength
                 )
                 self.runtime = .coreML(pipeline)
-                self.tokenizer = try Self.loadTokenizer(
-                    tokenizerName: tokenizerName,
-                    tokenizerFolderURL: tokenizerFolderURL,
-                    allowNetworkAccess: allowNetworkAccess
-                )
+                self.tokenizer = tokenizer
                 self.maxSeqLength = maxSeqLength
 
             case .mlx(let modelDirectoryURL):
-                let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
+                try OpenMedMLXRuntimeSupport.requireSupported()
+                let artifact = try artifact ?? OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
                 if artifact.family == .openaiPrivacyFilter {
                     let pipeline = try OpenMedPrivacyFilterPipeline(
                         artifact: artifact,
@@ -80,79 +254,46 @@
                         maxSeqLength: maxSeqLength
                     )
                     self.runtime = .mlx(pipeline)
-                    self.tokenizer = try Self.loadTokenizer(
-                        tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
-                        tokenizerFolderURL: pipeline.tokenizerDirectoryURL,
-                        allowNetworkAccess: allowNetworkAccess
-                    )
+                    self.tokenizer = tokenizer
                     self.maxSeqLength = pipeline.resolvedMaxSequenceLength
                 }
             }
         }
 
-        /// Initialize OpenMed with a CoreML model and tokenizer.
+        /// Initialize OpenMed over a deterministic in-process span recognizer.
         ///
-        /// - Parameters:
-        ///   - modelURL: URL to the compiled CoreML model (`.mlmodelc` or `.mlpackage`).
-        ///   - id2labelURL: URL to the `id2label.json` label mapping file.
-        ///   - tokenizerName: HuggingFace tokenizer name for text tokenization.
-        ///   - tokenizerFolderURL: Optional local tokenizer asset directory for offline use.
-        ///   - maxSeqLength: Maximum token sequence length (default: 512).
-        ///   - allowNetworkAccess: Whether missing tokenizer assets may be downloaded.
-        public convenience init(
-            modelURL: URL,
-            id2labelURL: URL,
-            tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
-            tokenizerFolderURL: URL? = nil,
-            maxSeqLength: Int = 512,
-            allowNetworkAccess: Bool = true
-        ) throws {
-            try self.init(
-                backend: .coreML(
-                    modelURL: modelURL,
-                    id2labelURL: id2labelURL,
-                    tokenizerName: tokenizerName,
-                    tokenizerFolderURL: tokenizerFolderURL
-                ),
-                maxSeqLength: maxSeqLength,
-                allowNetworkAccess: allowNetworkAccess
-            )
+        /// Internal test seam for the shared native parity gate. It loads no
+        /// tokenizer or model assets and never enables a network fallback; the
+        /// public backends and their defaults are unchanged.
+        init(recognizer: any OpenMedSpanRecognizer) {
+            self.runtime = .recognizer(recognizer)
+            self.tokenizer = nil
+            self.maxSeqLength = 512
         }
 
         /// Run NER on the given text and return detected entities.
+        ///
+        /// Synchronous calls share `OpenMedRuntime`'s staged pipeline and its
+        /// cooperative checkpoints, but observe only the calling task's
+        /// cancellation: they cannot be admitted, drained, or stopped by memory
+        /// pressure or background expiration. Use `OpenMedRuntime` for
+        /// lifecycle-managed inference.
         ///
         /// - Parameters:
         ///   - text: Input clinical text.
         ///   - confidenceThreshold: Minimum confidence to include an entity (default: 0.5).
         /// - Returns: Array of detected entities above the confidence threshold.
+        /// - Throws: `OpenMedRuntimeError.cancelled` when the calling task is
+        ///   cancelled; output from cancelled work is never returned.
         public func analyzeText(
             _ text: String,
             confidenceThreshold: Float = 0.5
         ) throws -> [EntityPrediction] {
-            let entities: [EntityPrediction]
-            switch runtime {
-            case .coreML(let pipeline):
-                let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
-                entities = try pipeline.predict(
-                    inputIds: inputIDs,
-                    attentionMask: attentionMask,
-                    offsets: offsets,
-                    text: text
-                )
-            case .mlx(let pipeline):
-                let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
-                entities = try pipeline.predict(
-                    inputIDs: inputIDs,
-                    attentionMask: attentionMask,
-                    tokenTypeIDs: tokenTypeIDs,
-                    offsets: offsets,
-                    text: text
-                )
-            case .privacyFilter(let pipeline):
-                entities = try pipeline.predict(text)
-            }
-
-            return entities.filter { $0.confidence >= confidenceThreshold }
+            try analyzeText(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                checkpoint: OpenMedInferenceCheckpoint()
+            )
         }
 
         /// Run PII detection on the given text with OpenMed's smart post-processing.
@@ -165,31 +306,12 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> [EntityPrediction] {
-            let entities = try analyzeText(text, confidenceThreshold: confidenceThreshold)
-            let repairedEntities = PostProcessing.repairEntitySpans(entities, text: text)
-
-            guard useSmartMerging else {
-                return repairedEntities
-            }
-
-            switch runtime {
-            case .privacyFilter:
-                return PostProcessing.mergePIIEntities(
-                    repairedEntities,
-                    text: text,
-                    useSemanticPatterns: true,
-                    preferModelLabels: true,
-                    allowSemanticOnlyMatches: false,
-                    allowSemanticLabelExpansion: false
-                )
-            case .coreML, .mlx:
-                return PostProcessing.mergePIIEntities(
-                    repairedEntities,
-                    text: text,
-                    useSemanticPatterns: true,
-                    preferModelLabels: true
-                )
-            }
+            try extractPII(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                useSmartMerging: useSmartMerging,
+                checkpoint: OpenMedInferenceCheckpoint()
+            )
         }
 
         /// De-identify text under a bundled policy profile.
@@ -225,12 +347,19 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> PolicyDeidentificationResult {
+            let checkpoint = OpenMedInferenceCheckpoint()
             let entities = try extractPII(
                 text,
                 confidenceThreshold: confidenceThreshold,
-                useSmartMerging: useSmartMerging
+                useSmartMerging: useSmartMerging,
+                checkpoint: checkpoint
             )
-            return Self.deidentify(text, entities: entities, policy: policy)
+            return try OpenMedInferenceCore.policyResult(
+                text,
+                entities: entities,
+                policy: policy,
+                checkpoint: checkpoint
+            )
         }
 
         /// Detect and de-identify PII, returning a Python-schema-compatible result.
@@ -240,21 +369,18 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> DeidentificationResult {
+            let checkpoint = OpenMedInferenceCheckpoint()
             let entities = try extractPII(
                 text,
                 confidenceThreshold: confidenceThreshold,
-                useSmartMerging: useSmartMerging
+                useSmartMerging: useSmartMerging,
+                checkpoint: checkpoint
             )
-            let deidentifiedText = Self.deidentifiedText(
+            return try OpenMedInferenceCore.methodResult(
                 text,
                 entities: entities,
-                method: method
-            )
-            return DeidentificationResult(
-                originalText: text,
-                deidentifiedText: deidentifiedText,
-                entities: entities,
-                method: method.rawValue
+                method: method,
+                checkpoint: checkpoint
             )
         }
 
@@ -270,6 +396,8 @@
             tokenOverlap: Int = 32,
             useSmartMerging: Bool = true
         ) throws -> [EntityPrediction] {
+            let checkpoint = OpenMedInferenceCheckpoint()
+            try checkpoint.check(.tokenization)
             let chunks = try makeTokenChunks(
                 for: text,
                 chunkTokenLimit: chunkTokenLimit,
@@ -279,17 +407,20 @@
                 return try extractPII(
                     text,
                     confidenceThreshold: confidenceThreshold,
-                    useSmartMerging: useSmartMerging
+                    useSmartMerging: useSmartMerging,
+                    checkpoint: checkpoint
                 )
             }
 
             var chunkEntities: [EntityPrediction] = []
             for chunk in chunks {
+                try checkpoint.check(.windowing)
                 let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
                 let entities = try extractPII(
                     chunkText,
                     confidenceThreshold: confidenceThreshold,
-                    useSmartMerging: useSmartMerging
+                    useSmartMerging: useSmartMerging,
+                    checkpoint: checkpoint
                 )
                 chunkEntities.append(
                     contentsOf: entities.compactMap { entity in
@@ -297,10 +428,100 @@
                     })
             }
 
-            return mergeChunkedPIIEntities(
+            try checkpoint.check(.merging)
+            let merged = mergeChunkedPIIEntities(
                 chunkEntities,
                 text: text,
                 useSmartMerging: useSmartMerging
+            )
+            try checkpoint.check(.serialization)
+            return merged
+        }
+
+        // MARK: - Staged core
+
+        /// Merge behaviour for this model's detections.
+        var mergeProfile: OpenMedPIIMergeProfile {
+            switch runtime {
+            case .privacyFilter: return .modelSpansOnly
+            case .coreML, .mlx, .recognizer: return .tokenClassification
+            }
+        }
+
+        /// Tokenize, window and run the model behind cooperative checkpoints,
+        /// returning raw detections before confidence filtering.
+        func predictEntities(
+            in text: String,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            switch runtime {
+            case .coreML(let pipeline):
+                try checkpoint.check(.tokenization)
+                let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
+                try checkpoint.check(.windowing)
+                try checkpoint.check(.modelPrediction)
+                let entities = try pipeline.predict(
+                    inputIds: inputIDs,
+                    attentionMask: attentionMask,
+                    offsets: offsets,
+                    text: text
+                )
+                try checkpoint.check(.modelPrediction)
+                return entities
+            case .mlx(let pipeline):
+                try checkpoint.check(.tokenization)
+                let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
+                try checkpoint.check(.windowing)
+                try checkpoint.check(.modelPrediction)
+                let entities = try pipeline.predict(
+                    inputIDs: inputIDs,
+                    attentionMask: attentionMask,
+                    tokenTypeIDs: tokenTypeIDs,
+                    offsets: offsets,
+                    text: text,
+                    checkpoint: checkpoint
+                )
+                try checkpoint.check(.modelPrediction)
+                return entities
+            case .privacyFilter(let pipeline):
+                try checkpoint.check(.tokenization)
+                let entities = try pipeline.predict(text, checkpoint: checkpoint)
+                try checkpoint.check(.modelPrediction)
+                return entities
+            case .recognizer(let recognizer):
+                try checkpoint.check(.modelPrediction)
+                let entities = try recognizer.recognize(text)
+                try checkpoint.check(.modelPrediction)
+                return entities
+            }
+        }
+
+        func analyzeText(
+            _ text: String,
+            confidenceThreshold: Float,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            let entities = try predictEntities(in: text, checkpoint: checkpoint)
+            return OpenMedInferenceCore.applyConfidenceThreshold(entities, confidenceThreshold)
+        }
+
+        func extractPII(
+            _ text: String,
+            confidenceThreshold: Float,
+            useSmartMerging: Bool,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            let entities = try analyzeText(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                checkpoint: checkpoint
+            )
+            return try OpenMedInferenceCore.mergePII(
+                entities,
+                text: text,
+                useSmartMerging: useSmartMerging,
+                profile: mergeProfile,
+                checkpoint: checkpoint
             )
         }
 
@@ -314,16 +535,27 @@
         }
 
         private func tokenize(_ text: String) throws -> ([Int], [Int], [Int], [(Int, Int)]) {
-            // Use swift-transformers for tokenization
-            // This ensures token IDs match the Python HuggingFace tokenizer
             guard let tokenizer else {
                 throw TokenizerError.missingConfig
             }
+            return Self.encodeForModel(tokenizer: tokenizer, text: text, maxSeqLength: maxSeqLength)
+        }
+
+        /// Encode text into the CoreML and MLX model inputs.
+        ///
+        /// Uses swift-transformers so token IDs follow the Hugging Face
+        /// tokenizer, and maps tokens back to Unicode scalar offsets. The
+        /// tokenizer conformance vectors exercise this exact adapter.
+        static func encodeForModel(
+            tokenizer: any Tokenizer,
+            text: String,
+            maxSeqLength: Int
+        ) -> ([Int], [Int], [Int], [(Int, Int)]) {
             let inputIds = Array(tokenizer(text, addSpecialTokens: true).prefix(maxSeqLength))
             let tokens = tokenizer.convertIdsToTokens(inputIds).map { $0 ?? "" }
             let attentionMask = Array(repeating: 1, count: inputIds.count)
             let tokenTypeIDs = Array(repeating: 0, count: inputIds.count)
-            let offsets = Self.buildOffsets(tokens: tokens, in: text)
+            let offsets = buildOffsets(tokens: tokens, in: text)
 
             return (inputIds, attentionMask, tokenTypeIDs, offsets)
         }
@@ -337,8 +569,27 @@
                 return []
             }
 
-            let tokenOffsets = try tokenOffsets(in: text)
-                .filter { $0.0 < $0.1 }
+            let offsets = try tokenOffsets(in: text)
+            return Self.makeTokenChunks(
+                tokenOffsets: offsets,
+                text: text,
+                chunkTokenLimit: chunkTokenLimit,
+                tokenOverlap: tokenOverlap
+            )
+        }
+
+        /// Split content-token offsets into overlapping chunk windows.
+        static func makeTokenChunks(
+            tokenOffsets allTokenOffsets: [(Int, Int)],
+            text: String,
+            chunkTokenLimit: Int,
+            tokenOverlap: Int
+        ) -> [TextChunk] {
+            guard !text.isEmpty else {
+                return []
+            }
+
+            let tokenOffsets = allTokenOffsets.filter { $0.0 < $0.1 }
 
             let tokenLimit = max(1, chunkTokenLimit)
             guard tokenOffsets.count > tokenLimit else {
@@ -387,12 +638,20 @@
                 guard let tokenizer else {
                     throw TokenizerError.missingConfig
                 }
-                let inputIDs = tokenizer(text, addSpecialTokens: false)
-                let tokens = tokenizer.convertIdsToTokens(inputIDs).map { $0 ?? "" }
-                return Self.buildOffsets(tokens: tokens, in: text)
+                return Self.contentTokenOffsets(tokenizer: tokenizer, text: text)
             case .privacyFilter(let pipeline):
                 return try pipeline.tokenOffsets(in: text)
+            case .recognizer:
+                // The recognizer seam scores the whole text in one window.
+                return []
             }
+        }
+
+        /// Unicode scalar offsets of the content tokens, without special tokens.
+        static func contentTokenOffsets(tokenizer: any Tokenizer, text: String) -> [(Int, Int)] {
+            let inputIDs = tokenizer(text, addSpecialTokens: false)
+            let tokens = tokenizer.convertIdsToTokens(inputIDs).map { $0 ?? "" }
+            return buildOffsets(tokens: tokens, in: text)
         }
 
         func mergeChunkedPIIEntities(
@@ -420,7 +679,7 @@
                     allowSemanticOnlyMatches: false,
                     allowSemanticLabelExpansion: false
                 )
-            case .coreML, .mlx:
+            case .coreML, .mlx, .recognizer:
                 merged = PostProcessing.mergePIIEntities(
                     repaired,
                     text: text,
@@ -432,124 +691,24 @@
             return Self.deduplicateOverlappingEntities(merged)
         }
 
+        /// Apply a verified policy to detected entities.
+        ///
+        /// Entities are first snapped to grapheme boundaries (a platform
+        /// pre-step). The shared portable policy engine then applies label
+        /// normalization, thresholds, overlap resolution, and rendering, so the
+        /// output matches every other OpenMedKit surface for the same spans.
         static func deidentify(
             _ text: String,
             entities: [EntityPrediction],
-            policy: Policy
-        ) -> PolicyDeidentificationResult {
-            let candidates = deidentificationCandidates(entities, in: text)
-            var redactedText = text
-            var actionRecords: [DeidentifiedSpanAction] = []
-
-            for entity in candidates {
-                let canonicalLabel = Policy.canonicalLabel(for: entity.label)
-                let action = policy.action(for: entity.label)
-                let original = substring(text, start: entity.start, end: entity.end)
-                let replacement = replacementText(
-                    for: action,
-                    canonicalLabel: canonicalLabel,
-                    original: original
-                )
-
-                actionRecords.append(
-                    DeidentifiedSpanAction(
-                        label: entity.label,
-                        canonicalLabel: canonicalLabel,
-                        action: action,
-                        start: entity.start,
-                        end: entity.end,
-                        confidence: entity.confidence,
-                        replacement: replacement
-                    )
-                )
-            }
-
-            for record in actionRecords.reversed() {
-                guard let replacement = record.replacement else {
-                    continue
-                }
-                guard
-                    let range = PostProcessing.scalarRange(
-                        in: redactedText,
-                        start: record.start,
-                        end: record.end
-                    )
-                else {
-                    continue
-                }
-                redactedText.replaceSubrange(range, with: replacement)
-            }
-
-            return PolicyDeidentificationResult(
-                redactedText: redactedText,
-                policyName: policy.name,
-                actions: actionRecords
+            policy: Policy,
+            surrogateKey: Data? = nil
+        ) throws -> PolicyDeidentificationResult {
+            try OpenMedRedaction.deidentify(
+                text,
+                entities: entities,
+                policy: policy,
+                surrogateKey: surrogateKey
             )
-        }
-
-        private static func deidentificationCandidates(
-            _ entities: [EntityPrediction],
-            in text: String
-        ) -> [EntityPrediction] {
-            let textLength = PostProcessing.unicodeScalarCount(in: text)
-            let sorted =
-                entities
-                .compactMap { $0.snappedToGraphemeBoundaries(in: text) }
-                .filter { $0.start >= 0 && $0.end > $0.start && $0.end <= textLength }
-                .sorted {
-                    if $0.start == $1.start {
-                        let lhsLength = entityLength($0)
-                        let rhsLength = entityLength($1)
-                        if lhsLength == rhsLength {
-                            return $0.confidence > $1.confidence
-                        }
-                        return lhsLength > rhsLength
-                    }
-                    return $0.start < $1.start
-                }
-
-            var selected: [EntityPrediction] = []
-            for entity in sorted {
-                let overlapsSelected = selected.contains { existing in
-                    entity.start < existing.end && entity.end > existing.start
-                }
-                if !overlapsSelected {
-                    selected.append(entity)
-                }
-            }
-
-            return selected.sorted {
-                if $0.start == $1.start {
-                    return $0.end < $1.end
-                }
-                return $0.start < $1.start
-            }
-        }
-
-        private static func replacementText(
-            for action: PolicyAction,
-            canonicalLabel: String,
-            original: String
-        ) -> String? {
-            switch action.redactionEquivalent {
-            case .keep:
-                return nil
-            case .mask:
-                return "[\(canonicalLabel)]"
-            case .replace:
-                return "[\(canonicalLabel)_REPLACED]"
-            case .remove:
-                return ""
-            case .hash:
-                return "\(canonicalLabel)_\(stableHash(original))"
-            case .redact:
-                return "[\(canonicalLabel)]"
-            }
-        }
-
-        private static func stableHash(_ text: String) -> String {
-            let digest = SHA256.hash(data: Data(text.utf8))
-            return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
         }
 
         static func deduplicateOverlappingEntities(
@@ -674,115 +833,123 @@
             PostProcessing.scalarSubstring(text, start: start, end: end)
         }
 
-        private static func deidentifiedText(
-            _ text: String,
-            entities: [EntityPrediction],
-            method: DeidentificationMethod
-        ) -> String {
-            var redacted = text
-            for entity in entities.sorted(by: { $0.start > $1.start }) {
-                guard let range = characterRange(in: redacted, start: entity.start, end: entity.end) else {
-                    continue
-                }
-                redacted.replaceSubrange(
-                    range,
-                    with: replacementText(for: entity, method: method)
+        /// Load a tokenizer synchronously under the local-first acquisition rules.
+        ///
+        /// Blocks the calling thread on ``loadTokenizerAsync``. Kept for the
+        /// synchronous initializers; async callers must use the async loader.
+        static func loadTokenizer(
+            tokenizerName: String?,
+            tokenizerFolderURL: URL?,
+            allowNetworkAccess: Bool = false,
+            pin: OpenMedTokenizerPin? = nil
+        ) throws -> any Tokenizer {
+            try blockingAwait {
+                try await loadTokenizerAsync(
+                    tokenizerName: tokenizerName,
+                    tokenizerFolderURL: tokenizerFolderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: pin
                 )
             }
-            return redacted
         }
 
-        private static func replacementText(
-            for entity: EntityPrediction,
-            method: DeidentificationMethod
-        ) -> String {
-            switch method {
-            case .mask:
-                return "[\(entity.entityType.uppercased())]"
-            case .remove:
-                return ""
+        /// Load a tokenizer under the local-first acquisition rules.
+        ///
+        /// 1. Local assets in `tokenizerFolderURL` load with zero requests.
+        /// 2. Otherwise a `pin` resolves to a verified copy under Caches, or is
+        ///    downloaded at the pinned commit when `allowNetworkAccess` is set.
+        /// 3. Otherwise this throws a typed, value-free error with no request.
+        static func loadTokenizerAsync(
+            tokenizerName: String?,
+            tokenizerFolderURL: URL?,
+            allowNetworkAccess: Bool = false,
+            pin: OpenMedTokenizerPin? = nil,
+            assetStore: OpenMedTokenizerAssetStore? = nil
+        ) async throws -> any Tokenizer {
+            let directory = try await resolveTokenizerDirectory(
+                tokenizerName: tokenizerName,
+                tokenizerFolderURL: tokenizerFolderURL,
+                allowNetworkAccess: allowNetworkAccess,
+                pin: pin,
+                assetStore: assetStore
+            )
+            // Underlying file and parser errors carry paths and file contents;
+            // surface only a value-free code.
+            let preparedDirectory: URL
+            do {
+                preparedDirectory = try prepareTokenizerDirectory(directory)
+            } catch {
+                throw OpenMedTokenizerError.invalidAssets
+            }
+            do {
+                return try await AutoTokenizer.from(modelFolder: preparedDirectory)
+            } catch {
+                throw OpenMedTokenizerError.invalidAssets
             }
         }
 
-        private static func characterRange(
-            in text: String,
-            start: Int,
-            end: Int
-        ) -> Range<String.Index>? {
-            PostProcessing.scalarRange(in: text, start: start, end: end)
+        static func resolveTokenizerDirectory(
+            tokenizerName: String?,
+            tokenizerFolderURL: URL?,
+            allowNetworkAccess: Bool,
+            pin: OpenMedTokenizerPin?,
+            assetStore: OpenMedTokenizerAssetStore?
+        ) async throws -> URL {
+            if let tokenizerFolderURL, hasLocalTokenizerAssets(in: tokenizerFolderURL) {
+                return tokenizerFolderURL
+            }
+            guard let pin else {
+                throw
+                    allowNetworkAccess
+                    ? OpenMedTokenizerError.pinnedRevisionRequired
+                    : OpenMedTokenizerError.missingLocalAssets
+            }
+            if let tokenizerName,
+                OpenMedTokenizerAssetStore.isRepositoryID(tokenizerName),
+                tokenizerName != pin.repositoryID
+            {
+                throw OpenMedTokenizerError.identityMismatch
+            }
+
+            let store = try assetStore ?? OpenMedTokenizerAssetStore.makeDefault()
+            if let cached = try store.verifiedCachedDirectory(for: pin) {
+                return cached
+            }
+            guard allowNetworkAccess else {
+                throw OpenMedTokenizerError.missingLocalAssets
+            }
+            return try await store.download(pin)
         }
 
-        static func loadTokenizer(
-            tokenizerName: String,
-            tokenizerFolderURL: URL?,
-            allowNetworkAccess: Bool = true
-        ) throws -> any Tokenizer {
+        private static func hasLocalTokenizerAssets(in directoryURL: URL) -> Bool {
+            OpenMedTokenizerAssetStore.requiredFileNames.allSatisfy { fileName in
+                FileManager.default.fileExists(atPath: directoryURL.appending(path: fileName).path)
+            }
+        }
+
+        /// Single synchronous bridge for the blocking initializers.
+        private static func blockingAwait<T: Sendable>(
+            _ operation: @escaping @Sendable () async throws -> T
+        ) throws -> T {
             let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
+            let outcome = OSAllocatedUnfairLock<Result<T, any Error>?>(initialState: nil)
 
             Task.detached {
+                let result: Result<T, any Error>
                 do {
-                    let tokenizer = try await loadTokenizerAsync(
-                        tokenizerName: tokenizerName,
-                        tokenizerFolderURL: tokenizerFolderURL,
-                        allowNetworkAccess: allowNetworkAccess
-                    )
-                    result = .success(tokenizer)
+                    result = .success(try await operation())
                 } catch {
                     result = .failure(error)
                 }
+                outcome.withLock { $0 = result }
                 semaphore.signal()
             }
 
             semaphore.wait()
-            return try result!.get()
-        }
-
-        private static func loadTokenizerAsync(
-            tokenizerName: String,
-            tokenizerFolderURL: URL?,
-            allowNetworkAccess: Bool
-        ) async throws -> any Tokenizer {
-            if let tokenizerFolderURL {
-                return try loadTokenizerFromDirectory(
-                    tokenizerFolderURL,
-                    fallbackTokenizerName: allowNetworkAccess ? tokenizerName : nil
-                )
+            guard let result = outcome.withLock({ $0 }) else {
+                throw OpenMedTokenizerError.invalidAssets
             }
-
-            guard allowNetworkAccess else {
-                throw TokenizerError.missingConfig
-            }
-
-            if tokenizerName.contains("/") {
-                let localDirectory = try await ensureTokenizerAssets(modelID: tokenizerName)
-                return try loadTokenizerFromDirectory(
-                    localDirectory,
-                    fallbackTokenizerName: tokenizerName
-                )
-            }
-
-            return try await AutoTokenizer.from(pretrained: tokenizerName)
-        }
-
-        private static func loadTokenizerFromDirectory(
-            _ directoryURL: URL,
-            fallbackTokenizerName: String?
-        ) throws -> any Tokenizer {
-            let tokenizerDataURL = directoryURL.appending(path: "tokenizer.json")
-            let tokenizerConfigURL = directoryURL.appending(path: "tokenizer_config.json")
-
-            guard FileManager.default.fileExists(atPath: tokenizerDataURL.path),
-                FileManager.default.fileExists(atPath: tokenizerConfigURL.path)
-            else {
-                if let fallbackTokenizerName {
-                    return try blockingPretrainedTokenizer(named: fallbackTokenizerName)
-                }
-                throw TokenizerError.missingConfig
-            }
-
-            let preparedDirectory = try prepareTokenizerDirectory(directoryURL)
-            return try blockingLocalTokenizer(from: preparedDirectory)
+            return try result.get()
         }
 
         static func patchTokenizerConfigDataIfNeeded(
@@ -869,7 +1036,7 @@
                 withIntermediateDirectories: true
             )
 
-            for fileName in tokenizerAssetFileNames {
+            for fileName in OpenMedTokenizerAssetStore.tokenizerAssetFileNames {
                 let sourceURL = directoryURL.appending(path: fileName)
                 let destinationURL = preparedDirectory.appending(path: fileName)
                 guard fileManager.fileExists(atPath: sourceURL.path) else {
@@ -912,151 +1079,6 @@
                 .appending(path: "OpenMed", directoryHint: .isDirectory)
                 .appending(path: "PreparedTokenizerAssets", directoryHint: .isDirectory)
                 .appending(path: "\(leafName)-\(digest)", directoryHint: .isDirectory)
-        }
-
-        private static func blockingLocalTokenizer(from modelFolder: URL) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(modelFolder: modelFolder))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
-        }
-
-        private static func ensureTokenizerAssets(modelID: String) async throws -> URL {
-            let directory = try tokenizerCacheDirectory(modelID: modelID)
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-
-            let requiredFiles = [
-                "tokenizer.json",
-                "tokenizer_config.json",
-            ]
-            let optionalFiles = tokenizerAssetFileNames.filter { fileName in
-                !requiredFiles.contains(fileName)
-            }
-
-            for fileName in requiredFiles {
-                try await downloadTokenizerFile(
-                    modelID: modelID,
-                    relativePath: fileName,
-                    destinationURL: directory.appending(path: fileName),
-                    required: true
-                )
-            }
-
-            for fileName in optionalFiles {
-                try await downloadTokenizerFile(
-                    modelID: modelID,
-                    relativePath: fileName,
-                    destinationURL: directory.appending(path: fileName),
-                    required: false
-                )
-            }
-
-            return directory
-        }
-
-        private static func tokenizerCacheDirectory(modelID: String) throws -> URL {
-            let base =
-                try FileManager.default.url(
-                    for: .cachesDirectory,
-                    in: .userDomainMask,
-                    appropriateFor: nil,
-                    create: true
-                )
-            let sanitized = modelID.replacingOccurrences(of: "/", with: "__")
-            return
-                base
-                .appending(path: "OpenMed", directoryHint: .isDirectory)
-                .appending(path: "TokenizerAssets", directoryHint: .isDirectory)
-                .appending(path: sanitized, directoryHint: .isDirectory)
-        }
-
-        private static let tokenizerAssetFileNames = [
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "special_tokens_map.json",
-            "vocab.txt",
-            "vocab.json",
-            "merges.txt",
-            "spm.model",
-            "sentencepiece.bpe.model",
-            "added_tokens.json",
-        ]
-
-        private static func downloadTokenizerFile(
-            modelID: String,
-            relativePath: String,
-            destinationURL: URL,
-            required: Bool
-        ) async throws {
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                return
-            }
-
-            let encodedModelID =
-                modelID
-                .split(separator: "/")
-                .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
-                .joined(separator: "/")
-            let encodedPath =
-                relativePath
-                .split(separator: "/")
-                .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
-                .joined(separator: "/")
-
-            guard
-                let url = URL(
-                    string: "https://huggingface.co/\(encodedModelID)/resolve/main/\(encodedPath)?download=1"
-                )
-            else {
-                throw TokenizerError.missingConfig
-            }
-
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse else {
-                throw TokenizerError.missingConfig
-            }
-            if http.statusCode == 404 && !required {
-                return
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                throw TokenizerError.missingConfig
-            }
-
-            try FileManager.default.createDirectory(
-                at: destinationURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try data.write(to: destinationURL, options: .atomic)
-        }
-
-        private static func blockingPretrainedTokenizer(named name: String) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(pretrained: name))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
         }
 
         private static func sanitizedCacheComponent(_ value: String) -> String {
@@ -1183,6 +1205,94 @@
             default:
                 return false
             }
+        }
+    }
+
+    /// Adapts a loaded `OpenMed` session to the runtime's model seam. The
+    /// runtime serializes calls by default and is the session's only owner.
+    final class OpenMedTextModelSession: OpenMedRuntimeModel, @unchecked Sendable {
+        private static let loadQueue = DispatchQueue(
+            label: "OpenMedKit.runtime.load",
+            qos: .userInitiated
+        )
+        private let openMed: OpenMed
+
+        init(_ openMed: OpenMed) {
+            self.openMed = openMed
+        }
+
+        var mergeProfile: OpenMedPIIMergeProfile { openMed.mergeProfile }
+
+        func predictEntities(
+            in text: String,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) async throws -> [EntityPrediction] {
+            try openMed.predictEntities(in: text, checkpoint: checkpoint)
+        }
+
+        static func releaseUnreferencedCaches() {
+            OpenMed.clearRuntimeMemoryCache()
+        }
+
+        /// Load on a dedicated queue: `OpenMed.init` blocks while it prepares
+        /// tokenizer assets and must not occupy a Swift concurrency thread.
+        static func load(
+            backend: OpenMedBackend,
+            maxSeqLength: Int
+        ) async throws -> OpenMedTextModelSession {
+            try await withCheckedThrowingContinuation { continuation in
+                loadQueue.async {
+                    continuation.resume(
+                        with: Result {
+                            OpenMedTextModelSession(
+                                try OpenMed(
+                                    backend: backend,
+                                    maxSeqLength: maxSeqLength,
+                                    allowNetworkAccess: false
+                                )
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    extension OpenMedRuntime {
+        /// Create a lifecycle-managed runtime for an OpenMed text model.
+        ///
+        /// The model session is loaded lazily from local assets with network
+        /// access disabled, both on first use and on every reacquisition after
+        /// an idle, memory-pressure or background release. MLX artifacts carry
+        /// their tokenizer; Core ML bundles need `tokenizerFolderURL`.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX model location.
+        ///   - maxSeqLength: Maximum token sequence length.
+        ///   - configuration: Admission, idle-release and pressure policy.
+        ///   - memoryPressure: Memory-pressure signal source.
+        ///   - backgroundExecution: Background-time provider.
+        ///   - clock: Monotonic clock for timers and latency evidence.
+        public init(
+            backend: OpenMedBackend,
+            maxSeqLength: Int = 512,
+            configuration: OpenMedRuntimeConfiguration = OpenMedRuntimeConfiguration(),
+            memoryPressure: any OpenMedMemoryPressureSource = OpenMedDispatchMemoryPressureSource(),
+            backgroundExecution: any OpenMedBackgroundExecutionProvider = OpenMedNoBackgroundExecution(),
+            clock: any OpenMedRuntimeClock = OpenMedSystemClock()
+        ) {
+            self.init(
+                configuration: configuration,
+                memoryPressure: memoryPressure,
+                backgroundExecution: backgroundExecution,
+                clock: clock,
+                loader: {
+                    try await OpenMedTextModelSession.load(
+                        backend: backend,
+                        maxSeqLength: maxSeqLength
+                    )
+                }
+            )
         }
     }
 #endif

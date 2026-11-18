@@ -1,9 +1,10 @@
 package com.openmed.openmedkit
 
 import com.openmed.openmedkit.policy.PolicyAction
+import com.openmed.openmedkit.policy.PolicyDetection
+import com.openmed.openmedkit.policy.PolicyEngine
 import com.openmed.openmedkit.policy.PolicyProfile
 import com.openmed.openmedkit.segmentation.IcuTextSegmenter
-import java.security.MessageDigest
 
 /**
  * A single action applied to a detected span during policy de-identification.
@@ -30,8 +31,11 @@ data class PolicyDeidentificationResult(
 /**
  * De-identification engine driven by bundled policy profile actions.
  *
- * Input and action offsets follow the shared Unicode scalar contract. Native
- * UTF-16 ranges are derived only while slicing or replacing the source text.
+ * Input and action offsets follow the shared Unicode scalar contract. Entities
+ * are first snapped to grapheme boundaries (a platform pre-step); the shared
+ * portable [PolicyEngine] then applies label normalization, thresholds,
+ * overlap resolution, and rendering, so the output matches every other
+ * OpenMedKit surface for the same spans.
  */
 class DeidentifyEngine(
     private val segmenter: IcuTextSegmenter = IcuTextSegmenter(),
@@ -40,85 +44,36 @@ class DeidentifyEngine(
         text: String,
         entities: List<EntityPrediction>,
         policy: PolicyProfile,
+        surrogateKey: ByteArray? = null,
     ): PolicyDeidentificationResult {
-        val candidates = deidentificationCandidates(entities, text)
-        val actions = candidates.map { entity ->
-            val canonicalLabel = policy.canonicalLabel(entity.label)
-            val action = policy.actionFor(entity.label)
-            val original = UnicodeOffsetContract.substring(
-                text,
-                entity.start,
-                entity.end,
-            )
+        val length = UnicodeOffsetContract.scalarLength(text)
+        val detections = entities
+            .map { it.snappedToGraphemeBoundaries(text, segmenter) }
+            .filter { it.start >= 0 && it.end > it.start && it.end <= length }
+            .map { entity ->
+                PolicyDetection(
+                    label = entity.label,
+                    start = entity.start,
+                    end = entity.end,
+                    confidencePpm = KitParity.confidencePpm(entity.confidence),
+                )
+            }
+        val outcome = PolicyEngine.decide(policy, text, detections, surrogateKey = surrogateKey)
+        val actions = outcome.result.spans.map { span ->
             DeidentifiedSpanAction(
-                label = entity.label,
-                canonicalLabel = canonicalLabel,
-                action = action,
-                start = entity.start,
-                end = entity.end,
-                confidence = entity.confidence,
-                replacement = replacementText(action, canonicalLabel, original),
+                label = span.label,
+                canonicalLabel = span.canonicalLabel,
+                action = PolicyAction.fromWireName(span.action),
+                start = span.start,
+                end = span.end,
+                confidence = (span.confidencePpm ?: 0) / KitParity.CONFIDENCE_SCALE.toFloat(),
+                replacement = span.replacement,
             )
         }
-
-        var redacted = text
-        val replacements = actions.mapNotNull { record ->
-            val replacement = record.replacement ?: return@mapNotNull null
-            UnicodeOffsetContract.utf16Span(
-                text,
-                record.start,
-                record.end,
-            ) to replacement
-        }
-        for ((range, replacement) in replacements.asReversed()) {
-            redacted = redacted.replaceRange(range.start, range.end, replacement)
-        }
-
         return PolicyDeidentificationResult(
-            redactedText = redacted,
+            redactedText = outcome.result.deidentifiedText,
             policyName = policy.name,
             actions = actions,
         )
-    }
-
-    private fun deidentificationCandidates(
-        entities: List<EntityPrediction>,
-        text: String,
-    ): List<EntityPrediction> {
-        val sorted = entities
-            .map { it.snappedToGraphemeBoundaries(text, segmenter) }
-            .filter { it.end > it.start }
-            .sortedWith(
-                compareBy<EntityPrediction> { it.start }
-                    .thenByDescending { it.end - it.start }
-                    .thenByDescending { it.confidence },
-            )
-
-        val selected = mutableListOf<EntityPrediction>()
-        for (entity in sorted) {
-            if (selected.none { entity.start < it.end && entity.end > it.start }) {
-                selected += entity
-            }
-        }
-        return selected.sortedWith(compareBy<EntityPrediction> { it.start }.thenBy { it.end })
-    }
-
-    private fun replacementText(
-        action: PolicyAction,
-        canonicalLabel: String,
-        original: String,
-    ): String? = when (action.redactionEquivalent) {
-        PolicyAction.KEEP -> null
-        PolicyAction.MASK,
-        PolicyAction.REDACT,
-        -> "[$canonicalLabel]"
-        PolicyAction.REPLACE -> "[${canonicalLabel}_REPLACED]"
-        PolicyAction.REMOVE -> ""
-        PolicyAction.HASH -> "${canonicalLabel}_${stableHash(original)}"
-    }
-
-    private fun stableHash(text: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
-        return digest.take(12).joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 }

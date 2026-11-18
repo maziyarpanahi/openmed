@@ -127,10 +127,12 @@ export interface TokenClassificationCallOptions {
   [key: string]: unknown;
 }
 
-export type TokenClassificationPipeline = (
+export type TokenClassificationPipeline = ((
   text: string,
   options?: TokenClassificationCallOptions,
-) => TokenClassificationOutput | Promise<TokenClassificationOutput>;
+) => TokenClassificationOutput | Promise<TokenClassificationOutput>) & {
+  dispose?: () => Promise<void> | void;
+};
 
 export type RawTokenClassificationPipeline = (
   text: string,
@@ -162,6 +164,8 @@ export interface ExtractPiiOptions {
   regulatoryTags?: string[];
   metadata?: Record<string, unknown>;
   pipelineOptions?: TokenClassificationCallOptions;
+  /** Refuse Hub IDs and remote assets before any loader runs. */
+  offlineOnly?: boolean;
 }
 
 export interface DeidentifyOptions extends ExtractPiiOptions {
@@ -183,7 +187,14 @@ export interface LoadModelOptions {
   device?: string;
   runtime?: RawTransformersRuntime | (() => Promise<RawTransformersRuntime>);
   pipelineOptions?: Record<string, unknown>;
+  /** Load from local files only; Hub IDs and remote assets are refused. */
+  offlineOnly?: boolean;
+  /** Local ONNX Runtime WebAssembly location; replaces the CDN default. */
+  wasmPaths?: OnnxWasmPaths;
 }
+
+/** Directory prefix, or `{ mjs, wasm }` file locations, for ONNX Runtime Web. */
+export type OnnxWasmPaths = string | { mjs?: string; wasm?: string };
 
 export type OpenMedOnnxVariant = "int8" | "fp32" | "fp16";
 

@@ -19,8 +19,10 @@ from openmed.clinical.journey_contracts import (
     sha256_digest,
 )
 from openmed.structured.store import (
+    STORE_BUSY_CODE,
     CanonicalRecord,
     DenyStorageOperations,
+    JourneyStoreEncryption,
     MigrationHealth,
     PointInTimeReader,
     PostgresJourneyStore,
@@ -28,9 +30,13 @@ from openmed.structured.store import (
     PostgresStoreError,
     SQLiteJourneyStore,
     StorePoint,
+    StoreTimeouts,
     TransactionalJourneyStore,
 )
 from openmed.structured.store import postgres as postgres_module
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -201,7 +207,9 @@ def test_postgres_matches_sqlite_logical_contract(
     tmp_path: Path,
 ) -> None:
     psycopg, dsn, schema = postgres_runtime
-    with SQLiteJourneyStore(tmp_path / "journey.sqlite3") as local:
+    with SQLiteJourneyStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    ) as local:
         local_result = _exercise_contract(local)
 
     postgres = PostgresJourneyStore(psycopg.connect(dsn), schema=schema)
@@ -286,3 +294,50 @@ def test_interrupted_migration_rolls_back_and_recovers(
         assert recovered.schema_version == original_latest
     finally:
         recovered.close()
+
+
+def _session_settings(store: PostgresJourneyStore) -> dict[str, str]:
+    row = store._connection.execute(
+        "SELECT current_setting('statement_timeout') AS statement_timeout, "
+        "current_setting('lock_timeout') AS lock_timeout, "
+        "current_setting('search_path') AS search_path"
+    ).fetchone()
+    assert row is not None
+    return {key: str(value) for key, value in row.items()}
+
+
+def test_postgres_lock_waits_are_bounded_and_sessions_reset_before_reuse(
+    postgres_runtime: tuple[Any, str, str],
+) -> None:
+    psycopg, dsn, schema = postgres_runtime
+    store = PostgresJourneyStore(
+        psycopg.connect(dsn),
+        schema=schema,
+        timeouts=StoreTimeouts(lock_wait_seconds=0.2),
+    )
+    blocker = psycopg.connect(dsn)
+    try:
+        baseline = _session_settings(store)
+        with blocker.cursor() as cursor:
+            cursor.execute(
+                f"LOCK TABLE {schema}.store_revisions IN ACCESS EXCLUSIVE MODE"
+            )
+
+        busy_write = store.put_artifact(_artifact(), committed_at=COMMITTED_1)
+        busy_read = store.get_artifact(_artifact().artifact_id)
+
+        assert busy_write.code == STORE_BUSY_CODE
+        assert busy_read.code == STORE_BUSY_CODE
+        assert _session_settings(store) == baseline
+        blocker.rollback()
+
+        with store.transaction(committed_at=COMMITTED_1, deadline=2.0) as transaction:
+            armed = _session_settings(store)
+            assert transaction.put_artifact(_artifact()).ok
+        assert armed["statement_timeout"] != baseline["statement_timeout"]
+        assert armed["lock_timeout"] != baseline["lock_timeout"]
+        assert _session_settings(store) == baseline
+        assert store.get_artifact(_artifact().artifact_id).ok
+    finally:
+        blocker.close()
+        store.close()

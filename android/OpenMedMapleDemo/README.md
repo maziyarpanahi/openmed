@@ -20,7 +20,7 @@ an exact, unique source surface and applies bracketed replacements itself.
 
 ## Run the UI immediately
 
-Install JDK 11 and Android SDK Platform 33, then run:
+Install JDK 17 and Android SDK Platform 35, then run:
 
 ```bash
 cd android

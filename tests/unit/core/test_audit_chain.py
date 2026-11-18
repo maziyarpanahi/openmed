@@ -11,6 +11,10 @@ import pytest
 
 from openmed.core.audit import AuditReport, AuditSpan, DetectorInfo, hash_text
 from openmed.core.audit_chain import (
+    CHAIN_VERIFICATION_CODES,
+    CHAIN_VERSION,
+    GENESIS_HASH,
+    PRUNED_CHAIN_VERSION,
     AuditChain,
     append_to_chain_file,
     verify_chain,
@@ -265,3 +269,122 @@ def test_verification_is_fully_offline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket, "socket", deny_network)
 
     assert chain.verify().valid
+
+
+def test_unpruned_chains_keep_the_version_one_document() -> None:
+    payload = _three_entry_chain().to_dict()
+
+    assert payload["version"] == CHAIN_VERSION
+    assert "base_sequence" not in payload
+    assert "base_hash" not in payload
+
+
+def test_pruned_chain_links_to_its_retained_base_and_round_trips(
+    tmp_path: Path,
+) -> None:
+    chain = _three_entry_chain()
+    first_hash = chain.entries[0].entry_hash
+
+    removed = chain.prune_through(0)
+
+    assert [entry.sequence for entry in removed] == [0]
+    assert chain.is_pruned
+    assert chain.base_sequence == 1
+    assert chain.base_hash == first_hash
+    assert chain.next_sequence == 3
+    assert chain.entry_at(0) is None
+    assert chain.entry_at(1) is not None
+    assert chain.verify().valid
+    payload = chain.to_dict()
+    assert payload["version"] == PRUNED_CHAIN_VERSION
+    assert payload["base_sequence"] == 1
+    serialized = chain.to_json()
+    assert "Alice Rivera" not in serialized
+    assert hash_text("Alice Rivera") not in serialized
+
+    path = tmp_path / "audit-chain.json"
+    chain.write(path)
+    restored = AuditChain.load(path)
+    assert restored.to_dict() == payload
+    assert restored.verify().valid
+    entry = restored.append(_report("Dmitri Okafor", "555-0104"))
+    assert entry.sequence == 3
+    assert restored.verify().valid
+
+
+def test_pruning_every_entry_keeps_the_head_and_continues_the_sequence() -> None:
+    chain = _three_entry_chain()
+    head = chain.head_hash
+
+    chain.prune_through(2)
+
+    assert chain.entries == ()
+    assert chain.head_hash == head == chain.base_hash
+    assert chain.verify().valid
+    assert chain.append(_report("Dmitri Okafor", "555-0104")).previous_hash == head
+
+
+def test_pruning_rejects_out_of_range_sequences_and_invalid_chains() -> None:
+    chain = _three_entry_chain()
+    chain.prune_through(0)
+    for sequence in (0, 3, -1):
+        with pytest.raises(ValueError, match="retained audit chain entry"):
+            chain.prune_through(sequence)
+
+    payload = json.loads(_three_entry_chain().to_json())
+    payload["entries"].pop(1)
+    with pytest.raises(ValueError, match="cannot prune an invalid audit chain"):
+        AuditChain.from_dict(payload).prune_through(0)
+
+
+def test_pruned_document_without_its_base_fails_closed() -> None:
+    chain = _three_entry_chain()
+    chain.prune_through(0)
+    payload = chain.to_dict()
+
+    stripped = dict(payload)
+    stripped.pop("base_sequence")
+    stripped.pop("base_hash")
+    stripped["version"] = CHAIN_VERSION
+    assert AuditChain.from_dict(stripped).verify().code == "sequence_gap"
+
+    for field, value in (("base_sequence", 0), ("base_hash", GENESIS_HASH)):
+        with pytest.raises(ValueError):
+            AuditChain.from_dict({**payload, field: value})
+
+
+def test_verification_results_carry_stable_value_free_codes() -> None:
+    def broken(mutate):
+        payload = json.loads(_three_entry_chain().to_json())
+        mutate(payload)
+        return AuditChain.from_dict(payload).verify().code
+
+    def swap(payload):
+        entries = payload["entries"]
+        entries[0], entries[1] = entries[1], entries[0]
+
+    def relabel(payload):
+        payload["entries"][1]["spans"][0]["label"] = "PHONE"
+
+    def duplicate(payload):
+        payload["entries"].insert(1, copy.deepcopy(payload["entries"][0]))
+
+    def drop(payload):
+        payload["entries"].pop(1)
+
+    def renumber(payload):
+        payload["entries"][2]["sequence"] = 7
+
+    assert _three_entry_chain().verify().code == "valid"
+    assert broken(swap) == "sequence_reordered"
+    assert broken(relabel) == "entry_hash_mismatch"
+    assert broken(duplicate) == "entry_count_excess"
+    assert broken(drop) == "entry_count_deficit"
+    assert broken(renumber) == "sequence_gap"
+    assert (
+        AuditChain(_three_entry_chain().entries, declared_head_hash=GENESIS_HASH)
+        .verify()
+        .code
+        == "head_mismatch"
+    )
+    assert all(code.replace("_", "").isalpha() for code in CHAIN_VERIFICATION_CODES)

@@ -102,7 +102,7 @@ Desteklenen Apple donanımında OpenMed, gerekli yapıtlar hazır olduktan sonra
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.3.0"),
 ]
 ```
 
@@ -393,7 +393,7 @@ OpenMed araştırmanızda faydalı olduysa, lütfen atıfta bulunun:
 
 OpenMed sizin için faydalıysa, bir yıldız başkalarının onu keşfetmesine yardımcı olur.
 
-[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,700+ GitHub stars · 11 Nov 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

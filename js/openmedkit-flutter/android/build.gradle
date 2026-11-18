@@ -24,7 +24,7 @@ configurations {
     onnxRuntimeArchive
 }
 
-def onnxRuntimeVersion = '1.20.0'
+def onnxRuntimeVersion = '1.25.1'
 def extractedOnnxRuntime = layout.buildDirectory.dir('onnxruntime')
 def extractOnnxRuntime = tasks.register('extractOnnxRuntime', Sync) {
     from {

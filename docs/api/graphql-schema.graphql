@@ -184,7 +184,7 @@ type Query {
   analyze(input: AnalyzeInput!): AnalyzePayload!
   deidentify(input: DeidentifyInput!): DeidentifyPayload!
   entityTypes: [EntityType!]!
-  journeyResources(resourceType: JourneyResourceKind!, namespace: String! = "default", purpose: String! = "care_review", role: String! = "clinician", attributes: [String!] = null, consentState: String! = "active", exportPolicy: String! = "metadata_only", first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
+  journeyResources(resourceType: JourneyResourceKind!, namespace: String = null, purpose: String = null, role: String = null, attributes: [String!] = null, consentState: String = null, exportPolicy: String = null, first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
 }
 
 type RiskFacets {

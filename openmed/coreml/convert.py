@@ -15,10 +15,13 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import plistlib
 import re
 import statistics
+import sys
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +29,31 @@ from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from openmed.core.capabilities import raise_missing_backend
 from openmed.core.decoding import build_label_info, labels_to_token_spans
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    context_from_metadata,
+    resolve_source_context,
+    write_canonical_manifest,
+)
 from openmed.core.hf_publish import publish_artifact
+from openmed.eval.export_qualification import (
+    GLOBAL_ATTENTION_INPUT,
+    SHAPE_MODE_DYNAMIC,
+    SHAPE_MODE_STATIC,
+    ExportIOContract,
+    ExportQualificationError,
+    ExportQualificationReport,
+    ExportReason,
+    QualificationBinding,
+    VariantCandidate,
+    WindowingPolicy,
+    global_attention_row,
+    qualify_export,
+    source_identity,
+    summarize_report,
+    write_qualification_report,
+)
 from openmed.eval.metrics import compute_recall_slices, normalize_eval_spans
 from openmed.eval.quant_delta import (
     COREML_RECALL_DELTA_LIMIT,
@@ -48,16 +75,36 @@ SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = (
     "roberta",
     "xlm-roberta",
     "deberta-v2",
+    "modernbert",
+    "longformer",
+    "openai-privacy-filter",
 )
 
 COMPUTE_UNIT_CHOICES = ("all", "cpuAndNeuralEngine", "cpuOnly")
 QUANTIZATION_CHOICES = ("int8", "int4", "all")
 COREML_MANIFEST_FILENAME = "openmed-coreml.json"
 COREML_MANIFEST_VERSION = 1
+COREML_PACKAGE_MANIFEST_VERSION = 2
 COREML_RESIDENCY_THRESHOLD = 0.90
 COREML_PARITY_REPORT_VERSION = 1
+_CHEAP_CPU_OP_TOKENS = (
+    "cast",
+    "const",
+    "constexpr",
+    "embedding",
+    "expanddims",
+    "gather",
+    "gatheralongaxis",
+    "reshape",
+    "slice",
+    "squeeze",
+    "transpose",
+)
 
 _ARCHITECTURE_TYPE_HINTS = (
+    ("OpenAIPrivacyFilter", "openai-privacy-filter"),
+    ("ModernBert", "modernbert"),
+    ("Longformer", "longformer"),
     ("DebertaV2", "deberta-v2"),
     ("XLMRoberta", "xlm-roberta"),
     ("Roberta", "roberta"),
@@ -65,6 +112,8 @@ _ARCHITECTURE_TYPE_HINTS = (
     ("Electra", "electra"),
     ("Bert", "bert"),
 )
+
+_MODEL_TYPE_ALIASES = {"modern-bert": "modernbert"}
 
 _COMPUTE_UNIT_ATTRS = {
     "all": "ALL",
@@ -118,10 +167,18 @@ class CoreMLResidencyReport:
     source: str = "compute_plan"
 
     @property
+    def blocking_cpu_fallback_layers(self) -> tuple[CoreMLLayerResidency, ...]:
+        return tuple(
+            layer
+            for layer in self.cpu_fallback_layers
+            if not _is_cheap_cpu_op(layer.op_type, layer.name)
+        )
+
+    @property
     def passed(self) -> bool:
         return (
             self.ane_residency_percentage >= self.threshold
-            and not self.cpu_fallback_layers
+            and not self.blocking_cpu_fallback_layers
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -132,6 +189,9 @@ class CoreMLResidencyReport:
             "total_ops": self.total_ops,
             "cpu_fallback_layers": [
                 layer.to_dict() for layer in self.cpu_fallback_layers
+            ],
+            "blocking_cpu_fallback_layers": [
+                layer.to_dict() for layer in self.blocking_cpu_fallback_layers
             ],
             "threshold": self.threshold,
             "passed": self.passed,
@@ -191,9 +251,35 @@ def convert(
     swift_parity_corpus_path: str | Path | None = None,
     latency_iterations: int = 3,
     optimize_for_ane: bool = True,
+    ane_conv_layout: bool = True,
     segmenter_id: str | None = None,
+    qualify: bool | None = None,
+    qualification_fixtures_path: str | Path | None = None,
+    qualification_report_path: str | Path | None = None,
+    expected_source_revision: str | None = None,
+    direct_identifier_recall_floor: float | None = None,
+    global_attention: str | None = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
+
+    Families with a registered export adapter (ModernBERT, Longformer, Privacy
+    Filter) are traced through that adapter, always use a static
+    ``(1, max_seq_length)`` sequence bucket, and are qualified against the
+    PyTorch reference checkpoint on a synthetic PHI suite. Qualification needs
+    Core ML prediction, so it runs on macOS; a failing variant raises
+    :class:`ExportQualificationError` after the evidence is written, and
+    unqualified packages are never published.
+
+    Longformer packages take an explicit ``global_attention_mask`` input. The
+    bucket must be a declared multiple of the largest attention window whose
+    estimated attention working set fits the Core ML memory ceiling, and
+    qualification additionally sweeps minimum, typical, attention-window
+    boundary, and maximum lengths and checks windowed long documents.
+
+    Privacy Filter requests must also name an eligible checkpoint and a
+    pinned ``expected_source_revision``; the package ships a
+    ``<stem>_decoder_profile.json`` with the canonical decoder and threshold
+    profile.
 
     Args:
         model_id: HuggingFace model identifier.
@@ -219,10 +305,34 @@ def convert(
         latency_iterations: Number of prediction calls used for latency
             evidence when the CoreML object supports local prediction.
         optimize_for_ane: Use static rank-2 input shapes for fp16 ANE exports.
+        ane_conv_layout: Rewrite BERT encoders to BC1S + 1x1 conv for ANE
+            residency. Falls back to the Hugging Face graph when the model is
+            not a BERT token classifier.
         segmenter_id: Optional compact Han/Indic resource set to package.
+        qualify: Qualify adapter-family packages. ``None`` qualifies when Core
+            ML prediction is available on this host and records
+            ``runtime_unavailable`` otherwise; ``True`` requires it; ``False``
+            skips it (the manifest then claims nothing).
+        qualification_fixtures_path: Synthetic suite for qualification.
+            Defaults to the packaged synthetic PHI suite.
+        qualification_report_path: Output path for the qualification report.
+            Defaults to ``<output stem>_qualification.json``.
+        expected_source_revision: Optional pinned source revision; a different
+            resolved revision fails before conversion.
+        direct_identifier_recall_floor: Optional absolute direct-identifier
+            recall floor for release evidence on real checkpoints.
+        global_attention: Global attention fill policy for families with a
+            ``global_attention_mask`` input (Longformer): ``"none"`` (default)
+            or ``"first_token"``.
 
     Returns:
         Path to the created ``.mlpackage``.
+
+    Raises:
+        ExportQualificationError: For unsupported family, precision,
+            quantization, compute-unit, sequence, bucket, memory, global
+            attention, or converter combinations (before weights load) and for
+            failed qualification gates.
     """
     output_path = Path(output_path)
     _validate_compute_precision(compute_precision)
@@ -239,6 +349,18 @@ def convert(
         conversion_manifest_path,
     )
 
+    observation_paths = {"conversion_manifest_path": manifest_path}
+    if parity_report_path is not None or eval_suite_path is not None:
+        observation_paths["parity_report_path"] = _resolve_parity_report_path(
+            output_path, parity_report_path
+        )
+    if swift_parity_corpus_path is not None:
+        observation_paths["swift_parity_corpus_path"] = Path(swift_parity_corpus_path)
+    for package_path in (output_path, *quantized_outputs.values()):
+        for option, report_path in observation_paths.items():
+            if report_path.resolve().is_relative_to(package_path.resolve()):
+                raise ValueError(f"{option} must be outside CoreML packages")
+
     try:
         import coremltools as ct
         import torch
@@ -250,40 +372,115 @@ def convert(
     except ImportError as e:
         raise_missing_backend("coreml", feature="CoreML model conversion", cause=e)
 
-    source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    source = resolve_source_context(model_id, cache_dir=cache_dir)
+    load_reference = source.load_reference
+    source_config = AutoConfig.from_pretrained(load_reference, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
+    adapter = _resolve_export_adapter(model_type)
+    qualification_source: Mapping[str, Any] | None = None
+    graph_inputs: tuple[str, ...] = ("input_ids", "attention_mask")
+    global_policy: str | None = None
+    sequence_limits: Any = None
+    eligibility: dict[str, Any] | None = None
+    binding: QualificationBinding | None = None
+    if adapter is None:
+        if qualify:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+        if global_attention is not None:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
+    else:
+        adapter.validate_request(
+            runtime="coreml",
+            config=source_config,
+            max_sequence_length=max_seq_length,
+            precisions=(compute_precision,),
+            quantizations=("none", *quantization_variants),
+            providers=(compute_units,),
+            shape_mode=SHAPE_MODE_STATIC if optimize_for_ane else SHAPE_MODE_DYNAMIC,
+            global_attention=global_attention,
+        )
+        graph_inputs = adapter.inputs_for("coreml")
+        global_policy = adapter.resolve_global_attention(
+            global_attention, runtime="coreml"
+        )
+        sequence_limits = adapter.limits_for(source_config, "coreml", compute_precision)
+        eligibility = adapter.source_eligibility(
+            source_config,
+            model_id=model_id,
+            expected_revision=expected_source_revision,
+        )
+        if qualify is not False or eligibility is not None:
+            # Families with a source check verify the pin even without
+            # qualification, before any weights load.
+            resolved_source = source_identity(
+                model_id,
+                config=source_config,
+                expected_revision=expected_source_revision,
+            )
+            if qualify is not False:
+                qualification_source = resolved_source
+            if qualify and not _coreml_prediction_available(ct):
+                raise ExportQualificationError(ExportReason.RUNTIME_UNAVAILABLE)
+        binding = adapter.binding(source_config, model_id, cache_dir)
+    decoder_profile = (
+        dict(binding.decoder_profile)
+        if binding is not None and binding.decoder_profile is not None
+        else None
+    )
 
     # 1. Load model and tokenizer
-    logger.info("Loading HuggingFace model %s ...", model_id)
+    logger.info("Loading HuggingFace model %s ...", source.source_model_id)
     tokenizer = get_tokenizer_with_loader(
-        model_id,
+        load_reference,
         AutoTokenizer.from_pretrained,
         cache_dir=cache_dir,
     )
-    model = AutoModelForTokenClassification.from_pretrained(
-        model_id,
-        cache_dir=cache_dir,
-    )
+    load_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+    if hasattr(torch, "float32"):
+        load_kwargs["torch_dtype"] = torch.float32
+    try:
+        model = AutoModelForTokenClassification.from_pretrained(
+            load_reference,
+            attn_implementation="eager",
+            trust_remote_code=False,
+            **load_kwargs,
+        )
+    except TypeError:
+        model = AutoModelForTokenClassification.from_pretrained(
+            load_reference,
+            trust_remote_code=False,
+            **load_kwargs,
+        )
+    to_float = getattr(model, "float", None)
+    if callable(to_float):
+        model = to_float()
     model.eval()
 
     num_labels = model.config.num_labels
     id2label = model.config.id2label
 
     # 2. Create wrapper that returns only logits (not ModelOutput)
-    class TokenClassificationWrapper(torch.nn.Module):
-        def __init__(self, base_model):
-            super().__init__()
-            self.base_model = base_model
-
-        def forward(self, input_ids, attention_mask):
-            output = self.base_model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-            )
-            return output.logits
-
-    wrapper = TokenClassificationWrapper(model)
-    wrapper.eval()
+    if adapter is not None:
+        adapter.prepare_model(model)
+        wrapper = adapter.build_wrapper(torch, model)
+        trace_context = adapter.trace_context(torch, model)
+        ane_profile = _ane_optimization_profile(
+            optimize_for_ane=optimize_for_ane,
+            ane_conv_layout=False,
+            compute_precision=compute_precision,
+            compute_units=compute_units,
+        )
+    else:
+        wrapper, ane_profile = _build_token_classification_wrapper(
+            torch,
+            model,
+            model_type=model_type,
+            optimize_for_ane=optimize_for_ane,
+            ane_conv_layout=ane_conv_layout,
+            compute_precision=compute_precision,
+            compute_units=compute_units,
+        )
+        trace_context = nullcontext()
 
     # 3. Trace with sample inputs
     logger.info("Tracing model with sequence length %d ...", max_seq_length)
@@ -296,53 +493,86 @@ def convert(
         return_tensors="pt",
     )
 
-    traced = torch.jit.trace(
-        wrapper,
-        (sample["input_ids"], sample["attention_mask"]),
-    )
+    if GLOBAL_ATTENTION_INPUT in graph_inputs:
+        # The traced graph has no data-dependent branches, so any binary mask
+        # traces the same ops; one global token keeps the global path live.
+        global_sample = torch.zeros_like(sample["input_ids"])
+        global_sample[:, 0] = 1
+        sample[GLOBAL_ATTENTION_INPUT] = global_sample
+
+    with trace_context:
+        traced = torch.jit.trace(
+            wrapper,
+            tuple(sample[name] for name in graph_inputs),
+        )
 
     # 4. Convert to CoreML
     logger.info("Converting to CoreML (%s precision) ...", compute_precision)
     ct_precision = (
         ct.precision.FLOAT16 if compute_precision == "float16" else ct.precision.FLOAT32
     )
+    fp32_ops = adapter.coreml_fp32_ops if adapter is not None else None
+    if fp32_ops and compute_precision == "float16":
+        # Keep the family's float32 reference sections (Privacy Filter's
+        # attention softmax) in float32 inside an otherwise fp16 program.
+        ct_precision = ct.transform.FP16ComputePrecision(
+            op_selector=lambda op: op.op_type not in fp32_ops
+        )
     ct_compute_units = _resolve_compute_units(ct, compute_units)
-    input_shape = _coreml_input_shape(
-        ct,
-        max_seq_length=max_seq_length,
-        optimize_for_ane=optimize_for_ane,
-        compute_precision=compute_precision,
-        compute_units=compute_units,
+    if adapter is not None:
+        # Adapter families are qualified on fixed buckets only.
+        input_shape = ct.Shape(shape=(1, max_seq_length))
+    else:
+        input_shape = _coreml_input_shape(
+            ct,
+            max_seq_length=max_seq_length,
+            optimize_for_ane=optimize_for_ane,
+            compute_precision=compute_precision,
+            compute_units=compute_units,
+        )
+    export_metadata = (
+        _adapter_export_metadata(
+            adapter,
+            max_seq_length=max_seq_length,
+            global_policy=global_policy,
+            sequence_limits=sequence_limits,
+        )
+        if adapter is not None
+        else {}
     )
+    if fp32_ops and compute_precision == "float16":
+        export_metadata["float32_ops"] = ",".join(sorted(fp32_ops))
+    if decoder_profile is not None:
+        export_metadata["decoder"] = str(decoder_profile["decoder"])
+        export_metadata["decoder_profile_sha256"] = str(decoder_profile["sha256"])
+        export_metadata["label_space"] = str(decoder_profile["label_space"])
 
-    mlmodel = ct.convert(
-        traced,
-        inputs=[
+    convert_kwargs: dict[str, Any] = {
+        "inputs": [
             ct.TensorType(
-                name="input_ids",
+                name=name,
                 shape=input_shape,
                 dtype=int,
-            ),
-            ct.TensorType(
-                name="attention_mask",
-                shape=input_shape,
-                dtype=int,
-            ),
+            )
+            for name in graph_inputs
         ],
-        outputs=[
+        "outputs": [
             ct.TensorType(name="logits"),
         ],
-        compute_precision=ct_precision,
-        compute_units=ct_compute_units,
-        minimum_deployment_target=ct.target.iOS16,
-    )
+        "compute_precision": ct_precision,
+        "compute_units": ct_compute_units,
+        "minimum_deployment_target": ct.target.iOS16,
+    }
+    if hasattr(ct, "precision"):
+        convert_kwargs["convert_to"] = "mlprogram"
+    mlmodel = ct.convert(traced, **convert_kwargs)
 
-    sample_inputs = _latency_sample_inputs(sample)
+    sample_inputs = _latency_sample_inputs(sample, names=graph_inputs)
 
     # 5. Add metadata
     _apply_metadata(
         mlmodel,
-        model_id=model_id,
+        model_id=source.source_model_id,
         model_type=model_type,
         num_labels=num_labels,
         id2label=id2label,
@@ -351,12 +581,24 @@ def convert(
         compute_units=compute_units,
         quantization="none",
         optimize_for_ane=optimize_for_ane,
+        ane_optimization_profile=ane_profile,
+        extra=export_metadata,
     )
 
     # 6. Save
     logger.info("Saving to %s ...", output_path)
     mlmodel.save(str(output_path))
     _write_id2label(output_path, id2label)
+    _write_live_compute_plan(
+        ct,
+        mlmodel,
+        output_path,
+        compute_units=compute_units,
+    )
+    decoder_profile_path: Path | None = None
+    if decoder_profile is not None:
+        decoder_profile_path = _decoder_profile_path(output_path)
+        _write_decoder_profile(decoder_profile_path, decoder_profile)
     variant_models: dict[str, Any] = {"coreml-fp16": mlmodel}
     variant_paths: dict[str, Path] = {"coreml-fp16": output_path}
 
@@ -367,7 +609,7 @@ def convert(
         quantized_model = _palettize(ct, mlmodel, bits=bits)
         _apply_metadata(
             quantized_model,
-            model_id=model_id,
+            model_id=source.source_model_id,
             model_type=model_type,
             num_labels=num_labels,
             id2label=id2label,
@@ -376,6 +618,8 @@ def convert(
             compute_units=compute_units,
             quantization=variant,
             optimize_for_ane=optimize_for_ane,
+            ane_optimization_profile=ane_profile,
+            extra=export_metadata,
         )
         logger.info(
             "Saving %s CoreML package to %s ...",
@@ -384,6 +628,12 @@ def convert(
         )
         quantized_model.save(str(quantized_output))
         _write_id2label(quantized_output, id2label)
+        _write_live_compute_plan(
+            ct,
+            quantized_model,
+            quantized_output,
+            compute_units=compute_units,
+        )
         variant_models[f"coreml-{variant}"] = quantized_model
         variant_paths[f"coreml-{variant}"] = quantized_output
 
@@ -412,7 +662,8 @@ def convert(
     parity_by_variant: dict[str, Mapping[str, Any]] = {}
     if eval_suite_path is not None:
         parity_report = write_coreml_variant_parity_report(
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
+            source_load_reference=load_reference,
             variant_paths=variant_paths,
             eval_suite_path=eval_suite_path,
             output_path=parity_report_path,
@@ -447,22 +698,116 @@ def convert(
                 parity=parity_by_variant.get(name, {}),
             )
         )
+    qualification_report: ExportQualificationReport | None = None
+    qualification_block: dict[str, Any] | None = None
+    if adapter is not None:
+        if qualification_source is not None and _coreml_prediction_available(ct):
+            qualification_report = _qualify_coreml_variants(
+                ct,
+                torch,
+                adapter=adapter,
+                model_id=model_id,
+                cache_dir=cache_dir,
+                tokenizer=tokenizer,
+                id2label=id2label,
+                variant_paths=variant_paths,
+                compute_precision=compute_precision,
+                compute_units=compute_units,
+                max_seq_length=max_seq_length,
+                source=qualification_source,
+                artifact_root=_common_root([manifest_path, *variant_paths.values()]),
+                fixtures_path=qualification_fixtures_path,
+                direct_identifier_recall_floor=direct_identifier_recall_floor,
+                graph_inputs=graph_inputs,
+                global_policy=global_policy,
+                sequence_limits=sequence_limits,
+                source_config=source_config,
+                binding=binding,
+                support_paths=(
+                    (decoder_profile_path,) if decoder_profile_path is not None else ()
+                ),
+            )
+            qualification_block = summarize_report(qualification_report)
+        else:
+            qualification_block = {
+                "family": adapter.family,
+                "adapter_version": adapter.version,
+                "passed": False,
+                "status": "not_run",
+                "reasons": [
+                    (
+                        ExportReason.MISSING_EVIDENCE.value
+                        if qualify is False
+                        else ExportReason.RUNTIME_UNAVAILABLE.value
+                    )
+                ],
+                "qualified_variants": [],
+                "sequence_buckets": [max_seq_length],
+            }
+            if global_policy is not None:
+                qualification_block["global_attention"] = global_policy
+                qualification_block["input_names"] = list(graph_inputs)
+            if sequence_limits is not None:
+                qualification_block["limits"] = sequence_limits.to_dict(
+                    selected=max_seq_length
+                )
+            if decoder_profile is not None:
+                qualification_block["decoder_profile_sha256"] = decoder_profile[
+                    "sha256"
+                ]
+
+    assert_source_unchanged(source)
     _write_coreml_conversion_manifest(
         manifest_path,
-        model_id=model_id,
+        model_id=source.source_model_id,
         model_type=model_type,
         compute_units=compute_units,
         max_seq_length=max_seq_length,
         optimize_for_ane=optimize_for_ane,
+        ane_optimization_profile=ane_profile,
         variants=records,
         segmenter=segmenter,
+        source=source,
+        variant_paths=variant_paths,
+        qualification=qualification_block,
+        eligibility=eligibility,
+        decoder_profile=(
+            {
+                "path": _artifact_relative_path(
+                    decoder_profile_path, manifest_path.parent
+                ),
+                "sha256": decoder_profile["sha256"],
+                "decoder": decoder_profile["decoder"],
+                "label_space": decoder_profile["label_space"],
+                "threshold_profile": decoder_profile["threshold_profile"],
+            }
+            if decoder_profile is not None and decoder_profile_path is not None
+            else None
+        ),
     )
+    if qualification_report is not None:
+        report_path = (
+            Path(qualification_report_path)
+            if qualification_report_path is not None
+            else _default_qualification_report_path(output_path)
+        )
+        write_qualification_report(qualification_report, report_path)
+        if not qualification_report.passed:
+            logger.warning(
+                "CoreML qualification failed: %s",
+                ", ".join(qualification_report.reasons),
+            )
+        qualification_report.raise_for_failure()
 
     logger.info("CoreML model saved to %s", output_path)
     if publish_to_hub:
+        if adapter is not None and (
+            qualification_report is None or not qualification_report.passed
+        ):
+            raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
         result = publish_artifact(
             artifact_dir=output_path,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             format_name="coreml",
             repo_id=publish_repo_id,
             org=publish_org,
@@ -479,8 +824,183 @@ def convert(
     return output_path
 
 
+def _resolve_export_adapter(model_type: str):
+    from openmed.torch.export_adapters import resolve_export_adapter
+
+    return resolve_export_adapter(model_type)
+
+
+def _adapter_export_metadata(
+    adapter,
+    *,
+    max_seq_length: int,
+    global_policy: str | None,
+    sequence_limits: Any,
+) -> dict[str, str]:
+    """Return the string-valued package metadata for an adapter family."""
+    metadata = {
+        "export_family": adapter.family,
+        "export_adapter_version": str(adapter.version),
+        "sequence_shape_mode": SHAPE_MODE_STATIC,
+        "sequence_buckets": json.dumps([max_seq_length]),
+    }
+    if global_policy is not None:
+        metadata["global_attention_policy"] = global_policy
+        metadata["global_attention_input"] = GLOBAL_ATTENTION_INPUT
+    if sequence_limits is not None:
+        metadata["attention_windows"] = json.dumps(
+            list(sequence_limits.attention_windows)
+        )
+        metadata["memory_ceiling_bytes"] = str(sequence_limits.memory_ceiling_bytes)
+        metadata["estimated_attention_bytes"] = str(
+            sequence_limits.bucket_memory_bytes.get(max_seq_length, 0)
+        )
+    return metadata
+
+
+def _coreml_prediction_available(ct) -> bool:
+    """Return whether Core ML can execute predictions on this host."""
+    models = getattr(ct, "models", None)
+    return sys.platform == "darwin" and hasattr(models, "MLModel")
+
+
+def _default_qualification_report_path(output_path: Path) -> Path:
+    stem = output_path.stem if output_path.suffix else output_path.name
+    return output_path.with_name(f"{stem}_qualification.json")
+
+
+def _decoder_profile_path(output_path: Path) -> Path:
+    stem = output_path.stem if output_path.suffix else output_path.name
+    return output_path.with_name(f"{stem}_decoder_profile.json")
+
+
+def _write_decoder_profile(path: Path, profile: Mapping[str, Any]) -> None:
+    from openmed.torch.privacy_filter_export import write_decoder_profile
+
+    write_decoder_profile(profile, path)
+
+
+def _common_root(paths: Sequence[Path]) -> Path:
+    parents = [str(Path(path).resolve().parent) for path in paths]
+    return Path(os.path.commonpath(parents))
+
+
+def _qualify_coreml_variants(
+    ct,
+    torch,
+    *,
+    adapter,
+    model_id: str,
+    cache_dir: str | None,
+    tokenizer,
+    id2label,
+    variant_paths: Mapping[str, Path],
+    compute_precision: str,
+    compute_units: str,
+    max_seq_length: int,
+    source: Mapping[str, Any],
+    artifact_root: Path,
+    fixtures_path: str | Path | None,
+    direct_identifier_recall_floor: float | None,
+    graph_inputs: Sequence[str] = ("input_ids", "attention_mask"),
+    global_policy: str | None = None,
+    sequence_limits: Any = None,
+    source_config: Any = None,
+    binding: QualificationBinding | None = None,
+    support_paths: Sequence[Path] = (),
+) -> ExportQualificationReport:
+    """Qualify every Core ML package against the stock PyTorch checkpoint."""
+
+    from openmed.torch.export_adapters import torch_reference_runner
+
+    reference_model = adapter.reference_model(torch, model_id, cache_dir)
+    ct_compute_units = _resolve_compute_units(ct, compute_units)
+    candidates = []
+    for name, path in variant_paths.items():
+        quantization = name.removeprefix("coreml-")
+        if quantization == "fp16":
+            quantization = "none"
+        candidates.append(
+            VariantCandidate(
+                name=name,
+                runner=_coreml_logits_runner(ct, path, ct_compute_units),
+                precision=compute_precision,
+                quantization=quantization,
+                provider=compute_units,
+                artifact_paths=(
+                    path,
+                    path.parent / f"{path.stem}_id2label.json",
+                ),
+            )
+        )
+    return qualify_export(
+        family=adapter.family,
+        adapter_version=adapter.version,
+        runtime="coreml",
+        support=adapter.support_for("coreml"),
+        io_contract=ExportIOContract(
+            input_names=tuple(graph_inputs),
+            output_names=("logits",),
+            sequence_buckets=(max_seq_length,),
+            max_sequence_length=max_seq_length,
+            shape_mode=SHAPE_MODE_STATIC,
+            batch_size=1,
+            input_dtype="int32",
+            global_attention=global_policy,
+            windowing=(
+                WindowingPolicy.for_window(max_seq_length)
+                if adapter.windowed_documents
+                else None
+            ),
+        ),
+        tokenizer=tokenizer,
+        id2label=id2label,
+        reference_runner=torch_reference_runner(torch, reference_model),
+        candidates=candidates,
+        source=source,
+        artifact_root=artifact_root,
+        artifact_paths=support_paths,
+        fixtures_path=fixtures_path,
+        exclude_artifact_names=(COREML_MANIFEST_FILENAME,),
+        direct_identifier_recall_floor=direct_identifier_recall_floor,
+        sequence_sweep_boundaries=(
+            adapter.sweep_boundaries(source_config or reference_model.config)
+            if adapter.sweep_boundaries is not None
+            else None
+        ),
+        limits=(
+            sequence_limits.to_dict(selected=max_seq_length)
+            if sequence_limits is not None
+            else None
+        ),
+        binding=binding,
+    )
+
+
+def _coreml_logits_runner(ct, path: Path, compute_units):
+    import numpy as np
+
+    model = ct.models.MLModel(str(path), compute_units=compute_units)
+
+    def run(feed: Mapping[str, Any]) -> Any:
+        inputs = {
+            name: np.asarray(value, dtype=np.int32) for name, value in feed.items()
+        }
+        outputs = model.predict(inputs)
+        return np.asarray(outputs["logits"], dtype=np.float32)
+
+    return run
+
+
 def resolve_supported_model_type(config) -> str:
     """Resolve and validate a supported CoreML token-classification family."""
+    from openmed.ner.families.zero_shot_export import (
+        reject_zero_shot_token_classification,
+    )
+
+    # GLiNER and GLiClass checkpoints declare a DeBERTa model_type; refuse
+    # them before the token-classification allowlist can accept the backbone.
+    reject_zero_shot_token_classification(config, runtime="coreml")
     raw_model_type = _config_get(config, "model_type")
     model_type = _normalize_model_type(raw_model_type)
     if model_type is None:
@@ -492,9 +1012,10 @@ def resolve_supported_model_type(config) -> str:
         return model_type
 
     supported = ", ".join(SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES)
-    raise ValueError(
+    raise ExportQualificationError(
+        ExportReason.UNSUPPORTED_FAMILY,
         "Unsupported CoreML token-classification architecture "
-        f"{model_type or raw_model_type!r}. Supported families: {supported}."
+        f"{model_type or raw_model_type!r}. Supported families: {supported}.",
     )
 
 
@@ -508,7 +1029,7 @@ def _normalize_model_type(model_type: str | None) -> str | None:
     if model_type is None:
         return None
     normalized = str(model_type).replace("_", "-").lower()
-    return normalized or None
+    return _MODEL_TYPE_ALIASES.get(normalized, normalized) or None
 
 
 def _infer_model_type_from_architectures(architectures) -> str | None:
@@ -516,6 +1037,169 @@ def _infer_model_type_from_architectures(architectures) -> str | None:
         if any(needle in str(architecture) for architecture in architectures):
             return model_type
     return None
+
+
+def _ane_optimization_profile(
+    *,
+    optimize_for_ane: bool,
+    ane_conv_layout: bool,
+    compute_precision: str,
+    compute_units: str,
+) -> str:
+    if not optimize_for_ane:
+        return "dynamic"
+    if (
+        ane_conv_layout
+        and compute_precision == "float16"
+        and compute_units in {"all", "cpuAndNeuralEngine"}
+    ):
+        return "nchw-conv1x1-fp16"
+    return "static-rank2-fp16"
+
+
+def _build_token_classification_wrapper(
+    torch,
+    model,
+    *,
+    model_type: str,
+    optimize_for_ane: bool,
+    ane_conv_layout: bool,
+    compute_precision: str,
+    compute_units: str,
+):
+    profile = _ane_optimization_profile(
+        optimize_for_ane=optimize_for_ane,
+        ane_conv_layout=False,
+        compute_precision=compute_precision,
+        compute_units=compute_units,
+    )
+
+    class TokenClassificationWrapper(torch.nn.Module):
+        def __init__(self, base_model):
+            super().__init__()
+            self.base_model = base_model
+
+        def forward(self, input_ids, attention_mask):
+            output = self.base_model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+            )
+            return output.logits
+
+    wrapper = TokenClassificationWrapper(model)
+    if (
+        ane_conv_layout
+        and model_type == "bert"
+        and hasattr(model, "bert")
+        and optimize_for_ane
+        and compute_precision == "float16"
+    ):
+        try:
+            from openmed.coreml.ane_bert import ANEBertForTokenClassification
+
+            wrapper = ANEBertForTokenClassification.from_hf(model)
+            profile = _ane_optimization_profile(
+                optimize_for_ane=optimize_for_ane,
+                ane_conv_layout=True,
+                compute_precision=compute_precision,
+                compute_units=compute_units,
+            )
+            logger.info("Using BC1S 1x1-conv ANE BERT wrapper")
+        except Exception as exc:
+            logger.warning(
+                "ANE conv layout wrapper failed (%s); using Hugging Face graph",
+                exc,
+            )
+            wrapper = TokenClassificationWrapper(model)
+    wrapper.eval()
+    return wrapper, profile
+
+
+def _is_cheap_cpu_op(op_type: str, name: str = "") -> bool:
+    blob = f"{op_type} {name}".lower()
+    compact = re.sub(r"[^a-z0-9]+", "", blob)
+    return any(token in compact for token in _CHEAP_CPU_OP_TOKENS)
+
+
+def _write_live_compute_plan(
+    ct,
+    mlmodel,
+    package_path: Path,
+    *,
+    compute_units: str,
+) -> Path | None:
+    """Compile locally and write ``ane_residency.json`` next to the package."""
+
+    models = getattr(ct, "models", None)
+    load_plan = getattr(
+        getattr(models, "compute_plan", None),
+        "MLComputePlan",
+        None,
+    )
+    if models is None or load_plan is None:
+        return None
+    try:
+        compute_unit = _resolve_compute_units(ct, compute_units)
+        loaded = ct.models.MLModel(str(package_path), compute_units=compute_unit)
+        compiled = loaded.get_compiled_model_path()
+        plan = load_plan.load_from_path(compiled, compute_units=compute_unit)
+        layers = _layers_from_mlcompute_plan(plan)
+    except Exception as exc:
+        logger.warning("Could not export a live CoreML compute plan: %s", exc)
+        return None
+    if not layers:
+        return None
+    payload = {
+        "operations": [layer.to_dict() for layer in layers],
+        "source": "mlcompute_plan",
+    }
+    plan_path = Path(package_path) / "ane_residency.json"
+    plan_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    logger.info(
+        "Wrote ANE compute plan (%d ops) to %s",
+        len(layers),
+        plan_path,
+    )
+    return plan_path
+
+
+def _layers_from_mlcompute_plan(plan) -> list[CoreMLLayerResidency]:
+    structure = getattr(plan, "model_structure", None)
+    program = getattr(structure, "program", None)
+    functions = getattr(program, "functions", None) or {}
+    layers: list[CoreMLLayerResidency] = []
+    usage_fn = getattr(plan, "get_compute_device_usage_for_mlprogram_operation", None)
+    cost_fn = getattr(plan, "get_estimated_cost_for_mlprogram_operation", None)
+    for func in functions.values():
+        block = getattr(func, "block", None)
+        operations = getattr(block, "operations", None) or ()
+        for index, op in enumerate(operations):
+            name = str(getattr(op, "name", None) or f"op_{index}")
+            op_type = str(getattr(op, "operator_name", None) or "")
+            compute_unit = "unknown"
+            if usage_fn is not None:
+                usage = usage_fn(op)
+                preferred = getattr(usage, "preferred_compute_device", None)
+                if preferred is None:
+                    compute_unit = "unknown"
+                else:
+                    compute_unit = type(preferred).__name__
+            cheap = _is_cheap_cpu_op(op_type, name)
+            weight = 0.0 if cheap else 1.0
+            if cost_fn is not None:
+                cost = cost_fn(op)
+                parsed = _optional_float(getattr(cost, "weight", None))
+                if parsed is not None:
+                    weight = 0.0 if cheap else parsed
+            layers.append(
+                CoreMLLayerResidency(
+                    name=name,
+                    op_type=op_type,
+                    compute_unit=compute_unit,
+                    weight=weight,
+                )
+            )
+    return layers
 
 
 def _resolve_compute_units(ct, compute_units: str):
@@ -612,6 +1296,14 @@ def _resolve_conversion_manifest_path(
     return output_path.with_name(f"{stem}_coreml_manifest.json")
 
 
+def _resolve_parity_report_path(
+    first_variant_path: str | Path, output_path: str | Path | None
+) -> Path:
+    if output_path is not None:
+        return Path(output_path)
+    return Path(first_variant_path).with_name("coreml_parity.json")
+
+
 def _coreml_input_shape(
     ct,
     *,
@@ -646,6 +1338,8 @@ def _apply_metadata(
     compute_units: str,
     quantization: str,
     optimize_for_ane: bool,
+    ane_optimization_profile: str | None = None,
+    extra: Mapping[str, str] | None = None,
 ) -> None:
     mlmodel.short_description = (
         f"OpenMed Token Classification: {model_id} "
@@ -663,8 +1357,11 @@ def _apply_metadata(
     mlmodel.user_defined_metadata["compute_units"] = compute_units
     mlmodel.user_defined_metadata["quantization"] = quantization
     mlmodel.user_defined_metadata["ane_optimization_profile"] = (
-        "static-rank2-fp16" if optimize_for_ane else "dynamic"
+        ane_optimization_profile
+        or ("static-rank2-fp16" if optimize_for_ane else "dynamic")
     )
+    for key, value in (extra or {}).items():
+        mlmodel.user_defined_metadata[key] = value
 
 
 def _id2label_dict(id2label) -> dict[str, str]:
@@ -716,6 +1413,17 @@ def analyze_ane_residency(
         )
 
     layers = tuple(_load_compute_plan_layers(plan_path))
+    layers = tuple(
+        CoreMLLayerResidency(
+            name=layer.name,
+            op_type=layer.op_type,
+            compute_unit=layer.compute_unit,
+            weight=(
+                0.0 if _is_cheap_cpu_op(layer.op_type, layer.name) else layer.weight
+            ),
+        )
+        for layer in layers
+    )
     if not layers:
         return CoreMLResidencyReport(
             artifact_path=str(path),
@@ -726,14 +1434,13 @@ def analyze_ane_residency(
             source=str(plan_path),
         )
 
-    total_weight = sum(max(layer.weight, 0.0) for layer in layers)
+    weighted = [layer for layer in layers if layer.weight > 0.0]
+    if not weighted:
+        weighted = list(layers)
+    total_weight = sum(max(layer.weight, 0.0) for layer in weighted)
     if total_weight <= 0.0:
-        total_weight = float(len(layers))
-    ane_weight = sum(
-        max(layer.weight, 0.0) if layer.weight > 0.0 else 1.0
-        for layer in layers
-        if layer.ane_resident
-    )
+        total_weight = float(len(weighted) or 1)
+    ane_weight = sum(max(layer.weight, 0.0) for layer in weighted if layer.ane_resident)
     fallback_layers = tuple(layer for layer in layers if not layer.ane_resident)
     return CoreMLResidencyReport(
         artifact_path=str(path),
@@ -759,21 +1466,21 @@ def write_coreml_variant_parity_report(
     candidate_runners: Mapping[str, CoreMLRunner] | None = None,
     span_tolerance: int = 0,
     recall_delta_limit: float = COREML_RECALL_DELTA_LIMIT,
+    source_load_reference: str | None = None,
 ) -> dict[str, Any]:
     """Run PyTorch-vs-CoreML parity for all variants and write evidence JSON."""
 
     from openmed.eval.harness import load_fixtures
 
     eval_suite_path = Path(eval_suite_path)
-    report_path = (
-        Path(output_path)
-        if output_path is not None
-        else Path(next(iter(variant_paths.values()))).with_name("coreml_parity.json")
+    report_path = _resolve_parity_report_path(
+        next(iter(variant_paths.values())), output_path
     )
     generated_at = _utc_now()
     fixtures = load_fixtures(eval_suite_path)
+    load_reference = source_load_reference or source_model_id
     parent_runner = parent_runner or _hf_token_classification_runner(
-        source_model_id,
+        load_reference,
         cache_dir=cache_dir,
     )
     reference_spans = _capture_spans(
@@ -789,7 +1496,7 @@ def write_coreml_variant_parity_report(
     for format_name, variant_path in sorted(variant_paths.items()):
         runner = candidate_runners.get(format_name) or _coreml_artifact_runner(
             variant_path,
-            source_model_id=source_model_id,
+            source_model_id=load_reference,
             max_seq_length=max_seq_length,
             cache_dir=cache_dir,
         )
@@ -1014,14 +1721,18 @@ def _is_ane_compute_unit(value: str) -> bool:
     )
 
 
-def _latency_sample_inputs(sample: Mapping[str, Any]) -> dict[str, Any]:
+def _latency_sample_inputs(
+    sample: Mapping[str, Any],
+    *,
+    names: Sequence[str] = ("input_ids", "attention_mask"),
+) -> dict[str, Any]:
     try:
         import numpy as np
     except ImportError:
         return {}
 
     inputs: dict[str, Any] = {}
-    for name in ("input_ids", "attention_mask"):
+    for name in names:
         value = sample[name]
         if hasattr(value, "detach"):
             value = value.detach().cpu().numpy()
@@ -1076,35 +1787,104 @@ def _write_coreml_conversion_manifest(
     optimize_for_ane: bool,
     variants: Sequence[CoreMLVariantRecord],
     segmenter: Mapping[str, Any] | None = None,
+    ane_optimization_profile: str | None = None,
+    source: SourceContext | None = None,
+    variant_paths: Mapping[str, Path] | None = None,
+    qualification: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
+    decoder_profile: Mapping[str, Any] | None = None,
 ) -> Path:
+    """Write legacy observations outside packages and canonical package manifests."""
+    source = source or context_from_metadata(model_id)
+    package_paths = dict(variant_paths or {})
+    for variant in variants:
+        package_paths.setdefault(variant.name, manifest_path.parent / variant.path)
+    if any(
+        manifest_path.resolve().is_relative_to(path.resolve())
+        for path in package_paths.values()
+    ):
+        raise ValueError("conversion_manifest_path must be outside CoreML packages")
+    observations = []
+    for variant in variants:
+        observation = variant.to_dict()
+        package_path = package_paths[variant.name]
+        residency = dict(variant.residency)
+        if "artifact_path" in residency:
+            residency["artifact_path"] = _artifact_relative_path(
+                package_path, manifest_path.parent
+            )
+        residency_source = residency.get("source")
+        if isinstance(residency_source, str) and Path(residency_source).is_absolute():
+            residency["source"] = _artifact_relative_path(
+                Path(residency_source), manifest_path.parent
+            )
+        observation["residency"] = residency
+        parity = dict(variant.parity)
+        if "path" in parity:
+            parity["path"] = _artifact_relative_path(package_path, manifest_path.parent)
+        observation["parity"] = parity
+        observations.append(observation)
     payload = {
         "schema_version": COREML_MANIFEST_VERSION,
         "format": "openmed-coreml",
         "generated_at": _utc_now(),
-        "source_model_id": model_id,
+        "source_model_id": source.source_model_id,
         "source_model_type": model_type,
         "compute_units": compute_units,
         "max_sequence_length": max_seq_length,
         "ane_optimization_profile": (
-            "static-rank2-fp16" if optimize_for_ane else "dynamic"
+            ane_optimization_profile
+            or ("static-rank2-fp16" if optimize_for_ane else "dynamic")
         ),
-        "variants": [variant.to_dict() for variant in variants],
+        "variants": observations,
     }
     if segmenter is not None:
         payload["segmenter"] = dict(segmenter)
+    if qualification is not None:
+        payload["qualification"] = dict(qualification)
+    if eligibility is not None:
+        payload["eligibility"] = dict(eligibility)
+    if decoder_profile is not None:
+        payload["decoder_profile"] = dict(decoder_profile)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
+        json.dump(payload, handle, indent=2, sort_keys=True, allow_nan=False)
         handle.write("\n")
 
     for variant in variants:
-        package_path = (manifest_path.parent / variant.path).resolve()
-        if package_path.is_dir():
-            package_manifest = package_path / COREML_MANIFEST_FILENAME
-            with package_manifest.open("w", encoding="utf-8") as handle:
-                json.dump(payload, handle, indent=2, sort_keys=True)
-                handle.write("\n")
-            validate_coreml_bundle(package_path)
+        package_path = package_paths[variant.name]
+        if not package_path.is_dir():
+            raise ValueError("CoreML variant package is missing")
+        canonical = {
+            "schema_version": COREML_PACKAGE_MANIFEST_VERSION,
+            "format": "openmed-coreml",
+            "source_model_id": source.source_model_id,
+            "source_model_type": model_type,
+            "compute_units": compute_units,
+            "max_sequence_length": max_seq_length,
+            "ane_optimization_profile": payload["ane_optimization_profile"],
+            "variants": [
+                {
+                    "name": variant.name,
+                    "path": ".",
+                    "precision": variant.precision,
+                    "quantization": variant.quantization,
+                    "size_bytes": _artifact_size_bytes(
+                        package_path, exclude=COREML_MANIFEST_FILENAME
+                    ),
+                }
+            ],
+        }
+        if segmenter is not None:
+            canonical["segmenter"] = dict(segmenter)
+        write_canonical_manifest(
+            package_path,
+            COREML_MANIFEST_FILENAME,
+            canonical,
+            source=source,
+            backend="coreml",
+        )
+        validate_coreml_bundle(package_path)
     return manifest_path
 
 
@@ -1250,6 +2030,13 @@ def _coreml_artifact_runner(
             id2label = _load_id2label_for_package(model_path)
             pipeline_state["np"] = np
             pipeline_state["model"] = ct.models.MLModel(str(model_path))
+            # Longformer packages name their global attention fill policy.
+            package_metadata = (
+                getattr(pipeline_state["model"], "user_defined_metadata", None) or {}
+            )
+            pipeline_state["global_attention_policy"] = package_metadata.get(
+                "global_attention_policy"
+            )
             pipeline_state["label_info"] = build_label_info(id2label)
             pipeline_state["tokenizer"] = get_tokenizer_with_loader(
                 source_model_id,
@@ -1268,12 +2055,17 @@ def _coreml_artifact_runner(
         )
         input_ids = np.asarray([encoded["input_ids"]], dtype=np.int32)
         attention_mask = np.asarray([encoded["attention_mask"]], dtype=np.int32)
-        outputs = pipeline_state["model"].predict(
-            {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-            }
-        )
+        feed = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        policy = pipeline_state.get("global_attention_policy")
+        if policy is not None:
+            row = global_attention_row(
+                policy, int(attention_mask.sum()), attention_mask.shape[1]
+            )
+            feed[GLOBAL_ATTENTION_INPUT] = np.asarray([row], dtype=np.int32)
+        outputs = pipeline_state["model"].predict(feed)
         logits = np.asarray(outputs["logits"])
         label_ids = logits[0].argmax(axis=-1).tolist()
         offsets = encoded.get("offset_mapping") or []
@@ -1344,7 +2136,7 @@ def _plain_span(span: Any) -> dict[str, Any]:
 
 def _artifact_relative_path(path: Path, base_dir: Path) -> str:
     try:
-        return str(path.resolve().relative_to(base_dir.resolve()))
+        return Path(os.path.relpath(path.resolve(), base_dir.resolve())).as_posix()
     except (OSError, ValueError):
         return path.name
 
@@ -1371,9 +2163,14 @@ def _optional_float(value: Any) -> float | None:
     return result
 
 
-def _artifact_size_bytes(path: Path) -> int:
+def _artifact_size_bytes(path: Path, *, exclude: str | None = None) -> int:
     if path.is_dir():
-        return sum(file.stat().st_size for file in path.rglob("*") if file.is_file())
+        excluded = path / exclude if exclude is not None else None
+        return sum(
+            file.stat().st_size
+            for file in path.rglob("*")
+            if file.is_file() and file != excluded
+        )
     return path.stat().st_size
 
 
@@ -1466,6 +2263,14 @@ def main():
         help="Keep dynamic sequence shapes instead of ANE-optimized rank-2 shapes",
     )
     parser.add_argument(
+        "--disable-ane-conv-layout",
+        action="store_true",
+        help=(
+            "Skip the BERT BC1S 1x1-conv rewrite used to maximize Neural Engine "
+            "residency"
+        ),
+    )
+    parser.add_argument(
         "--cache-dir",
         default=None,
         help="HuggingFace model cache directory",
@@ -1475,6 +2280,55 @@ def main():
         choices=SEGMENTER_IDS,
         default=None,
         help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    qualification = parser.add_mutually_exclusive_group()
+    qualification.add_argument(
+        "--qualify",
+        dest="qualify",
+        action="store_const",
+        const=True,
+        default=None,
+        help=(
+            "Require qualification of adapter families such as ModernBERT "
+            "(needs Core ML prediction, so macOS)"
+        ),
+    )
+    qualification.add_argument(
+        "--no-qualify",
+        dest="qualify",
+        action="store_const",
+        const=False,
+        help="Skip qualification; the manifest then claims no qualified variant",
+    )
+    parser.add_argument(
+        "--qualification-fixtures",
+        default=None,
+        help="Synthetic benchmark fixture JSON/JSONL for qualification",
+    )
+    parser.add_argument(
+        "--qualification-report",
+        default=None,
+        help="Output path for the qualification report JSON",
+    )
+    parser.add_argument(
+        "--expected-source-revision",
+        default=None,
+        help="Fail unless the source checkpoint resolves to this revision",
+    )
+    parser.add_argument(
+        "--direct-identifier-recall-floor",
+        type=float,
+        default=None,
+        help="Optional absolute direct-identifier recall floor",
+    )
+    parser.add_argument(
+        "--global-attention",
+        choices=("none", "first_token"),
+        default=None,
+        help=(
+            "Global attention fill policy for Longformer packages "
+            "(default: none, the token-classification default)"
+        ),
     )
     parser.add_argument(
         "--publish-to-hub",
@@ -1544,7 +2398,14 @@ def main():
         swift_parity_corpus_path=args.swift_parity_corpus,
         latency_iterations=args.latency_iterations,
         optimize_for_ane=not args.disable_ane_static_shapes,
+        ane_conv_layout=not args.disable_ane_conv_layout,
         segmenter_id=args.segmenter,
+        qualify=args.qualify,
+        qualification_fixtures_path=args.qualification_fixtures,
+        qualification_report_path=args.qualification_report,
+        expected_source_revision=args.expected_source_revision,
+        direct_identifier_recall_floor=args.direct_identifier_recall_floor,
+        global_attention=args.global_attention,
     )
 
 

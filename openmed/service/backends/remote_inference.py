@@ -1,7 +1,9 @@
 """Remote token-classification inference over the KServe V2 protocol.
 
 OpenMed keeps tokenization, offset handling, and entity decoding in-process.
-Only numeric model tensors cross the explicitly configured network boundary.
+Only numeric model tensors cross the explicitly configured network boundary,
+and only when the egress policy (:mod:`openmed.service.egress`) allows the
+``remote_inference`` purpose for the endpoint.
 """
 
 from __future__ import annotations
@@ -15,6 +17,18 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 from openmed.core.offline import is_local_only, raise_offline_error
 from openmed.onnx.inference import _decode_entities
+
+from ..egress import (
+    EgressAdapter,
+    EgressDataClass,
+    EgressDecision,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+    egress_http_client,
+    egress_scope,
+    pinned_grpc_target,
+)
 
 _PROTOCOLS = {"http", "grpc"}
 _NUMPY_TO_KSERVE = {
@@ -152,32 +166,42 @@ class RemoteInferenceSettings:
 
 
 class KServeV2HttpTransport:
-    """JSON implementation of the KServe V2 HTTP inference endpoint."""
+    """JSON implementation of the KServe V2 HTTP inference endpoint.
+
+    The endpoint is authorized by the egress policy when the transport is
+    created and again before every inference call, and the tensor byte total
+    is checked against the decision's budget before the JSON body is built.
+    """
 
     def __init__(
         self,
         settings: RemoteInferenceSettings,
         *,
         client: Any | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         if settings.protocol != "http":
             raise ValueError("KServeV2HttpTransport requires protocol='http'")
         _ensure_remote_allowed()
         self.settings = settings
+        self._egress = _remote_egress_operation(settings.endpoint, egress_policy)
+        self._authorize()
         self._owns_client = client is None
         if client is None:
             try:
-                import httpx
+                client = egress_http_client(
+                    timeout=settings.timeout_seconds,
+                    verify=settings.verify_tls,
+                )
             except ImportError as exc:
                 raise ImportError(
                     "KServe HTTP inference requires the Triton extra. "
                     "Install with: pip install 'openmed[triton]'"
                 ) from exc
-            client = httpx.Client(
-                timeout=settings.timeout_seconds,
-                verify=settings.verify_tls,
-            )
         self.client = client
+
+    def _authorize(self) -> EgressDecision:
+        return _authorize_remote(self._egress, self.settings.endpoint, self.settings)
 
     def infer(
         self,
@@ -187,10 +211,14 @@ class KServeV2HttpTransport:
     ) -> Any:
         """Send tensor data as KServe V2 JSON and return one named output."""
 
+        decision = self._authorize()
         np = _load_numpy()
+        arrays = {name: np.ascontiguousarray(value) for name, value in inputs.items()}
+        decision = decision.require_body(
+            sum(int(array.nbytes) for array in arrays.values())
+        )
         payload_inputs = []
-        for name, value in inputs.items():
-            array = np.ascontiguousarray(value)
+        for name, array in arrays.items():
             payload_inputs.append(
                 {
                     "name": name,
@@ -203,7 +231,8 @@ class KServeV2HttpTransport:
             "inputs": payload_inputs,
             "outputs": [{"name": output_name}],
         }
-        response = self.client.post(self._infer_url(), json=payload)
+        with egress_scope(decision):
+            response = self.client.post(self._infer_url(), json=payload)
         status_code = int(getattr(response, "status_code", 0))
         if not 200 <= status_code < 300:
             raise RuntimeError(
@@ -257,18 +286,26 @@ class KServeV2HttpTransport:
 
 
 class TritonGrpcTransport:
-    """Wire-compatible transport for the KServe V2 gRPC inference API."""
+    """Wire-compatible transport for the KServe V2 gRPC inference API.
+
+    The target is authorized by the egress policy before the channel is
+    created and before every call. An owned channel dials only the addresses
+    that passed the policy while TLS still verifies the configured host name.
+    """
 
     def __init__(
         self,
         settings: RemoteInferenceSettings,
         *,
         rpc: Any | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         if settings.protocol != "grpc":
             raise ValueError("TritonGrpcTransport requires protocol='grpc'")
         _ensure_remote_allowed()
         self.settings = settings
+        self._egress_destination = _grpc_policy_destination(settings.endpoint)
+        self._egress = _remote_egress_operation(self._egress_destination, egress_policy)
         from openmed.service.proto.generated import kserve_v2_pb2
 
         self.messages = kserve_v2_pb2
@@ -281,24 +318,28 @@ class TritonGrpcTransport:
                     "KServe gRPC inference requires the Triton extra. "
                     "Install with: pip install 'openmed[triton]'"
                 ) from exc
-            target, use_tls = _grpc_target(settings.endpoint)
+            _, use_tls = _grpc_target(settings.endpoint)
+            if use_tls and not settings.verify_tls:
+                raise ValueError(
+                    "gRPC TLS verification cannot be disabled; configure a "
+                    "trusted endpoint certificate"
+                )
+            target, options = pinned_grpc_target(self._authorize())
             if use_tls:
-                if not settings.verify_tls:
-                    raise ValueError(
-                        "gRPC TLS verification cannot be disabled; configure a "
-                        "trusted endpoint certificate"
-                    )
                 self.channel = grpc.secure_channel(
                     target,
                     grpc.ssl_channel_credentials(),
+                    options=options,
                 )
             else:
-                self.channel = grpc.insecure_channel(target)
+                self.channel = grpc.insecure_channel(target, options=options)
             rpc = self.channel.unary_unary(
                 "/inference.GRPCInferenceService/ModelInfer",
                 request_serializer=kserve_v2_pb2.ModelInferRequest.SerializeToString,
                 response_deserializer=kserve_v2_pb2.ModelInferResponse.FromString,
             )
+        else:
+            self._authorize()
         self.rpc = rpc
 
     def infer(
@@ -309,13 +350,15 @@ class TritonGrpcTransport:
     ) -> Any:
         """Send named NumPy tensors through the standard unary gRPC method."""
 
+        decision = self._authorize()
         np = _load_numpy()
+        arrays = {name: np.ascontiguousarray(value) for name, value in inputs.items()}
+        decision.require_body(sum(int(array.nbytes) for array in arrays.values()))
         request = self.messages.ModelInferRequest(
             model_name=self.settings.model_name,
             model_version=self.settings.model_version or "",
         )
-        for name, value in inputs.items():
-            array = np.ascontiguousarray(value)
+        for name, array in arrays.items():
             request.inputs.add(
                 name=name,
                 shape=list(array.shape),
@@ -326,6 +369,9 @@ class TritonGrpcTransport:
 
         response = self.rpc(request, timeout=self.settings.timeout_seconds)
         return _grpc_output_array(np, response, output_name)
+
+    def _authorize(self) -> EgressDecision:
+        return _authorize_remote(self._egress, self._egress_destination, self.settings)
 
     def close(self) -> None:
         """Close the underlying gRPC channel when one was created."""
@@ -662,6 +708,39 @@ def _numpy_datatype(dtype: Any) -> str:
         return _NUMPY_TO_KSERVE[name]
     except KeyError as exc:
         raise ValueError(f"Unsupported remote tensor dtype: {name}") from exc
+
+
+def _remote_egress_operation(
+    destination: str,
+    egress_policy: EgressPolicy | None,
+) -> EgressOperation:
+    return EgressOperation(
+        EgressAdapter.REMOTE_INFERENCE,
+        policy=egress_policy,
+        bound_destinations=(destination,),
+    )
+
+
+def _authorize_remote(
+    operation: EgressOperation,
+    destination: str,
+    settings: RemoteInferenceSettings,
+) -> EgressDecision:
+    return operation.authorize(
+        destination,
+        purpose=EgressPurpose.REMOTE_INFERENCE,
+        data_class=EgressDataClass.TENSORS,
+        timeout_seconds=settings.timeout_seconds,
+    )
+
+
+def _grpc_policy_destination(endpoint: str) -> str:
+    """Return the ``grpc://`` or ``grpcs://`` origin the policy evaluates."""
+
+    parsed = urlsplit(endpoint)
+    if parsed.scheme in {"grpc", "grpcs"}:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return f"grpc://{endpoint.rstrip('/')}"
 
 
 def _grpc_target(endpoint: str) -> tuple[str, bool]:

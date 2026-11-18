@@ -1,9 +1,18 @@
 jdk:
-  - openjdk11
+  - openjdk17
 
 before_install:
   - curl -LsSf https://astral.sh/uv/0.11.16/install.sh | env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh
   - $HOME/.local/bin/uv python install 3.12
+  # :openmedkit packages the pinned NDK's libc++_shared.so and strips it with
+  # that NDK; install it when the build image does not already have it.
+  - |
+    NDK="$(sed -n 's/^android-ndk = "\([0-9.]*\)"$/\1/p' android/gradle/libs.versions.toml)"
+    if [ ! -f "$ANDROID_HOME/ndk/$NDK/source.properties" ]; then
+      SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+      [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+      "$SDKMANAGER" --install "ndk;$NDK" < /dev/null
+    fi
 
 install:
-  - PYTHON_BIN="$($HOME/.local/bin/uv python find 3.12)" && cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" -PopenmedPython="$PYTHON_BIN" --stacktrace
+  - PYTHON_BIN="$($HOME/.local/bin/uv python find 3.12)" && cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal :openmedkit-mlkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" -PopenmedPython="$PYTHON_BIN" --stacktrace
