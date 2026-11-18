@@ -23,6 +23,54 @@ Send requests using this JSON shape.
 }
 ```
 
+## Supported message content
+
+The proxy redacts text only. A message's `content` must be a string, `null`
+(for example on an assistant turn that only has `tool_calls`), or a list of
+content parts with these types:
+
+| Role | Accepted part types |
+| --- | --- |
+| `assistant` | `text`, `refusal` |
+| Any other role | `text` |
+
+Any other part refuses the whole request with HTTP 400 and the reason
+`unsupported_content_part`. This includes `image_url`, `input_audio` and
+`file` parts, the Responses API's `input_text` and `output_text`, unknown
+types, and parts that are not objects or have no string `type`. The proxy does
+not strip the part or forward the rest of the request. It checks every message
+before the extractor, the tripwire or the transport runs, so text earlier in
+the request is never redacted or sent when a later part is refused.
+
+```json
+{
+  "error": {
+    "code": "privacy_proxy_invalid_request",
+    "message": "Privacy proxy request failed",
+    "details": {
+      "reason": "unsupported_content_part",
+      "part_type": "image_url",
+      "message_index": 1
+    }
+  }
+}
+```
+
+`message_index` is the zero-based position of the first refused message in
+`messages`. `part_type` is `refusal`, `image_url`, `input_audio` or `file`
+when the part used one of those types. Any other string type is reported as
+`unknown`, and a missing or non-string type, or a part that is not an object,
+as `invalid`. The error never contains the part's data or the caller's own
+`type` value. A `content` value that is neither a string, `null` nor a list,
+such as a single part object, gets `message_content_invalid` instead.
+
+Before this check, the proxy forwarded these parts after running their string
+values, such as base64 `data:` URLs, through the text detector, which cannot
+find identifiers inside an image, a recording or a document. Clients that send
+images, audio or files now get a 400 and must remove those parts or redact
+them before calling the proxy. Redacting media through the multimodal pipeline
+is not part of this route.
+
 Create the app with a local transport. The transport receives a copied request
 mapping whose text leaves contain deterministic `OPENMED_PHI` placeholders;
 the in-memory replacement map is not passed in metadata and is discarded when
@@ -75,8 +123,9 @@ this order, and the first two read headers only:
    counted as they arrive.
 
 After parsing, the proxy checks the message count and the total characters
-across every text value it would redact. Both checks run before the extractor
-or the transport is called. Streaming responses also have a wall-clock bound.
+across every text value it would redact, then the `X-Request-ID` header, then
+the content-part types. All of these run before the extractor or the transport
+is called. Streaming responses also have a wall-clock bound.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -124,14 +173,16 @@ read them without sending a request. They hold no raw credentials.
 Proxy errors share one envelope:
 `{"error": {"code": ..., "message": ..., "details": {"reason": ...}}}`. The
 message is fixed, and no error carries message text, placeholders or the
-replacement map.
+replacement map. Only `unsupported_content_part` adds fields to `details`:
+`part_type` and `message_index`, described under
+[Supported message content](#supported-message-content).
 
 | Status | Code | Reasons |
 | --- | --- | --- |
 | 400 | `bad_request` | Untrusted `Host` header (shared service envelope) |
 | 401 / 403 / 429 | `authentication_required`, `invalid_credentials`, `forbidden`, `auth_rate_limited` | Shared service auth envelope |
 | 413 | `request_size_exceeded` | Body over the byte limit (shared operational-limit envelope) |
-| 400 | `privacy_proxy_invalid_request` | `invalid_json`, `messages_required`, `invalid_message`, `message_role_required`, `message_content_required`, `model_invalid`, `stream_invalid`, `request_id_invalid` |
+| 400 | `privacy_proxy_invalid_request` | `invalid_json`, `messages_required`, `invalid_message`, `message_role_required`, `message_content_required`, `message_content_invalid`, `unsupported_content_part`, `model_invalid`, `stream_invalid`, `request_id_invalid` |
 | 413 | `privacy_proxy_limit_exceeded` | `message_count_exceeded`, `text_length_exceeded` |
 | 400 | `privacy_proxy_redaction_failed` | `redaction_failed`, `outbound_tripwire_detected`, `placeholder_collision` and policy reasons |
 | 502 | `privacy_proxy_transport_failed` | `transport_failed`, `transport_not_callable`, `invalid_transport_response` |
