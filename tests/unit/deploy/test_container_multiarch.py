@@ -5,9 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 DEPLOY_DOCKERFILE = ROOT / "deploy" / "docker" / "Dockerfile"
 ROOT_DOCKERFILE = ROOT / "Dockerfile"
+HELM_VALUES = ROOT / "deploy" / "helm" / "openmed-service" / "values.yaml"
 WORKFLOW = ROOT / ".github" / "workflows" / "container-multiarch.yml"
 ARM_LATENCY_DOCS = ROOT / "docs" / "benchmarks" / "arm-latency.md"
 DOCS = ROOT / "docs" / "deploy" / "multi-arch.md"
@@ -74,6 +77,30 @@ def test_runtime_images_omit_unrelated_sources_and_remove_installer() -> None:
         assert source.index("python -m pip check") < source.index(
             "python -m pip uninstall --yes pip"
         )
+
+
+def test_runtime_images_default_to_the_chart_non_root_user() -> None:
+    values = yaml.safe_load(HELM_VALUES.read_text(encoding="utf-8"))
+    uid = values["securityContext"]["runAsUser"]
+    gid = values["securityContext"]["runAsGroup"]
+    home = values["writableVolumes"]["home"]["mountPath"]
+    assert uid == gid == values["podSecurityContext"]["runAsUser"] == 65532
+    assert values["persistence"]["mountPath"] == f"{home}/.cache"
+
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        user_lines = [line for line in source.splitlines() if line.startswith("USER ")]
+        # The last USER wins at runtime; it must be the chart's numeric
+        # UID/GID so kubelet can verify runAsNonRoot without /etc/passwd.
+        assert user_lines == [f"USER {uid}:{gid}"]
+        assert source.index("python -m pip uninstall --yes pip") < source.index(
+            user_lines[0]
+        )
+        assert source.index(user_lines[0]) < source.index("CMD ")
+        assert f"useradd --uid {uid} --gid {gid}" in source
+        assert f"--home-dir {home}" in source
+        assert f"install -d -o {uid} -g {gid} -m 0755 {home}/.cache" in source
+        assert f"ENV HOME={home}" in source
 
 
 def test_runtime_uuid_pin_uses_available_repository_revision() -> None:

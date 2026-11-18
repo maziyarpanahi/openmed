@@ -4,9 +4,9 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.google.mlkit.vision.common.InputImage
 import com.openmed.openmedkit.ocr.MlKitOcrAdapter
 import com.openmed.openmedkit.ocr.OcrAdapter
+import com.openmed.openmedkit.ocr.OcrImage
 import com.openmed.openmedkit.ocr.OcrResult
 import com.openmed.openmedkit.ocr.OcrToken
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +49,7 @@ class ScanFlowViewModel(
     var uiState by mutableStateOf(ScanUiState())
         private set
 
-    suspend fun processImage(image: InputImage, source: ScanSource) {
+    suspend fun processImage(image: OcrImage, source: ScanSource) {
         if (uiState.isWorking) {
             return
         }
@@ -125,9 +125,9 @@ class ScanPipeline(
     private val ocrAdapter: OcrAdapter,
     private val deidentifier: OnDeviceDeidentifier,
 ) {
-    suspend fun recognize(image: InputImage): OcrResult = ocrAdapter.recognize(image)
+    suspend fun recognize(image: OcrImage): OcrResult = ocrAdapter.recognize(image)
 
-    suspend fun run(image: InputImage): ScanPipelineResult =
+    suspend fun run(image: OcrImage): ScanPipelineResult =
         processOcrResult(recognize(image))
 
     fun processOcrResult(ocrResult: OcrResult): ScanPipelineResult {

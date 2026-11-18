@@ -11,12 +11,22 @@ from openmed.structured.decision import (
     decision_request_schema,
     decision_result_schema,
 )
+from openmed.structured.decision_interop import (
+    openai_decisions_request_schema,
+    openai_decisions_response_schema,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "openmed" / "core" / "schemas" / "json"
 OUTPUTS = {
     SCHEMA_DIR / "decision_request.schema.json": decision_request_schema,
     SCHEMA_DIR / "decision_result.schema.json": decision_result_schema,
+    SCHEMA_DIR / "decision_openai_request.schema.json": (
+        openai_decisions_request_schema
+    ),
+    SCHEMA_DIR / "decision_openai_response.schema.json": (
+        openai_decisions_response_schema
+    ),
 }
 
 

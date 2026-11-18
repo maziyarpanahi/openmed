@@ -278,6 +278,44 @@ def test_balanced_permissive_group_is_supported() -> None:
     )
 
 
+def test_with_accepts_only_reviewed_permission_granting_exceptions(subtests) -> None:
+    for expression, expected in [
+        ("Apache-2.0 WITH Swift-exception", inventory.LicenseClass.PERMISSIVE),
+        (
+            "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+            inventory.LicenseClass.PERMISSIVE,
+        ),
+        ("(MIT OR Apache-2.0) AND Unicode-3.0", inventory.LicenseClass.PERMISSIVE),
+        ("CC0-1.0 OR MIT-0 OR Apache-2.0", inventory.LicenseClass.PERMISSIVE),
+        ("Apache-2.0 WITH Classpath-exception-2.0", inventory.LicenseClass.UNKNOWN),
+        ("GPL-3.0-only WITH LLVM-exception", inventory.LicenseClass.RESTRICTED),
+        ("Apache-2.0 WITH", inventory.LicenseClass.UNKNOWN),
+        ("WITH LLVM-exception", inventory.LicenseClass.UNKNOWN),
+        ("(Apache-2.0) WITH LLVM-exception", inventory.LicenseClass.UNKNOWN),
+        (
+            "Apache-2.0 WITH LLVM-exception WITH Swift-exception",
+            inventory.LicenseClass.UNKNOWN,
+        ),
+        ("Apache-2.0 WITH LLVM-exception MIT", inventory.LicenseClass.UNKNOWN),
+    ]:
+        with subtests.test(expression=expression):
+            assert inventory.classify_license(expression) == expected
+
+
+def test_widened_allowlist_does_not_override_restricted_tokens() -> None:
+    widened = inventory.PERMISSIVE_LICENSES | {"epl-1-0", "gpl-3-0-only"}
+
+    assert inventory.classify_license("EPL-1.0") == inventory.LicenseClass.UNKNOWN
+    assert (
+        inventory.classify_license("EPL-1.0", permissive_licenses=widened)
+        == inventory.LicenseClass.PERMISSIVE
+    )
+    assert (
+        inventory.classify_license("GPL-3.0-only", permissive_licenses=widened)
+        == inventory.LicenseClass.RESTRICTED
+    )
+
+
 def test_mapping_cannot_silently_drop_or_rename_entries(subtests, tmp_path) -> None:
     case_root = tmp_path
     for entries in [

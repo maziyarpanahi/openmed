@@ -589,6 +589,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .multimodal_preflight import add_multimodal_preflight_command
 
     add_multimodal_preflight_command(subparsers)
+    from .service_preflight import add_service_preflight_command
+
+    add_service_preflight_command(subparsers)
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
@@ -601,6 +604,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
+    from .service_recovery import add_service_recovery_command
+
+    add_service_recovery_command(subparsers)
     _add_policy_command(subparsers)
     _add_export_command(subparsers)
     _add_fhir_command(subparsers)
@@ -633,9 +639,18 @@ def build_parser() -> argparse.ArgumentParser:
     _add_completion_command(subparsers)
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
+    from .recovery import add_recovery_command
+
+    add_recovery_command(subparsers)
+    from .migrations import add_migrations_command
+
+    add_migrations_command(subparsers)
     add_active_learning_command(subparsers)
     add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
+    from .service_diagnostics import add_service_command
+
+    add_service_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
     add_repro_command(subparsers)

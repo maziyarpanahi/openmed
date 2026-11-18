@@ -3,7 +3,6 @@ import childProcess from "node:child_process";
 import dgram from "node:dgram";
 import dns from "node:dns";
 import dnsPromises from "node:dns/promises";
-import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import http from "node:http";
 import http2 from "node:http2";
@@ -11,35 +10,53 @@ import https from "node:https";
 import net from "node:net";
 import { join } from "node:path";
 import tls from "node:tls";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
-  deidentify,
   type OpenMedDeidentifyResult,
   type OpenMedSpan,
   type TokenClassificationPipeline,
 } from "../../js/openmedkit-web/src/index";
 import {
+  ELECTRON_DEIDENTIFY_ERROR_CODES,
+  ElectronDeidentifyError,
   ElectronDeidentifyService,
+  ElectronHardeningError,
+  OPENMED_CANCEL_CHANNEL,
   OPENMED_DEIDENTIFY_CHANNEL,
   OPENMED_ELECTRON_SCHEMA_VERSION,
+  OPENMED_HARDENED_WEB_PREFERENCES,
+  OPENMED_RENDERER_CSP,
+  WEB_PREFERENCE_RELAXATIONS,
+  assertHardenedWebPreferences,
   createElectronDeidentifyClient,
+  createHardenedWebPreferences,
+  findWebPreferenceRelaxations,
+  hardenOpenMedSession,
+  hardenOpenMedWebContents,
+  isAllowedOpenMedOrigin,
   redactTextWithSpans,
   registerElectronDeidentifyIpc,
   type ElectronDeidentifyRequest,
-  type ElectronOfflineSessionLike,
-  type IpcMainLike,
   type RendererOpenMedSpan,
-  type UtilityProcessLike,
   type UtilityProcessModuleLike,
 } from "../../js/openmedkit-electron/src/index";
 import {
   createUtilityDeidentifyHandler,
   installOfflineNetworkGuard,
 } from "../../js/openmedkit-electron/src/utility-process";
+import {
+  FakeIpcMain,
+  FakeOfflineSession,
+  FakeSender,
+  FakeUtilityProcessModule,
+  ManualUtilityProcessModule,
+  legacyModelPath,
+  rootDir,
+  until,
+  workerPath,
+} from "./electron_test_support";
 
-const rootDir = fileURLToPath(new URL("../..", import.meta.url));
 const fixturePath = join(
   rootDir,
   "tests",
@@ -61,9 +78,9 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
       return fixturePipeline;
     },
   });
-  const utilityProcess = new FakeUtilityProcessModule(async (message) => {
+  const utilityProcess = new FakeUtilityProcessModule(() => async (message) => {
     const response = await handler(message);
-    if (!response.ok) {
+    if (response === null || response.type !== "deidentify-result" || !response.ok) {
       return response;
     }
     return {
@@ -75,25 +92,21 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
   const service = new ElectronDeidentifyService({
     utilityProcess,
     offlineSession,
-    workerPath: join(
-      rootDir,
-      "js",
-      "openmedkit-electron",
-      "dist",
-      "utility-process.js",
-    ),
-    modelPath: join(rootDir, "tests", "web", "fixtures", "local-model-cache"),
+    workerPath,
+    modelPath: legacyModelPath,
     logger: (entry) => mainLogs.push(entry),
   });
   const ipcMain = new FakeIpcMain();
+  const trusted = new Set([new FakeSender(1), new FakeSender(2)]);
+  const [firstSender, secondSender] = [...trusted];
   const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
-    isTrustedSender: (event) => event.sender === "trusted-window",
+    isTrustedSender: (event) => trusted.has(event.sender as FakeSender),
   });
   const firstWindow = createElectronDeidentifyClient(
-    ipcMain.createRenderer(rendererLogs),
+    ipcMain.createRenderer(firstSender as FakeSender, rendererLogs),
   );
   const secondWindow = createElectronDeidentifyClient(
-    ipcMain.createRenderer(rendererLogs),
+    ipcMain.createRenderer(secondSender as FakeSender, rendererLogs),
   );
   const restoreNetwork = installOfflineNetworkGuard();
   const restoreConsole = captureConsole(rendererLogs);
@@ -142,14 +155,9 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
 
     const first = await firstWindow.deidentify(golden.text);
     const second = await secondWindow.deidentify(golden.text);
-    assertRendererSpansClose(
-      first.spans,
-      golden.spans.map(projectGoldenSpan),
-    );
-    assertRendererSpansClose(
-      second.spans,
-      golden.spans.map(projectGoldenSpan),
-    );
+    assertRendererSpansClose(first.spans, golden.spans.map(projectGoldenSpan));
+    assertRendererSpansClose(second.spans, golden.spans.map(projectGoldenSpan));
+    assert.equal(first.bundle, null, "legacy model paths are not verified bundles");
     assert.equal(redactTextWithSpans(golden.text, first.spans), golden.deidentifiedText);
     assert.equal(utilityProcess.forkCount, 1);
     assert.equal(utilityProcess.lastFork?.workerPath.endsWith("utility-process.js"), true);
@@ -162,6 +170,10 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
     assert.equal(JSON.stringify(utilityProcess.lastFork).includes("Alice"), false);
     assert.equal(modelLoadCount, 1, "model cache must be shared across windows");
     assert.deepEqual(offlineSession.simulateRequest(), { cancel: true });
+    assert.deepEqual(ipcMain.channels(), [
+      OPENMED_DEIDENTIFY_CHANNEL,
+      OPENMED_CANCEL_CHANNEL,
+    ].sort());
 
     for (const span of first.spans) {
       assert.deepEqual(Object.keys(span).sort(), [
@@ -180,6 +192,7 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
     unregister();
     service.dispose();
   }
+  assert.deepEqual(ipcMain.channels(), []);
 
   const combinedLogs = JSON.stringify({ mainLogs, rendererLogs });
   for (const phi of ["Alice", "Nguyen", "1979-04-12", "alice@example.org"]) {
@@ -188,27 +201,135 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
 });
 
 test("Electron IPC rejects untrusted senders before inference", async () => {
-  const utilityProcess = new FakeUtilityProcessModule(async () => {
+  const utilityProcess = new FakeUtilityProcessModule(() => async () => {
     throw new Error("must not run");
   });
   const service = createService(utilityProcess);
   const ipcMain = new FakeIpcMain();
+  const trusted = new FakeSender(1);
   const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
-    isTrustedSender: (event) => event.sender === "trusted-window",
+    isTrustedSender: (event) => event.sender === trusted,
   });
 
   try {
     const client = createElectronDeidentifyClient(
-      ipcMain.createRenderer([], "untrusted-window"),
+      ipcMain.createRenderer(new FakeSender(2)),
     );
-    await assert.rejects(
-      client.deidentify("Synthetic patient note"),
-      /Unauthorized OpenMed Electron IPC sender/,
-    );
+    const error = await rejection(client.deidentify("Synthetic patient note"));
+    assert.equal(error.code, "UNTRUSTED_SENDER");
+    assert.match(error.message, /Unauthorized OpenMed Electron IPC sender/);
     assert.equal(utilityProcess.forkCount, 0);
   } finally {
     unregister();
     service.dispose();
+  }
+});
+
+test("IPC refuses trusted senders whose web preferences are relaxed", async () => {
+  const utilityProcess = new FakeUtilityProcessModule(() => async () => {
+    throw new Error("must not run");
+  });
+  const service = createService(utilityProcess);
+  const ipcMain = new FakeIpcMain();
+  const relaxedPreferences: Array<Record<string, unknown>> = [
+    { contextIsolation: false },
+    { sandbox: false },
+    { nodeIntegration: true },
+    { nodeIntegrationInWorker: true },
+    { nodeIntegrationInSubFrames: true },
+    { webSecurity: false },
+    { allowRunningInsecureContent: true },
+    { webviewTag: true },
+    { experimentalFeatures: true },
+    { enableBlinkFeatures: "SyntheticFeature" },
+  ];
+  const senders = [
+    ...relaxedPreferences.map(
+      (override, index) =>
+        new FakeSender(index + 10, { ...OPENMED_HARDENED_WEB_PREFERENCES, ...override }),
+    ),
+    new FakeSender(40, { contextIsolation: true, nodeIntegration: false }),
+    new FakeSender(41, null),
+  ];
+  const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+    isTrustedSender: () => true,
+  });
+
+  try {
+    for (const sender of [...senders, { id: 50 }]) {
+      const client = createElectronDeidentifyClient(ipcMain.createRenderer(sender));
+      const error = await rejection(client.deidentify("Synthetic patient note"));
+      assert.equal(error.code, "UNTRUSTED_SENDER");
+    }
+    assert.equal(utilityProcess.forkCount, 0);
+  } finally {
+    unregister();
+    service.dispose();
+  }
+});
+
+test("IPC refuses renderer-chosen model paths, bundles, runtimes and policies", async () => {
+  const utilityProcess = new FakeUtilityProcessModule(() => async () => {
+    throw new Error("must not run");
+  });
+  const service = createService(utilityProcess);
+  const ipcMain = new FakeIpcMain();
+  const sender = new FakeSender(1);
+  const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+    isTrustedSender: (event) => event.sender === sender,
+  });
+  const raw = ipcMain.createRenderer(sender);
+  const base = {
+    schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
+    requestId: "attack-1",
+    text: "Synthetic patient note",
+  };
+
+  try {
+    for (const extra of [
+      { modelPath: "/synthetic/elsewhere" },
+      { bundle: { root: "/synthetic/elsewhere" } },
+      { bundleRoot: "/synthetic/elsewhere" },
+      { trustPolicy: { keys: [] } },
+      { generation: 99 },
+      { runtime: "pytorch" },
+      { policy: { allow: "all" } },
+      { type: "load-bundle" },
+    ]) {
+      const response = (await raw.invoke(OPENMED_DEIDENTIFY_CHANNEL, {
+        ...base,
+        ...extra,
+      })) as Record<string, unknown>;
+      assert.deepEqual(response, {
+        schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
+        requestId: "attack-1",
+        ok: false,
+        errorCode: "INVALID_REQUEST",
+      });
+    }
+    for (const malformed of [null, [], "text", { ...base, schemaVersion: 2 }]) {
+      const response = (await raw.invoke(OPENMED_DEIDENTIFY_CHANNEL, malformed)) as {
+        errorCode: string;
+      };
+      assert.equal(response.errorCode, "INVALID_REQUEST");
+    }
+    await assert.rejects(raw.invoke("openmed:activate-bundle", base), /No handler/);
+    const cancel = (await raw.invoke(OPENMED_CANCEL_CHANNEL, {
+      ...base,
+    })) as { errorCode: string };
+    assert.equal(cancel.errorCode, "INVALID_REQUEST");
+    assert.equal(utilityProcess.forkCount, 0);
+  } finally {
+    unregister();
+    service.dispose();
+  }
+});
+
+test("error codes are value-free and cover the IPC failure contract", () => {
+  for (const code of ELECTRON_DEIDENTIFY_ERROR_CODES) {
+    const error = new ElectronDeidentifyError(code);
+    assert.equal(error.code, code);
+    assert.doesNotMatch(error.message, /[/\\]|Alice|sha256/);
   }
 });
 
@@ -259,17 +380,18 @@ test("renderer span validation rejects unsafe bounds and overlap", () => {
 });
 
 test("service rejects corrupt utility output and restarts safely", async () => {
-  const utilityProcess = new FakeUtilityProcessModule(async (message) => {
+  const utilityProcess = new FakeUtilityProcessModule(() => async (message) => {
     const request = message as ElectronDeidentifyRequest;
     return utilitySuccess(request.requestId, [rendererSpan(0, request.text.length + 1)]);
   });
   const service = createService(utilityProcess);
 
   try {
-    await assert.rejects(
+    const error = await rejection(
       service.deidentify(electronRequest("invalid-output", "Synthetic note")),
-      /invalid response/,
     );
+    assert.equal(error.code, "INVALID_UTILITY_RESPONSE");
+    assert.match(error.message, /invalid response/);
     assert.equal(utilityProcess.children[0]?.killed, true);
   } finally {
     service.dispose();
@@ -285,17 +407,22 @@ test("timeout retires the worker and ignores its stale response", async () => {
     const firstResult = service.deidentify(request);
     const firstChild = utilityProcess.children[0];
     assert.ok(firstChild);
-    await assert.rejects(firstResult, /timed out/);
+    const firstError = await rejection(firstResult);
+    assert.equal(firstError.code, "REQUEST_TIMEOUT");
+    assert.match(firstError.message, /timed out/);
     assert.equal(firstChild.killed, true);
 
     const secondResult = service.deidentify(request);
     const secondChild = utilityProcess.children[1];
     assert.ok(secondChild);
-    firstChild.reply(utilitySuccess(request.requestId, [rendererSpan(0, 4)]));
-    secondChild.reply(utilitySuccess(request.requestId, [rendererSpan(0, 4)]));
+    firstChild.reply(utilitySuccess(jobIdOf(firstChild.messages[0]), [rendererSpan(0, 4)]));
+    secondChild.reply(
+      utilitySuccess(jobIdOf(secondChild.messages[0]), [rendererSpan(0, 4)]),
+    );
 
     const response = await secondResult;
     assert.deepEqual(response.spans, [rendererSpan(0, 4)]);
+    assert.equal(response.requestId, request.requestId);
   } finally {
     service.dispose();
   }
@@ -313,14 +440,38 @@ test("service bounds pending work and isolates logger failures", async () => {
 
   try {
     const firstResult = service.deidentify(firstRequest);
-    await assert.rejects(
-      service.deidentify(electronRequest("second", "Note")),
-      /queue is full/,
-    );
-    utilityProcess.children[0]?.reply(
-      utilitySuccess(firstRequest.requestId, [rendererSpan(0, 4)]),
-    );
+    const full = await rejection(service.deidentify(electronRequest("second", "Note")));
+    assert.equal(full.code, "QUEUE_FULL");
+    assert.match(full.message, /queue is full/);
+    const duplicate = await rejection(service.deidentify(firstRequest));
+    assert.equal(duplicate.code, "DUPLICATE_REQUEST");
+    const child = utilityProcess.children[0];
+    assert.ok(child);
+    child.reply(utilitySuccess(jobIdOf(child.messages[0]), [rendererSpan(0, 4)]));
     assert.deepEqual((await firstResult).spans, [rendererSpan(0, 4)]);
+  } finally {
+    service.dispose();
+  }
+});
+
+test("request ids are scoped per renderer and may repeat across renderers", async () => {
+  const utilityProcess = new ManualUtilityProcessModule();
+  const service = createService(utilityProcess);
+  const request = electronRequest("shared-id", "Note");
+
+  try {
+    const first = service.deidentify(request, { owner: "window-a" });
+    const second = service.deidentify(request, { owner: "window-b" });
+    const duplicate = await rejection(service.deidentify(request, { owner: "window-a" }));
+    assert.equal(duplicate.code, "DUPLICATE_REQUEST");
+    const child = utilityProcess.children[0];
+    assert.ok(child);
+    const [firstJob, secondJob] = child.messages.map(jobIdOf);
+    assert.notEqual(firstJob, secondJob);
+    child.reply(utilitySuccess(secondJob as string, [rendererSpan(0, 2)]));
+    child.reply(utilitySuccess(firstJob as string, [rendererSpan(0, 4)]));
+    assert.deepEqual((await first).spans, [rendererSpan(0, 4)]);
+    assert.deepEqual((await second).spans, [rendererSpan(0, 2)]);
   } finally {
     service.dispose();
   }
@@ -350,167 +501,283 @@ test("utility inference is serialized while its pipeline cache is shared", async
     handler(utilityRequest("parallel-first", golden.text)),
     handler(utilityRequest("parallel-second", golden.text)),
   ]);
-  assert.equal(first.ok, true);
-  assert.equal(second.ok, true);
+  assert.equal(first?.type === "deidentify-result" && first.ok, true);
+  assert.equal(second?.type === "deidentify-result" && second.ok, true);
   assert.equal(modelLoadCount, 1);
   assert.equal(maximumActive, 1);
 });
 
-class FakeUtilityProcess extends EventEmitter implements UtilityProcessLike {
-  killed = false;
+test("hardened web preferences refuse every relaxation", () => {
+  const hardened = createHardenedWebPreferences({ preload: "/synthetic/preload.cjs" });
+  assert.deepEqual(findWebPreferenceRelaxations(hardened), []);
+  assert.equal(hardened.contextIsolation, true);
+  assert.equal(hardened.sandbox, true);
+  assert.equal(hardened.nodeIntegration, false);
+  assert.equal(hardened.webSecurity, true);
+  assertHardenedWebPreferences(hardened);
+  assert.throws(() => createHardenedWebPreferences({ preload: "" }), TypeError);
 
-  constructor(
-    private readonly handler: (message: unknown) => Promise<unknown>,
-  ) {
-    super();
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ contextIsolation: false }, "context_isolation_disabled"],
+    [{ contextIsolation: undefined }, "context_isolation_disabled"],
+    [{ sandbox: false }, "sandbox_disabled"],
+    [{ sandbox: undefined }, "sandbox_disabled"],
+    [{ nodeIntegration: true }, "node_integration_enabled"],
+    [{ nodeIntegration: undefined }, "node_integration_enabled"],
+    [{ nodeIntegrationInWorker: true }, "node_integration_in_worker_enabled"],
+    [{ nodeIntegrationInSubFrames: true }, "node_integration_in_subframes_enabled"],
+    [{ webSecurity: false }, "web_security_disabled"],
+    [{ allowRunningInsecureContent: true }, "insecure_content_allowed"],
+    [{ webviewTag: true }, "webview_tag_enabled"],
+    [{ experimentalFeatures: true }, "experimental_features_enabled"],
+    [{ enableBlinkFeatures: "SyntheticFeature" }, "blink_features_enabled"],
+  ];
+  const seen = new Set<string>();
+  for (const [override, relaxation] of cases) {
+    const preferences = { ...hardened, ...override };
+    assert.deepEqual(findWebPreferenceRelaxations(preferences), [relaxation]);
+    assert.throws(
+      () => assertHardenedWebPreferences(preferences),
+      (error: unknown) =>
+        error instanceof ElectronHardeningError &&
+        error.relaxations.length === 1 &&
+        error.relaxations[0] === relaxation,
+    );
+    seen.add(relaxation);
   }
+  assert.deepEqual(findWebPreferenceRelaxations(null), ["web_preferences_invalid"]);
+  seen.add("web_preferences_invalid");
+  assert.deepEqual([...seen].sort(), [...WEB_PREFERENCE_RELAXATIONS].sort());
+});
 
-  postMessage(message: unknown): void {
-    void this.handler(message).then((response) => this.emit("message", response));
+test("renderer CSP refuses inline code, eval, network and frames", () => {
+  const directives = new Map(
+    OPENMED_RENDERER_CSP.split(";").map((directive) => {
+      const [name, ...values] = directive.trim().split(/\s+/);
+      return [name as string, values];
+    }),
+  );
+  assert.deepEqual(directives.get("default-src"), ["'none'"]);
+  assert.deepEqual(directives.get("script-src"), ["'self'"]);
+  assert.deepEqual(directives.get("connect-src"), ["'none'"]);
+  assert.deepEqual(directives.get("object-src"), ["'none'"]);
+  assert.deepEqual(directives.get("frame-src"), ["'none'"]);
+  assert.deepEqual(directives.get("frame-ancestors"), ["'none'"]);
+  assert.deepEqual(directives.get("base-uri"), ["'none'"]);
+  assert.deepEqual(directives.get("form-action"), ["'none'"]);
+  assert.deepEqual(directives.get("worker-src"), ["'none'"]);
+  for (const values of directives.values()) {
+    for (const value of values) {
+      assert.ok(
+        value === "'self'" || value === "'none'",
+        "renderer CSP may only use 'self' or 'none'",
+      );
+    }
   }
+});
 
-  kill(): boolean {
-    this.killed = true;
-    this.emit("exit", 0);
-    return true;
-  }
-}
-
-class FakeUtilityProcessModule implements UtilityProcessModuleLike {
-  forkCount = 0;
-  readonly children: FakeUtilityProcess[] = [];
-  lastFork:
-    | {
-        workerPath: string;
-        args: string[];
-        options?: {
-          env?: Record<string, string>;
-          session?: ElectronOfflineSessionLike;
-          serviceName?: string;
-          stdio?: "ignore";
-        };
-      }
-    | undefined;
-
-  constructor(
-    private readonly handler: (message: unknown) => Promise<unknown>,
-  ) {}
-
-  fork(
-    workerPath: string,
-    args: string[] = [],
-    options?: {
-      env?: Record<string, string>;
-      session?: ElectronOfflineSessionLike;
-      serviceName?: string;
-      stdio?: "ignore";
+test("window guard blocks off-origin navigation, popups and webviews", () => {
+  const events = new Map<string, (...args: unknown[]) => void>();
+  let openHandler: ((details: { url: string }) => { action: "deny" }) | undefined;
+  const blocked: string[] = [];
+  const contents = {
+    on(event: string, listener: (...args: never[]) => void) {
+      events.set(event, listener as (...args: unknown[]) => void);
+      return contents;
     },
-  ): UtilityProcessLike {
-    this.forkCount += 1;
-    this.lastFork = options
-      ? { workerPath, args, options }
-      : { workerPath, args };
-    const child = new FakeUtilityProcess(this.handler);
-    this.children.push(child);
-    return child;
-  }
-}
-
-class ManualUtilityProcess extends EventEmitter implements UtilityProcessLike {
-  readonly messages: unknown[] = [];
-  killed = false;
-
-  postMessage(message: unknown): void {
-    this.messages.push(message);
-  }
-
-  reply(message: unknown): void {
-    this.emit("message", message);
-  }
-
-  kill(): boolean {
-    this.killed = true;
-    this.emit("exit", 0);
-    return true;
-  }
-}
-
-class ManualUtilityProcessModule implements UtilityProcessModuleLike {
-  readonly children: ManualUtilityProcess[] = [];
-
-  fork(): UtilityProcessLike {
-    const child = new ManualUtilityProcess();
-    this.children.push(child);
-    return child;
-  }
-}
-
-interface FakeIpcEvent {
-  sender: string;
-}
-
-class FakeIpcMain implements IpcMainLike<FakeIpcEvent> {
-  private readonly handlers = new Map<
-    string,
-    (event: FakeIpcEvent, request: unknown) => Promise<unknown> | unknown
-  >();
-
-  handle(
-    channel: string,
-    listener: (
-      event: FakeIpcEvent,
-      request: unknown,
-    ) => Promise<unknown> | unknown,
-  ): void {
-    this.handlers.set(channel, listener);
-  }
-
-  removeHandler(channel: string): void {
-    this.handlers.delete(channel);
-  }
-
-  createRenderer(logs: unknown[], sender = "trusted-window") {
-    return {
-      invoke: async (channel: string, request: unknown): Promise<unknown> => {
-        assert.equal(channel, OPENMED_DEIDENTIFY_CHANNEL);
-        const handler = this.handlers.get(channel);
-        assert.ok(handler);
-        const response = await handler({ sender }, request);
-        logs.push({ event: "deidentify_completed" });
-        return response;
-      },
-    };
-  }
-}
-
-class FakeOfflineSession implements ElectronOfflineSessionLike {
-  private listener:
-    | ((
-        details: unknown,
-        callback: (response: { cancel: boolean }) => void,
-      ) => void)
-    | null = null;
-
-  readonly webRequest = {
-    onBeforeRequest: (
-      listener:
-        | ((
-            details: unknown,
-            callback: (response: { cancel: boolean }) => void,
-          ) => void)
-        | null,
-    ): void => {
-      this.listener = listener;
+    setWindowOpenHandler(handler: (details: { url: string }) => { action: "deny" }) {
+      openHandler = handler;
     },
+    getLastWebPreferences: () => ({ ...OPENMED_HARDENED_WEB_PREFERENCES }),
   };
+  hardenOpenMedWebContents(contents, {
+    allowedOrigins: ["app://openmed"],
+    onBlocked: (event) => blocked.push(event),
+  });
 
-  simulateRequest(): { cancel: boolean } | undefined {
-    let response: { cancel: boolean } | undefined;
-    this.listener?.({}, (value) => {
-      response = value;
-    });
-    return response;
+  const navigate = (name: string, url: string) => {
+    let prevented = false;
+    events.get(name)?.({ url, preventDefault: () => (prevented = true) });
+    return prevented;
+  };
+  for (const name of ["will-navigate", "will-redirect", "will-frame-navigate"]) {
+    assert.equal(navigate(name, "https://example.invalid/"), true);
+    assert.equal(navigate(name, "file:///synthetic/index.html"), true);
+    assert.equal(navigate(name, "app://openmed.example.invalid/"), true);
+    assert.equal(navigate(name, "app://openmed/index.html"), false);
   }
+  assert.deepEqual(openHandler?.({ url: "app://openmed/index.html" }), { action: "deny" });
+  let webviewPrevented = false;
+  events.get("will-attach-webview")?.({ preventDefault: () => (webviewPrevented = true) });
+  assert.equal(webviewPrevented, true);
+  assert.ok(blocked.includes("navigation_blocked"));
+  assert.ok(blocked.includes("window_open_blocked"));
+  assert.ok(blocked.includes("webview_blocked"));
+
+  const relaxed = { ...contents, getLastWebPreferences: () => ({ sandbox: false }) };
+  assert.throws(
+    () => hardenOpenMedWebContents(relaxed, { allowedOrigins: ["app://openmed"] }),
+    ElectronHardeningError,
+  );
+  for (const origins of [[], ["https://example.invalid"], ["file://"], ["http://localhost"]]) {
+    assert.throws(
+      () => hardenOpenMedWebContents(contents, { allowedOrigins: origins }),
+      TypeError,
+    );
+  }
+  assert.equal(isAllowedOpenMedOrigin("app://user:pw@openmed/", ["app://openmed"]), false);
+  assert.equal(isAllowedOpenMedOrigin("not a url", ["app://openmed"]), false);
+});
+
+test("session guard denies permissions, off-origin requests and weaker CSP", () => {
+  let permissionHandler:
+    | ((contents: unknown, permission: string, callback: (granted: boolean) => void) => void)
+    | null = null;
+  let checkHandler: (() => boolean) | null = null;
+  let beforeRequest:
+    | ((details: { url: string }, callback: (response: { cancel: boolean }) => void) => void)
+    | undefined;
+  let headersReceived:
+    | ((
+        details: { url: string; responseHeaders?: Record<string, string[]> },
+        callback: (response: {
+          cancel?: boolean;
+          responseHeaders?: Record<string, string[]>;
+        }) => void,
+      ) => void)
+    | undefined;
+  hardenOpenMedSession(
+    {
+      setPermissionRequestHandler: (handler) => {
+        permissionHandler = handler;
+      },
+      setPermissionCheckHandler: (handler) => {
+        checkHandler = handler;
+      },
+      webRequest: {
+        onBeforeRequest: (listener) => {
+          beforeRequest = listener;
+        },
+        onHeadersReceived: (listener) => {
+          headersReceived = listener;
+        },
+      },
+    },
+    { allowedOrigins: ["app://openmed"] },
+  );
+  let granted: boolean | undefined;
+  (permissionHandler as unknown as (c: unknown, p: string, cb: (g: boolean) => void) => void)(
+    {},
+    "media",
+    (value) => (granted = value),
+  );
+  assert.equal(granted, false);
+  assert.equal((checkHandler as unknown as () => boolean)(), false);
+
+  const decide = (url: string) => {
+    let decision: { cancel: boolean } | undefined;
+    beforeRequest?.({ url }, (value) => (decision = value));
+    return decision;
+  };
+  assert.deepEqual(decide("https://example.invalid/model.onnx"), { cancel: true });
+  assert.deepEqual(decide("app://openmed/renderer.js"), { cancel: false });
+
+  let headers: Record<string, string[]> | undefined;
+  headersReceived?.(
+    {
+      url: "app://openmed/index.html",
+      responseHeaders: {
+        "content-security-policy": ["default-src *"],
+        "Content-Type": ["text/html"],
+      },
+    },
+    (value) => (headers = value.responseHeaders),
+  );
+  assert.deepEqual(headers, {
+    "Content-Type": ["text/html"],
+    "Content-Security-Policy": [OPENMED_RENDERER_CSP],
+  });
+});
+
+test("renderer clients surface typed errors for unexpected main responses", async () => {
+  const responses: unknown[] = [
+    { schemaVersion: 1, requestId: "other", ok: true, spans: [], bundle: null },
+    { schemaVersion: 1, ok: false, errorCode: "SYNTHETIC_CODE" },
+    "not-an-object",
+  ];
+  const client = createElectronDeidentifyClient({
+    invoke: async (_channel, request) => {
+      const next = responses.shift();
+      if (isRecord(next) && next.requestId === undefined) {
+        return { ...next, requestId: (request as { requestId: string }).requestId };
+      }
+      return next;
+    },
+  });
+  for (let index = 0; index < 3; index += 1) {
+    const error = await rejection(client.deidentify("Synthetic patient note"));
+    assert.equal(error.code, "INVALID_RESPONSE");
+  }
+  const failing = createElectronDeidentifyClient({
+    invoke: async () => {
+      throw new Error("Error invoking remote method: synthetic detail");
+    },
+  });
+  const error = await rejection(failing.deidentify("Synthetic patient note"));
+  assert.equal(error.code, "INTERNAL_ERROR");
+  assert.doesNotMatch(error.message, /synthetic detail/);
+  const invalid = await rejection(failing.deidentify(""));
+  assert.equal(invalid.code, "INVALID_REQUEST");
+});
+
+test("an aborted signal cancels before and during a request", async () => {
+  const ipcMain = new FakeIpcMain();
+  const utilityProcess = new ManualUtilityProcessModule();
+  const service = createService(utilityProcess);
+  const sender = new FakeSender(1);
+  const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
+    isTrustedSender: (event) => event.sender === sender,
+  });
+  const client = createElectronDeidentifyClient(ipcMain.createRenderer(sender));
+  try {
+    const before = new AbortController();
+    before.abort();
+    assert.equal(
+      (await rejection(client.deidentify("Note", { signal: before.signal }))).code,
+      "CANCELLED",
+    );
+    const during = new AbortController();
+    const pending = client.deidentify("Note", { signal: during.signal });
+    await until(() => service.diagnostics().pendingRequests === 1, "request pending");
+    during.abort();
+    assert.equal((await rejection(pending)).code, "CANCELLED");
+    await until(() => service.diagnostics().pendingRequests === 0, "request dropped");
+    assert.equal(service.diagnostics().cancellingRequests, 1);
+    const child = utilityProcess.children[0];
+    assert.ok(child);
+    assert.deepEqual(child.messages.at(-1), {
+      type: "cancel",
+      requestId: jobIdOf(child.messages[0]),
+    });
+    child.reply(utilitySuccess(jobIdOf(child.messages[0]), [rendererSpan(0, 4)]));
+    assert.equal(service.diagnostics().cancellingRequests, 0);
+    assert.equal(child.killed, false, "a late result of a cancelled job is dropped");
+  } finally {
+    unregister();
+    service.dispose();
+  }
+});
+
+class Rejection extends Error {}
+
+async function rejection(promise: Promise<unknown>): Promise<ElectronDeidentifyError> {
+  try {
+    await promise;
+  } catch (error) {
+    assert.ok(error instanceof ElectronDeidentifyError, "expected a typed error");
+    return error;
+  }
+  throw new Rejection("expected a rejection");
 }
 
 function createService(
@@ -525,14 +792,8 @@ function createService(
   return new ElectronDeidentifyService({
     utilityProcess,
     offlineSession: new FakeOfflineSession(),
-    workerPath: join(
-      rootDir,
-      "js",
-      "openmedkit-electron",
-      "dist",
-      "utility-process.js",
-    ),
-    modelPath: join(rootDir, "tests", "web", "fixtures", "local-model-cache"),
+    workerPath,
+    modelPath: legacyModelPath,
     ...overrides,
   });
 }
@@ -552,8 +813,14 @@ function utilityRequest(requestId: string, text: string): unknown {
   return {
     ...electronRequest(requestId, text),
     type: "deidentify",
-    modelPath: join(rootDir, "tests", "web", "fixtures", "local-model-cache"),
+    modelPath: legacyModelPath,
   };
+}
+
+function jobIdOf(message: unknown): string {
+  const requestId = (message as { requestId?: unknown }).requestId;
+  assert.equal(typeof requestId, "string");
+  return requestId as string;
 }
 
 function rendererSpan(start: number, end: number): RendererOpenMedSpan {
@@ -574,6 +841,7 @@ function utilitySuccess(requestId: string, spans: RendererOpenMedSpan[]): unknow
     requestId,
     ok: true,
     spans,
+    generation: null,
   };
 }
 
@@ -638,6 +906,10 @@ const fixturePipeline: TokenClassificationPipeline = (text) => {
     },
   ];
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function captureConsole(logs: unknown[]): () => void {
   const originalLog = console.log;

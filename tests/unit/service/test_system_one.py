@@ -33,6 +33,13 @@ BODY = {
 HEADERS = {"X-API-Key": "example-synthetic-key"}
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 def configured(monkeypatch, *, scopes=("decisions:write", "pii:write"), burst=20):
     # Exercise the real service admission and warm pool without installing
     # optional Transformers weights for a fake de-identifier.
@@ -46,6 +53,8 @@ def configured(monkeypatch, *, scopes=("decisions:write", "pii:write"), burst=20
     monkeypatch.setenv("OPENMED_SERVICE_SYSTEM_ONE", "1")
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "1")
+    # The default prod profile requires a durable job-ownership digest key.
+    monkeypatch.setenv("OPENMED_SERVICE_DIGEST_KEY", "synthetic-digest-key-" + "0" * 32)
     monkeypatch.setenv(
         "OPENMED_SERVICE_AUTH_API_KEYS",
         json.dumps(

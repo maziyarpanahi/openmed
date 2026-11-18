@@ -152,8 +152,22 @@ reads central-directory metadata only and does not open or decompress members.
 Encrypted, malformed, traversing, linked, duplicate, oversized, or
 high-expansion archives fail closed with counts-only decisions.
 
+REST and GraphQL request bodies also have a receive deadline and a minimum
+transfer rate. A stalled or trickling body returns `408 request_body_timeout`
+after its buffered chunks are released. The
+`openmed_service_request_body_timeout_total{reason}` and
+`openmed_service_connection_rejected_total` counters carry only a bounded
+reason label and counts, never body content or client addresses. See the
+[REST service guide](../rest-service.md) for the defaults.
+
 The REST and GraphQL application installs a body-size middleware for `POST`,
 `PUT`, and `PATCH`. `OPENMED_SERVICE_MAX_REQUEST_BYTES` may lower or raise the
 default within the library's safe ceiling. Declared sizes are rejected before
 the body is read; streamed bodies are counted and rejected before route parsing
 or model execution.
+The same middleware streams JSON bodies through `JsonStructureScanner`, a
+single-pass, non-recursive scan that enforces `max_json_depth`,
+`max_json_nodes`, and `max_json_string_bytes` while chunks arrive. Violations
+return `json_structure_exceeded` with only the limit category and ceiling, so
+oversized structure is rejected before JSON decoding, Pydantic validation, or
+model execution and without echoing request values.

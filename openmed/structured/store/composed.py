@@ -13,6 +13,7 @@ from openmed.clinical.journey_contracts import (
     EvidenceLocator,
 )
 
+from .deadlines import StoreWaitError
 from .protocols import (
     CommitStatusUnknown,
     CompensatingArtifactStore,
@@ -124,6 +125,8 @@ class ComposedJourneyStore:
                         created_metadata = created_metadata or result.created
         except CommitStatusUnknown:
             return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
+        except StoreWaitError as error:
+            failure = error.outcome()
         except Exception:
             failure = StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
 

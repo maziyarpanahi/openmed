@@ -21,7 +21,10 @@ SERVICE_CORS_HEADERS = (
     "Content-Language",
     "Content-Type",
     "X-Request-ID",
+    "X-OpenMed-Priority",
 )
+SERVICE_CORS_AUTH_HEADERS = ("Authorization", "X-API-Key")
+SERVICE_CORS_EXPOSE_HEADERS = ("X-Request-ID", "Retry-After")
 
 
 @dataclass(frozen=True)
@@ -57,16 +60,44 @@ def parse_cors_origins(raw_value: Optional[str]) -> Tuple[str, ...]:
     return origins
 
 
-def parse_trusted_hosts(raw_value: Optional[str]) -> Tuple[str, ...]:
-    """Parse trusted hosts or return the loopback-only default allowlist."""
+def parse_trusted_hosts(
+    raw_value: Optional[str],
+    *,
+    env_var: str = SERVICE_TRUSTED_HOSTS_ENV_VAR,
+) -> Tuple[str, ...]:
+    """Parse trusted hosts or return the loopback-only default allowlist.
+
+    Args:
+        raw_value: Comma-separated host names, or ``None`` for the default.
+        env_var: Setting name used in the configuration error message.
+
+    Returns:
+        The de-duplicated allowlist, or the loopback default when empty.
+
+    Raises:
+        ValueError: If the allowlist contains the global ``*`` host.
+    """
     hosts = _parse_csv_allowlist(raw_value)
     if not hosts:
         return DEFAULT_TRUSTED_HOSTS
     if "*" in hosts:
-        raise ValueError(
-            f"{SERVICE_TRUSTED_HOSTS_ENV_VAR} must not contain the global '*' host"
-        )
+        raise ValueError(f"{env_var} must not contain the global '*' host")
     return hosts
+
+
+def service_cors_allow_headers(*, auth_enabled: bool) -> Tuple[str, ...]:
+    """Return the request headers a CORS preflight may approve.
+
+    Args:
+        auth_enabled: Whether service authentication is active. Credential
+            headers are only approved when the service will read them.
+
+    Returns:
+        Explicit header names; wildcards are never returned.
+    """
+    if auth_enabled:
+        return SERVICE_CORS_HEADERS + SERVICE_CORS_AUTH_HEADERS
+    return SERVICE_CORS_HEADERS
 
 
 def parse_service_security_config() -> ServiceSecurityConfig:

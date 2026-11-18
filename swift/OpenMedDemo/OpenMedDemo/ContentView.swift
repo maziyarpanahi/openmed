@@ -918,7 +918,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
             if let tokenizerFolderURL {
                 return "Runs through OpenMedKit with bundled tokenizer assets at \(tokenizerFolderURL.lastPathComponent)."
             }
-            return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
+            return "Bundle tokenizer assets with this model: OpenMedKit loads tokenizers offline only."
         case .mlx:
             if DemoPlatform.supportsOnDeviceMLX {
                 return "Downloads the public MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."

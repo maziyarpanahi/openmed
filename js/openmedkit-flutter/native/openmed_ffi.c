@@ -5,14 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+
 #if defined(OPENMED_FFI_ONNXRUNTIME)
 #include <onnxruntime_c_api.h>
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 #endif
 
 #define OPENMED_ERROR_CAPACITY 256
+#define OPENMED_SHA256_BYTES 32
+#define OPENMED_READ_CHUNK 65536
 
 #if defined(_MSC_VER)
 #define OPENMED_THREAD_LOCAL __declspec(thread)
@@ -23,9 +31,12 @@
 struct openmed_runtime {
     char **labels;
     size_t label_count;
+    openmed_session_kind kind;
     openmed_session_api session_api;
     void *session;
-    int fixture_session;
+    uint64_t owner;
+    struct openmed_runtime *previous;
+    struct openmed_runtime *next;
 };
 
 typedef struct pending_span {
@@ -42,6 +53,316 @@ static OPENMED_THREAD_LOCAL char openmed_error[OPENMED_ERROR_CAPACITY];
 static openmed_session_api registered_session_api;
 static int has_registered_session_api;
 
+/* Every live runtime is linked here so ownership release frees it once. */
+static openmed_runtime *live_runtimes;
+static uint64_t live_runtime_count;
+static uint64_t next_owner_id;
+
+#if defined(_WIN32)
+static SRWLOCK registry_lock = SRWLOCK_INIT;
+static void lock_registry(void) { AcquireSRWLockExclusive(&registry_lock); }
+static void unlock_registry(void) { ReleaseSRWLockExclusive(&registry_lock); }
+#else
+static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
+static void lock_registry(void) { (void)pthread_mutex_lock(&registry_lock); }
+static void unlock_registry(void) { (void)pthread_mutex_unlock(&registry_lock); }
+#endif
+
+static void set_error(const char *message) {
+    if (message == NULL || message[0] == '\0') {
+        openmed_error[0] = '\0';
+        return;
+    }
+    (void)snprintf(openmed_error, sizeof(openmed_error), "%s", message);
+}
+
+/* ------------------------------------------------------------------------ */
+/* SHA-256 (FIPS 180-4) for verified model loading                          */
+/* ------------------------------------------------------------------------ */
+
+typedef struct openmed_sha256 {
+    uint32_t state[8];
+    uint64_t length;
+    unsigned char buffer[64];
+    size_t buffered;
+} openmed_sha256;
+
+static const uint32_t sha256_constants[64] = {
+    0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU,
+    0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U, 0xd807aa98U, 0x12835b01U,
+    0x243185beU, 0x550c7dc3U, 0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U,
+    0xc19bf174U, 0xe49b69c1U, 0xefbe4786U, 0x0fc19dc6U, 0x240ca1ccU,
+    0x2de92c6fU, 0x4a7484aaU, 0x5cb0a9dcU, 0x76f988daU, 0x983e5152U,
+    0xa831c66dU, 0xb00327c8U, 0xbf597fc7U, 0xc6e00bf3U, 0xd5a79147U,
+    0x06ca6351U, 0x14292967U, 0x27b70a85U, 0x2e1b2138U, 0x4d2c6dfcU,
+    0x53380d13U, 0x650a7354U, 0x766a0abbU, 0x81c2c92eU, 0x92722c85U,
+    0xa2bfe8a1U, 0xa81a664bU, 0xc24b8b70U, 0xc76c51a3U, 0xd192e819U,
+    0xd6990624U, 0xf40e3585U, 0x106aa070U, 0x19a4c116U, 0x1e376c08U,
+    0x2748774cU, 0x34b0bcb5U, 0x391c0cb3U, 0x4ed8aa4aU, 0x5b9cca4fU,
+    0x682e6ff3U, 0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U,
+    0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U
+};
+
+static uint32_t rotate_right(uint32_t value, unsigned int count) {
+    return (value >> count) | (value << (32U - count));
+}
+
+static void sha256_block(openmed_sha256 *context, const unsigned char *block) {
+    uint32_t schedule[64];
+    uint32_t a = context->state[0];
+    uint32_t b = context->state[1];
+    uint32_t c = context->state[2];
+    uint32_t d = context->state[3];
+    uint32_t e = context->state[4];
+    uint32_t f = context->state[5];
+    uint32_t g = context->state[6];
+    uint32_t h = context->state[7];
+    size_t index;
+    for (index = 0; index < 16; ++index) {
+        schedule[index] = ((uint32_t)block[index * 4] << 24) |
+            ((uint32_t)block[index * 4 + 1] << 16) |
+            ((uint32_t)block[index * 4 + 2] << 8) |
+            (uint32_t)block[index * 4 + 3];
+    }
+    for (index = 16; index < 64; ++index) {
+        uint32_t s0 = rotate_right(schedule[index - 15], 7) ^
+            rotate_right(schedule[index - 15], 18) ^ (schedule[index - 15] >> 3);
+        uint32_t s1 = rotate_right(schedule[index - 2], 17) ^
+            rotate_right(schedule[index - 2], 19) ^ (schedule[index - 2] >> 10);
+        schedule[index] = schedule[index - 16] + s0 + schedule[index - 7] + s1;
+    }
+    for (index = 0; index < 64; ++index) {
+        uint32_t s1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^ rotate_right(e, 25);
+        uint32_t choose = (e & f) ^ (~e & g);
+        uint32_t first = h + s1 + choose + sha256_constants[index] + schedule[index];
+        uint32_t s0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^ rotate_right(a, 22);
+        uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
+        uint32_t second = s0 + majority;
+        h = g;
+        g = f;
+        f = e;
+        e = d + first;
+        d = c;
+        c = b;
+        b = a;
+        a = first + second;
+    }
+    context->state[0] += a;
+    context->state[1] += b;
+    context->state[2] += c;
+    context->state[3] += d;
+    context->state[4] += e;
+    context->state[5] += f;
+    context->state[6] += g;
+    context->state[7] += h;
+}
+
+static void sha256_init(openmed_sha256 *context) {
+    static const uint32_t initial[8] = {
+        0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U, 0xa54ff53aU,
+        0x510e527fU, 0x9b05688cU, 0x1f83d9abU, 0x5be0cd19U
+    };
+    memcpy(context->state, initial, sizeof(initial));
+    context->length = 0;
+    context->buffered = 0;
+}
+
+static void sha256_update(
+    openmed_sha256 *context,
+    const unsigned char *data,
+    size_t length
+) {
+    context->length += (uint64_t)length;
+    while (length > 0) {
+        size_t take = 64 - context->buffered;
+        if (take > length) {
+            take = length;
+        }
+        memcpy(context->buffer + context->buffered, data, take);
+        context->buffered += take;
+        data += take;
+        length -= take;
+        if (context->buffered == 64) {
+            sha256_block(context, context->buffer);
+            context->buffered = 0;
+        }
+    }
+}
+
+static void sha256_final(
+    openmed_sha256 *context,
+    unsigned char digest[OPENMED_SHA256_BYTES]
+) {
+    uint64_t bits = context->length * 8U;
+    unsigned char padding[72];
+    size_t padding_length;
+    size_t index;
+    padding_length = context->buffered < 56
+        ? 56 - context->buffered
+        : 120 - context->buffered;
+    memset(padding, 0, sizeof(padding));
+    padding[0] = 0x80U;
+    for (index = 0; index < 8; ++index) {
+        padding[padding_length + index] = (unsigned char)(bits >> (56 - 8 * index));
+    }
+    {
+        uint64_t length = context->length;
+        sha256_update(context, padding, padding_length + 8);
+        context->length = length;
+    }
+    for (index = 0; index < 8; ++index) {
+        digest[index * 4] = (unsigned char)(context->state[index] >> 24);
+        digest[index * 4 + 1] = (unsigned char)(context->state[index] >> 16);
+        digest[index * 4 + 2] = (unsigned char)(context->state[index] >> 8);
+        digest[index * 4 + 3] = (unsigned char)context->state[index];
+    }
+}
+
+static int hex_value(char value) {
+    if (value >= '0' && value <= '9') {
+        return value - '0';
+    }
+    if (value >= 'a' && value <= 'f') {
+        return value - 'a' + 10;
+    }
+    return -1;
+}
+
+/* Parses "sha256:<64 lowercase hex>" into raw digest bytes. */
+static int parse_sha256(
+    const char *text,
+    unsigned char digest[OPENMED_SHA256_BYTES]
+) {
+    static const char prefix[] = "sha256:";
+    size_t index;
+    if (text == NULL || strncmp(text, prefix, sizeof(prefix) - 1) != 0) {
+        return 0;
+    }
+    text += sizeof(prefix) - 1;
+    if (strlen(text) != OPENMED_SHA256_BYTES * 2) {
+        return 0;
+    }
+    for (index = 0; index < OPENMED_SHA256_BYTES; ++index) {
+        int high = hex_value(text[index * 2]);
+        int low = hex_value(text[index * 2 + 1]);
+        if (high < 0 || low < 0) {
+            return 0;
+        }
+        digest[index] = (unsigned char)((high << 4) | low);
+    }
+    return 1;
+}
+
+static int digests_equal(
+    const unsigned char *left,
+    const unsigned char *right
+) {
+    unsigned char difference = 0;
+    size_t index;
+    for (index = 0; index < OPENMED_SHA256_BYTES; ++index) {
+        difference |= (unsigned char)(left[index] ^ right[index]);
+    }
+    return difference == 0;
+}
+
+static FILE *open_model_file(const char *model_path) {
+#if defined(_WIN32)
+    FILE *file = NULL;
+    int length = MultiByteToWideChar(CP_UTF8, 0, model_path, -1, NULL, 0);
+    wchar_t *wide_path;
+    if (length <= 0) {
+        return NULL;
+    }
+    wide_path = (wchar_t *)malloc((size_t)length * sizeof(wchar_t));
+    if (wide_path == NULL) {
+        return NULL;
+    }
+    if (MultiByteToWideChar(CP_UTF8, 0, model_path, -1, wide_path, length) > 0) {
+        file = _wfopen(wide_path, L"rb");
+    }
+    free(wide_path);
+    return file;
+#else
+    return fopen(model_path, "rb");
+#endif
+}
+
+/*
+ * Hashes the model file and compares it with the verified digest. When bytes
+ * is non-NULL the hashed bytes are returned so the session is created from
+ * exactly the content that was verified.
+ */
+static openmed_status read_verified_model(
+    const char *model_path,
+    const unsigned char expected[OPENMED_SHA256_BYTES],
+    unsigned char **bytes,
+    size_t *length
+) {
+    openmed_sha256 hasher;
+    unsigned char chunk[OPENMED_READ_CHUNK];
+    unsigned char actual[OPENMED_SHA256_BYTES];
+    unsigned char *buffer = NULL;
+    size_t used = 0;
+    size_t capacity = 0;
+    size_t count;
+    int read_failed;
+    FILE *file = open_model_file(model_path);
+    if (file == NULL) {
+        set_error("the verified model file could not be read");
+        return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
+    }
+    sha256_init(&hasher);
+    while ((count = fread(chunk, 1, sizeof(chunk), file)) > 0) {
+        sha256_update(&hasher, chunk, count);
+        if (bytes != NULL) {
+            if (used + count > capacity) {
+                size_t grown = capacity == 0 ? sizeof(chunk) * 16 : capacity;
+                unsigned char *resized;
+                while (grown < used + count) {
+                    if (grown > ((size_t)-1) / 2) {
+                        grown = used + count;
+                        break;
+                    }
+                    grown *= 2;
+                }
+                resized = (unsigned char *)realloc(buffer, grown);
+                if (resized == NULL) {
+                    free(buffer);
+                    (void)fclose(file);
+                    set_error("could not allocate the verified model bytes");
+                    return OPENMED_STATUS_OUT_OF_MEMORY;
+                }
+                buffer = resized;
+                capacity = grown;
+            }
+            memcpy(buffer + used, chunk, count);
+            used += count;
+        }
+    }
+    read_failed = ferror(file);
+    (void)fclose(file);
+    if (read_failed) {
+        free(buffer);
+        set_error("the verified model file could not be read");
+        return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
+    }
+    sha256_final(&hasher, actual);
+    if (!digests_equal(actual, expected)) {
+        free(buffer);
+        set_error("model bytes do not match the verified bundle digest");
+        return OPENMED_STATUS_INTEGRITY_FAILED;
+    }
+    if (bytes != NULL) {
+        *bytes = buffer;
+        *length = used;
+    }
+    return OPENMED_STATUS_OK;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Built-in ONNX Runtime session                                             */
+/* ------------------------------------------------------------------------ */
+
 #if defined(OPENMED_FFI_ONNXRUNTIME)
 typedef struct openmed_onnx_session {
     const OrtApi *api;
@@ -51,24 +372,21 @@ typedef struct openmed_onnx_session {
     size_t input_count;
 } openmed_onnx_session;
 
-static int onnx_status_ok(
-    const OrtApi *api,
-    OrtStatus *status,
-    char *error,
-    size_t error_capacity
-) {
-    const char *message;
+/* ONNX Runtime messages can quote paths or graph content, so only the code
+ * is reported. */
+static int onnx_status_ok(const OrtApi *api, OrtStatus *status) {
+    char message[96];
     if (status == NULL) {
         return 1;
     }
-    message = api->GetErrorMessage(status);
     (void)snprintf(
-        error,
-        error_capacity,
-        "ONNX Runtime operation failed: %s",
-        message == NULL ? "unknown error" : message
+        message,
+        sizeof(message),
+        "ONNX Runtime operation failed (code %d)",
+        (int)api->GetErrorCode(status)
     );
     api->ReleaseStatus(status);
+    set_error(message);
     return 0;
 }
 
@@ -89,50 +407,26 @@ static void destroy_onnx_session(void *opaque) {
     free(session);
 }
 
-#if defined(_WIN32)
-static wchar_t *onnx_model_path(const char *model_path) {
-    int length = MultiByteToWideChar(CP_UTF8, 0, model_path, -1, NULL, 0);
-    wchar_t *wide_path;
-    if (length <= 0) {
-        return NULL;
-    }
-    wide_path = (wchar_t *)malloc((size_t)length * sizeof(wchar_t));
-    if (wide_path == NULL) {
-        return NULL;
-    }
-    if (MultiByteToWideChar(CP_UTF8, 0, model_path, -1, wide_path, length) <= 0) {
-        free(wide_path);
-        return NULL;
-    }
-    return wide_path;
-}
-#endif
-
-static void *create_onnx_session(
-    const char *model_path,
-    const char *const *labels,
-    size_t label_count,
-    char *error,
-    size_t error_capacity
+static openmed_onnx_session *create_onnx_session(
+    const unsigned char *model_bytes,
+    size_t model_length
 ) {
     const OrtApiBase *api_base = OrtGetApiBase();
     openmed_onnx_session *created;
     OrtSessionOptions *options = NULL;
     OrtStatus *status;
-    (void)labels;
-    (void)label_count;
     if (api_base == NULL) {
-        (void)snprintf(error, error_capacity, "ONNX Runtime API is unavailable");
+        set_error("ONNX Runtime API is unavailable");
         return NULL;
     }
     created = (openmed_onnx_session *)calloc(1, sizeof(openmed_onnx_session));
     if (created == NULL) {
-        (void)snprintf(error, error_capacity, "could not allocate an ONNX session");
+        set_error("could not allocate an ONNX session");
         return NULL;
     }
     created->api = api_base->GetApi(ORT_API_VERSION);
     if (created->api == NULL) {
-        (void)snprintf(error, error_capacity, "ONNX Runtime ABI is incompatible");
+        set_error("ONNX Runtime ABI is incompatible");
         free(created);
         return NULL;
     }
@@ -141,17 +435,17 @@ static void *create_onnx_session(
         "openmed_flutter",
         &created->environment
     );
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         destroy_onnx_session(created);
         return NULL;
     }
     status = created->api->CreateSessionOptions(&options);
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         destroy_onnx_session(created);
         return NULL;
     }
     status = created->api->SetIntraOpNumThreads(options, 1);
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         created->api->ReleaseSessionOptions(options);
         destroy_onnx_session(created);
         return NULL;
@@ -160,38 +454,20 @@ static void *create_onnx_session(
         options,
         ORT_ENABLE_ALL
     );
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         created->api->ReleaseSessionOptions(options);
         destroy_onnx_session(created);
         return NULL;
     }
-#if defined(_WIN32)
-    {
-        wchar_t *wide_path = onnx_model_path(model_path);
-        if (wide_path == NULL) {
-            created->api->ReleaseSessionOptions(options);
-            destroy_onnx_session(created);
-            (void)snprintf(error, error_capacity, "model path is not valid UTF-8");
-            return NULL;
-        }
-        status = created->api->CreateSession(
-            created->environment,
-            wide_path,
-            options,
-            &created->session
-        );
-        free(wide_path);
-    }
-#else
-    status = created->api->CreateSession(
+    status = created->api->CreateSessionFromArray(
         created->environment,
-        model_path,
+        model_bytes,
+        model_length,
         options,
         &created->session
     );
-#endif
     created->api->ReleaseSessionOptions(options);
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         destroy_onnx_session(created);
         return NULL;
     }
@@ -200,7 +476,7 @@ static void *create_onnx_session(
         OrtMemTypeDefault,
         &created->memory_info
     );
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         destroy_onnx_session(created);
         return NULL;
     }
@@ -208,14 +484,12 @@ static void *create_onnx_session(
         created->session,
         &created->input_count
     );
-    if (!onnx_status_ok(created->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(created->api, status)) {
         destroy_onnx_session(created);
         return NULL;
     }
     if (created->input_count != 2 && created->input_count != 3) {
-        (void)snprintf(
-            error,
-            error_capacity,
+        set_error(
             "ONNX model must expose input_ids, attention_mask, and optional token_type_ids"
         );
         destroy_onnx_session(created);
@@ -228,9 +502,7 @@ static int create_onnx_tensor(
     openmed_onnx_session *session,
     int64_t *values,
     size_t token_count,
-    OrtValue **tensor,
-    char *error,
-    size_t error_capacity
+    OrtValue **tensor
 ) {
     int64_t shape[2] = {1, (int64_t)token_count};
     OrtStatus *status = session->api->CreateTensorWithDataAsOrtValue(
@@ -242,19 +514,16 @@ static int create_onnx_tensor(
         ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
         tensor
     );
-    return onnx_status_ok(session->api, status, error, error_capacity);
+    return onnx_status_ok(session->api, status);
 }
 
 static openmed_status run_onnx_session(
-    void *opaque,
+    openmed_onnx_session *session,
     const openmed_token_batch *batch,
     float **logits,
     size_t *sequence_length,
-    size_t *label_count,
-    char *error,
-    size_t error_capacity
+    size_t *label_count
 ) {
-    openmed_onnx_session *session = (openmed_onnx_session *)opaque;
     const char *input_names[3] = {
         "input_ids",
         "attention_mask",
@@ -279,22 +548,18 @@ static openmed_status run_onnx_session(
             session,
             (int64_t *)batch->input_ids,
             batch->token_count,
-            &inputs[0],
-            error,
-            error_capacity) ||
+            &inputs[0]) ||
         !create_onnx_tensor(
             session,
             (int64_t *)batch->attention_mask,
             batch->token_count,
-            &inputs[1],
-            error,
-            error_capacity)) {
+            &inputs[1])) {
         goto cleanup;
     }
     if (session->input_count == 3) {
         token_types = (int64_t *)calloc(batch->token_count, sizeof(int64_t));
         if (token_types == NULL) {
-            (void)snprintf(error, error_capacity, "could not allocate token_type_ids");
+            set_error("could not allocate token_type_ids");
             result = OPENMED_STATUS_OUT_OF_MEMORY;
             goto cleanup;
         }
@@ -302,9 +567,7 @@ static openmed_status run_onnx_session(
                 session,
                 token_types,
                 batch->token_count,
-                &inputs[2],
-                error,
-                error_capacity)) {
+                &inputs[2])) {
             goto cleanup;
         }
     }
@@ -321,48 +584,48 @@ static openmed_status run_onnx_session(
         1,
         &output
     );
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     status = session->api->GetTensorTypeAndShape(output, &shape_info);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     status = session->api->GetDimensionsCount(shape_info, &dimension_count);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     status = session->api->GetTensorElementType(shape_info, &element_type);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     if (dimension_count != 3 || element_type != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-        (void)snprintf(error, error_capacity, "logits must be a rank-3 float tensor");
+        set_error("logits must be a rank-3 float tensor");
         result = OPENMED_STATUS_INVALID_OUTPUT;
         goto cleanup;
     }
     status = session->api->GetDimensions(shape_info, dimensions, 3);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     status = session->api->GetTensorShapeElementCount(shape_info, &element_count);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     if (dimensions[0] != 1 || dimensions[1] < 0 || dimensions[2] <= 0 ||
         (size_t)dimensions[1] != batch->token_count ||
         element_count != (size_t)(dimensions[1] * dimensions[2])) {
-        (void)snprintf(error, error_capacity, "logits dimensions do not match the input batch");
+        set_error("logits dimensions do not match the input batch");
         result = OPENMED_STATUS_INVALID_OUTPUT;
         goto cleanup;
     }
     status = session->api->GetTensorMutableData(output, &data);
-    if (!onnx_status_ok(session->api, status, error, error_capacity)) {
+    if (!onnx_status_ok(session->api, status)) {
         goto cleanup;
     }
     *logits = (float *)malloc(element_count * sizeof(float));
     if (*logits == NULL) {
-        (void)snprintf(error, error_capacity, "could not allocate logits output");
+        set_error("could not allocate logits output");
         result = OPENMED_STATUS_OUT_OF_MEMORY;
         goto cleanup;
     }
@@ -386,28 +649,11 @@ cleanup:
     free(token_types);
     return result;
 }
-
-static void release_onnx_logits(void *session, float *logits) {
-    (void)session;
-    free(logits);
-}
-
-static const openmed_session_api onnx_session_api = {
-    OPENMED_FFI_ABI_VERSION,
-    create_onnx_session,
-    run_onnx_session,
-    release_onnx_logits,
-    destroy_onnx_session
-};
 #endif
 
-static void set_error(const char *message) {
-    if (message == NULL || message[0] == '\0') {
-        openmed_error[0] = '\0';
-        return;
-    }
-    (void)snprintf(openmed_error, sizeof(openmed_error), "%s", message);
-}
+/* ------------------------------------------------------------------------ */
+/* Labels, offsets, and decoding                                            */
+/* ------------------------------------------------------------------------ */
 
 static char *copy_string(const char *value) {
     size_t length;
@@ -452,6 +698,7 @@ static openmed_status copy_labels(
     size_t index;
     copies = (char **)calloc(count, sizeof(char *));
     if (copies == NULL) {
+        set_error("could not allocate runtime labels");
         return OPENMED_STATUS_OUT_OF_MEMORY;
     }
     for (index = 0; index < count; ++index) {
@@ -463,6 +710,7 @@ static openmed_status copy_labels(
         copies[index] = copy_string(labels[index]);
         if (copies[index] == NULL) {
             free_labels(copies, count);
+            set_error("could not allocate runtime labels");
             return OPENMED_STATUS_OUT_OF_MEMORY;
         }
     }
@@ -679,7 +927,17 @@ static openmed_status decode_logits(
     return append_pending(spans, &pending, threshold);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Sessions                                                                 */
+/* ------------------------------------------------------------------------ */
+
 #if defined(OPENMED_FFI_ENABLE_TEST_SESSION)
+/*
+ * Synthetic logits for tests. A token with input id 1000 + k (0 < k <
+ * label_count) selects label k; every other token selects label 0. The model
+ * file is hashed like any other, but its contents are never interpreted.
+ */
+#define OPENMED_FIXTURE_LABEL_BASE 1000
 static openmed_status fixture_logits(
     openmed_runtime *runtime,
     const openmed_token_batch *batch,
@@ -689,26 +947,21 @@ static openmed_status fixture_logits(
 ) {
     size_t token_index;
     size_t label_index;
-    size_t entity_index = 1;
-    if (runtime->label_count < 4) {
-        set_error("the synthetic fixture requires four labels");
-        return OPENMED_STATUS_INVALID_ARGUMENT;
-    }
     *logits = (float *)malloc(
         batch->token_count * runtime->label_count * sizeof(float)
     );
     if (*logits == NULL) {
+        set_error("could not allocate fixture logits");
         return OPENMED_STATUS_OUT_OF_MEMORY;
     }
     for (token_index = 0; token_index < batch->token_count; ++token_index) {
-        size_t selected = 0;
-        if (batch->start_offsets[token_index] != batch->end_offsets[token_index] &&
-            entity_index < 4) {
-            selected = entity_index++;
+        int64_t selected = batch->input_ids[token_index] - OPENMED_FIXTURE_LABEL_BASE;
+        if (selected <= 0 || (uint64_t)selected >= (uint64_t)runtime->label_count) {
+            selected = 0;
         }
         for (label_index = 0; label_index < runtime->label_count; ++label_index) {
             (*logits)[token_index * runtime->label_count + label_index] =
-                label_index == selected ? 5.0f : 0.0f;
+                label_index == (size_t)selected ? 5.0f : 0.0f;
         }
     }
     *sequence_length = batch->token_count;
@@ -724,8 +977,9 @@ static openmed_status run_session(
     size_t *sequence_length,
     size_t *label_count
 ) {
+    switch (runtime->kind) {
 #if defined(OPENMED_FFI_ENABLE_TEST_SESSION)
-    if (runtime->fixture_session) {
+    case OPENMED_SESSION_KIND_FIXTURE:
         return fixture_logits(
             runtime,
             batch,
@@ -733,17 +987,66 @@ static openmed_status run_session(
             sequence_length,
             label_count
         );
-    }
 #endif
-    return runtime->session_api.run(
-        runtime->session,
-        batch,
-        logits,
-        sequence_length,
-        label_count,
-        openmed_error,
-        sizeof(openmed_error)
-    );
+#if defined(OPENMED_FFI_ONNXRUNTIME)
+    case OPENMED_SESSION_KIND_ONNXRUNTIME:
+        return run_onnx_session(
+            (openmed_onnx_session *)runtime->session,
+            batch,
+            logits,
+            sequence_length,
+            label_count
+        );
+#endif
+    case OPENMED_SESSION_KIND_REGISTERED_ADAPTER: {
+        char adapter_error[OPENMED_ERROR_CAPACITY];
+        openmed_status status;
+        adapter_error[0] = '\0';
+        status = runtime->session_api.run(
+            runtime->session,
+            batch,
+            logits,
+            sequence_length,
+            label_count,
+            adapter_error,
+            sizeof(adapter_error)
+        );
+        if (status != OPENMED_STATUS_OK) {
+            set_error("the registered session adapter failed");
+        }
+        return status;
+    }
+    default:
+        set_error("the runtime has no session");
+        return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
+    }
+}
+
+static void release_logits(openmed_runtime *runtime, float *logits) {
+    if (runtime->kind == OPENMED_SESSION_KIND_REGISTERED_ADAPTER) {
+        runtime->session_api.release_logits(runtime->session, logits);
+        return;
+    }
+    free(logits);
+}
+
+static void free_runtime(openmed_runtime *runtime) {
+    switch (runtime->kind) {
+#if defined(OPENMED_FFI_ONNXRUNTIME)
+    case OPENMED_SESSION_KIND_ONNXRUNTIME:
+        destroy_onnx_session(runtime->session);
+        break;
+#endif
+    case OPENMED_SESSION_KIND_REGISTERED_ADAPTER:
+        if (runtime->session != NULL) {
+            runtime->session_api.destroy(runtime->session);
+        }
+        break;
+    default:
+        break;
+    }
+    free_labels(runtime->labels, runtime->label_count);
+    free(runtime);
 }
 
 static int use_test_session(void) {
@@ -752,6 +1055,71 @@ static int use_test_session(void) {
     return value != NULL && strcmp(value, "1") == 0;
 #else
     return 0;
+#endif
+}
+
+static openmed_status create_session(
+    openmed_runtime *runtime,
+    const char *model_path,
+    const unsigned char expected[OPENMED_SHA256_BYTES]
+) {
+    openmed_status status;
+    if (use_test_session()) {
+        status = read_verified_model(model_path, expected, NULL, NULL);
+        if (status == OPENMED_STATUS_OK) {
+            runtime->kind = OPENMED_SESSION_KIND_FIXTURE;
+        }
+        return status;
+    }
+    if (has_registered_session_api) {
+        char adapter_error[OPENMED_ERROR_CAPACITY];
+        status = read_verified_model(model_path, expected, NULL, NULL);
+        if (status != OPENMED_STATUS_OK) {
+            return status;
+        }
+        adapter_error[0] = '\0';
+        runtime->session_api = registered_session_api;
+        runtime->session = runtime->session_api.create(
+            model_path,
+            (const char *const *)runtime->labels,
+            runtime->label_count,
+            adapter_error,
+            sizeof(adapter_error)
+        );
+        if (runtime->session == NULL) {
+            set_error("the registered session adapter could not create a session");
+            return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
+        }
+        runtime->kind = OPENMED_SESSION_KIND_REGISTERED_ADAPTER;
+        return OPENMED_STATUS_OK;
+    }
+#if defined(OPENMED_FFI_ONNXRUNTIME)
+    {
+        unsigned char *model_bytes = NULL;
+        size_t model_length = 0;
+        status = read_verified_model(
+            model_path,
+            expected,
+            &model_bytes,
+            &model_length
+        );
+        if (status != OPENMED_STATUS_OK) {
+            return status;
+        }
+        runtime->session = create_onnx_session(model_bytes, model_length);
+        free(model_bytes);
+        if (runtime->session == NULL) {
+            if (openmed_error[0] == '\0') {
+                set_error("the ONNX token-classification session could not be created");
+            }
+            return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
+        }
+        runtime->kind = OPENMED_SESSION_KIND_ONNXRUNTIME;
+        return OPENMED_STATUS_OK;
+    }
+#else
+    set_error("no ONNX token-classification session adapter is registered");
+    return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
 #endif
 }
 
@@ -769,7 +1137,7 @@ static openmed_status validate_inference(
         set_error("runtime, text, token batch, and span output are required");
         return OPENMED_STATUS_INVALID_ARGUMENT;
     }
-    if (threshold < 0.0 || threshold > 1.0) {
+    if (!(threshold >= 0.0 && threshold <= 1.0)) {
         set_error("threshold must be between zero and one");
         return OPENMED_STATUS_INVALID_ARGUMENT;
     }
@@ -778,12 +1146,30 @@ static openmed_status validate_inference(
     return OPENMED_STATUS_OK;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Public ABI                                                               */
+/* ------------------------------------------------------------------------ */
+
 uint32_t openmed_ffi_abi_version(void) {
     return OPENMED_FFI_ABI_VERSION;
 }
 
+uint32_t openmed_ffi_capabilities(void) {
+    uint32_t capabilities = 0;
+#if defined(OPENMED_FFI_ONNXRUNTIME)
+    capabilities |= OPENMED_FFI_CAPABILITY_ONNXRUNTIME;
+#endif
+#if defined(OPENMED_FFI_ENABLE_TEST_SESSION)
+    capabilities |= OPENMED_FFI_CAPABILITY_FIXTURE_SESSION;
+#endif
+    if (has_registered_session_api) {
+        capabilities |= OPENMED_FFI_CAPABILITY_REGISTERED_ADAPTER;
+    }
+    return capabilities;
+}
+
 openmed_status openmed_register_session_api(const openmed_session_api *api) {
-    if (api == NULL || api->abi_version != OPENMED_FFI_ABI_VERSION ||
+    if (api == NULL || api->abi_version != OPENMED_FFI_SESSION_API_VERSION ||
         api->create == NULL || api->run == NULL ||
         api->release_logits == NULL || api->destroy == NULL) {
         set_error("session API is incomplete or has an incompatible ABI version");
@@ -797,18 +1183,27 @@ openmed_status openmed_register_session_api(const openmed_session_api *api) {
 
 openmed_status openmed_runtime_create(
     const char *model_path,
+    const char *model_sha256,
     const char *const *labels,
     size_t label_count,
+    uint64_t owner,
     openmed_runtime **runtime
 ) {
+    unsigned char expected[OPENMED_SHA256_BYTES];
     openmed_runtime *created;
     openmed_status status;
+    if (runtime != NULL) {
+        *runtime = NULL;
+    }
     if (model_path == NULL || model_path[0] == '\0' || labels == NULL ||
-        label_count == 0 || runtime == NULL) {
-        set_error("model path, labels, and runtime output are required");
+        label_count < 2 || runtime == NULL) {
+        set_error("model path, at least two labels, and runtime output are required");
         return OPENMED_STATUS_INVALID_ARGUMENT;
     }
-    *runtime = NULL;
+    if (!parse_sha256(model_sha256, expected)) {
+        set_error("a verified sha256 model digest is required");
+        return OPENMED_STATUS_INVALID_ARGUMENT;
+    }
     created = (openmed_runtime *)calloc(1, sizeof(openmed_runtime));
     if (created == NULL) {
         set_error("could not allocate the OpenMed runtime");
@@ -820,54 +1215,104 @@ openmed_status openmed_runtime_create(
         return status;
     }
     created->label_count = label_count;
-    created->fixture_session = use_test_session();
-    if (!created->fixture_session) {
-#if defined(OPENMED_FFI_ONNXRUNTIME)
-        created->session_api = has_registered_session_api
-            ? registered_session_api
-            : onnx_session_api;
-#else
-        if (has_registered_session_api) {
-            created->session_api = registered_session_api;
-        } else {
-            free_labels(created->labels, created->label_count);
-            free(created);
-            set_error(
-                "no ONNX token-classification session adapter is registered"
-            );
-            return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
-        }
-#endif
-        created->session = created->session_api.create(
-            model_path,
-            (const char *const *)created->labels,
-            created->label_count,
-            openmed_error,
-            sizeof(openmed_error)
-        );
-        if (created->session == NULL) {
-            free_labels(created->labels, created->label_count);
-            free(created);
-            if (openmed_error[0] == '\0') {
-                set_error("the ONNX token-classification session could not be created");
-            }
-            return OPENMED_STATUS_RUNTIME_UNAVAILABLE;
-        }
+    created->owner = owner;
+    status = create_session(created, model_path, expected);
+    if (status != OPENMED_STATUS_OK) {
+        free_runtime(created);
+        return status;
     }
+    lock_registry();
+    created->next = live_runtimes;
+    if (live_runtimes != NULL) {
+        live_runtimes->previous = created;
+    }
+    live_runtimes = created;
+    ++live_runtime_count;
+    unlock_registry();
     *runtime = created;
     set_error(NULL);
     return OPENMED_STATUS_OK;
 }
 
+/* Unlinks runtime from the registry; the caller holds the lock. */
+static void unlink_runtime(openmed_runtime *runtime) {
+    if (runtime->previous != NULL) {
+        runtime->previous->next = runtime->next;
+    } else {
+        live_runtimes = runtime->next;
+    }
+    if (runtime->next != NULL) {
+        runtime->next->previous = runtime->previous;
+    }
+    runtime->previous = NULL;
+    runtime->next = NULL;
+    --live_runtime_count;
+}
+
 void openmed_runtime_destroy(openmed_runtime *runtime) {
+    openmed_runtime *cursor;
     if (runtime == NULL) {
         return;
     }
-    if (!runtime->fixture_session && runtime->session != NULL) {
-        runtime->session_api.destroy(runtime->session);
+    lock_registry();
+    for (cursor = live_runtimes; cursor != NULL; cursor = cursor->next) {
+        if (cursor == runtime) {
+            unlink_runtime(cursor);
+            break;
+        }
     }
-    free_labels(runtime->labels, runtime->label_count);
-    free(runtime);
+    unlock_registry();
+    if (cursor != NULL) {
+        free_runtime(cursor);
+    }
+}
+
+int32_t openmed_runtime_session_kind(const openmed_runtime *runtime) {
+    return runtime == NULL ? OPENMED_SESSION_KIND_NONE : (int32_t)runtime->kind;
+}
+
+uint64_t openmed_runtime_live_count(void) {
+    uint64_t count;
+    lock_registry();
+    count = live_runtime_count;
+    unlock_registry();
+    return count;
+}
+
+uint64_t openmed_runtime_owner_create(void) {
+    uint64_t owner;
+    lock_registry();
+    owner = ++next_owner_id;
+    unlock_registry();
+    return owner;
+}
+
+uint64_t openmed_runtime_owner_release(uint64_t owner) {
+    openmed_runtime *released = NULL;
+    openmed_runtime *cursor;
+    uint64_t count = 0;
+    if (owner == 0) {
+        return 0;
+    }
+    lock_registry();
+    cursor = live_runtimes;
+    while (cursor != NULL) {
+        openmed_runtime *next = cursor->next;
+        if (cursor->owner == owner) {
+            unlink_runtime(cursor);
+            cursor->next = released;
+            released = cursor;
+            ++count;
+        }
+        cursor = next;
+    }
+    unlock_registry();
+    while (released != NULL) {
+        openmed_runtime *next = released->next;
+        free_runtime(released);
+        released = next;
+    }
+    return count;
 }
 
 openmed_status openmed_runtime_extract_pii(
@@ -890,6 +1335,7 @@ openmed_status openmed_runtime_extract_pii(
     if (status != OPENMED_STATUS_OK) {
         return status;
     }
+    openmed_error[0] = '\0';
     status = run_session(
         runtime,
         batch,
@@ -917,11 +1363,7 @@ openmed_status openmed_runtime_extract_pii(
         threshold,
         spans
     );
-    if (runtime->fixture_session) {
-        free(logits);
-    } else {
-        runtime->session_api.release_logits(runtime->session, logits);
-    }
+    release_logits(runtime, logits);
     if (status != OPENMED_STATUS_OK) {
         openmed_span_list_free(spans);
         return status;

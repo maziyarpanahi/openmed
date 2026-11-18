@@ -8,7 +8,7 @@ public protocol WFDBByteSource {
 }
 
 /// In-memory WFDB input. Window decoding does not copy the complete signal data.
-public struct WFDBDataSource: WFDBByteSource {
+public struct WFDBDataSource: WFDBByteSource, Sendable {
     private let data: Data
     public var byteCount: Int { data.count }
 
@@ -72,7 +72,7 @@ public struct WFDBError: Error, CustomStringConvertible, Equatable {
 }
 
 /// Positive input/output budgets, aligned with the Python WFDB reader.
-public struct WFDBLimits {
+public struct WFDBLimits: Sendable {
     public var maxHeaderBytes = 65_536
     public var maxSignals = 32
     public var maxSamples = 20_000_000
@@ -93,7 +93,7 @@ public struct WFDBLimits {
 }
 
 /// Declared calibration and raw integer window. No lead normalization is applied.
-public struct WFDBSignal: Equatable {
+public struct WFDBSignal: Equatable, Sendable {
     public let leadLabel: String?
     public let gain: Double
     public let baseline: Int
@@ -104,7 +104,7 @@ public struct WFDBSignal: Equatable {
 }
 
 /// Annotation counts and absolute sample positions in the returned window.
-public struct WFDBAnnotations: Equatable {
+public struct WFDBAnnotations: Equatable, Sendable {
     public let totalCount: Int
     public let samplePositions: [Int]
     public let auxiliaryTextPresent: Bool
@@ -112,7 +112,7 @@ public struct WFDBAnnotations: Equatable {
 
 /// Immutable review-only waveform data. Samples remain potentially sensitive;
 /// this is not a de-identification, quality-gate or clinical validation result.
-public struct WFDBRecord {
+public struct WFDBRecord: Sendable {
     public let signals: [WFDBSignal]
     public let sampleRateHz: Double
     public let totalSamples: Int
