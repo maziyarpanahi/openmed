@@ -32,6 +32,7 @@ from tests.fixtures.multimodal.pose_sequences import (
     SCENARIOS,
     PoseFixtureError,
     WalkerSpec,
+    far_leg_crossings,
     gait_truth,
     scenario,
     synthetic_pose_sequence,
@@ -229,8 +230,8 @@ def test_random_valid_walkers_stay_physical_or_fail_closed():
         spec = WalkerSpec(
             cadence_spm=rng.uniform(30, 200),
             stride_length_m=rng.uniform(0.3, 2.0),
-            stance_fraction=rng.uniform(0.55, 0.75),
-            asymmetry=rng.uniform(-0.29, 0.29),
+            stance_fraction=(stance := rng.uniform(0.55, 0.75)),
+            asymmetry=rng.uniform(-0.99, 0.99) * min(0.29, 2 * stance - 1),
             height_m=rng.uniform(1.0, 2.2),
             swing_lift_m=rng.uniform(0.01, 0.15),
             start_phase=rng.uniform(0, 0.99),
@@ -251,6 +252,8 @@ def test_random_valid_walkers_stay_physical_or_fail_closed():
             heel = _series(track, f"{foot}_heel", 1)
             toe = _series(track, f"{foot}_foot_index", 1)
             assert max(toe) <= max(heel) + ON_GROUND
+            knee = _series(track, f"{foot}_knee", 1)
+            assert max(knee) < max(heel)  # y points down: knee above the ground
             strikes, _ = _zeni(track, foot)
             for frame in _interior(track.truth.heel_strikes, foot, len(heel)):
                 assert min(abs(d - frame) for d in strikes) <= 1
@@ -270,6 +273,23 @@ def test_far_leg_occlusion_hides_only_the_far_leg_in_mid_swing():
             assert (frame[J[joint]] is None) == ((joint, i) in hidden)
     events = track.truth.heel_strikes + track.truth.toe_offs
     assert not any(("right_heel", i) in hidden for f, i in events if f == "right")
+
+
+@pytest.mark.parametrize("start_phase", [0.0, 0.2, 0.35, 0.5, 0.7, 0.9])
+def test_far_leg_occlusion_covers_every_crossing_in_the_clip(start_phase):
+    # Crossings come from the geometry, so a swing that started before the
+    # clip still has to be hidden when it passes the near leg inside it.
+    spec = WalkerSpec(start_phase=start_phase)
+    track = synthetic_pose_sequence(walkers=(spec,), fps=60.0).walkers[0]
+    gap = [f[J["right_ankle"]][0] - f[J["left_ankle"]][0] for f in track.frames]
+    crossings = [i for i in range(1, len(gap)) if gap[i - 1] < 0 <= gap[i]]
+    assert len(crossings) >= 3
+    hidden = {
+        i
+        for _, start, stop in far_leg_crossings(spec, fps=60.0, frame_count=len(gap))
+        for i in range(start, stop)
+    }
+    assert all(i in hidden for i in crossings)
 
 
 def test_occlusion_never_shifts_the_noise_of_other_joints():
@@ -326,7 +346,24 @@ def test_each_walker_keeps_its_own_truth():
             "pose_fixture_clip_shorter_than_stride",
         ),
         (
+            {"walkers": (WalkerSpec(stance_fraction=0.55, asymmetry=0.29),)},
+            "pose_fixture_invalid_walker",
+        ),
+        (
+            {"walkers": (WalkerSpec(stance_fraction=0.6, asymmetry=-0.2),)},
+            "pose_fixture_invalid_walker",
+        ),
+        (
             {"walkers": (WalkerSpec(height_m=1.0, stride_length_m=2.0),)},
+            "pose_fixture_unreachable_foot",
+        ),
+        (
+            {
+                "walkers": (
+                    WalkerSpec(height_m=1.2, stride_length_m=1.4, stance_fraction=0.7),
+                ),
+                "fps": 60.0,
+            },
             "pose_fixture_unreachable_foot",
         ),
         ({"walkers": ()}, "pose_fixture_invalid_grid"),

@@ -66,6 +66,7 @@ _STRIKE_PITCH = math.radians(15.0)  # toe up at initial contact
 _OFF_PITCH = math.radians(-45.0)  # toe down at final contact
 _FOOT_FLAT, _HEEL_OFF = 0.13, 0.52  # fractions of stance
 _REACH = 0.995  # largest hip-ankle distance, as a fraction of thigh + shank
+_MIN_HIP = 0.85  # lowest mean hip height, as a fraction of standing hip height
 ASPECT = 16 / 9  # camera frame width over height
 _MARGIN = 0.06
 
@@ -226,7 +227,9 @@ def far_leg_crossings(
     stride = 120.0 / spec.cadence_spm
     swing_mid = (spec.stance_fraction + (1 - spec.stance_fraction) / 2) * stride
     windows = []
-    for foot, time, kind in _events(spec, (frame_count - 1) / fps):
+    # Start one stride early: a swing whose heel strike precedes the clip can
+    # still cross the near leg inside it.
+    for foot, time, kind in _events(spec, (frame_count - 1) / fps, -stride):
         if foot == "right" and kind == "hs":
             centre = time + swing_mid
             start = max(0, round((centre - half_width_s) * fps))
@@ -285,6 +288,9 @@ def _validate(spec: WalkerSpec, fps: float, frame_count: int) -> None:
         0.3 <= spec.stride_length_m <= 2.0,
         0.55 <= spec.stance_fraction <= 0.75,
         abs(spec.asymmetry) < 0.3,
+        # Both double-support periods must stay positive, or the walker would
+        # have a flight phase with neither foot on the ground.
+        abs(spec.asymmetry) < 2 * spec.stance_fraction - 1,
         1.0 <= spec.height_m <= 2.2,
         0.0 < spec.swing_lift_m <= 0.15,
         0.0 <= spec.start_phase < 1.0,
@@ -299,8 +305,8 @@ def _validate(spec: WalkerSpec, fps: float, frame_count: int) -> None:
             raise PoseFixtureError("pose_fixture_invalid_occlusion")
 
 
-def _events(spec: WalkerSpec, last: float):
-    """Yield ``(foot, time, kind)`` in time order for events in ``[0, last]``."""
+def _events(spec: WalkerSpec, last: float, first: float = 0.0):
+    """Yield ``(foot, time, kind)`` in time order for events in ``[first, last]``."""
     step = 60.0 / spec.cadence_spm
     stride = 2.0 * step
     offsets = {"right": 0.0, "left": step * (1 + spec.asymmetry)}
@@ -313,7 +319,7 @@ def _events(spec: WalkerSpec, last: float):
                 ("hs", strike),
                 ("to", strike + spec.stance_fraction * stride),
             ):
-                if 0 <= time <= last:
+                if first <= time <= last:
                     found.append((time, foot, kind))
     for time, foot, kind in sorted(found):
         yield foot, time, kind
@@ -361,6 +367,10 @@ def _world_track(spec: WalkerSpec, fps: float, frame_count: int):
                 raise PoseFixtureError("pose_fixture_unreachable_foot")
             room = ankles[side][index][1] + math.sqrt(reach**2 - dx**2) - bob[index]
             hip_mean = min(hip_mean, room)
+    # A stride the leg can only reach by crouching is not walking; refuse it
+    # rather than let the knee sink towards the ground.
+    if hip_mean < _MIN_HIP * _HIP * height:
+        raise PoseFixtureError("pose_fixture_unreachable_foot")
     frames = []
     for index, t in enumerate(times):
         hip = (speed * t, hip_mean + bob[index])
