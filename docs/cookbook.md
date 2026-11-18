@@ -80,6 +80,7 @@ successful case and a rejected case with its stable reason code.
 | Inspect synthetic human-approval failure receipts | [`examples/agent_approval_failures.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/agent_approval_failures.py) |
 | Add a privacy boundary to a graph flow | [`examples/graph_orchestration_privacy.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/graph_orchestration_privacy.py) |
 | Redact before an external model call | [`examples/privacy_gateway_quickstart.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/privacy_gateway_quickstart.py) |
+| Run the local privacy proxy without a network or model download | [`examples/privacy_proxy_echo.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/privacy_proxy_echo.py) |
 | Preserve retrieval utility after redaction | [`examples/redaction_preserving_retrieval.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/redaction_preserving_retrieval.py) |
 | Protect a local search pipeline | [`examples/search_pipeline_privacy.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/search_pipeline_privacy.py) |
 
