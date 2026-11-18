@@ -32,15 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The local privacy proxy now refuses chat-completion requests whose messages
-  carry content parts it cannot redact. Any part other than `text` (or
-  `refusal` on assistant turns), including `image_url`, `input_audio` and
-  `file`, returns `400 unsupported_content_part` with only the part type and
-  zero-based message index, before any redaction or transport call. These
-  parts were previously run through the text detector and forwarded, so
-  identifiers inside images, audio or documents reached the transport.
-  Message `content` that is not a string, `null` or a list now returns
-  `400 message_content_invalid` (#5097).
 - Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).
 - The GraphQL endpoint now executes operations over `POST` only, keeps the
   GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
@@ -120,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Breaking:** the local privacy proxy now refuses chat-completion requests
+  whose messages carry content parts it cannot redact. Any part other than
+  `text` (or `refusal` on assistant turns), including `image_url`,
+  `input_audio` and `file`, returns `400 unsupported_content_part` with only
+  the part type and zero-based message index, before any redaction or
+  transport call. These parts were previously run through the text detector
+  and forwarded, so identifiers inside images, audio or documents reached the
+  transport. Remove media parts or redact them before calling the proxy.
+  Message `content` that is not a string, `null` or a list now returns
+  `400 message_content_invalid` (#5097).
 - **Breaking:** evaluation reports no longer fall back to signing keys
   published in the source, which let anyone forge a signature that verifies.
   `run_relation_suite`, `run_suite(suite="relations")` and

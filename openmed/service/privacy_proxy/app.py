@@ -80,6 +80,9 @@ _DONE = object()
 # chat completions does not define.
 _CHAT_CONTENT_PART_TYPES = frozenset({"text"})
 _ASSISTANT_CONTENT_PART_TYPES = _CHAT_CONTENT_PART_TYPES | {"refusal"}
+# An accepted part must hold its payload as a string under its own type name
+# (``text`` or ``refusal``) and may not also carry a media payload key.
+_MEDIA_CONTENT_PART_KEYS = frozenset({"image_url", "input_audio", "file"})
 # Only these fixed names are echoed in a refusal; any other type value is
 # caller input and is reported as ``unknown`` (a string) or ``invalid``.
 _REPORTABLE_CONTENT_PART_TYPES = frozenset(
@@ -307,7 +310,15 @@ class PrivacyProxy:
         *,
         request_id_header: Optional[str] = None,
     ) -> RedactedChatRequest:
-        """Validate and redact one JSON chat-completion request."""
+        """Validate and redact one JSON chat-completion request.
+
+        Raises:
+            PrivacyProxyRequestError: If the request is invalid. A refused
+                content part has ``reason_code`` ``unsupported_content_part``
+                and the safe ``part_type`` and ``message_index`` attributes.
+            PrivacyProxyLimitError: If a message or text bound is exceeded.
+            PrivacyProxyRedactionError: If redaction or its tripwire fails.
+        """
         normalized = _validate_request_payload(payload)
         _enforce_request_limits(normalized, self.limits)
         request_id = _stable_request_id(normalized, request_id_header)
@@ -795,12 +806,18 @@ def _refuse_unsupported_content_parts(messages: Sequence[Mapping[str, Any]]) -> 
             part_type = part.get("type") if isinstance(part, Mapping) else None
             # Check the shape first: an unhashable value cannot be tested
             # against a frozenset.
-            if isinstance(part_type, str) and part_type in allowed:
-                continue
-            raise _UnsupportedContentPartError(
-                part_type=_reportable_content_part_type(part_type),
-                message_index=message_index,
-            )
+            if not isinstance(part_type, str) or part_type not in allowed:
+                raise _UnsupportedContentPartError(
+                    part_type=_reportable_content_part_type(part_type),
+                    message_index=message_index,
+                )
+            if not isinstance(part.get(part_type), str) or any(
+                key in part for key in _MEDIA_CONTENT_PART_KEYS
+            ):
+                raise _UnsupportedContentPartError(
+                    part_type=_INVALID_CONTENT_PART_TYPE,
+                    message_index=message_index,
+                )
 
 
 def _reportable_content_part_type(part_type: Any) -> str:

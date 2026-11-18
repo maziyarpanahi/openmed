@@ -31,8 +31,12 @@ content parts with these types:
 
 | Role | Accepted part types |
 | --- | --- |
-| `assistant` | `text`, `refusal` |
+| `assistant` (exact, lowercase) | `text`, `refusal` |
 | Any other role | `text` |
+
+A `text` part must hold a string `text` and a `refusal` part a string
+`refusal`. Neither may also carry an `image_url`, `input_audio` or `file`
+key.
 
 Any other part refuses the whole request with HTTP 400 and the reason
 `unsupported_content_part`. This includes `image_url`, `input_audio` and
@@ -59,17 +63,19 @@ the request is never redacted or sent when a later part is refused.
 `message_index` is the zero-based position of the first refused message in
 `messages`. `part_type` is `refusal`, `image_url`, `input_audio` or `file`
 when the part used one of those types. Any other string type is reported as
-`unknown`, and a missing or non-string type, or a part that is not an object,
-as `invalid`. The error never contains the part's data or the caller's own
-`type` value. A `content` value that is neither a string, `null` nor a list,
-such as a single part object, gets `message_content_invalid` instead.
+`unknown`. A missing or non-string type, a part that is not an object, and a
+`text` or `refusal` part that breaks the rule above are reported as `invalid`.
+The error never contains the part's data or the caller's own `type` value.
+`PrivacyProxy.prepare()` raises `PrivacyProxyRequestError` with the same
+`reason_code`, `part_type` and `message_index`. A `content` value that is
+neither a string, `null` nor a list, such as a single part object, gets
+`message_content_invalid` instead.
 
-Before this check, the proxy forwarded these parts after running their string
-values, such as base64 `data:` URLs, through the text detector, which cannot
-find identifiers inside an image, a recording or a document. Clients that send
-images, audio or files now get a 400 and must remove those parts or redact
-them before calling the proxy. Redacting media through the multimodal pipeline
-is not part of this route.
+Clients that send images, audio or files must remove those parts, or redact
+them before calling the proxy. The message-count and text-length limits run
+first, so a request whose media pushes it over `max_text_chars` gets
+`413 text_length_exceeded` rather than this 400. Redacting media through the
+multimodal pipeline is not part of this route.
 
 Create the app with a local transport. The transport receives a copied request
 mapping whose text leaves contain deterministic `OPENMED_PHI` placeholders;

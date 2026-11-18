@@ -172,62 +172,102 @@ def test_first_refused_part_is_reported(recorder: Recorder):
     recorder.assert_untouched()
 
 
-@pytest.mark.parametrize(
-    ("part", "reported"),
-    [
-        ({"type": "video_url", "video_url": {"url": DATA_URL}}, "unknown"),
-        ({"type": f"x-{SENTINEL}", "data": SENTINEL}, "unknown"),
-        # Responses API text types are not chat-completions parts.
-        ({"type": "input_text", "text": SENTINEL}, "unknown"),
-        ({"type": "output_text", "text": SENTINEL}, "unknown"),
-        ({"type": "Text", "text": SENTINEL}, "unknown"),
-        ({"type": "", "text": SENTINEL}, "unknown"),
-        ({"text": SENTINEL}, "invalid"),
-        ({"type": None, "text": SENTINEL}, "invalid"),
-        ({"type": 7, "text": SENTINEL}, "invalid"),
-        ({"type": True, "text": SENTINEL}, "invalid"),
-        ({"type": {"name": SENTINEL}, "text": SENTINEL}, "invalid"),
-        ({"type": [SENTINEL], "text": SENTINEL}, "invalid"),
-        (SENTINEL, "invalid"),
-        ([SENTINEL], "invalid"),
-        (None, "invalid"),
-        ({"type": "refusal", "refusal": SENTINEL}, "refusal"),
-    ],
-    ids=[
-        "unknown-type",
-        "sentinel-type",
-        "input_text",
-        "output_text",
-        "wrong-case",
-        "empty-type",
-        "missing-type",
-        "null-type",
-        "number-type",
-        "bool-type",
-        "object-type",
-        "array-type",
-        "string-part",
-        "array-part",
-        "null-part",
-        "user-refusal",
-    ],
-)
+MALFORMED_PARTS: dict[str, tuple[Any, str]] = {
+    "unknown-type": ({"type": "video_url", "video_url": {"url": DATA_URL}}, "unknown"),
+    "sentinel-type": ({"type": f"x-{SENTINEL}", "data": SENTINEL}, "unknown"),
+    # Responses API text types are not chat-completions parts.
+    "input_text": ({"type": "input_text", "text": SENTINEL}, "unknown"),
+    "output_text": ({"type": "output_text", "text": SENTINEL}, "unknown"),
+    "wrong-case": ({"type": "Text", "text": SENTINEL}, "unknown"),
+    "empty-type": ({"type": "", "text": SENTINEL}, "unknown"),
+    "missing-type": ({"text": SENTINEL}, "invalid"),
+    "null-type": ({"type": None, "text": SENTINEL}, "invalid"),
+    "number-type": ({"type": 7, "text": SENTINEL}, "invalid"),
+    "bool-type": ({"type": True, "text": SENTINEL}, "invalid"),
+    "object-type": ({"type": {"name": SENTINEL}, "text": SENTINEL}, "invalid"),
+    "array-type": ({"type": [SENTINEL], "text": SENTINEL}, "invalid"),
+    "string-part": (SENTINEL, "invalid"),
+    "array-part": ([SENTINEL], "invalid"),
+    "null-part": (None, "invalid"),
+    "user-refusal": ({"type": "refusal", "refusal": SENTINEL}, "refusal"),
+    # A text part must carry its text as a string and no media payload.
+    "text-missing": ({"type": "text"}, "invalid"),
+    "text-object": ({"type": "text", "text": {"url": DATA_URL}}, "invalid"),
+    "text-with-image": (
+        {"type": "text", "text": "Hi.", "image_url": {"url": DATA_URL}},
+        "invalid",
+    ),
+    "text-with-audio": (
+        {"type": "text", "text": "Hi.", "input_audio": {"data": SENTINEL}},
+        "invalid",
+    ),
+    "text-with-file": (
+        {"type": "text", "text": "Hi.", "file": {"file_data": SENTINEL}},
+        "invalid",
+    ),
+}
+
+
 def test_unknown_and_malformed_parts_are_refused_with_safe_markers(
-    recorder: Recorder,
-    caplog: pytest.LogCaptureFixture,
-    part: Any,
-    reported: str,
-):
+    caplog: pytest.LogCaptureFixture, subtests: Any
+) -> None:
     caplog.set_level(logging.DEBUG)
+    for case, (part, reported) in MALFORMED_PARTS.items():
+        with subtests.test(case=case):
+            recorder = Recorder()
+            with _client(recorder) as client:
+                response = client.post(
+                    "/v1/chat/completions", json=_request(_user(_text(), part))
+                )
+
+            assert response.status_code == 400
+            assert response.json() == _refusal(reported, 0)
+            assert SENTINEL not in response.text
+            recorder.assert_untouched()
+    assert SENTINEL not in caplog.text
+
+
+def test_malformed_assistant_refusal_parts_are_refused(subtests: Any) -> None:
+    for case, part in {
+        "refusal-missing": {"type": "refusal"},
+        "refusal-number": {"type": "refusal", "refusal": 7},
+        "refusal-with-image": {
+            "type": "refusal",
+            "refusal": "No.",
+            "image_url": {"url": DATA_URL},
+        },
+    }.items():
+        with subtests.test(case=case):
+            recorder = Recorder()
+            assistant = {"role": "assistant", "content": [part]}
+            with _client(recorder) as client:
+                response = client.post(
+                    "/v1/chat/completions",
+                    json=_request(_user(_text()), assistant),
+                )
+
+            assert response.json() == _refusal("invalid", 1)
+            assert SENTINEL not in response.text
+            recorder.assert_untouched()
+
+
+def test_duplicate_type_keys_cannot_relabel_a_media_part(recorder: Recorder):
+    # JSON parsing keeps the last duplicate key, so this arrives as a "text"
+    # part that still carries the image payload.
+    body = (
+        '{"model": "local-fixture", "messages": [{"role": "user", "content": '
+        '[{"type": "image_url", "type": "text", "text": "Hi.", '
+        f'"image_url": {{"url": "{DATA_URL}"}}}}]}}]}}'
+    )
     with _client(recorder) as client:
         response = client.post(
-            "/v1/chat/completions", json=_request(_user(_text(), part))
+            "/v1/chat/completions",
+            content=body,
+            headers={"Content-Type": "application/json"},
         )
 
-    assert response.status_code == 400
-    assert response.json() == _refusal(reported, 0)
+    assert response.json() == _refusal("invalid", 0)
     assert SENTINEL not in response.text
-    assert SENTINEL not in caplog.text
     recorder.assert_untouched()
 
 
@@ -298,6 +338,7 @@ def test_tool_turns_and_type_keys_outside_content_are_not_parts(recorder: Record
         {"role": "assistant", "tool_calls": [{**tool_call, "id": "call_2"}]},
         {"role": "tool", "tool_call_id": "call_1", "content": "Found."},
         {"role": "tool", "tool_call_id": "call_2", "content": [_text("Found.")]},
+        {"role": "user", "content": []},
         tools=[
             {
                 "type": "function",
@@ -340,6 +381,9 @@ def test_existing_limit_and_request_id_errors_keep_precedence(recorder: Recorder
     oversized = _request(*[_user(_text("Hi."))] * 3, _user(MEDIA_PARTS["file"]))
     with _client(recorder, limits=PrivacyProxyLimits(max_messages=2)) as client:
         limited = client.post("/v1/chat/completions", json=oversized)
+    long_media = _request(_user(MEDIA_PARTS["image_url"]))
+    with _client(recorder, limits=PrivacyProxyLimits(max_text_chars=8)) as client:
+        too_long = client.post("/v1/chat/completions", json=long_media)
     with _client(recorder) as client:
         bad_id = client.post(
             "/v1/chat/completions",
@@ -349,6 +393,8 @@ def test_existing_limit_and_request_id_errors_keep_precedence(recorder: Recorder
 
     assert limited.status_code == 413
     assert limited.json()["error"]["details"] == {"reason": "message_count_exceeded"}
+    assert too_long.status_code == 413
+    assert too_long.json()["error"]["details"] == {"reason": "text_length_exceeded"}
     assert bad_id.status_code == 400
     assert bad_id.json()["error"]["details"] == {"reason": "request_id_invalid"}
     recorder.assert_untouched()
