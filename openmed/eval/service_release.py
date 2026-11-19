@@ -22,10 +22,10 @@ requires. The gate fails when any P0 is open, lacks one of those kinds, or is
 moved out of the release, and when a moved P1 or P2 item would narrow a
 protected invariant.
 
-Evidence is read through loaders keyed by kind. Kinds whose producers are not
-on master yet default to a loader that blocks with
-``typed_loader_unavailable``; callers inject a typed loader once the producer
-lands. A required kind with no entry is reported as ``not_present``.
+Evidence is read through loaders keyed by kind. Security-profile and no-egress
+reports use their production contracts. Kinds whose typed integration is still
+pending block with ``typed_loader_unavailable``; callers may inject a typed
+loader. A required kind with no entry is reported as ``not_present``.
 
 The packet reuses the Journey gate's canonical JSON, caller-keyed
 HMAC-SHA256 and atomic writer (:mod:`openmed.eval.journey_release`). It holds
@@ -255,6 +255,8 @@ SERVICE_RELEASE_REASON_CODES: Final = (
     "moved_item_residual_risk_missing",
     "moved_item_weakens_invariant",
     "moved_items_invalid",
+    "no_egress_attestation_invalid",
+    "no_egress_not_passed",
     "output_exists",
     "output_unwritable",
     "p0_checklist_invalid",
@@ -277,6 +279,9 @@ SERVICE_RELEASE_REASON_CODES: Final = (
     "release_target_invalid",
     "release_target_unsupported",
     "release_version_invalid",
+    "security_profile_not_production",
+    "security_profile_not_ready",
+    "security_profile_report_invalid",
     "sentinel_detected",
     "sentinel_invalid",
     "service_release_invalid",
@@ -831,6 +836,136 @@ def build_p0_status(
 # --- evidence loaders --------------------------------------------------------
 
 
+def load_security_profile_evidence(
+    source: ServiceEvidenceSource,
+) -> ServiceEvidenceResult:
+    """Validate the complete production self-check and its derived verdict.
+
+    Args:
+        source: Digest-bound JSON from the service security-profile producer.
+
+    Returns:
+        A typed result that refuses incomplete check sets, changed control
+        levels, inconsistent counts or digests, development profiles and
+        production reports that block readiness. Advisory findings remain
+        visible and follow the versioned production profile's own policy.
+    """
+    from openmed.service.security_profile import (
+        SECURITY_PROFILES,
+        CheckLevel,
+        CheckResult,
+        CheckStatus,
+        ProfileSource,
+        ResolvedSecurityProfile,
+        SecurityProfileName,
+        SecurityProfileReport,
+        registered_security_checks,
+    )
+
+    try:
+        document = source.read_json()
+    except ServiceReleaseError as exc:
+        return ServiceEvidenceResult(exc.codes)
+    try:
+        profile = SECURITY_PROFILES[SecurityProfileName(document["profile"]["name"])]
+        resolved = ResolvedSecurityProfile(
+            profile, ProfileSource(document["profile"]["source"])
+        )
+        rows = document["checks"]
+        checks = registered_security_checks()
+        if not isinstance(rows, list) or len(rows) != len(checks):
+            raise ValueError
+        results = []
+        for row, check in zip(rows, checks, strict=True):
+            if row["id"] != check.check_id:
+                raise ValueError
+            status = CheckStatus(row["status"])
+            reason = row["reason"]
+            if not isinstance(reason, str) or not re.fullmatch(
+                r"[a-z][a-z0-9_]{0,63}", reason
+            ):
+                raise ValueError
+            level = check.level_for(profile)
+            blocking = (
+                profile.enforcing
+                and level is CheckLevel.REQUIRED
+                and status in (CheckStatus.FAIL, CheckStatus.NOT_IMPLEMENTED)
+            )
+            results.append(
+                CheckResult(
+                    check.check_id,
+                    check.control,
+                    level,
+                    status,
+                    reason,
+                    blocking,
+                    check.tracking_issue,
+                )
+            )
+        report = SecurityProfileReport(resolved, tuple(results))
+        # Compare serialized forms, so JSON booleans cannot masquerade as counts.
+        # Rebuilding also checks every field, summary, profile and report digest.
+        if _canonical_json(document) != _canonical_json(report.to_dict()):
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return ServiceEvidenceResult(("security_profile_report_invalid",))
+    codes = []
+    if not resolved.is_production:
+        codes.append("security_profile_not_production")
+    if not report.ready:
+        codes.append("security_profile_not_ready")
+    summary = {
+        **document["summary"],
+        "ready": report.ready,
+        "report_digest": report.digest,
+        "status": report.status.value,
+    }
+    return ServiceEvidenceResult(tuple(codes), summary, document=document)
+
+
+def load_no_egress_evidence(source: ServiceEvidenceSource) -> ServiceEvidenceResult:
+    """Validate the OS boundary, controls, hashes and candidate of an attestation.
+
+    Args:
+        source: Digest-bound JSON from the OS-enforced no-egress producer.
+
+    Returns:
+        A typed result. Skipped, failed, tampered, wrong-version and
+        wrong-candidate attestations cannot satisfy the release gate.
+    """
+    from openmed.core.attestation import (
+        NO_EGRESS_STATUS_PASSED,
+        NoEgressAttestationError,
+        validate_no_egress_attestation,
+    )
+
+    try:
+        document = source.read_json()
+    except ServiceReleaseError as exc:
+        return ServiceEvidenceResult(exc.codes)
+    try:
+        attestation = validate_no_egress_attestation(document)
+    except NoEgressAttestationError:
+        return ServiceEvidenceResult(("no_egress_attestation_invalid",))
+    document = attestation.to_dict()
+    codes = []
+    if document["commit"] != source.release["candidate_commit"]:
+        codes.append("wrong_candidate")
+    if document["openmed_version"] != source.release["version"]:
+        codes.append("release_mismatch")
+    if document["status"] != NO_EGRESS_STATUS_PASSED:
+        codes.append("no_egress_not_passed")
+    summary = {
+        "isolated": document["boundary"]["isolated"],
+        "negative_controls": len(document["negative_controls"]),
+        "positive_controls": len(document["positive_controls"]),
+        "workflow_cases": len(document["workflow"]),
+        "report_digest": document["integrity_hash"],
+        "status": document["status"],
+    }
+    return ServiceEvidenceResult(tuple(codes), summary, document=document)
+
+
 def load_recovery_drill_evidence(
     source: ServiceEvidenceSource,
 ) -> ServiceEvidenceResult:
@@ -1028,8 +1163,8 @@ def load_unavailable_evidence(source: ServiceEvidenceSource) -> ServiceEvidenceR
 
 DEFAULT_EVIDENCE_LOADERS: Final[Mapping[str, ServiceEvidenceLoader]] = MappingProxyType(
     {
-        SECURITY_PROFILE_REPORT: load_unavailable_evidence,
-        NO_EGRESS_ATTESTATION: load_unavailable_evidence,
+        SECURITY_PROFILE_REPORT: load_security_profile_evidence,
+        NO_EGRESS_ATTESTATION: load_no_egress_evidence,
         RECOVERY_DRILL_REPORT: load_recovery_drill_evidence,
         MIGRATION_REHEARSAL_MATRIX: load_unavailable_evidence,
         PROTOCOL_MAP: load_unavailable_evidence,
@@ -2303,6 +2438,8 @@ __all__ = [
     "load_service_release_packet",
     "load_service_release_packet_schema",
     "load_unavailable_evidence",
+    "load_security_profile_evidence",
+    "load_no_egress_evidence",
     "main",
     "required_failure_codes",
     "scan_for_sentinels",

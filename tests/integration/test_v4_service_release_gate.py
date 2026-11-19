@@ -164,7 +164,7 @@ def test_master_cli_flow_signs_not_ready_and_verifies_offline(tmp_path: Path) ->
     )
     assert built.returncode == 1, built.stderr
     assert "NOT_READY" in built.stdout
-    assert "typed_loader_unavailable:security-profile" in built.stdout
+    assert "security_profile_report_invalid:security-profile" in built.stdout
     assert "drill_step_not_available:recovery-drill" in built.stdout
     for leaked in (str(tmp_path), fx.TEST_ONLY_SIGNING_KEY.decode()):
         assert leaked not in built.stdout + built.stderr

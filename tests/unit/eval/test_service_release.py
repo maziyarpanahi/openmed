@@ -158,15 +158,16 @@ def test_packet_is_deterministic_and_value_free(tmp_path: Path) -> None:
 # --- master defaults and missing evidence --------------------------------------
 
 
-def test_master_defaults_block_kinds_whose_producers_are_open_work(
+def test_master_defaults_reject_stand_ins_and_block_pending_integrations(
     tmp_path: Path,
 ) -> None:
     root, manifest = fx.make_service_release(tmp_path)
     packet = _evaluate(root, manifest, loaders={})
 
     assert packet.decision == SERVICE_RELEASE_NOT_READY
-    for entry_id in ("security-profile", "no-egress", "migration-rehearsal"):
-        assert f"typed_loader_unavailable:{entry_id}" in packet.blocking_codes
+    assert "security_profile_report_invalid:security-profile" in packet.blocking_codes
+    assert "no_egress_attestation_invalid:no-egress" in packet.blocking_codes
+    assert "typed_loader_unavailable:migration-rehearsal" in packet.blocking_codes
     assert "typed_loader_unavailable:protocol-map" in packet.blocking_codes
     blocked = {
         row["kind"] for row in packet.evidence_kinds if row["state"] != "present"
@@ -765,3 +766,214 @@ def test_from_dict_round_trip_preserves_signature(tmp_path: Path) -> None:
         replace(restored, decision="NOT_READY").verify(fx.TEST_ONLY_SIGNING_KEY)
         is False
     )
+
+
+def _producer_source(kind: str, document: Any):
+    from openmed.eval.service_release import ServiceEvidenceSource
+
+    data = json.dumps(document).encode()
+    return ServiceEvidenceSource(
+        entry_id="producer",
+        kind=kind,
+        digest=fx.digest(data),
+        byte_size=len(data),
+        release={"version": fx.VERSION, "candidate_commit": fx.CANDIDATE},
+        data=data,
+    )
+
+
+def _security_report(*, profile: str = "prod", auth: bool = True):
+    from openmed.service.auth import hash_api_key
+    from openmed.service.security_profile import run_service_preflight
+
+    return run_service_preflight(
+        profile=profile,
+        listen_host="127.0.0.1",
+        listen_tls=False,
+        environ={
+            "OPENMED_PROFILE": profile,
+            "OPENMED_SERVICE_AUTH_ENABLED": str(auth).lower(),
+            "OPENMED_SERVICE_AUTH_API_KEYS": json.dumps(
+                [
+                    {
+                        "id": "synthetic-release-key",
+                        "key_hash": hash_api_key("synthetic-release-preflight-key"),
+                        "principal": "synthetic-release-service",
+                        "scopes": ["models:read"],
+                    }
+                ]
+            ),
+            "OPENMED_SERVICE_SERVED_MODELS": "pii_detection_superclinical",
+            "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY": "2",
+            "OPENMED_SERVICE_DIGEST_KEY": "synthetic-release-digest-" + "0" * 32,
+        },
+    ).to_dict()
+
+
+@pytest.mark.parametrize(
+    ("profile", "auth", "expected"),
+    [
+        ("prod", True, ()),
+        ("prod", False, ("security_profile_not_ready",)),
+        ("dev", False, ("security_profile_not_production",)),
+    ],
+)
+def test_security_loader_uses_actual_preflight_verdict(profile, auth, expected):
+    from openmed.eval.service_release import load_security_profile_evidence
+
+    source = _producer_source(
+        "security_profile_report", _security_report(profile=profile, auth=auth)
+    )
+    result = load_security_profile_evidence(source)
+    assert result.blocking_codes == expected
+    assert result.loader == "typed"
+    assert result.summary["checks"] > 0
+    assert "synthetic-release" not in json.dumps(dict(result.summary))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d["checks"].pop(),
+        lambda d: d["checks"].append(d["checks"][0]),
+        lambda d: next(row for row in d["checks"] if row["level"] == "required").update(
+            level="advisory"
+        ),
+        lambda d: d["checks"][0].update(blocking=True),
+        lambda d: d["checks"][0].update(reason="not:a:producer:reason"),
+        lambda d: d["profile"].update(enforcing=False),
+        lambda d: d["summary"].update(blocking=False),
+        lambda d: d.update(ready=False),
+        lambda d: d.update(digest="sha256:" + "0" * 64),
+        lambda d: d.update(extra="SYNTH-SENTINEL-3603-DO-NOT-EMIT"),
+    ],
+)
+def test_security_loader_rejects_incomplete_or_edited_reports(mutate):
+    from openmed.eval.service_release import load_security_profile_evidence
+
+    document = _security_report()
+    mutate(document)
+    result = load_security_profile_evidence(
+        _producer_source("security_profile_report", document)
+    )
+    assert result.blocking_codes == ("security_profile_report_invalid",)
+    assert result.summary == {}
+
+
+def _no_egress_report(**overrides):
+    from openmed.core.attestation import (
+        NO_EGRESS_NEGATIVE_CONTROLS,
+        NO_EGRESS_POSITIVE_CONTROLS,
+        NO_EGRESS_WORKFLOW_CASES,
+        build_no_egress_attestation,
+    )
+
+    # Producer-shaped synthetic controls exercise parsing only; they are never
+    # retained or presented as a real Linux network-boundary attestation.
+    arguments = {
+        "host_kind": "linux",
+        "requested_boundary": "netns",
+        "boundary_kind": "netns",
+        "kernel": "linux",
+        "interfaces": {"total": 1, "loopback_up": 1, "non_loopback_up": 0},
+        "routes": {"ipv4_non_loopback": 0, "ipv6_non_loopback": 0},
+        "negative_controls": [
+            {"id": case, "status": "blocked", "reason_code": "network_unreachable"}
+            for case in NO_EGRESS_NEGATIVE_CONTROLS
+        ],
+        "positive_controls": [
+            {"id": case, "status": "reachable", "reason_code": "loopback_reachable"}
+            for case in NO_EGRESS_POSITIVE_CONTROLS
+        ],
+        "workflow": [
+            {
+                "id": case,
+                "status": "passed",
+                "reason_code": "ok",
+                "result_digest": "sha256:" + "1" * 64,
+            }
+            for case in NO_EGRESS_WORKFLOW_CASES
+        ],
+        "fixtures": {
+            "service_workflow_fixture": "sha256:" + "2" * 64,
+            "no_egress_gate_runner": "sha256:" + "3" * 64,
+        },
+        "commit": fx.CANDIDATE,
+        "openmed_version": fx.VERSION,
+        "generated_at": fx.GENERATED_AT,
+    }
+    arguments.update(overrides)
+    return build_no_egress_attestation(**arguments).to_dict()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({}, ()),
+        ({"commit": fx.OTHER_COMMIT}, ("wrong_candidate",)),
+        ({"openmed_version": "3.3.0"}, ("release_mismatch",)),
+        ({"negative_controls": []}, ("no_egress_not_passed",)),
+        (
+            {
+                "boundary_kind": "none",
+                "skip_reason": "boundary_unavailable",
+                "negative_controls": [],
+                "positive_controls": [],
+                "workflow": [],
+            },
+            ("no_egress_not_passed",),
+        ),
+    ],
+)
+def test_no_egress_loader_rechecks_producer_and_candidate(overrides, expected):
+    from openmed.eval.service_release import load_no_egress_evidence
+
+    result = load_no_egress_evidence(
+        _producer_source("no_egress_attestation", _no_egress_report(**overrides))
+    )
+    assert result.blocking_codes == expected
+    assert result.loader == "typed"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d.update(commit=fx.OTHER_COMMIT),
+        lambda d: d["negative_controls"].pop(),
+        lambda d: d["boundary"].update(isolated=False),
+        lambda d: d.update(integrity_hash="sha256:" + "0" * 64),
+    ],
+)
+def test_no_egress_loader_rejects_tampered_report(mutate):
+    from openmed.eval.service_release import load_no_egress_evidence
+
+    document = _no_egress_report()
+    mutate(document)
+    result = load_no_egress_evidence(
+        _producer_source("no_egress_attestation", document)
+    )
+    assert result.blocking_codes == ("no_egress_attestation_invalid",)
+    assert result.summary == {}
+
+
+def test_real_producer_loaders_participate_in_signed_gate(tmp_path):
+    from openmed.eval.service_release import (
+        NO_EGRESS_ATTESTATION,
+        SECURITY_PROFILE_REPORT,
+    )
+
+    root, manifest = fx.make_service_release(tmp_path)
+    for entry_id, document in (
+        ("security-profile", _security_report()),
+        ("no-egress", _no_egress_report()),
+    ):
+        entry = fx.entry(manifest, entry_id)
+        data = json.dumps(document).encode()
+        (root / entry["path"]).write_bytes(data)
+        entry["sha256"] = fx.digest(data)
+    loaders = fx.stand_in_loaders()
+    del loaders[SECURITY_PROFILE_REPORT]
+    del loaders[NO_EGRESS_ATTESTATION]
+    packet = _evaluate(root, manifest, loaders=loaders)
+    assert packet.decision == SERVICE_RELEASE_READY, packet.blocking_codes
+    assert packet.verify(fx.TEST_ONLY_SIGNING_KEY)
