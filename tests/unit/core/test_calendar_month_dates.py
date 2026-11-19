@@ -256,7 +256,7 @@ def test_empty_detector_pipeline_masks_and_tags_month_name_date(
 
     masked = result.deidentification_result.deidentified_text
     assert surface not in masked
-    assert masked == f"{text[:start]}[date]{text[end:]}"
+    assert masked == f"{text[:start]}[DATE]{text[end:]}"
     date_spans = [span for span in result.spans if span.canonical_label == "DATE"]
     assert [(span.start, span.end) for span in date_spans] == [(start, end)]
     assert date_spans[0].metadata["calendar"] == calendar
@@ -424,8 +424,6 @@ def test_calendar_fixtures_cover_every_calendar_with_exact_spans() -> None:
 
         assert set(_date_spans(lang, row["text"])) == expected
         masked = _pipeline(lang).run(row["text"], method="mask").redacted_text
-        assert masked == row["metadata"]["expected_output"]["text"].replace(
-            "[DATE]", "[date]"
-        )
+        assert masked == row["metadata"]["expected_output"]["text"]
 
     assert calendars == CALENDAR_CODES

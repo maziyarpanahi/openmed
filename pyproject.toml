@@ -7,7 +7,7 @@ name = "openmed"
 dynamic = ["version"]
 description = "Local-first SDK for clinical extraction and de-identification workflows on hardware you control."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
@@ -73,7 +73,7 @@ dev = [
   "fastapi>=0.110",
   "httpx>=0.27",
   "dask[dataframe]>=2024.8",
-  "opentelemetry-api>=1.45.1,<2",
+  "opentelemetry-api>=1.45.2,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "pandas>=2.0",
@@ -83,6 +83,7 @@ dev = [
   "fsspec>=2026.6.0",
   "fonttools[woff]==4.61.1",
   "grpcio>=1.64",
+  "grpcio-health-checking==1.81.1",
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
@@ -417,7 +418,7 @@ hf = [
 # Core pipeline observability. The SDK enables caller-owned in-process
 # providers and test exporters; no network exporter is included or configured.
 otel = [
-  "opentelemetry-api>=1.45.1,<2",
+  "opentelemetry-api>=1.45.2,<2",
   "opentelemetry-sdk>=1.26,<2",
 ]
 
@@ -425,8 +426,9 @@ service = [
   "cryptography>=50,<51",
   "fastapi>=0.110",
   "grpcio>=1.64",
+  "grpcio-health-checking==1.81.1",
   "httpx>=0.27",
-  "opentelemetry-api>=1.45.1,<2",
+  "opentelemetry-api>=1.45.2,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "protobuf>=5.26,<7",
@@ -637,16 +639,17 @@ constraint-dependencies = [
   "oauthlib>=4.0.1",
   # Keep transitive optional model backends above the checkpoint/native-op fixes.
   "torch>=2.13.0",
-  "tornado>=6.6",
+  "tornado>=6.6.1",
   "urllib3>=2.8.0",
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
   "brotlicffi>=1.2.1.0",
-  "dnspython>=2.9.0",
+  "dnspython>=2.9.2",
   "msgpack>=1.2.3",
   "nltk>=3.10.4",
+  "soupsieve>=4.0.0",
   "graphql-core>=3.2.12",
-  "opentelemetry-api>=1.45.1",
+  "opentelemetry-api>=1.45.2",
   "gitpython>=3.2.1",
   "betterproto==2.0.0b6",
   "pyjwt>=2.14.0",

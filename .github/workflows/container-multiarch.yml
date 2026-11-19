@@ -96,7 +96,8 @@ jobs:
           with patch("openmed.core.pii.extract_pii", return_value=prediction):
               result = openmed.deidentify(text, method="mask", keep_mapping=True)
 
-          assert result.deidentified_text == "Patient [NAME] called [PHONE]."
+          # Placeholders use the canonical taxonomy label: NAME becomes PERSON.
+          assert result.deidentified_text == "Patient [PERSON] called [PHONE]."
           assert len(result.pii_entities) == 2
           print(f"OpenMed {openmed.__version__} synthetic de-identification passed")
           PY

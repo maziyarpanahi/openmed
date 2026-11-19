@@ -1,0 +1,148 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/service/fault-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMedServiceFaultManifest",
+  "description": "Value-free result manifest of a seeded service fault matrix. Rows hold case identifiers, adapter names, transition states, counts, digests and controlled reason codes only.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_digest",
+    "seed",
+    "cases",
+    "summary",
+    "manifest_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "plan_id": {"$ref": "#/$defs/token"},
+    "plan_digest": {"$ref": "#/$defs/digest"},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/case_result"}
+    },
+    "summary": {"$ref": "#/$defs/summary"},
+    "manifest_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "token": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0},
+    "outcome": {
+      "enum": [
+        "no_effect",
+        "retryable",
+        "quarantined",
+        "rolled_back",
+        "committed_exactly_once"
+      ]
+    },
+    "observed_outcome": {
+      "enum": [
+        "no_effect",
+        "retryable",
+        "quarantined",
+        "rolled_back",
+        "committed_exactly_once",
+        "ambiguous"
+      ]
+    },
+    "case_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "case_digest",
+        "component",
+        "commit_point",
+        "category",
+        "fault",
+        "injection_point",
+        "phase",
+        "fault_call",
+        "persistent",
+        "expected_outcome",
+        "baseline_outcome",
+        "control_outcome",
+        "observed_outcome",
+        "control_seam_hits",
+        "fault_seam_hits",
+        "faults_fired",
+        "residue_count",
+        "require_no_residue",
+        "reason_code",
+        "status",
+        "known_gap_issue"
+      ],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/token"},
+        "case_digest": {"$ref": "#/$defs/digest"},
+        "component": {"$ref": "#/$defs/token"},
+        "commit_point": {"$ref": "#/$defs/token"},
+        "category": {
+          "enum": [
+            "disk",
+            "clock",
+            "process",
+            "network",
+            "cancellation",
+            "corrupted_state"
+          ]
+        },
+        "fault": {"$ref": "#/$defs/code"},
+        "injection_point": {"$ref": "#/$defs/token"},
+        "phase": {"enum": ["before_commit", "during_commit", "after_commit"]},
+        "fault_call": {"type": "integer", "minimum": 1},
+        "persistent": {"type": "boolean"},
+        "expected_outcome": {"$ref": "#/$defs/outcome"},
+        "baseline_outcome": {"$ref": "#/$defs/outcome"},
+        "control_outcome": {"$ref": "#/$defs/observed_outcome"},
+        "observed_outcome": {"$ref": "#/$defs/observed_outcome"},
+        "control_seam_hits": {"$ref": "#/$defs/count"},
+        "fault_seam_hits": {"$ref": "#/$defs/count"},
+        "faults_fired": {"$ref": "#/$defs/count"},
+        "residue_count": {"$ref": "#/$defs/count"},
+        "require_no_residue": {"type": "boolean"},
+        "reason_code": {"$ref": "#/$defs/code"},
+        "status": {"enum": ["passed", "failed", "known_gap"]},
+        "known_gap_issue": {
+          "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "known_gap",
+        "categories",
+        "outcomes"
+      ],
+      "properties": {
+        "total": {"$ref": "#/$defs/count"},
+        "passed": {"$ref": "#/$defs/count"},
+        "failed": {"$ref": "#/$defs/count"},
+        "known_gap": {"$ref": "#/$defs/count"},
+        "categories": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/code"},
+          "additionalProperties": {"$ref": "#/$defs/count"}
+        },
+        "outcomes": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/code"},
+          "additionalProperties": {"$ref": "#/$defs/count"}
+        }
+      }
+    }
+  }
+}

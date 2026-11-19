@@ -71,6 +71,29 @@ Name of the model-cache PVC.
 {{- end -}}
 
 {{/*
+emptyDir volume source with an optional size limit. Renders `{}` when the
+limit is empty so the volume source stays valid.
+*/}}
+{{- define "openmed-service.emptyDir" -}}
+{{- $spec := dict -}}
+{{- with .sizeLimit -}}
+{{- $_ := set $spec "sizeLimit" (toString .) -}}
+{{- end -}}
+{{- toJson $spec -}}
+{{- end -}}
+
+{{/*
+Replica mode: multi when more than one replica or an autoscaler can run.
+*/}}
+{{- define "openmed-service.replicaMode" -}}
+{{- if or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled -}}
+multi
+{{- else -}}
+single
+{{- end -}}
+{{- end -}}
+
+{{/*
 Trusted hosts needed for loopback probes and in-cluster Service DNS.
 */}}
 {{- define "openmed-service.trustedHosts" -}}
@@ -80,4 +103,127 @@ Trusted hosts needed for loopback probes and in-cluster Service DNS.
 {{- $hosts = append $hosts . -}}
 {{- end -}}
 {{- join "," (uniq $hosts) -}}
+{{- end -}}
+
+{{/*
+Journey PostgreSQL TLS file paths. Only paths are rendered; certificate and key
+contents stay in the operator-managed Secret.
+*/}}
+{{- define "openmed-service.journeyDatabaseTLSEnv" -}}
+{{- $tls := .Values.journey.database.tls -}}
+- name: OPENMED_JOURNEY_POSTGRES_SSLROOTCERT
+  value: {{ printf "%s/%s" $tls.mountPath $tls.caKey | quote }}
+{{- if $tls.clientCertKey }}
+- name: OPENMED_JOURNEY_POSTGRES_SSLCERT
+  value: {{ printf "%s/%s" $tls.mountPath $tls.clientCertKey | quote }}
+{{- end }}
+{{- if $tls.clientKeyKey }}
+- name: OPENMED_JOURNEY_POSTGRES_SSLKEY
+  value: {{ printf "%s/%s" $tls.mountPath $tls.clientKeyKey | quote }}
+{{- end }}
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseTLSVolumeMount" -}}
+- name: journey-database-tls
+  mountPath: {{ .Values.journey.database.tls.mountPath | quote }}
+  readOnly: true
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseTLSVolume" -}}
+- name: journey-database-tls
+  secret:
+    secretName: {{ .Values.journey.database.tls.secretName | quote }}
+{{- end -}}
+
+
+{{/*
+How the Journey DSN reaches containers: "file" (a read-only Secret volume plus
+OPENMED_JOURNEY_POSTGRES_DSN_FILE) or "env" (a secretKeyRef environment value).
+*/}}
+{{- define "openmed-service.journeyDatabaseSource" -}}
+{{- $source := default "file" .Values.journey.database.source -}}
+{{- if not (has $source (list "file" "env")) -}}
+{{- fail "journey.database.source must be \"file\" or \"env\"" -}}
+{{- end -}}
+{{- $source -}}
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseEnv" -}}
+{{- if eq (include "openmed-service.journeyDatabaseSource" .) "file" -}}
+- name: OPENMED_JOURNEY_POSTGRES_DSN_FILE
+  value: {{ printf "%s/dsn" (trimSuffix "/" .Values.journey.database.mountPath) | quote }}
+{{- else -}}
+- name: OPENMED_JOURNEY_POSTGRES_DSN
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.journey.database.secretName | quote }}
+      key: {{ .Values.journey.database.secretKey | quote }}
+{{- end -}}
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseVolumeMount" -}}
+{{- if eq (include "openmed-service.journeyDatabaseSource" .) "file" -}}
+- name: journey-database
+  mountPath: {{ .Values.journey.database.mountPath | quote }}
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Secret volumes are root-owned. With the pod fsGroup the kubelet makes the files
+group-readable (0440); the service accepts group read for root-owned files only.
+*/}}
+{{- define "openmed-service.journeyDatabaseVolume" -}}
+{{- if eq (include "openmed-service.journeyDatabaseSource" .) "file" -}}
+- name: journey-database
+  secret:
+    secretName: {{ .Values.journey.database.secretName | quote }}
+    defaultMode: 0440
+    items:
+      - key: {{ .Values.journey.database.secretKey | quote }}
+        path: dsn
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate one secretFiles entry and return its mount directory.
+*/}}
+{{- define "openmed-service.secretFileDir" -}}
+{{- $env := required "secretFiles[].env is required" .item.env -}}
+{{- if not (regexMatch "^[A-Z][A-Z0-9_]*$" $env) -}}
+{{- fail "secretFiles[].env must be an upper-case environment variable name" -}}
+{{- end -}}
+{{- if hasSuffix "_FILE" $env -}}
+{{- fail "secretFiles[].env names the credential setting without the _FILE suffix" -}}
+{{- end -}}
+{{- $_ := required "secretFiles[].secretName is required" .item.secretName -}}
+{{- $_ = required "secretFiles[].secretKey is required" .item.secretKey -}}
+{{- printf "%s/%s" (trimSuffix "/" .root.Values.secretFilesMountPath) (lower $env | replace "_" "-") -}}
+{{- end -}}
+
+{{- define "openmed-service.secretFileEnv" -}}
+{{- range $item := .Values.secretFiles }}
+- name: {{ printf "%s_FILE" $item.env }}
+  value: {{ printf "%s/value" (include "openmed-service.secretFileDir" (dict "root" $ "item" $item)) | quote }}
+{{- end }}
+{{- end -}}
+
+{{- define "openmed-service.secretFileVolumeMounts" -}}
+{{- range $index, $item := .Values.secretFiles }}
+- name: {{ printf "secret-file-%d" $index }}
+  mountPath: {{ include "openmed-service.secretFileDir" (dict "root" $ "item" $item) | quote }}
+  readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "openmed-service.secretFileVolumes" -}}
+{{- range $index, $item := .Values.secretFiles }}
+- name: {{ printf "secret-file-%d" $index }}
+  secret:
+    secretName: {{ $item.secretName | quote }}
+    defaultMode: 0440
+    items:
+      - key: {{ $item.secretKey | quote }}
+        path: value
+{{- end }}
 {{- end -}}

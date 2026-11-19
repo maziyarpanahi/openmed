@@ -44,9 +44,38 @@ def test_openmedkit_flutter_ffi_package(tmp_path: Path) -> None:
     environment["OPENMED_FFI_LIBRARY"] = str(library)
     environment["OPENMED_FFI_TEST_SESSION"] = "1"
     _run([flutter, "pub", "get"], cwd=PACKAGE_DIR, env=environment)
+    _run([flutter, "test", "test/"], cwd=PACKAGE_DIR, env=environment)
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_openmedkit_flutter_native_checks(tmp_path: Path) -> None:
+    if os.environ.get("OPENMED_RUN_FLUTTER_INTEGRATION") != "1":
+        pytest.skip("Set OPENMED_RUN_FLUTTER_INTEGRATION=1 for Flutter checks")
+    cmake = shutil.which("cmake")
+    ctest = shutil.which("ctest")
+    if cmake is None or ctest is None:
+        pytest.skip("CMake and CTest are required for the native FFI checks")
+
+    build_dir = tmp_path / "checks"
     _run(
-        [flutter, "test", "test/openmedkit_ffi_test.dart"],
-        cwd=PACKAGE_DIR,
+        [
+            cmake,
+            "-S",
+            str(PACKAGE_DIR / "native"),
+            "-B",
+            str(build_dir),
+            "-DOPENMED_FFI_BUILD_TESTS=ON",
+            "-DCMAKE_BUILD_TYPE=Debug",
+        ],
+        cwd=ROOT,
+    )
+    _run([cmake, "--build", str(build_dir)], cwd=ROOT)
+    environment = os.environ.copy()
+    environment["OPENMED_FFI_TEST_TMPDIR"] = str(tmp_path)
+    _run(
+        [ctest, "--test-dir", str(build_dir), "--output-on-failure"],
+        cwd=ROOT,
         env=environment,
     )
 

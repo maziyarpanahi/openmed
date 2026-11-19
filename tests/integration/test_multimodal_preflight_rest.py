@@ -82,6 +82,9 @@ def offline_env(monkeypatch):
         "OPENMED_SERVICE_MAX_REQUEST_BYTES",
     ):
         monkeypatch.delenv(name, raising=False)
+    # Without auth, the production security profile refuses every request; the
+    # test profile admits this unauthenticated loopback app.
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
 
 
 def test_fragmented_binary_body_preserves_direct_report_bytes(monkeypatch):

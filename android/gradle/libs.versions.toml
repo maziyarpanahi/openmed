@@ -1,6 +1,11 @@
 [versions]
-agp = "7.4.2"
-kotlin = "1.8.22"
+agp = "8.7.3"
+# NDK r28c. :openmedkit copies its libc++_shared.so into the AAR for the DJL
+# tokenizer and strips it with this NDK; CI installs it with sdkmanager.
+android-ndk = "28.2.13676358"
+kotlin = "2.0.21"
+# Build-time public API dump/check (apiDump, apiCheck); Apache-2.0.
+binary-compatibility-validator = "0.16.3"
 kotlinx-coroutines = "1.8.1"
 kotlinx-serialization-json = "1.5.1"
 mlkit-text-recognition = "16.0.1"
@@ -9,8 +14,7 @@ djl-tokenizers = "0.33.0"
 icu4j = "78.3"
 junit = "4.13.2"
 robolectric = "4.11.1"
-slf4j-android-compatible = "1.7.30"
-errorprone-android-compatible = "2.11.0"
+androidx-test-runner = "1.6.2"
 
 [libraries]
 junit = { module = "junit:junit", version.ref = "junit" }
@@ -24,10 +28,11 @@ djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djl-
 djl-tokenizer-native-android = { module = "ai.djl.android:tokenizer-native", version.ref = "djl-tokenizers" }
 icu4j = { module = "com.ibm.icu:icu4j", version.ref = "icu4j" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
-slf4j-android-compatible = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-android-compatible" }
-errorprone-android-compatible = { module = "com.google.errorprone:error_prone_annotations", version.ref = "errorprone-android-compatible" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlinx-binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compatibility-validator" }

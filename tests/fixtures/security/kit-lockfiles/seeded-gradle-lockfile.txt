@@ -1,0 +1,8 @@
+# Synthetic seeded Gradle lockfile for the OpenMedKit lockfile scan gate.
+# CI copies it to a temporary app/gradle.lockfile; it is never a real module.
+# log4j-core 2.14.1 is shipped (release runtime) and must block the gate.
+# guava 31.1-jre is test-only and must be dropped from the release runtime view.
+com.google.guava:guava:31.1-jre=debugUnitTestRuntimeClasspath,releaseUnitTestRuntimeClasspath
+org.apache.logging.log4j:log4j-api:2.14.1=debugRuntimeClasspath,releaseRuntimeClasspath
+org.apache.logging.log4j:log4j-core:2.14.1=debugRuntimeClasspath,releaseRuntimeClasspath
+empty=androidApis,lintChecks

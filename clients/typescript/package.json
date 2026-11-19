@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:workflow": "node --test tests/workflow-client.test.mjs"
+    "test:workflow": "node --test tests/workflow-client.test.mjs",
+    "test:decisions": "node --test tests/decision-client.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

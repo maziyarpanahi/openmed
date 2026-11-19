@@ -1,6 +1,10 @@
 # REST Service Authentication
 
-OpenMed REST authentication is off by default for local development. Enable it
+OpenMed REST authentication is off by default. The production
+[security profile](security-profile.md) requires it, with deny-by-default
+authorization and at least one credential source, and keeps the service closed
+until it is configured. JWT deployments under that profile also need an issuer,
+an audience and a lifetime bound of at most 24 hours. Enable authentication
 before exposing the service outside a trusted loopback or private subnet:
 
 ```bash
@@ -20,6 +24,21 @@ Static API keys are configured as SHA-256 hashes only. Send the raw key on the
 request as `X-API-Key: <key>` or `Authorization: ApiKey <key>`. The service
 hashes the presented key in memory and compares it with the configured digest;
 raw API keys are not stored in service config.
+
+In a container deployment, put the same JSON in a mounted secret file and set
+`OPENMED_SERVICE_AUTH_API_KEYS_FILE` instead of the inline variable, so the
+hashes stay out of the container environment:
+
+```bash
+OPENMED_SERVICE_AUTH_ENABLED=true \
+OPENMED_SERVICE_AUTH_API_KEYS_FILE=/run/secrets/openmed_api_keys \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+The inline and `_FILE` forms are mutually exclusive. Under the production
+profile the file must not be accessible to other users; see
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the size, newline, permission, and error-code rules.
 
 ## JWT Bearer Tokens
 
@@ -43,8 +62,11 @@ OPENMED_SERVICE_AUTH_JWT_AUDIENCE=openmed-rest \
 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
-You can also set `OPENMED_SERVICE_AUTH_JWKS` to an inline JWKS JSON object with
-a top-level `keys` array. JWT scopes are read from `scope`, `scp`, or `scopes`
+You can instead set `OPENMED_SERVICE_AUTH_JWKS` to an inline JWKS JSON object
+with a top-level `keys` array. The inline and file forms are mutually exclusive:
+setting both fails startup. `OPENMED_SERVICE_AUTH_JWKS_FILE` follows the shared
+secret-file rules, including the production-profile permission check, because a
+JWKS can carry HS256 secrets. JWT scopes are read from `scope`, `scp`, or `scopes`
 claims. `scope` may be a space-delimited string; `scp` and `scopes` may be
 lists.
 
@@ -69,14 +91,71 @@ When authentication is enabled, the current built-in route scopes are:
 | `POST /profile` | `profile:write` |
 | `POST /cohort/resolve` | `cohort:read` |
 | `GET /v1/journey/resources` | `journey:read` |
+| `GET /v1/compatibility` | `compatibility:read` |
 | `POST /v1/decisions` | `decisions:write` |
 | `POST /v1/systemone` | `decisions:write` and `pii:write` |
 | `POST /brief` / `POST /ground` | `brief:write` / `ground:write` |
 | `/graphql` | Selected field scopes; see [GraphQL](graphql.md) |
+| `GET /service/metadata` | Any authenticated principal |
 
-`GET /health`, `GET /livez`, `GET /readyz`, `GET /metrics`, `/docs`,
-`/redoc`, and `/openapi.json` are exempt so health checks, local API docs, and
-metrics scraping can remain separate from model-work authorization.
+`GET /health`, `GET /livez`, `GET /readyz`, and `GET /metrics` are exempt so
+health checks and metrics scraping can remain separate from model-work
+authorization. In the `dev` profile, `/docs`, `/redoc`, and `/openapi.json`
+are exempt too.
+
+## API Docs and Service Metadata
+
+The live API docs are a development aid. Only `OPENMED_PROFILE=dev` serves
+Swagger UI at `/docs`, ReDoc at `/redoc`, and the live `/openapi.json`, without
+authentication. Every other profile, including an unset profile (which means
+`prod`), does not register these routes. With authentication off they return
+`404`. With deny-by-default authentication, an anonymous caller gets the same
+`401` as any other unregistered path, and an authenticated caller gets `404`.
+The committed [`docs/api/openapi.json`](../api/openapi.json) remains the
+published contract.
+
+To serve the live schema outside `dev`, opt in:
+
+```bash
+OPENMED_PROFILE=prod \
+OPENMED_SERVICE_AUTH_ENABLED=true \
+OPENMED_SERVICE_AUTH_API_KEYS='[...]' \
+OPENMED_SERVICE_OPENAPI_ENABLED=true \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+In this mode only `GET /openapi.json` is served, and it requires any
+authenticated principal; a request without credentials returns `401`. Swagger
+UI and ReDoc stay off because their pages load scripts from a public CDN. If
+authentication is disabled, the opted-in schema is as open as every other
+route. Set `OPENMED_SERVICE_OPENAPI_ENABLED=false` to turn the docs off in
+`dev` too. Values other than a boolean fail startup.
+
+Outside `dev`, the unauthenticated `GET /health` response is only:
+
+```json
+{"status": "ok", "service": "openmed-rest"}
+```
+
+Read the package version and active profile from `GET /service/metadata`,
+which requires authentication whenever authentication is enabled:
+
+```bash
+curl -H "X-API-Key: $OPENMED_API_KEY" http://127.0.0.1:8080/service/metadata
+```
+
+```json
+{"service": "openmed-rest", "version": "<installed version>", "profile": "prod"}
+```
+
+The `dev` profile keeps `version` and `profile` in `/health`. The metadata
+route is an operator route like `/metrics`, so it is not part of the published
+OpenAPI contract.
+
+The reference launcher, `python -m openmed.service.logging`, starts uvicorn
+with its `server` response header turned off. The Dockerfiles, Helm chart, and
+Compose files use this launcher. If you run uvicorn directly, pass
+`--no-server-header`.
 
 Route scope requirements can be overridden with
 `OPENMED_SERVICE_AUTH_ROUTE_SCOPES`:
@@ -106,6 +185,76 @@ routes with an unrelated scope must receive the matching grant. `*` and
 `namespace:*` still work. The deny-by-default setting remains available for
 unmatched requests; it does not disable declared route scopes.
 
+## Job Ownership
+
+When API-key, JWT or mTLS authentication is enabled, every record created by
+`POST /jobs`, `POST /fhir/bulk/exports`, `POST /fhir/bulk/imports` and
+`POST /fhir/smart-backend/ingestions` is bound to the principal that submitted
+it. Only that principal can read or cancel the record afterwards:
+
+| Route | Owner check |
+|---|---|
+| `GET /jobs/{job_id}` | owner or `jobs:admin` |
+| `GET` bulk export/import status, `/manifest` and `/report` | owner or `bulk:admin` |
+| `DELETE` bulk export/import | owner or `bulk:admin` |
+| `GET` SMART ingestion status and `/summary`, `DELETE` ingestion | owner or `bulk:admin` |
+
+Any other authenticated principal receives the same `404` envelope as a
+request for an unknown job id, so job ids cannot be used to probe whether
+another caller's job exists. A non-owner never learns that a job is still
+running either: the `409` "not completed" answer is reserved for callers who
+may see the job.
+
+The owner is the credential type, the JWT issuer when present, and the subject
+(the API-key `principal`, the JWT `sub`, or the mapped mTLS principal). API-key
+ids are not part of the owner, so rotating a key for the same configured
+principal keeps access to its jobs. `jobs:admin` and `bulk:admin` are matched
+literally and are needed in addition to the route's read or write scope;
+wildcard grants such as `*` or `jobs:*` do not override ownership.
+
+`Idempotency-Key` retries of the bulk export, bulk import and SMART
+ingestion start routes are scoped to the same owner: a principal (including
+the same principal on a rotated API key) replays only its own starts, and
+another principal reusing that key starts its own job without learning that
+the key was used. See
+[Idempotent starts](../interop/fhir-bulk-data.md#idempotent-starts).
+
+The service never stores the principal itself. It stores a keyed,
+domain-separated HMAC-SHA256 digest with `alg` and `key_id` markers, which
+cannot be mapped back to a principal name without the deployment key. The
+digest is internal state: it is not returned by any job, bulk or SMART route,
+not included in webhook payloads, and not logged.
+
+Configure the digest key whenever authentication is enabled:
+
+```bash
+OPENMED_SERVICE_DIGEST_KEY="$(openssl rand -hex 32)" \
+OPENMED_SERVICE_DIGEST_KEY_ID=jobs-2026-11 \
+OPENMED_SERVICE_AUTH_ENABLED=true \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+`OPENMED_SERVICE_DIGEST_KEY` must contain at least 32 bytes and is used as-is
+(its UTF-8 bytes). `OPENMED_SERVICE_DIGEST_KEY_ID` is optional; without it the
+service derives a public key id from the key. Outside the `dev` and `test`
+profiles the service refuses to start with authentication enabled and no
+digest key. In `dev` and `test` it falls back to a random per-process key, so
+`/jobs` records persisted by one process are visible only to administrators
+after a restart. Changing the key has the same effect: records whose digest
+was made by another key fail closed and remain visible to administrators until
+their TTL expires. The same key also makes the span, document and webhook URL
+digests in job records and webhook payloads; see
+[Keyed Digests](async-jobs.md#keyed-digests).
+
+Records created while authentication was disabled, and `/jobs` records written
+by releases before this binding existed, have no owner. The local job store
+upgrades its file to the current schema version and marks such records as
+unowned. Once
+authentication is enabled they are visible only to `jobs:admin` principals,
+except in the `dev` and `test` profiles where any authenticated caller with
+`jobs:read` can still read them. With authentication disabled, job routes
+behave exactly as before.
+
 ## Errors and Failed Attempts
 
 Missing or invalid credentials return the standard service error envelope with
@@ -118,11 +267,45 @@ Failed authentication attempts are rate limited in process:
 ```bash
 OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS=5 \
 OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST=10 \
-OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer
+OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=x-forwarded-for
 ```
 
 The failure limiter only counts failed authentication attempts. Successful
-authenticated requests are not charged against it.
+authenticated requests are not charged against it. Its default key,
+`x-forwarded-for`, resolves clients exactly like the request throttle: through
+`OPENMED_SERVICE_TRUSTED_PROXIES` when configured, otherwise by the direct
+peer. See [Client Identity and Limiter State](backpressure.md#client-identity-and-limiter-state).
+
+## Middleware Order
+
+Authentication reads request headers only. The service runs its HTTP layers in
+this order, outermost first:
+
+1. Trusted-host validation. An unexpected `Host` returns the `400` envelope
+   before authentication, the failure limiter, or the request throttle runs.
+2. CORS, when `OPENMED_SERVICE_CORS_ORIGINS` is set. Preflight requests are
+   answered here and do not need credentials.
+3. mTLS, API-key and JWT authentication, scope checks and the failed-attempt
+   limiter. Missing or invalid credentials are rejected before the request
+   body is read.
+4. Request-body limits, correlation IDs, tracing, the request throttle,
+   metrics and readiness.
+
+Because authentication runs before the correlation layer, `401`, `403` and
+`auth_rate_limited` `429` responses do not carry an `X-Request-ID` header or a
+`request_id` field.
+
+## Browser Clients
+
+When CORS and authentication are both enabled, preflight responses allow the
+`Authorization`, `X-API-Key` and `X-OpenMed-Priority` request headers in
+addition to the default content and `X-Request-ID` headers. Credential headers
+are not offered while authentication is off. Responses to allowed origins
+expose `X-Request-ID` and `Retry-After`, and error responses such as `401`,
+`403`, `413` and `429` keep their CORS headers so browser code can read the
+JSON error envelope. Origins must still be listed exactly; wildcard origins are
+rejected at startup, and requests from other origins receive no
+`Access-Control-Allow-Origin` header.
 
 ## Mutual TLS
 

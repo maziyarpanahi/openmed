@@ -233,7 +233,7 @@ final class MultimodalThermalAdmissionTests: XCTestCase {
     }
 
     #if canImport(MLXLMCommon) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
-        private static func guardedVisionFixture(
+        @Sendable private static func guardedVisionFixture(
             _ releaseGuard: GeneratedTextGuard?, _ assetDigest: String?,
             _ identifiers: [GeneratedIdentifierDigest]
         ) async throws -> OpenMedVisionLanguageGeneration {

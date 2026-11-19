@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import shutil
@@ -11,6 +12,8 @@ import types
 from pathlib import Path
 
 import pytest
+
+from openmed.core.export_provenance import SourceContext
 
 ROOT = Path(__file__).resolve().parents[3]
 NODE_SMOKE = ROOT / "tests" / "fixtures" / "onnx" / "transformersjs_smoke.mjs"
@@ -22,6 +25,25 @@ def _module():
 
 def _convert_module():
     return importlib.import_module("openmed.onnx.convert")
+
+
+def _passing_webgpu_gate(webgpu_path: Path) -> dict:
+    from openmed.onnx.webgpu_gate import (
+        Fp16ParityObservation,
+        evaluate_webgpu_fp16_gate,
+    )
+
+    rows = [[[2.0, 0.0], [0.0, 2.0]]]
+    return evaluate_webgpu_fp16_gate(
+        [Fp16ParityObservation("synthetic", rows, rows, requested_length=2)],
+        activation_probe={"status": "computed", "overflow_tensor_count": 0},
+        evidence={
+            "artifact_sha256": hashlib.sha256(
+                Path(webgpu_path).read_bytes()
+            ).hexdigest(),
+            "evaluated_lengths": [2],
+        },
+    )
 
 
 def test_export_transformersjs_bundle_writes_layout_and_manifest(
@@ -90,6 +112,127 @@ def test_validate_transformersjs_contract_rejects_static_sequence_axis(
         module.validate_transformersjs_contract(model_path)
 
 
+def test_transformersjs_updater_refreshes_existing_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core.export_provenance import (
+        SourceContext,
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+    manifest_path = source_dir / "openmed-onnx.json"
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    write_canonical_manifest(
+        source_dir,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+
+    result = module.export_transformersjs_bundle(source_dir)
+
+    provenance = verify_export_provenance(source_dir, manifest_path.name)
+    assert provenance["source"]["revision"] == source.revision
+    assert any(
+        item["path"] == "transformersjs/onnx/model_quantized.onnx"
+        for item in provenance["files"]
+    )
+    assert result.output_dir == source_dir / "transformersjs"
+
+
+@pytest.mark.parametrize("destination", ["external", "source"])
+@pytest.mark.parametrize("entry_point", ["export", "updater"])
+def test_provenance_parent_rejects_unbound_bundle_before_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    destination: str,
+    entry_point: str,
+) -> None:
+    from openmed.core.export_provenance import write_canonical_manifest
+
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+    manifest_path = source_dir / "openmed-onnx.json"
+    write_canonical_manifest(
+        source_dir,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=SourceContext("OpenMed/synthetic", "unused", revision="a" * 40),
+        backend="onnx",
+    )
+    bundle_dir = tmp_path / "external" if destination == "external" else source_dir
+    before = {
+        path.relative_to(source_dir): path.read_bytes() if path.is_file() else None
+        for path in source_dir.rglob("*")
+    }
+
+    with pytest.raises(ValueError, match="update_manifest=False"):
+        if entry_point == "export":
+            module.export_transformersjs_bundle(source_dir, bundle_dir)
+        else:
+            module._update_openmed_onnx_manifest(source_dir, bundle_dir, quantized=True)
+
+    after = {
+        path.relative_to(source_dir): path.read_bytes() if path.is_file() else None
+        for path in source_dir.rglob("*")
+    }
+    assert after == before
+    if destination == "external":
+        assert not bundle_dir.exists()
+
+
+def test_legacy_parent_can_still_register_external_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+
+    result = module.export_transformersjs_bundle(source_dir, tmp_path / "external")
+
+    assert result.model_path.is_file()
+    manifest = json.loads((source_dir / "openmed-onnx.json").read_text())
+    assert manifest["artifacts"][-1]["path"] == "../external"
+    assert "provenance" not in manifest
+
+
+def test_external_bundle_without_manifest_update_preserves_provenance_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core.export_provenance import (
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+    manifest_path = source_dir / "openmed-onnx.json"
+    write_canonical_manifest(
+        source_dir,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=SourceContext("OpenMed/synthetic", "unused", revision="a" * 40),
+        backend="onnx",
+    )
+    before = manifest_path.read_bytes()
+
+    result = module.export_transformersjs_bundle(
+        source_dir, tmp_path / "external", update_manifest=False
+    )
+
+    assert result.model_path.is_file()
+    assert result.manifest_path is None
+    assert manifest_path.read_bytes() == before
+    verify_export_provenance(source_dir, manifest_path.name)
+
+
 def test_export_packages_and_validates_optional_segmenter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -135,6 +278,11 @@ def test_convert_can_include_transformersjs_bundle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     publish_calls = []
 
     def fake_export_onnx(model_id, output_path, **kwargs):
@@ -175,6 +323,11 @@ def test_convert_can_include_transformersjs_bundle(
 
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
+    monkeypatch.setattr(
+        module,
+        "validate_webgpu_fp16_export",
+        lambda onnx_path, webgpu_path, **kwargs: _passing_webgpu_gate(webgpu_path),
+    )
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(
         module,

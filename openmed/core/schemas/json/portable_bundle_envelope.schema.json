@@ -1,0 +1,52 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/models/portable-bundle-envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable-bundle signature envelope",
+  "description": "Canonical (RFC 8785) openmed-bundle.sig.json. Each sig is an unpadded base64url Ed25519 signature over the DSSE v1 pre-authentication encoding of application/vnd.openmed.portable-bundle.v1+json and the exact manifest bytes.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "content_id",
+    "schema",
+    "schema_version",
+    "signatures"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.portable_bundle.signatures"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "content_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "signatures": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alg",
+          "kid",
+          "sig"
+        ],
+        "properties": {
+          "kid": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "alg": {
+            "type": "string"
+          },
+          "sig": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

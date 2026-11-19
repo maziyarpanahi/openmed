@@ -1,0 +1,4 @@
+# Negative control: an unrestricted trusted-host allowlist.
+config:
+  trustedHosts:
+    - "*"

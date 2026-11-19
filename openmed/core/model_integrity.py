@@ -57,7 +57,13 @@ _RUNTIME_METADATA_FILES = frozenset(
 
 
 class ModelIntegrityError(RuntimeError):
-    """Raised when model or model-manifest integrity cannot be established."""
+    """Raised when model or model-manifest integrity cannot be established.
+
+    Attributes:
+        code: Controlled, value-free failure category. Callers that persist or
+            report a failure use this code instead of the human message, which
+            names the model and the offending artifact.
+    """
 
     def __init__(
         self,
@@ -67,10 +73,12 @@ class ModelIntegrityError(RuntimeError):
         actual_sha256: str,
         artifact: str | Path | None = None,
         reason: str | None = None,
+        code: str = "integrity_failed",
     ) -> None:
         self.model_id = model_id
         self.expected_sha256 = expected_sha256
         self.actual_sha256 = actual_sha256
+        self.code = code
         self.artifact = str(artifact) if artifact is not None else None
         detail = reason or "artifact digest mismatch"
         location = f" ({self.artifact})" if self.artifact else ""
@@ -228,6 +236,7 @@ def verify_artifact_manifest(
             actual_sha256="sha256:" + "0" * 64,
             artifact=sidecar,
             reason=f"integrity manifest belongs to {model_id}",
+            code="manifest_model_mismatch",
         )
     recorded_reproducibility_hash = str(payload["reproducibility_hash"])
     if (
@@ -240,6 +249,7 @@ def verify_artifact_manifest(
             actual_sha256=recorded_reproducibility_hash,
             artifact=sidecar,
             reason="integrity manifest does not match the registry revision",
+            code="manifest_revision_mismatch",
         )
 
     artifact_root = _artifact_root(sidecar, payload)
@@ -256,6 +266,7 @@ def verify_artifact_manifest(
                 actual_sha256="sha256:" + "0" * 64,
                 artifact=relative_path,
                 reason="cached artifact is missing",
+                code="artifact_missing",
             )
         actual = sha256_file(artifact)
         if actual != expected:
@@ -264,6 +275,7 @@ def verify_artifact_manifest(
                 expected_sha256=expected,
                 actual_sha256=actual,
                 artifact=relative_path,
+                code="artifact_digest_mismatch",
             )
         expected_records.append((relative_path.as_posix(), expected))
         actual_records.append((relative_path.as_posix(), actual))
@@ -278,6 +290,79 @@ def verify_artifact_manifest(
         files_checked=len(expected_records),
         manifest_path=sidecar,
     )
+
+
+def write_local_artifact_manifest(
+    artifact_root: str | Path,
+    *,
+    model_id: str,
+    reproducibility_hash: str,
+) -> Path:
+    """Measure a local artifact tree and write its relocatable integrity manifest.
+
+    The manifest is written to ``<artifact_root>/.openmed-integrity.json`` with
+    an ``artifact_root`` of ``"."``, so the measured tree can be renamed or moved
+    as one unit and still verify with :func:`verify_artifact_manifest`. Every
+    file below the root is hashed, following file links the way Hugging Face
+    snapshots use them; the manifest itself is excluded. The digests attest to
+    the bytes on disk at measurement time, so callers measure only content they
+    have already verified, for example a download checked against Hub metadata.
+
+    Args:
+        artifact_root: Existing directory holding the artifact tree.
+        model_id: Model identity recorded in the manifest.
+        reproducibility_hash: ``sha256:`` revision digest recorded in the
+            manifest.
+
+    Returns:
+        Path to the written manifest.
+
+    Raises:
+        ValueError: If the root is not a directory, an argument is malformed,
+            or the tree holds no artifact files.
+    """
+    root = Path(artifact_root)
+    if not root.is_dir():
+        raise ValueError("artifact root must be an existing directory")
+    if not isinstance(model_id, str) or not model_id:
+        raise ValueError("model_id must be a non-empty string")
+    if not isinstance(reproducibility_hash, str) or not _SHA256_RE.fullmatch(
+        reproducibility_hash
+    ):
+        raise ValueError("reproducibility_hash must be a sha256: digest")
+
+    records: list[dict[str, Any]] = []
+    for current, _dirnames, filenames in os.walk(root, followlinks=False):
+        for filename in filenames:
+            path = Path(current) / filename
+            relative = path.relative_to(root).as_posix()
+            if relative == ARTIFACT_MANIFEST_FILENAME or not path.is_file():
+                continue
+            records.append(
+                {
+                    "path": relative,
+                    "sha256": sha256_file(path),
+                    "size": path.stat().st_size,
+                }
+            )
+    if not records:
+        raise ValueError("artifact root holds no artifact files")
+
+    sidecar = root / ARTIFACT_MANIFEST_FILENAME
+    payload = {
+        "schema_version": ARTIFACT_MANIFEST_SCHEMA,
+        "model_id": model_id,
+        "reproducibility_hash": reproducibility_hash,
+        "artifact_root": ".",
+        "artifacts": sorted(records, key=lambda record: str(record["path"])),
+    }
+    temporary = sidecar.with_suffix(f"{sidecar.suffix}.tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(sidecar)
+    return sidecar
 
 
 def verify_cached_models(
@@ -714,6 +799,7 @@ def _load_artifact_manifest(sidecar: Path) -> Mapping[str, Any]:
             actual_sha256="sha256:<invalid>",
             artifact=sidecar,
             reason=f"integrity manifest is invalid: {exc}",
+            code="manifest_invalid",
         ) from exc
     return payload
 

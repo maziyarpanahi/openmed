@@ -7,6 +7,10 @@ metadata:
 data:
   OPENMED_PROFILE: {{ .Values.config.profile | quote }}
   OPENMED_CACHE_DIR: {{ .Values.config.cacheDir | quote }}
+  HF_HOME: {{ .Values.config.hfHome | quote }}
+  OPENMED_SERVICE_REPLICA_MODE: {{ include "openmed-service.replicaMode" . | quote }}
+  OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE: {{ join "," .Values.replicaState.accept | quote }}
+  OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE: {{ join "," .Values.replicaState.disable | quote }}
   OPENMED_SERVICE_PRELOAD_MODELS: {{ join "," .Values.config.preloadModels | quote }}
   OPENMED_SERVICE_MAX_RESIDENT_MODELS: {{ .Values.config.maxResidentModels | quote }}
   OPENMED_SERVICE_KEEP_ALIVE: {{ .Values.config.keepAlive | quote }}
@@ -22,12 +26,24 @@ data:
   OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS: {{ .Values.config.batching.maxQueueWaitMs | quote }}
   OPENMED_SERVICE_COALESCING_ENABLED: {{ .Values.config.coalescing.enabled | quote }}
   OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS: {{ .Values.config.shutdownDrainSeconds | quote }}
+  OPENMED_SERVICE_LIMIT_CONCURRENCY: {{ .Values.config.transport.limitConcurrency | int64 | quote }}
+  OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE: {{ .Values.config.transport.timeoutKeepAliveSeconds | int64 | quote }}
+  OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN: {{ .Values.config.transport.timeoutGracefulShutdownSeconds | int64 | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS: {{ .Values.config.transport.requestBodyTimeoutSeconds | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS: {{ .Values.config.transport.requestBodyGraceSeconds | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND: {{ .Values.config.transport.requestBodyMinBytesPerSecond | int64 | quote }}
   OPENMED_SERVICE_METRICS_ENABLED: {{ .Values.config.metrics.enabled | quote }}
   OPENMED_SERVICE_RATE_LIMIT_RPS: {{ .Values.config.throttle.rateLimitRps | quote }}
   OPENMED_SERVICE_RATE_LIMIT_BURST: {{ .Values.config.throttle.rateLimitBurst | quote }}
   OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY: {{ .Values.config.throttle.maxConcurrency | quote }}
   OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS: {{ .Values.config.throttle.concurrencyWaitSeconds | quote }}
   OPENMED_SERVICE_THROTTLE_KEY: {{ .Values.config.throttle.keyBy | quote }}
+  OPENMED_SERVICE_TRUSTED_PROXIES: {{ join "," .Values.config.throttle.trustedProxies | quote }}
+  OPENMED_SERVICE_TRUSTED_PROXY_HOPS: {{ .Values.config.throttle.trustedProxyHops | quote }}
+  OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS: {{ .Values.config.throttle.maxTrackedKeys | quote }}
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  DISABLE_TELEMETRY: "1"
+  DO_NOT_TRACK: "1"
   {{- if .Values.journey.enabled }}
   OPENMED_JOURNEY_SCHEMA: {{ .Values.journey.schema | quote }}
   OPENMED_JOURNEY_ARTIFACT_ROOT: {{ .Values.journey.artifacts.mountPath | quote }}

@@ -123,10 +123,11 @@ def test_committed_openapi_spec_lists_current_service_paths() -> None:
 def test_rest_recipe_examples_are_parseable_and_current() -> None:
     examples = _rest_recipe_json_examples()
 
-    assert len(examples) == 8
+    assert len(examples) == 9
 
-    health = next(example for example in examples if example.get("service"))
-    assert health["version"] == openmed.__version__
+    health, metadata = (example for example in examples if example.get("service"))
+    assert health == {"status": "ok", "service": "openmed-rest"}
+    assert metadata["version"] == openmed.__version__
 
     analysis = next(
         example

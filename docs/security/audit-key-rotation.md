@@ -89,6 +89,12 @@ unverified data cannot be carried beside an otherwise valid signature.
    permits retirement.
 4. Remove the former key from the provider only after that policy is met.
 
+To prove which key vouched for which part of an audit chain across rotations,
+record each rollover in the [audit continuity manifest](audit-continuity.md).
+Its signatures use `AuditKeyRotationSigner.sign_digest` and
+`AuditKeyRotationVerifier.verify_digest`, which sign value-free digests with a
+separate per-purpose key derivation.
+
 Key IDs must be stable, non-secret metadata identifiers such as
 `audit-2026`. Never use a raw key, token, patient identifier, or document text
 as a key ID. HMAC is symmetric: verification proves integrity to callers that

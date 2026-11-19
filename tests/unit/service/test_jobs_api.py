@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -34,6 +36,37 @@ class FakeLoader:
         return {}
 
 
+class CaptureExecutor:
+    """Executor double that records queued work without running it."""
+
+    def __init__(self, **_: Any) -> None:
+        self.work: list[Any] = []
+        self.futures: list[Future[None]] = []
+
+    def submit(self, _operation: Any, item: Any) -> Future[None]:
+        future: Future[None] = Future()
+        self.work.append(item)
+        self.futures.append(future)
+        return future
+
+    def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
+        del wait
+        if cancel_futures:
+            for future in self.futures:
+                future.cancel()
+
+
+def _captured_queue(
+    monkeypatch: pytest.MonkeyPatch,
+    store: jobs.LocalJobStore,
+    **kwargs: Any,
+) -> jobs.DeidentifyJobQueue:
+    runtime = SimpleNamespace(validate_served_model=lambda _model_name: None)
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs, "ThreadPoolExecutor", CaptureExecutor)
+        return jobs.DeidentifyJobQueue(runtime, store=store, **kwargs)
+
+
 @pytest.fixture(autouse=True)
 def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
     names = [
@@ -56,6 +89,9 @@ def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "OPENMED_SERVICE_JOBS_STORE_PATH",
         "OPENMED_SERVICE_JOBS_TTL_SECONDS",
         "OPENMED_SERVICE_JOBS_WORKERS",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_MODE",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_DIR",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS",
     ]
     for name in names:
         monkeypatch.delenv(name, raising=False)
@@ -148,22 +184,18 @@ def test_invalid_result_span_fails_only_its_document(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    from types import SimpleNamespace
-
-    from openmed.service import jobs
     from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 
     path = tmp_path / "jobs.json"
     store = jobs.LocalJobStore(path)
-    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store)
+    queue = _captured_queue(monkeypatch, store)
     payload = DeidentifyJobRequest(
         documents=[
             DeidentifyJobDocument(id="synthetic-0", text="synthetic first"),
             DeidentifyJobDocument(id="synthetic-1", text="synthetic second"),
         ]
     )
-    record = queue._new_record(payload)
-    store.create(record)
+    record = queue.submit(payload)
     seen: list[str] = []
 
     def entity(start: int | str) -> SimpleNamespace:
@@ -178,7 +210,7 @@ def test_invalid_result_span_fails_only_its_document(
 
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(queue._executor.work[0])
     finally:
         queue.shutdown()
 
@@ -200,8 +232,6 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from types import SimpleNamespace
-
     from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 
     now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
@@ -210,16 +240,11 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
         ttl_seconds=10,
         clock=lambda: now[0],
     )
-    queue = jobs.DeidentifyJobQueue(
-        SimpleNamespace(),
-        store=store,
-        clock=lambda: now[0],
-    )
+    queue = _captured_queue(monkeypatch, store, clock=lambda: now[0])
     payload = DeidentifyJobRequest(
         documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
     )
-    record = queue._new_record(payload)
-    store.create(record)
+    record = queue.submit(payload)
 
     def process(_payload: DeidentifyJobRequest, _document: DeidentifyJobDocument):
         now[0] += timedelta(seconds=11)
@@ -227,7 +252,7 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
 
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(queue._executor.work[0])
     finally:
         queue.shutdown()
 
@@ -252,6 +277,11 @@ def _wait_for_job(
             return payload
         time.sleep(0.01)
     raise AssertionError(f"job {job_id} did not reach expected state: {payload}")
+
+
+def _delivery_settled(payload: dict[str, Any]) -> bool:
+    delivery = payload["webhook_delivery"]
+    return delivery is not None and delivery["status"] != "pending"
 
 
 def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
@@ -279,6 +309,7 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
         callbacks.append(
             {
@@ -287,6 +318,7 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
                 "secret": secret,
                 "max_attempts": max_attempts,
                 "backoff_seconds": backoff_seconds,
+                "delivery_id": delivery_id,
             }
         )
         return WebhookDeliveryResult(success=True, attempts=1, status_code=204)
@@ -329,17 +361,34 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
         done = _wait_for_job(
             client,
             created["id"],
-            lambda payload: (
-                payload["status"] == "done" and payload["webhook_delivery"] is not None
-            ),
+            lambda payload: payload["status"] == "done" and _delivery_settled(payload),
         )
 
     assert done["progress_percent"] == 100.0
     assert done["processed_count"] == 2
     assert done["failed_count"] == 0
     assert done["label_histogram"] == {"NAME": 2}
-    assert done["webhook"]["url_hash"].startswith("sha256:")
-    assert done["webhook_delivery"]["success"] is True
+    # The callback URL is stored only as a keyed digest.
+    assert done["webhook"]["url_digest"]["alg"] == "hmac-sha256"
+    assert done["webhook"]["url_digest"]["key_id"]
+    assert "url_hash" not in done["webhook"]
+    # Like the other published contracts the body carries no schema_version;
+    # the digests marker says how its digests were produced.
+    assert "schema_version" not in callbacks[0]["payload"]
+    assert callbacks[0]["payload"]["digests"]["mode"] == "keyed"
+    delivery = dict(done["webhook_delivery"])
+    assert str(delivery.pop("payload_ref")).startswith("jp_")
+    assert delivery.pop("delivery_id") == callbacks[0]["delivery_id"]
+    assert callbacks[0]["delivery_id"].startswith("dlv_")
+    delivery.pop("signature_version", None)
+    delivery.pop("attempt_receipts", None)
+    assert delivery == {
+        "status": "delivered",
+        "success": True,
+        "attempts": 1,
+        "status_code": 204,
+        "error": None,
+    }
     assert callbacks[0]["payload"]["status"] == "done"
     assert callbacks[0]["payload"]["label_histogram"] == {"NAME": 2}
 
@@ -374,8 +423,9 @@ def test_failed_job_surfaces_error_and_records_webhook_delivery(
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
-        del url, secret, max_attempts, backoff_seconds
+        del url, secret, max_attempts, backoff_seconds, delivery_id
         callbacks.append(payload)
         return WebhookDeliveryResult(success=True, attempts=2, status_code=200)
 
@@ -403,14 +453,14 @@ def test_failed_job_surfaces_error_and_records_webhook_delivery(
             client,
             job_id,
             lambda payload: (
-                payload["status"] == "failed"
-                and payload["webhook_delivery"] is not None
+                payload["status"] == "failed" and _delivery_settled(payload)
             ),
         )
 
     assert failed["failed_count"] == 1
     assert failed["processed_count"] == 0
     assert failed["error"] == {
+        "code": "document_failed",
         "type": "RuntimeError",
         "message": "Document failed during de-identification",
     }
@@ -488,3 +538,363 @@ def test_job_store_failed_publication_preserves_memory_and_disk(
                     assert store._records == original_records
                     assert path.read_bytes() == original_bytes
                     assert list(tmp_path.iterdir()) == [path]
+
+
+class _StoreWriteSpy:
+    """Record every published job-store payload without changing behavior."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.payloads: list[bytes] = []
+        self._replace = jobs.os.replace
+        monkeypatch.setattr(jobs.os, "replace", self)
+
+    def __call__(self, src: Any, dst: Any) -> None:
+        self.payloads.append(Path(src).read_bytes())
+        self._replace(src, dst)
+
+    @property
+    def count(self) -> int:
+        return len(self.payloads)
+
+    @property
+    def bytes_written(self) -> int:
+        return sum(len(payload) for payload in self.payloads)
+
+    def job_snapshots(self, job_id: str) -> list[dict[str, Any]]:
+        return [json.loads(payload)["jobs"][job_id] for payload in self.payloads]
+
+
+def _synthetic_job_payload(document_count: int) -> Any:
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    return DeidentifyJobRequest(
+        documents=[
+            DeidentifyJobDocument(
+                id=f"synthetic-{index}",
+                text=f"Synthetic patient Alex Rivera visit {index}",
+            )
+            for index in range(document_count)
+        ]
+    )
+
+
+def _run_synthetic_job(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    document_count: int,
+    *,
+    seconds_per_document: float = 1.0,
+    failing_documents: frozenset[int] = frozenset(),
+    **queue_kwargs: Any,
+) -> tuple[_StoreWriteSpy, jobs.LocalJobStore, str]:
+    """Run one fake-runtime job and spy on every store publication."""
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    ticks = [0.0]
+    store = jobs.LocalJobStore(tmp_path / "jobs.json", clock=lambda: now[0])
+    queue = jobs.DeidentifyJobQueue(
+        SimpleNamespace(),
+        store=store,
+        clock=lambda: now[0],
+        monotonic=lambda: ticks[0],
+        **queue_kwargs,
+    )
+    payload = _synthetic_job_payload(document_count)
+    record, item = queue._stage(payload)
+    calls = [0]
+
+    def process(_payload: DeidentifyJobRequest, document: DeidentifyJobDocument):
+        index = calls[0]
+        calls[0] += 1
+        ticks[0] += seconds_per_document
+        now[0] += timedelta(seconds=seconds_per_document)
+        if index in failing_documents:
+            raise RuntimeError("synthetic model failure")
+        start = document.text.index("Alex Rivera")
+        return SimpleNamespace(
+            pii_entities=[
+                SimpleNamespace(
+                    label="NAME",
+                    text="Alex Rivera",
+                    start=start,
+                    end=start + len("Alex Rivera"),
+                    confidence=0.9,
+                )
+            ]
+        )
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    spy = _StoreWriteSpy(monkeypatch)
+    store.create(record)
+    try:
+        queue._run_job(item)
+    finally:
+        queue.shutdown()
+    return spy, store, record["id"]
+
+
+def _assert_consistent_progress(snapshot: dict[str, Any]) -> None:
+    attempted = snapshot["processed_count"] + snapshot["failed_count"]
+    assert 0 <= attempted <= snapshot["document_count"]
+    assert len(snapshot["spans"]) == snapshot["processed_count"]
+    assert sum(snapshot["label_histogram"].values()) == snapshot["processed_count"]
+    if snapshot["status"] == "running" and snapshot["document_count"]:
+        expected = round(attempted / snapshot["document_count"] * 100, 2)
+        assert snapshot["progress_percent"] == expected
+    span_ids = [span["document_id"] for span in snapshot["spans"]]
+    assert span_ids == sorted(span_ids, key=lambda value: int(value.split("-")[1]))
+
+
+@pytest.mark.parametrize("document_count", [40, 160, 640])
+def test_job_store_writes_stay_under_ceiling_independent_of_document_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    document_count: int,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        document_count,
+        progress_interval_seconds=0.5,
+        max_progress_writes=8,
+    )
+
+    # create + running + at most 8 progress checkpoints + terminal.
+    assert spy.count <= 11
+    final = store.get(job_id)
+    assert final is not None
+    assert final["status"] == "done"
+    assert final["processed_count"] == document_count
+    assert final["progress_percent"] == 100.0
+    assert len(final["spans"]) == document_count
+
+
+def test_job_store_bytes_written_grow_linearly_with_document_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    measured: dict[int, int] = {}
+    for document_count in (100, 400):
+        run_path = tmp_path / str(document_count)
+        run_path.mkdir()
+        with monkeypatch.context() as patched:
+            spy, _store, _job_id = _run_synthetic_job(
+                patched,
+                run_path,
+                document_count,
+                progress_interval_seconds=0.5,
+                max_progress_writes=8,
+            )
+        measured[document_count] = spy.bytes_written
+
+    # Four times the documents must cost about four times the bytes; the
+    # per-document full rewrite cost about sixteen times as much.
+    assert measured[400] < measured[100] * 5
+
+
+def test_job_progress_writes_coalesce_on_injected_clock(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        20,
+        seconds_per_document=0.25,
+        progress_interval_seconds=1.0,
+        max_progress_writes=100,
+    )
+
+    snapshots = spy.job_snapshots(job_id)
+    statuses = [snapshot["status"] for snapshot in snapshots]
+    progress = [snapshot for snapshot in snapshots if snapshot["status"] == "running"]
+    # One checkpoint per elapsed second of synthetic time, not one per document.
+    assert statuses[0] == "queued"
+    assert statuses[-1] == "done"
+    assert [snapshot["processed_count"] for snapshot in progress] == [0, 4, 8, 12, 16]
+    for snapshot in snapshots:
+        _assert_consistent_progress(snapshot)
+    persisted = json.loads(store.path.read_text(encoding="utf-8"))["jobs"]
+    assert persisted == store._records
+
+
+def test_job_progress_writes_skip_checkpoints_before_interval_elapses(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        30,
+        seconds_per_document=0.0,
+        progress_interval_seconds=1.0,
+        max_progress_writes=100,
+    )
+
+    statuses = [snapshot["status"] for snapshot in spy.job_snapshots(job_id)]
+    # The terminal write also records the consumed input payload as deleted.
+    assert statuses == ["queued", "running", "done"]
+    final = store.get(job_id)
+    assert final is not None
+    assert final["processed_count"] == 30
+    assert len(final["spans"]) == 30
+
+
+def test_job_progress_without_coalescing_writes_after_each_document(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Negative control: disabling both limits restores one write per document.
+    spy, _store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        12,
+        progress_interval_seconds=0.0,
+        max_progress_writes=12,
+    )
+
+    progress = [
+        snapshot["processed_count"]
+        for snapshot in spy.job_snapshots(job_id)
+        if snapshot["status"] == "running"
+    ]
+    assert progress == list(range(12))
+    # Submission, running, 11 checkpoints, and the terminal result, which
+    # also records the consumed input.
+    assert spy.count == 14
+
+
+def test_coalesced_progress_keeps_counts_and_never_persists_raw_text(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        50,
+        failing_documents=frozenset({3, 17, 49}),
+        progress_interval_seconds=0.5,
+        max_progress_writes=5,
+    )
+
+    snapshots = spy.job_snapshots(job_id)
+    assert len(snapshots) <= 8
+    for snapshot in snapshots:
+        _assert_consistent_progress(snapshot)
+    final = store.get(job_id)
+    assert final is not None
+    assert final["status"] == "failed"
+    assert final["processed_count"] == 47
+    assert final["failed_count"] == 3
+    assert final["label_histogram"] == {"NAME": 47}
+    assert final["error"]["type"] == "RuntimeError"
+    for payload in spy.payloads:
+        text = payload.decode("utf-8")
+        assert "Alex Rivera" not in text
+        assert "Synthetic patient" not in text
+        assert "synthetic model failure" not in text
+
+
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [
+        ("progress_interval_seconds", -0.1),
+        ("max_progress_writes", 0),
+    ],
+)
+def test_job_queue_rejects_invalid_progress_coalescing_limits(
+    tmp_path: Path,
+    argument: str,
+    value: float,
+) -> None:
+    from types import SimpleNamespace
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    with pytest.raises(ValueError, match=argument):
+        jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, **{argument: value})
+    assert not (tmp_path / "jobs.json").exists()
+
+
+def test_failed_progress_write_leaves_previous_store_without_temp_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    ticks = [0.0]
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    queue = jobs.DeidentifyJobQueue(
+        SimpleNamespace(),
+        store=store,
+        monotonic=lambda: ticks[0],
+        progress_interval_seconds=1.0,
+    )
+    payload = _synthetic_job_payload(6)
+    record, item = queue._stage(payload)
+    store.create(record)
+    calls = [0]
+
+    def process(_payload: DeidentifyJobRequest, _document: DeidentifyJobDocument):
+        calls[0] += 1
+        ticks[0] += 1.0
+        return SimpleNamespace(pii_entities=[])
+
+    original_replace = jobs.os.replace
+    replacements = [0]
+
+    def fail_second_checkpoint(src: Any, dst: Any) -> None:
+        replacements[0] += 1
+        if replacements[0] == 3:
+            raise OSError("synthetic disk full")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    monkeypatch.setattr(jobs.os, "replace", fail_second_checkpoint)
+    try:
+        with pytest.raises(OSError, match="synthetic disk full"):
+            queue._run_job(item)
+    finally:
+        queue.shutdown()
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))["jobs"]
+    assert persisted == store._records
+    assert persisted[record["id"]]["status"] == "running"
+    assert persisted[record["id"]]["processed_count"] == 1
+    assert calls[0] == 2
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_job_store_rollback_restores_only_the_changed_record(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    store.create({"id": "synthetic-a", "status": "queued", "spans": []})
+    store.create({"id": "synthetic-b", "status": "queued", "spans": []})
+    untouched = store._records["synthetic-b"]
+    original_bytes = path.read_bytes()
+
+    def fail(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("synthetic publication failure")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs.os, "replace", fail)
+        with pytest.raises(OSError, match="synthetic publication failure"):
+            store.update("synthetic-a", status="running", spans=[{"start": 0}])
+
+    assert store._records["synthetic-a"] == {
+        "id": "synthetic-a",
+        "status": "queued",
+        "spans": [],
+    }
+    # Rollback must not snapshot and restore unrelated records.
+    assert store._records["synthetic-b"] is untouched
+    assert path.read_bytes() == original_bytes
+    assert list(tmp_path.iterdir()) == [path]

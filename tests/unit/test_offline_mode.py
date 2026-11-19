@@ -439,5 +439,5 @@ def test_pii_deidentification_path_runs_with_sockets_blocked(monkeypatch):
         use_smart_merging=False,
     )
 
-    assert deid_result.deidentified_text == "Patient [NAME] called [PHONE]."
+    assert deid_result.deidentified_text == "Patient [PERSON] called [PHONE]."
     assert blocked_attempts == []

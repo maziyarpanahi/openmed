@@ -1,0 +1,3 @@
+# Negative control: selects the development security profile.
+config:
+  profile: dev

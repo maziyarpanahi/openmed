@@ -27,6 +27,13 @@ from tests.unit.service.test_rest_client import SyncASGITransport
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 @pytest.mark.parametrize("case", corpus()["cases"], ids=lambda c: c["case_id"])
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_fixed_local_provider_full_pipeline_surface_parity(

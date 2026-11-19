@@ -140,6 +140,7 @@ bindings. They neither establish semantic reversibility nor execute a rollback.
 Compensating clinical writes remain proposals requiring separate review.
 
 - [Durable workflow recovery](workflow-recovery.md): reconcile absent, committed and ambiguous effects without replaying bearer approval tokens.
+- [Restore authority reconciliation](restore-authority-reconciliation.md): bind a restored backup to a new recovery epoch so spent, revoked or expired authority cannot be revived.
 - [OMOP rollback manifests](../interop/omop-rollback-manifests.md): bind operation-compatible rollback strategies to the exact batch and vocabulary snapshot.
 - [OMOP rollback JSON Schema](../interop/omop-rollback-schema.md): validate the portable structural contract before semantic binding checks.
 
