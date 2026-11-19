@@ -12,14 +12,15 @@ exercise recovery code that is on master today:
   reclaimed, repeated failure is quarantined, and authorized replay resumes;
 * network: the model-backend circuit breaker opens, sheds, admits one
   recovery probe and closes (:mod:`openmed.service.resilience`); and
-* corrupted state: the Journey artifact store refuses to serve or silently
-  replace a corrupted blob while unaffected blobs stay readable
-  (:mod:`openmed.structured.store.local`).
+* corrupted state: Journey refuses a corrupted blob, restores verified bytes
+  into an inactive directory, and verifies a signed audit restore transition
+  against the undamaged continuity manifest and retained anchor.
 
-A phase whose integration is still pending (Journey restore, audit continuity)
-is recorded as ``not_available`` with its owning
-issue, which keeps the report ``incomplete`` and blocks a release. Callers
-may inject an implementation for a ``(category, phase)`` pair.
+All default phases use production recovery implementations. Callers may replace
+a ``(category, phase)`` pair, including with ``not_available`` and its owning
+issue; that keeps the report ``incomplete`` and blocks a release. The corruption
+scenario assumes the continuity manifest survives; it does not qualify recovery
+after loss of that separately retained state.
 
 The report holds controlled codes, counts, issue references and a canonical
 self-digest only. It never records paths, record contents, exception text or
@@ -763,33 +764,98 @@ def _blob_location(root: Path, content_hash: str) -> Path:
 
 
 def _corrupted_inject(context: DrillContext) -> DrillStepOutcome:
+    from openmed.core.audit_continuity import AuditContinuityStore
     from openmed.core.key_provider import InMemoryKeyProvider
-    from openmed.structured.store import JOURNEY_KEY_PURPOSE, JourneyStoreEncryption
-    from openmed.structured.store.local import LocalArtifactStore
+    from openmed.service.recovery import (
+        BACKUP_KEY_PURPOSE,
+        ServiceStateSources,
+        create_recovery_point,
+    )
+    from openmed.structured.store import (
+        JOURNEY_KEY_PURPOSE,
+        JourneyStoreEncryption,
+        LocalJourneyStore,
+    )
 
-    root = context.work_dir / "artifacts"
+    live = context.work_dir / "live"
+    root = live / "journey"
     # Seal the synthetic blobs with a throw-away key that never leaves this
     # process, as a deployed store would be sealed, so the drill also runs
     # under the production profile, which refuses plaintext Journey storage.
-    store = LocalArtifactStore(
-        root,
-        encryption=JourneyStoreEncryption.encrypted(
-            InMemoryKeyProvider.generate(JOURNEY_KEY_PURPOSE)
-        ),
+    encryption = JourneyStoreEncryption.encrypted(
+        InMemoryKeyProvider.generate(JOURNEY_KEY_PURPOSE)
     )
     affected = _artifact(_SYNTHETIC_BLOB, "a")
     peer = _artifact(_SYNTHETIC_PEER_BLOB, "b")
-    stored = store.put_bytes(affected, _SYNTHETIC_BLOB).ok
-    stored = store.put_bytes(peer, _SYNTHETIC_PEER_BLOB).ok and stored
-    blob = _blob_location(root, affected.content_hash)
+    with LocalJourneyStore(root, encryption=encryption) as journey:
+        stored = journey.ingest_graph(
+            affected, _SYNTHETIC_BLOB, committed_at=_DRILL_TIMESTAMP
+        ).ok
+        stored = (
+            journey.ingest_graph(
+                peer, _SYNTHETIC_PEER_BLOB, committed_at=_DRILL_TIMESTAMP
+            ).ok
+            and stored
+        )
+        store = journey.artifacts
+    audit_keys = {"drill-audit": secrets.token_bytes(32)}
+    audit = AuditContinuityStore(live / "audit-chain.json", key_provider=audit_keys)
+    audit.initialize(key_id="drill-audit", chain_id="chain-drill")
+    audit.append(_drill_audit_report())
+    audit.anchor()
+    anchor = audit.load()[1].head_ref()
+    provider = InMemoryKeyProvider.generate(BACKUP_KEY_PURPOSE)
+    point = context.work_dir / "backup"
+    backup = create_recovery_point(
+        ServiceStateSources(journey_root=root, audit_chains=(audit.chain_path,)),
+        point,
+        key_provider=provider,
+        writers_stopped=True,
+    )
+    blob = _blob_location(root / "artifacts", affected.content_hash)
     data = bytearray(blob.read_bytes())
     # Flip a stored content bit rather than the envelope header, so the read
     # fails its integrity check instead of being refused as a foreign format.
     data[-1] ^= 0x01
     blob.chmod(0o600)
     blob.write_bytes(bytes(data))
-    context.state.update(store=store, affected=affected, peer=peer)
-    return _outcome(stored, "blob_bytes_corrupted")
+    context.state.update(
+        store=store,
+        affected=affected,
+        peer=peer,
+        encryption=encryption,
+        live=live,
+        point=point,
+        provider=provider,
+        backup_completed=backup.completed,
+        audit=audit,
+        audit_keys=audit_keys,
+        anchor=anchor,
+        audit_digest=_file_digest(audit.chain_path),
+        continuity_digest=_file_digest(audit.manifest_path),
+        corrupted_digest=_file_digest(blob),
+        blob=blob,
+    )
+    return _outcome(stored and backup.completed, "blob_bytes_corrupted")
+
+
+def _drill_audit_report() -> Any:
+    from openmed.core.audit import AuditReport
+
+    return AuditReport(
+        policy="synthetic",
+        resolved_profile={},
+        detectors=[],
+        safety_sweep={},
+        spans=[],
+        thresholds={},
+        residual_risk={},
+        openmed_version="synthetic",
+        manifest_hash=stable_hash({}),
+        document_length=1,
+        input_hash=stable_hash("a"),
+        deidentified_text_hash=stable_hash("b"),
+    )
 
 
 # Store codes that refuse a blob because its stored bytes fail verification:
@@ -820,25 +886,123 @@ def _corrupted_contain(context: DrillContext) -> DrillStepOutcome:
     )
 
 
-def _corrupted_resume(context: DrillContext) -> DrillStepOutcome:
-    store, peer = context.state["store"], context.state["peer"]
-    result = store.get_bytes(peer.content_hash)
+def _corrupted_recover(context: DrillContext) -> DrillStepOutcome:
+    from openmed.service.recovery import restore_recovery_point, verify_recovery_point
+    from openmed.structured.store import LocalJourneyStore
+
+    point, provider = context.state["point"], context.state["provider"]
+    verified = (
+        context.state["backup_completed"]
+        and verify_recovery_point(point, key_provider=provider).completed
+    )
+    valid = False
+    if verified:
+        target = context.work_dir / "restored"
+        receipt = restore_recovery_point(
+            point, target, key_provider=provider, live=context.state["live"]
+        )
+        # Do not create an empty store when a false success receipt supplies
+        # no bytes. Verify both restored metadata and decrypted content.
+        if receipt.completed and (target / "journey" / "journey.sqlite3").is_file():
+            with LocalJourneyStore(
+                target / "journey", encryption=context.state["encryption"]
+            ) as restored:
+                affected, peer = context.state["affected"], context.state["peer"]
+                content = restored.artifacts.get_bytes(affected.content_hash)
+                peer_content = restored.artifacts.get_bytes(peer.content_hash)
+                metadata = restored.metadata.get_artifact(affected.artifact_id)
+                valid = (
+                    content.ok
+                    and content.value == _SYNTHETIC_BLOB
+                    and peer_content.ok
+                    and peer_content.value == _SYNTHETIC_PEER_BLOB
+                    and metadata.ok
+                    and metadata.value == affected
+                    and _file_digest(context.state["blob"])
+                    == context.state["corrupted_digest"]
+                    and not context.state["store"].get_bytes(affected.content_hash).ok
+                )
+                if valid:
+                    context.state.update(
+                        restored_store=restored.artifacts,
+                        restore_receipt=receipt,
+                        restored_target=target,
+                    )
     return _outcome(
-        result.ok and result.value == _SYNTHETIC_PEER_BLOB, "unaffected_records_served"
+        valid,
+        "verified_restore_to_inactive_target",
+        unverified_restored_records=int(not valid),
+    )
+
+
+def _corrupted_verify(context: DrillContext) -> DrillStepOutcome:
+    from openmed.core.audit_continuity import (
+        AuditContinuityRecoveryHook,
+        AuditContinuityStore,
+    )
+
+    audit, anchor = context.state["audit"], context.state["anchor"]
+    # Recovery points carry the chain, not the continuity manifest. In this
+    # blob-corruption scenario the signed manifest survives. Preserve it and
+    # explicitly verify its retained anchor before copying to the inactive
+    # generation. This is not a claim of full-host disaster recovery.
+    intact = (
+        _file_digest(audit.chain_path) == context.state["audit_digest"]
+        and _file_digest(audit.manifest_path) == context.state["continuity_digest"]
+        and audit.verify(trusted_anchors=[anchor]).valid
+    )
+    if not intact:
+        return _outcome(False, "continuity_manifest_verification")
+    restored = AuditContinuityStore(
+        context.state["restored_target"] / "audit" / "chain-0000.json",
+        key_provider=context.state["audit_keys"],
+    )
+    if not restored.chain_path.is_file():
+        return _outcome(False, "continuity_manifest_verification")
+    with restored.manifest_path.open("xb") as stream:
+        stream.write(audit.manifest_path.read_bytes())
+    if not restored.verify(trusted_anchors=[anchor]).valid:
+        return _outcome(False, "continuity_manifest_verification")
+    receipt = context.state["restore_receipt"]
+    AuditContinuityRecoveryHook(
+        restored.chain_path, key_provider=context.state["audit_keys"]
+    ).open_recovery_epoch(receipt)
+    verified = restored.verify(trusted_anchors=[anchor])
+    event = restored.load()[1].head_event
+    valid = (
+        verified.valid
+        and verified.counts["restore_count"] == 1
+        and verified.counts["retained_entry_count"] == 1
+        and verified.counts["trusted_anchor_count"] == 1
+        and event.kind == "restore"
+        and event.body["backup_digest"] == receipt.manifest_digest
+        and event.body["restore_id"] == receipt.recovery_point_id
+        and _file_digest(audit.chain_path) == context.state["audit_digest"]
+        and _file_digest(audit.manifest_path) == context.state["continuity_digest"]
+    )
+    context.state["restored_audit"] = restored
+    return _outcome(valid, "continuity_manifest_verification")
+
+
+def _corrupted_resume(context: DrillContext) -> DrillStepOutcome:
+    store, peer = context.state["restored_store"], context.state["peer"]
+    result = store.get_bytes(peer.content_hash)
+    audit = context.state["restored_audit"]
+    audit.append(_drill_audit_report())
+    audit.anchor()
+    verified = audit.verify(trusted_anchors=[context.state["anchor"]])
+    return _outcome(
+        result.ok
+        and result.value == _SYNTHETIC_PEER_BLOB
+        and verified.valid
+        and verified.counts["retained_entry_count"] == 2,
+        "unaffected_records_served",
     )
 
 
 # Phases whose integration is pending: (owning issue, check code).
 UNAVAILABLE_DRILL_STEPS: Final[Mapping[tuple[str, str], tuple[str, str]]] = (
-    MappingProxyType(
-        {
-            (CORRUPTED_STATE, "recover"): (
-                "#3577",
-                "verified_restore_to_inactive_target",
-            ),
-            (CORRUPTED_STATE, "verify"): ("#3599", "continuity_manifest_verification"),
-        }
-    )
+    MappingProxyType({})
 )
 
 DEFAULT_DRILL_STEPS: Final[Mapping[tuple[str, str], DrillStep]] = MappingProxyType(
@@ -864,6 +1028,8 @@ DEFAULT_DRILL_STEPS: Final[Mapping[tuple[str, str], DrillStep]] = MappingProxyTy
         (CORRUPTED_STATE, "inject"): _corrupted_inject,
         (CORRUPTED_STATE, "detect"): _corrupted_detect,
         (CORRUPTED_STATE, "contain"): _corrupted_contain,
+        (CORRUPTED_STATE, "recover"): _corrupted_recover,
+        (CORRUPTED_STATE, "verify"): _corrupted_verify,
         (CORRUPTED_STATE, "resume"): _corrupted_resume,
         **{
             key: not_available(owner, check)

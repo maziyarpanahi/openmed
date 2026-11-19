@@ -203,11 +203,17 @@ def test_each_missing_kind_is_not_present_and_fails_release(
     ).valid
 
 
-def test_default_master_drill_report_blocks_with_not_available_steps(
+def test_drill_report_blocks_with_not_available_steps(
     tmp_path: Path,
 ) -> None:
     report = drill.run_recovery_drill(
-        candidate_commit=fx.CANDIDATE, generated_at=fx.GENERATED_AT
+        candidate_commit=fx.CANDIDATE,
+        generated_at=fx.GENERATED_AT,
+        steps={
+            (drill.STORAGE, "recover"): drill.not_available(
+                "#3577", "encrypted_backup_restore"
+            )
+        },
     )
     root, manifest = fx.make_service_release(
         tmp_path, documents={"recovery-drill": report}
@@ -223,7 +229,7 @@ def test_default_master_drill_report_blocks_with_not_available_steps(
     p0 = {row["issue"]: row for row in packet.p0_items}
     assert p0["#3574"]["missing_evidence"] == ["recovery_drill_report"]
     summary = next(row for row in packet.evidence if row["id"] == "recovery-drill")
-    assert summary["summary"]["steps_not_available"] == 2
+    assert summary["summary"]["steps_not_available"] == 1
 
 
 @pytest.mark.parametrize(
