@@ -42,6 +42,7 @@ def test_master_drill_exercises_available_recovery_and_records_gaps(
         drill.DRILL_CATEGORIES
     )
     scenario_states = {row["category"]: row["state"] for row in report["scenarios"]}
+    assert scenario_states[drill.STORAGE] == drill.DRILL_COMPLETE
     assert scenario_states[drill.NETWORK] == drill.DRILL_COMPLETE
     unavailable = {
         key: (row["owner"], row["check"])
@@ -68,7 +69,7 @@ def test_master_drill_exercises_available_recovery_and_records_gaps(
             "target": 0,
         }
     assert objectives["unverified_restored_records"]["state"] == "not_measured"
-    assert report["summary"]["steps_not_available"] == 6
+    assert report["summary"]["steps_not_available"] == 5
     assert drill.validate_recovery_drill_report(report) == ()
     Draft202012Validator(load_service_recovery_drill_schema()).validate(report)
 
@@ -110,6 +111,53 @@ def test_storage_rollback_regression_is_detected(monkeypatch) -> None:
     objectives = {row["id"]: row for row in report["objectives"]}
     assert objectives["partial_writes_visible"]["state"] == "missed"
     assert report["state"] == drill.DRILL_FAILED
+
+
+@pytest.mark.parametrize("operation", ["create", "verify", "restore"])
+def test_storage_recovery_refusal_blocks_the_drill(monkeypatch, operation) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service import recovery
+
+    monkeypatch.setattr(
+        recovery,
+        f"{operation}_recovery_point",
+        lambda *args, **kwargs: SimpleNamespace(completed=False),
+    )
+    report = _run()
+    recovered = _steps(report)[(drill.STORAGE, "recover")]
+    assert recovered["state"] == drill.STEP_FAILED
+    assert recovered["observed"] == {"unverified_restored_records": 1}
+    assert report["state"] == drill.DRILL_FAILED
+
+
+def test_storage_recovery_does_not_trust_a_success_receipt_alone(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service import recovery
+
+    monkeypatch.setattr(
+        recovery,
+        "restore_recovery_point",
+        lambda *args, **kwargs: SimpleNamespace(completed=True),
+    )
+    report = _run()
+    assert _steps(report)[(drill.STORAGE, "recover")]["state"] == drill.STEP_FAILED
+    assert report["state"] == drill.DRILL_FAILED
+
+
+def test_storage_recovery_reads_restored_bytes_and_preserves_live_state(tmp_path):
+    from openmed.service.jobs import LocalJobStore
+    from openmed.service.recovery import JOB_STORE_PATH
+
+    root = tmp_path / "drill"
+    report = _run(work_dir=root)
+    assert _steps(report)[(drill.STORAGE, "recover")]["state"] == drill.STEP_PASSED
+    original = LocalJobStore(root / "storage" / "live" / "jobs.json")
+    restored = LocalJobStore(root / "storage" / "restored" / JOB_STORE_PATH)
+    assert original.get("job-drill-pending") is None
+    assert restored.get("job-drill-pending") is not None
+    assert original.get("job-drill-committed") == restored.get("job-drill-committed")
 
 
 def test_corrupted_bytes_served_regression_is_detected(monkeypatch) -> None:

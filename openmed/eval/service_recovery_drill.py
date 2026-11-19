@@ -6,8 +6,8 @@ through six phases: ``inject``, ``detect``, ``contain``, ``recover``,
 ``verify`` and ``resume``. Every phase is a pluggable step. The defaults
 exercise recovery code that is on master today:
 
-* storage: the async job metadata store rolls back a failed write and keeps
-  committed records across a reopen (:mod:`openmed.service.jobs`);
+* storage: the async job metadata store rolls back a failed write, then its
+  encrypted backup is verified and restored into an inactive directory;
 * process: committed job metadata survives an abrupt worker stop;
 * network: the model-backend circuit breaker opens, sheds, admits one
   recovery probe and closes (:mod:`openmed.service.resilience`); and
@@ -15,11 +15,10 @@ exercise recovery code that is on master today:
   replace a corrupted blob while unaffected blobs stay readable
   (:mod:`openmed.structured.store.local`).
 
-A phase whose capability is not on master yet (encrypted restore, leased
-durable jobs, audit continuity) is recorded as ``not_available`` with its
-owning issue, which keeps the report ``incomplete`` and blocks a release.
-Callers inject an implementation for a ``(category, phase)`` pair when the
-owning work lands.
+A phase whose integration is still pending (leased durable jobs, Journey
+restore, audit continuity) is recorded as ``not_available`` with its owning
+issue, which keeps the report ``incomplete`` and blocks a release. Callers
+may inject an implementation for a ``(category, phase)`` pair.
 
 The report holds controlled codes, counts, issue references and a canonical
 self-digest only. It never records paths, record contents, exception text or
@@ -306,7 +305,9 @@ def _file_digest(path: Path) -> str:
 
 
 def _storage_inject(context: DrillContext) -> DrillStepOutcome:
-    path = context.work_dir / "jobs.json"
+    live = context.work_dir / "live"
+    live.mkdir(mode=0o700)
+    path = live / "jobs.json"
     store = _fault_injecting_job_store(path)
     committed = store.create(_job_record("job-drill-committed", "queued"))
     context.state.update(
@@ -342,8 +343,56 @@ def _storage_contain(context: DrillContext) -> DrillStepOutcome:
     )
 
 
+def _storage_recover(context: DrillContext) -> DrillStepOutcome:
+    from openmed.core.key_provider import InMemoryKeyProvider
+    from openmed.service.recovery import (
+        BACKUP_KEY_PURPOSE,
+        JOB_STORE_PATH,
+        ServiceStateSources,
+        create_recovery_point,
+        restore_recovery_point,
+        verify_recovery_point,
+    )
+
+    provider = InMemoryKeyProvider.generate(BACKUP_KEY_PURPOSE)
+    point = context.work_dir / "backup"
+    restored = context.work_dir / "restored"
+    path = context.state["path"]
+    # This synthetic store has no active worker or writer throughout capture.
+    backup = create_recovery_point(
+        ServiceStateSources(job_store=path),
+        point,
+        key_provider=provider,
+        writers_stopped=True,
+    )
+    verified = (
+        backup.completed
+        and verify_recovery_point(point, key_provider=provider).completed
+    )
+    if not verified:
+        return _outcome(
+            False, "encrypted_backup_restore", unverified_restored_records=1
+        )
+    receipt = restore_recovery_point(
+        point, restored, key_provider=provider, live=path.parent
+    )
+    restored_path = restored / JOB_STORE_PATH
+    valid = (
+        receipt.completed
+        and restored_path.is_file()
+        and _file_digest(restored_path) == context.state["digest_before"]
+        and _file_digest(path) == context.state["digest_before"]
+    )
+    if valid:
+        context.state["restored_path"] = restored_path
+    return _outcome(
+        valid, "encrypted_backup_restore", unverified_restored_records=int(not valid)
+    )
+
+
 def _storage_verify(context: DrillContext) -> DrillStepOutcome:
-    reopened = _open_job_store(context.state["path"])
+    path = context.state.get("restored_path", context.state["path"])
+    reopened = _open_job_store(path)
     context.state["reopened"] = reopened
     lost = int(reopened.get("job-drill-committed") != context.state["committed"])
     unexpected = int(reopened.get("job-drill-pending") is not None)
@@ -356,7 +405,8 @@ def _storage_verify(context: DrillContext) -> DrillStepOutcome:
 
 def _storage_resume(context: DrillContext) -> DrillStepOutcome:
     context.state["reopened"].create(_job_record("job-drill-pending", "queued"))
-    durable = _open_job_store(context.state["path"]).get("job-drill-pending")
+    path = context.state.get("restored_path", context.state["path"])
+    durable = _open_job_store(path).get("job-drill-pending")
     return _outcome(durable is not None, "admission_resumed_after_failure")
 
 
@@ -582,11 +632,10 @@ def _corrupted_resume(context: DrillContext) -> DrillStepOutcome:
     )
 
 
-# Phases whose capability is owned by open work: (owning issue, check code).
+# Phases whose integration is pending: (owning issue, check code).
 UNAVAILABLE_DRILL_STEPS: Final[Mapping[tuple[str, str], tuple[str, str]]] = (
     MappingProxyType(
         {
-            (STORAGE, "recover"): ("#3577", "encrypted_backup_restore"),
             (PROCESS, "detect"): ("#3574", "orphaned_lease_detection"),
             (PROCESS, "contain"): ("#3574", "poison_job_quarantine"),
             (PROCESS, "recover"): ("#3574", "checkpoint_replay"),
@@ -604,6 +653,7 @@ DEFAULT_DRILL_STEPS: Final[Mapping[tuple[str, str], DrillStep]] = MappingProxyTy
         (STORAGE, "inject"): _storage_inject,
         (STORAGE, "detect"): _storage_detect,
         (STORAGE, "contain"): _storage_contain,
+        (STORAGE, "recover"): _storage_recover,
         (STORAGE, "verify"): _storage_verify,
         (STORAGE, "resume"): _storage_resume,
         (PROCESS, "inject"): _process_inject,
