@@ -223,7 +223,7 @@ def test_default_master_drill_report_blocks_with_not_available_steps(
     p0 = {row["issue"]: row for row in packet.p0_items}
     assert p0["#3574"]["missing_evidence"] == ["recovery_drill_report"]
     summary = next(row for row in packet.evidence if row["id"] == "recovery-drill")
-    assert summary["summary"]["steps_not_available"] == 5
+    assert summary["summary"]["steps_not_available"] == 2
 
 
 @pytest.mark.parametrize(

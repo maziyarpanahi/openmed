@@ -43,6 +43,7 @@ def test_master_drill_exercises_available_recovery_and_records_gaps(
     )
     scenario_states = {row["category"]: row["state"] for row in report["scenarios"]}
     assert scenario_states[drill.STORAGE] == drill.DRILL_COMPLETE
+    assert scenario_states[drill.PROCESS] == drill.DRILL_COMPLETE
     assert scenario_states[drill.NETWORK] == drill.DRILL_COMPLETE
     unavailable = {
         key: (row["owner"], row["check"])
@@ -69,7 +70,7 @@ def test_master_drill_exercises_available_recovery_and_records_gaps(
             "target": 0,
         }
     assert objectives["unverified_restored_records"]["state"] == "not_measured"
-    assert report["summary"]["steps_not_available"] == 5
+    assert report["summary"]["steps_not_available"] == 2
     assert drill.validate_recovery_drill_report(report) == ()
     Draft202012Validator(load_service_recovery_drill_schema()).validate(report)
 
@@ -158,6 +159,56 @@ def test_storage_recovery_reads_restored_bytes_and_preserves_live_state(tmp_path
     assert original.get("job-drill-pending") is None
     assert restored.get("job-drill-pending") is not None
     assert original.get("job-drill-committed") == restored.get("job-drill-committed")
+
+
+@pytest.mark.parametrize("phase", ["detect", "contain"])
+def test_process_drill_detects_missing_lease_or_quarantine_transition(
+    monkeypatch, phase
+):
+    from openmed.service.jobs import DeidentifyJobQueue
+
+    original = DeidentifyJobQueue._reconcile_running
+
+    def ignore_transition(self, record, now, counts):
+        if phase == "detect" or record["recovery"]["attempt"] >= 2:
+            return None
+        return original(self, record, now, counts)
+
+    monkeypatch.setattr(DeidentifyJobQueue, "_reconcile_running", ignore_transition)
+    report = _run()
+    assert _steps(report)[(drill.PROCESS, phase)]["state"] == drill.STEP_FAILED
+    assert report["state"] == drill.DRILL_FAILED
+
+
+def test_process_replay_must_preserve_the_checkpoint(monkeypatch):
+    from openmed.service.jobs import DeidentifyJobQueue
+
+    original = DeidentifyJobQueue._process
+
+    def replay_from_beginning(self, lease, record):
+        if record["recovery"]["execution"] == 2:
+            record["recovery"]["completed_documents"] = 0
+        return original(self, lease, record)
+
+    monkeypatch.setattr(DeidentifyJobQueue, "_process", replay_from_beginning)
+    report = _run()
+    assert _steps(report)[(drill.PROCESS, "recover")]["state"] == drill.STEP_FAILED
+    assert report["state"] == drill.DRILL_FAILED
+
+
+def test_process_replay_must_refuse_unauthorized_approval(monkeypatch):
+    from openmed.service.jobs import DeidentifyJobQueue
+
+    original = DeidentifyJobQueue.replay
+
+    def ignore_authorization(self, job, approval):
+        self.replay_authorizer = lambda *args: True
+        return original(self, job, approval)
+
+    monkeypatch.setattr(DeidentifyJobQueue, "replay", ignore_authorization)
+    report = _run()
+    assert _steps(report)[(drill.PROCESS, "recover")]["state"] == drill.STEP_FAILED
+    assert report["state"] == drill.DRILL_FAILED
 
 
 def test_corrupted_bytes_served_regression_is_detected(monkeypatch) -> None:

@@ -8,15 +8,16 @@ exercise recovery code that is on master today:
 
 * storage: the async job metadata store rolls back a failed write, then its
   encrypted backup is verified and restored into an inactive directory;
-* process: committed job metadata survives an abrupt worker stop;
+* process: a stopped worker leaves a durable checkpoint; its expired lease is
+  reclaimed, repeated failure is quarantined, and authorized replay resumes;
 * network: the model-backend circuit breaker opens, sheds, admits one
   recovery probe and closes (:mod:`openmed.service.resilience`); and
 * corrupted state: the Journey artifact store refuses to serve or silently
   replace a corrupted blob while unaffected blobs stay readable
   (:mod:`openmed.structured.store.local`).
 
-A phase whose integration is still pending (leased durable jobs, Journey
-restore, audit continuity) is recorded as ``not_available`` with its owning
+A phase whose integration is still pending (Journey restore, audit continuity)
+is recorded as ``not_available`` with its owning
 issue, which keeps the report ``incomplete`` and blocks a release. Callers
 may inject an implementation for a ``(category, phase)`` pair.
 
@@ -31,14 +32,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from typing import Any, Final
 
 from openmed.core.audit import stable_hash
@@ -413,29 +415,223 @@ def _storage_resume(context: DrillContext) -> DrillStepOutcome:
 # --- process: abrupt worker stop ---------------------------------------------
 
 
+class _DrillWorkerStopped(BaseException):
+    """Exit a synthetic worker without the queue's exception recovery path."""
+
+
+def _process_queue(context: DrillContext, *, authorized: bool = False) -> Any:
+    from openmed.service import jobs
+    from openmed.service.job_payloads import EncryptedJobPayloadStore
+    from openmed.service.job_recovery import RetryPolicy
+
+    class _DrillQueue(jobs.DeidentifyJobQueue):
+        # Only scheduling and synthetic inference are replaced. Persistence,
+        # leases, retry limits, quarantine and replay use the production queue.
+        def __init__(self, **kwargs: Any) -> None:
+            self.pending: list[Any] = []
+            super().__init__(
+                SimpleNamespace(validate_served_model=lambda name: None), **kwargs
+            )
+
+        def _dispatch(self, job_id: str, input_ref: Any) -> bool:
+            if any(item.job_id == job_id for item in self.pending):
+                return False
+            self.pending.append(jobs._JobWorkItem(job_id, input_ref))
+            return True
+
+        def _deidentify_document(self, request: Any, document: Any) -> Any:
+            calls = context.state["calls"]
+            calls[document.id] = calls.get(document.id, 0) + 1
+            if context.state["poison"] and document.id == "drill-second":
+                raise _DrillWorkerStopped
+            return SimpleNamespace(
+                pii_entities=[
+                    SimpleNamespace(
+                        label="NAME", text="synthetic", start=0, end=9, confidence=1.0
+                    )
+                ]
+            )
+
+        def run_pending(self) -> bool:
+            while self.pending:
+                try:
+                    self._run_job(self.pending.pop(0))
+                except _DrillWorkerStopped:
+                    return True
+            return False
+
+        def close_resources(self) -> None:
+            # shutdown() would deliberately mutate running jobs. A simulated
+            # crash must preserve their on-disk lease and checkpoint instead.
+            self._executor.shutdown(wait=True, cancel_futures=True)
+            self._webhooks.shutdown(0)
+
+    clock = lambda: context.state["now"]
+    queue = _DrillQueue(
+        store=jobs.LocalJobStore(context.state["path"], clock=clock),
+        clock=clock,
+        payload_store=EncryptedJobPayloadStore(
+            context.work_dir / "payloads",
+            key_provider=context.state["keys"],
+            max_retention_seconds=3600,
+            clock=clock,
+        ),
+        digests=context.state["digests"],
+        progress_interval_seconds=0,
+        lease_seconds=30,
+        retry_policy=RetryPolicy(
+            max_attempts=2, base_delay_seconds=0, max_delay_seconds=0
+        ),
+        replay_authorizer=lambda job, approval: (
+            authorized
+            and job == context.state.get("job_id")
+            and approval == context.state.get("approval")
+        ),
+    )
+    context.state.setdefault("process_queues", []).append(queue)
+    context.state["queue"] = queue
+    return queue
+
+
+def _process_request(*document_ids: str) -> Any:
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    return DeidentifyJobRequest(
+        documents=[
+            DeidentifyJobDocument(id=value, text="synthetic recovery drill text")
+            for value in document_ids
+        ]
+    )
+
+
 def _process_inject(context: DrillContext) -> DrillStepOutcome:
-    path = context.work_dir / "jobs.json"
-    store = _open_job_store(path)
-    running = store.create(_job_record("job-drill-running", "running"))
-    context.state.update(path=path, running=running)
-    # The worker stops without shutdown, cleanup or a terminal update.
-    del store
-    return _outcome(True, "abrupt_worker_stop_simulated")
+    from openmed.core.key_provider import InMemoryKeyProvider
+    from openmed.service.job_payloads import JOB_PAYLOAD_KEY_PURPOSE
+    from openmed.service.jobs import JobDigestPolicy
+    from openmed.service.keyed_digest import ServiceDigestKey
+
+    context.state.update(
+        path=context.work_dir / "jobs.json",
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        calls={},
+        poison=True,
+        keys=InMemoryKeyProvider.generate(JOB_PAYLOAD_KEY_PURPOSE),
+        digests=JobDigestPolicy(
+            key=ServiceDigestKey.from_secret(
+                secrets.token_bytes(32), key_id="drill-digest"
+            )
+        ),
+    )
+    queue = _process_queue(context)
+    job = queue.submit(_process_request("drill-first", "drill-second"))["id"]
+    context.state["job_id"] = job
+    stopped = queue.run_pending()
+    record = queue.get(job)
+    context.state["checkpoint"] = record["spans"]
+    queue.close_resources()
+    return _outcome(
+        stopped
+        and record["status"] == "running"
+        and record["recovery"]["completed_documents"] == 1,
+        "abrupt_worker_stop_simulated",
+    )
+
+
+def _process_detect(context: DrillContext) -> DrillStepOutcome:
+    queue = _process_queue(context)
+    job = context.state["job_id"]
+    before_expiry = queue.get(job)["status"] == "running" and not queue.pending
+    context.state["now"] += timedelta(seconds=31)
+    reconciled = queue.reconcile()
+    record = queue.get(job)
+    return _outcome(
+        before_expiry
+        and reconciled.get("reclaimed") == 1
+        and record["status"] == "queued"
+        and record["recovery"]["completed_documents"] == 1
+        and record["spans"] == context.state["checkpoint"],
+        "orphaned_lease_detection",
+    )
+
+
+def _process_contain(context: DrillContext) -> DrillStepOutcome:
+    queue = context.state["queue"]
+    stopped = queue.run_pending()
+    queue.close_resources()
+    context.state["now"] += timedelta(seconds=31)
+    queue = _process_queue(context)
+    record = queue.get(context.state["job_id"])
+    queue.reconcile()
+    contained = (
+        stopped
+        and record["status"] == "quarantined"
+        and record["error"]["code"] == "attempts_exhausted"
+        and record["recovery"]["completed_documents"] == 1
+        and record["spans"] == context.state["checkpoint"]
+        and not queue.pending
+    )
+    return _outcome(contained, "poison_job_quarantine")
+
+
+def _process_recover(context: DrillContext) -> DrillStepOutcome:
+    from openmed.service.job_recovery import JobReplayAuthorization, ReplayRefusedError
+
+    queue, job = context.state["queue"], context.state["job_id"]
+    # Approval is synthetic and bounded to this private drill's one job.
+    approval = JobReplayAuthorization("sha256:" + "a" * 64, "sha256:" + "b" * 64)
+    context.state["approval"] = approval
+    before = _file_digest(context.state["path"])
+    denied = False
+    try:
+        queue.replay(job, approval)
+    except ReplayRefusedError as exc:
+        denied = exc.code == "replay_unauthorized"
+    unchanged = _file_digest(context.state["path"]) == before
+    queue.close_resources()
+    context.state["poison"] = False
+    queue = _process_queue(context, authorized=True)
+    queue.replay(job, approval)
+    stopped = queue.run_pending()
+    record = queue.get(job)
+    valid = (
+        denied
+        and unchanged
+        and not stopped
+        and record["status"] == "done"
+        and record["recovery"]["completed_documents"] == 2
+        and record["recovery"]["execution"] == 2
+        and record["spans"][:1] == context.state["checkpoint"]
+        and len(record["spans"]) == 2
+        and context.state["calls"] == {"drill-first": 1, "drill-second": 3}
+    )
+    context.state["recovered"] = record
+    return _outcome(valid, "checkpoint_replay")
 
 
 def _process_verify(context: DrillContext) -> DrillStepOutcome:
-    restarted = _open_job_store(context.state["path"])
-    context.state["restarted"] = restarted
-    lost = int(restarted.get("job-drill-running") != context.state["running"])
+    from openmed.service.jobs import LocalJobStore
+
+    restarted = LocalJobStore(context.state["path"], clock=lambda: context.state["now"])
+    lost = int(restarted.get(context.state["job_id"]) != context.state["recovered"])
     return _outcome(
         lost == 0, "committed_records_survive_restart", lost_committed_records=lost
     )
 
 
 def _process_resume(context: DrillContext) -> DrillStepOutcome:
-    context.state["restarted"].create(_job_record("job-drill-after-restart", "queued"))
-    durable = _open_job_store(context.state["path"]).get("job-drill-after-restart")
-    return _outcome(durable is not None, "admission_resumed_after_restart")
+    from openmed.service.jobs import LocalJobStore
+
+    queue = context.state["queue"]
+    job = queue.submit(_process_request("drill-after-restart"))["id"]
+    queue.run_pending()
+    restarted = LocalJobStore(context.state["path"], clock=lambda: context.state["now"])
+    durable = restarted.get(job)
+    return _outcome(
+        durable is not None
+        and durable["status"] == "done"
+        and restarted.get(context.state["job_id"]) == context.state["recovered"],
+        "admission_resumed_after_restart",
+    )
 
 
 # --- network: model-backend connection failures ------------------------------
@@ -636,9 +832,6 @@ def _corrupted_resume(context: DrillContext) -> DrillStepOutcome:
 UNAVAILABLE_DRILL_STEPS: Final[Mapping[tuple[str, str], tuple[str, str]]] = (
     MappingProxyType(
         {
-            (PROCESS, "detect"): ("#3574", "orphaned_lease_detection"),
-            (PROCESS, "contain"): ("#3574", "poison_job_quarantine"),
-            (PROCESS, "recover"): ("#3574", "checkpoint_replay"),
             (CORRUPTED_STATE, "recover"): (
                 "#3577",
                 "verified_restore_to_inactive_target",
@@ -657,6 +850,9 @@ DEFAULT_DRILL_STEPS: Final[Mapping[tuple[str, str], DrillStep]] = MappingProxyTy
         (STORAGE, "verify"): _storage_verify,
         (STORAGE, "resume"): _storage_resume,
         (PROCESS, "inject"): _process_inject,
+        (PROCESS, "detect"): _process_detect,
+        (PROCESS, "contain"): _process_contain,
+        (PROCESS, "recover"): _process_recover,
         (PROCESS, "verify"): _process_verify,
         (PROCESS, "resume"): _process_resume,
         (NETWORK, "inject"): _network_inject,
@@ -745,10 +941,14 @@ def _run_scenarios(
         directory = root / category
         directory.mkdir(mode=0o700)
         context = DrillContext(category=category, work_dir=directory)
-        rows = [
-            _run_step(registry[(category, phase)], context, phase)
-            for phase in DRILL_PHASES
-        ]
+        try:
+            rows = [
+                _run_step(registry[(category, phase)], context, phase)
+                for phase in DRILL_PHASES
+            ]
+        finally:
+            for queue in context.state.get("process_queues", ()):
+                queue.close_resources()
         scenarios.append(
             {
                 "category": category,
