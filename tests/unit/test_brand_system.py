@@ -41,6 +41,28 @@ def test_brand_system_contract() -> None:
     assert validator.validate(reproduce=False) == []
 
 
+@pytest.mark.parametrize("version", [None, 13, "", "unrecorded", "99.0.0"])
+def test_social_provenance_records_a_tool_version_without_pinning_it(
+    monkeypatch, version
+):
+    pytest.importorskip("PIL")
+    validator = _load_validator()
+    original = validator._load_json
+
+    def changed(path):
+        value = original(path)
+        if path == "docs/brand/social/manifest.json":
+            value = deepcopy(value)
+            value["synchronizer"]["pillow_version"] = version
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", changed)
+    errors = []
+    validator._validate_approved_social(errors)
+    version_errors = [error for error in errors if "Pillow provenance version" in error]
+    assert bool(version_errors) == (version != "99.0.0")
+
+
 def test_brand_fonts_consumers_and_homepage_on_every_interpreter() -> None:
     validator = _load_validator()
     errors = []

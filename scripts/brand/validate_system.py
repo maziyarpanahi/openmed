@@ -1460,8 +1460,14 @@ def _validate_approved_social(errors: list[str]) -> None:
         )
 
     synchronizer = manifest.get("synchronizer", {})
+    # Record the generating tool's version without freezing every future
+    # regeneration to it. Source hashes and decoded-pixel checks bind the art.
+    pillow_version = synchronizer.get("pillow_version")
+    if not isinstance(pillow_version, str) or not re.fullmatch(
+        r"\d+\.\d+\.\d+", pillow_version
+    ):
+        errors.append("social synchronizer has no valid Pillow provenance version")
     expected_synchronizer = {
-        "pillow_version": "12.3.0",
         "master_policy": "byte-identical approved export",
         "resampling": "LANCZOS",
         "derivative_png_compress_level": 9,
