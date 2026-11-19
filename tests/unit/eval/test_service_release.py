@@ -167,7 +167,7 @@ def test_master_defaults_reject_stand_ins_and_block_pending_integrations(
     assert packet.decision == SERVICE_RELEASE_NOT_READY
     assert "security_profile_report_invalid:security-profile" in packet.blocking_codes
     assert "no_egress_attestation_invalid:no-egress" in packet.blocking_codes
-    assert "typed_loader_unavailable:migration-rehearsal" in packet.blocking_codes
+    assert "migration_rehearsal_invalid:migration-rehearsal" in packet.blocking_codes
     assert "protocol_map_invalid:protocol-map" in packet.blocking_codes
     blocked = {
         row["kind"] for row in packet.evidence_kinds if row["state"] != "present"
@@ -1019,6 +1019,7 @@ def test_protocol_loader_refuses_invalid_maps(document):
         "none",
         "wrong_commit",
         "service",
+        "package",
         "openapi",
         "graphql",
         "staged",
@@ -1037,6 +1038,7 @@ def test_protocol_candidate_guard_checks_real_git_state(tmp_path, change):
 
     paths = {
         "service": "openmed/service/auth.py",
+        "package": "openmed/__about__.py",
         "openapi": "docs/api/openapi.json",
         "graphql": "docs/api/graphql-schema.graphql",
     }

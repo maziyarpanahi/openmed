@@ -14,6 +14,7 @@ when ``OPENMED_TEST_POSTGRES_DSN`` is set.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -34,6 +35,7 @@ from openmed.service.migration_rehearsal import (
     ScenarioOutcome,
     SQLitePostgresDouble,
     rehearse_service_migrations,
+    validate_rehearsal_report,
 )
 from openmed.service.recovery import (
     ServiceStateSources,
@@ -122,6 +124,140 @@ def test_full_rehearsal_passes_the_release_gate(full_report: RehearsalReport) ->
     assert full_report.previous_release == schema_registry.PREVIOUS_RELEASE
     assert full_report.generated_at == "2026-11-07T12:00:00Z"
     assert registry_findings() == ()
+
+
+def test_retained_full_matrix_validates_with_and_without_signature(full_report):
+    unsigned = validate_rehearsal_report(full_report.to_dict())
+    assert unsigned.to_dict() == full_report.to_dict()
+    key = b"synthetic-migration-validator-key-" + b"0" * 32
+    signed = full_report.sign(key, key_id="synthetic-migration")
+    assert validate_rehearsal_report(signed.to_dict(), verification_key=key).verify(key)
+    for wrong_key in (None, b"different-synthetic-key-" + b"1" * 32):
+        with pytest.raises(ValueError, match="^migration_rehearsal_invalid$"):
+            validate_rehearsal_report(signed.to_dict(), verification_key=wrong_key)
+
+
+def _rehash_matrix(document):
+    unsigned = {
+        key: value
+        for key, value in document.items()
+        if key not in {"packet_digest", "signature"}
+    }
+    document["packet_digest"] = (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(
+                unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")
+        ).hexdigest()
+    )
+    return document
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d["components"].pop(),
+        lambda d: d["components"].append(d["components"][0]),
+        lambda d: d["components"][0]["scenarios"].pop(),
+        lambda d: d["components"][0]["scenarios"].append(
+            d["components"][0]["scenarios"][0]
+        ),
+        lambda d: d["components"][0]["scenarios"][0]["checks"].clear(),
+        lambda d: d["components"][0]["scenarios"][0]["checks"].update(ready=False),
+        lambda d: d["components"][0]["scenarios"][0]["checks"].update(ready=1),
+        lambda d: d["components"][0]["scenarios"][0]["counts"].update(records=True),
+        lambda d: d["components"][0]["scenarios"][0].update(observed_version=999),
+        lambda d: d["components"][0]["scenarios"][0].update(
+            outcome="not_applicable", checks={}
+        ),
+        lambda d: d["components"][0]["scenarios"][0].update(evidence="declared"),
+        lambda d: d["components"][0].update(presence="not_present", scenarios=[]),
+        lambda d: d["components"][0].update(engine="synthetic-unverified"),
+        lambda d: d["components"][0].update(current_version=True),
+        lambda d: d["gate"].update(state="partial"),
+        lambda d: d.update(registry_digest="sha256:" + "0" * 64),
+        lambda d: d.update(previous_release="0.0.1"),
+        lambda d: d.update(release="0.0.1"),
+        lambda d: d.update(generated_at="2026-02-30T00:00:00Z"),
+        lambda d: d.update(extra="SYNTHETIC-PRIVATE-VALUE"),
+    ],
+)
+def test_retained_matrix_rejects_rehashed_inconsistent_evidence(full_report, mutate):
+    document = full_report.to_dict()
+    mutate(document)
+    with pytest.raises(ValueError, match="^migration_rehearsal_invalid$") as error:
+        validate_rehearsal_report(_rehash_matrix(document))
+    assert "SYNTHETIC-PRIVATE-VALUE" not in str(error.value)
+
+
+def test_retained_matrix_requires_its_canonical_digest(full_report):
+    document = full_report.to_dict()
+    document["packet_digest"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match="^migration_rehearsal_invalid$"):
+        validate_rehearsal_report(document)
+
+
+def _migration_evidence_source(document, version):
+    from openmed.eval.service_release import (
+        MIGRATION_REHEARSAL_MATRIX,
+        ServiceEvidenceSource,
+    )
+
+    data = json.dumps(document).encode()
+    return ServiceEvidenceSource(
+        entry_id="migration",
+        kind=MIGRATION_REHEARSAL_MATRIX,
+        digest="sha256:" + hashlib.sha256(data).hexdigest(),
+        byte_size=len(data),
+        release={"version": version, "candidate_commit": "a" * 40},
+        data=data,
+    )
+
+
+def test_release_loader_preserves_rehearsal_scope_and_authenticates_signed_input(
+    full_report,
+):
+    from openmed.eval.service_release import (
+        MIGRATION_REHEARSAL_MATRIX,
+        _loader_registry,
+    )
+
+    key = b"synthetic-migration-release-key-" + b"2" * 32
+    report = full_report.sign(key, key_id="synthetic-migration")
+    source = _migration_evidence_source(report.to_dict(), report.release)
+    loader = _loader_registry(None, signing_key=key)[MIGRATION_REHEARSAL_MATRIX]
+    result = loader(source)
+    assert result.blocking_codes == ()
+    assert result.summary["producer_authenticated"] is True
+    assert result.summary["postgres_double"] is True
+    assert result.summary["declared_scenarios"] > 0
+    assert result.summary["external_scenarios"] > 0
+    assert key.decode() not in repr(result)
+    wrong = _loader_registry(None, signing_key=b"wrong-synthetic-key-" + b"3" * 32)
+    assert wrong[MIGRATION_REHEARSAL_MATRIX](source).blocking_codes == (
+        "migration_rehearsal_invalid",
+    )
+
+
+def test_partial_matrix_and_wrong_release_cannot_qualify(full_report):
+    from dataclasses import replace
+
+    from openmed.eval.service_release import load_migration_rehearsal_evidence
+
+    partial = replace(
+        full_report, components=full_report.components[:1], gate_state="partial"
+    )
+    parsed = validate_rehearsal_report(partial.to_dict())
+    assert parsed.gate_state == "partial"
+    result = load_migration_rehearsal_evidence(
+        _migration_evidence_source(partial.to_dict(), partial.release)
+    )
+    assert result.blocking_codes == ("migration_rehearsal_not_passed",)
+    result = load_migration_rehearsal_evidence(
+        _migration_evidence_source(full_report.to_dict(), "0.0.1")
+    )
+    assert result.blocking_codes == ("release_mismatch",)
 
 
 def test_every_component_and_source_version_has_a_complete_matrix(

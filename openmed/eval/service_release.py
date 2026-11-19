@@ -24,9 +24,11 @@ protected invariant.
 
 Evidence is read through loaders keyed by kind. Security-profile and no-egress
 reports use their production contracts. The protocol map is checked against
-the candidate's transport source and contracts. Kinds whose typed integration
-is still pending block with ``typed_loader_unavailable``; callers may inject a
-typed loader. A required kind with no entry is reported as ``not_present``.
+the candidate's package source and transport contracts. Migration evidence is
+validated against the current durable-schema registry and scenario contracts.
+Callers may override a typed loader; an unavailable or untyped override blocks
+with ``typed_loader_unavailable``. A required kind with no entry is reported
+as ``not_present``.
 
 The packet reuses the Journey gate's canonical JSON, caller-keyed
 HMAC-SHA256 and atomic writer (:mod:`openmed.eval.journey_release`). It holds
@@ -244,6 +246,8 @@ SERVICE_RELEASE_REASON_CODES: Final = (
     "manifest_not_object",
     "manifest_too_large",
     "manifest_unreadable",
+    "migration_rehearsal_invalid",
+    "migration_rehearsal_not_passed",
     "moved_item_claims_invalid",
     "moved_item_destination_invalid",
     "moved_item_invalid",
@@ -970,6 +974,66 @@ def load_no_egress_evidence(source: ServiceEvidenceSource) -> ServiceEvidenceRes
     return ServiceEvidenceResult(tuple(codes), summary, document=document)
 
 
+def load_migration_rehearsal_evidence(
+    source: ServiceEvidenceSource, *, verification_key: bytes | str | None = None
+) -> ServiceEvidenceResult:
+    """Validate the complete migration matrix and any producer signature.
+
+    Args:
+        source: Digest-bound report from the migration rehearsal producer.
+        verification_key: Key authenticating a signed producer report. The
+            release evaluator supplies its signing key by default; a caller
+            using another producer key can inject a loader bound to that key.
+
+    Returns:
+        A typed result. Partial, failed, stale-registry and internally
+        inconsistent reports block release. Summaries retain the count of
+        declared and externally owned scenarios and whether PostgreSQL used
+        the offline DB-API double; these are not real-server qualification.
+    """
+    from openmed.service.migration_rehearsal import (
+        ScenarioOutcome,
+        validate_rehearsal_report,
+    )
+
+    try:
+        document = source.read_json()
+    except ServiceReleaseError as exc:
+        return ServiceEvidenceResult(exc.codes)
+    try:
+        key = None if verification_key is None else _key_bytes(verification_key)
+        report = validate_rehearsal_report(document, verification_key=key)
+    except (ValueError, JourneyReleaseError):
+        return ServiceEvidenceResult(("migration_rehearsal_invalid",))
+    codes = []
+    if report.release != source.release["version"]:
+        codes.append("release_mismatch")
+    if not report.passed:
+        codes.append("migration_rehearsal_not_passed")
+    rows = [row for component in report.components for row in component.scenarios]
+    return ServiceEvidenceResult(
+        tuple(codes),
+        {
+            "components": len(report.components),
+            "scenarios": len(rows),
+            "declared_scenarios": sum(
+                row.outcome is ScenarioOutcome.DECLARED for row in rows
+            ),
+            "external_scenarios": sum(
+                row.outcome is ScenarioOutcome.EXTERNAL for row in rows
+            ),
+            "postgres_double": any(
+                item.engine == "native_engine_sqlite_dbapi_double"
+                for item in report.components
+            ),
+            "producer_authenticated": report.signature is not None,
+            "report_digest": report.packet_digest,
+            "state": report.gate_state,
+        },
+        document=document,
+    )
+
+
 def _require_protocol_candidate(candidate: str, *, root: Path | None = None) -> None:
     # Discovery imports route policies and protobuf descriptors from this
     # package as well as reading source files. Its own checkout must therefore
@@ -979,7 +1043,7 @@ def _require_protocol_candidate(candidate: str, *, root: Path | None = None) -> 
         if _git_head(root) != candidate:
             raise ServiceReleaseError("protocol_map_checkout_mismatch")
         paths = (
-            "openmed/service",
+            "openmed",
             "docs/api/openapi.json",
             "docs/api/graphql-schema.graphql",
         )
@@ -1247,7 +1311,7 @@ DEFAULT_EVIDENCE_LOADERS: Final[Mapping[str, ServiceEvidenceLoader]] = MappingPr
         SECURITY_PROFILE_REPORT: load_security_profile_evidence,
         NO_EGRESS_ATTESTATION: load_no_egress_evidence,
         RECOVERY_DRILL_REPORT: load_recovery_drill_evidence,
-        MIGRATION_REHEARSAL_MATRIX: load_unavailable_evidence,
+        MIGRATION_REHEARSAL_MATRIX: load_migration_rehearsal_evidence,
         PROTOCOL_MAP: load_protocol_map_evidence,
         FIXTURE: load_digest_only_evidence,
         FAILURE_CODE_INVENTORY: load_failure_code_inventory_evidence,
@@ -1447,7 +1511,7 @@ def evaluate_service_release(
         raise ServiceReleaseError("p0_checklist_release_mismatch")
     _key_or_raise(signing_key)
     planted = tuple(_validated_sentinels(sentinels))
-    registry = _loader_registry(loaders)
+    registry = _loader_registry(loaders, signing_key=signing_key)
     root = Path(repo_root).resolve()
     evaluated_at = _timestamp(release["evaluated_at"], "evaluated_at_invalid")
     binding = _repository_binding(root, release["candidate_commit"], resolve_head)
@@ -1893,8 +1957,13 @@ def _validate_moved_items(raw: Any) -> list[dict[str, Any]]:
 
 def _loader_registry(
     loaders: Mapping[str, ServiceEvidenceLoader] | None,
+    *,
+    signing_key: bytes | str | None = None,
 ) -> dict[str, ServiceEvidenceLoader]:
     registry = dict(DEFAULT_EVIDENCE_LOADERS)
+    registry[MIGRATION_REHEARSAL_MATRIX] = lambda source: (
+        load_migration_rehearsal_evidence(source, verification_key=signing_key)
+    )
     for kind, loader in (loaders or {}).items():
         if kind not in EVIDENCE_KINDS or not callable(loader):
             raise ServiceReleaseError("loader_kind_unknown")
@@ -2522,6 +2591,7 @@ __all__ = [
     "load_security_profile_evidence",
     "load_no_egress_evidence",
     "load_protocol_map_evidence",
+    "load_migration_rehearsal_evidence",
     "main",
     "required_failure_codes",
     "scan_for_sentinels",
