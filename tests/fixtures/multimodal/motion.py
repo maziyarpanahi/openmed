@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 KINDS = (
@@ -88,6 +88,11 @@ class MotionSpec:
     posture of a fall. ``gaps`` are half-open ``(start_s, stop_s)`` intervals
     whose samples are reported as ``None``. Noise is Gaussian per axis, clipped
     at three standard deviations, and readings are clipped at ``range_g``.
+
+    Every number is checked before use: ``rate_hz`` lies in 1 to 1000 Hz,
+    ``duration_s`` in (0, 600] s, ``impact_width_s`` in (0, 0.3] s and, for a
+    jump or a dropped device, below ``descent_s`` so a free fall remains;
+    ``seed`` is an integer. Booleans are not accepted as numbers.
     """
 
     kind: str
@@ -229,17 +234,25 @@ SCENARIOS = {
 
 def scenario(name: str, **overrides: Any) -> MotionWindow:
     """Return one curated scenario from ``SCENARIOS``, with optional overrides."""
-    if name not in SCENARIOS:
+    if not isinstance(name, str) or name not in SCENARIOS:
         raise MotionFixtureError("motion_fixture_unknown_scenario")
+    if not set(overrides) <= {field.name for field in fields(MotionSpec)}:
+        raise MotionFixtureError("motion_fixture_unknown_override")
     return synthetic_motion_window(replace(SCENARIOS[name], **overrides))
 
 
 def _validate(spec: MotionSpec) -> tuple[int, int | None, tuple[tuple[int, int], ...]]:
     """Return sample count, onset index and gap ranges, or fail closed."""
-    if spec.kind not in KINDS:
+    if not isinstance(spec.kind, str) or spec.kind not in KINDS:
         raise MotionFixtureError("motion_fixture_unknown_kind")
-    if spec.direction not in FALL_POSTURES:
+    if not isinstance(spec.direction, str) or spec.direction not in FALL_POSTURES:
         raise MotionFixtureError("motion_fixture_unknown_direction")
+    if isinstance(spec.seed, bool) or not isinstance(spec.seed, int):
+        raise MotionFixtureError("motion_fixture_invalid_seed")
+    if not isinstance(spec.gaps, tuple) or any(
+        not isinstance(gap, tuple) or len(gap) != 2 for gap in spec.gaps
+    ):
+        raise MotionFixtureError("motion_fixture_invalid_gap")
     numbers = (
         spec.rate_hz,
         spec.duration_s,
@@ -253,12 +266,17 @@ def _validate(spec: MotionSpec) -> tuple[int, int | None, tuple[tuple[int, int],
         spec.range_g,
         *(edge for gap in spec.gaps for edge in gap),
     )
+    if any(
+        isinstance(value, bool) or not isinstance(value, int | float)
+        for value in numbers
+    ):
+        raise MotionFixtureError("motion_fixture_invalid_parameter")
     if not all(math.isfinite(value) for value in numbers):
         raise MotionFixtureError("motion_fixture_non_finite")
     checks = (
-        spec.rate_hz > 0,
-        spec.duration_s > 0,
-        spec.impact_width_s > 0,
+        1 <= spec.rate_hz <= 1000,
+        0 < spec.duration_s <= 600,
+        0 < spec.impact_width_s <= 0.3,
         0 <= spec.trough_g < 1,
         spec.descent_s > 0,
         30 <= spec.cadence_spm <= 200,
@@ -283,6 +301,11 @@ def _validate(spec: MotionSpec) -> tuple[int, int | None, tuple[tuple[int, int],
             raise MotionFixtureError("motion_fixture_no_room_after_event")
         if spec.peak_g <= 1.0:
             raise MotionFixtureError("motion_fixture_peak_not_above_gravity")
+        if (
+            spec.kind in ("jump", "device_drop")
+            and spec.impact_width_s >= spec.descent_s
+        ):
+            raise MotionFixtureError("motion_fixture_no_free_fall")
     gaps = []
     previous = 0
     for start_s, stop_s in spec.gaps:

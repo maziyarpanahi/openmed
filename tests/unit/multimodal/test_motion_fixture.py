@@ -312,7 +312,7 @@ def test_random_specs_keep_their_truth_or_fail_closed():
     for _ in range(300):
         spec = MotionSpec(
             kind=rng.choice(KINDS),
-            rate_hz=rng.choice((5.0, 10.0, 12.5, 25.0, 50.0, 60.0, 100.0, 400.0)),
+            rate_hz=rng.choice((1.0, 5.0, 10.0, 12.5, 25, 50.0, 60.0, 100, 1000.0)),
             duration_s=rng.uniform(2.0, 15.0),
             onset_s=rng.uniform(0.0, 14.0),
             peak_g=rng.uniform(0.8, 6.0),
@@ -370,6 +370,28 @@ def test_random_specs_keep_their_truth_or_fail_closed():
         ({"gaps": ((6.0, 5.0),)}, "motion_fixture_invalid_gap"),
         ({"gaps": ((1.0, 3.0), (2.0, 4.0))}, "motion_fixture_invalid_gap"),
         ({"gaps": ((9.0, 11.0),)}, "motion_fixture_invalid_gap"),
+        ({"gaps": ((1.0,),)}, "motion_fixture_invalid_gap"),
+        ({"gaps": [(1.0, 2.0)]}, "motion_fixture_invalid_gap"),
+        ({"gaps": ((1.0, math.inf),)}, "motion_fixture_non_finite"),
+        ({"kind": ["fall"]}, "motion_fixture_unknown_kind"),
+        ({"direction": {}}, "motion_fixture_unknown_direction"),
+        ({"rate_hz": True}, "motion_fixture_invalid_parameter"),
+        ({"rate_hz": "100"}, "motion_fixture_invalid_parameter"),
+        ({"rate_hz": 0.5}, "motion_fixture_invalid_parameter"),
+        ({"rate_hz": 1001.0}, "motion_fixture_invalid_parameter"),
+        ({"rate_hz": -100.0}, "motion_fixture_invalid_parameter"),
+        ({"rate_hz": math.inf}, "motion_fixture_non_finite"),
+        ({"duration_s": -10.0}, "motion_fixture_invalid_parameter"),
+        ({"duration_s": 601.0}, "motion_fixture_invalid_parameter"),
+        ({"impact_width_s": 0.0}, "motion_fixture_invalid_parameter"),
+        ({"impact_width_s": 0.31}, "motion_fixture_invalid_parameter"),
+        ({"descent_s": 0.0}, "motion_fixture_invalid_parameter"),
+        ({"cadence_spm": 201.0}, "motion_fixture_invalid_parameter"),
+        ({"range_g": 0.0}, "motion_fixture_invalid_parameter"),
+        ({"noise_g": False}, "motion_fixture_invalid_parameter"),
+        ({"seed": 1.5}, "motion_fixture_invalid_seed"),
+        ({"seed": True}, "motion_fixture_invalid_seed"),
+        ({"seed": "0"}, "motion_fixture_invalid_seed"),
     ],
 )
 def test_parameters_without_exact_truth_fail_with_stable_codes(overrides, code):
@@ -377,9 +399,21 @@ def test_parameters_without_exact_truth_fail_with_stable_codes(overrides, code):
         scenario("fall_backward", **overrides)
 
 
-def test_unknown_scenario_fails_closed():
+@pytest.mark.parametrize("name", ("jump", "device_drop"))
+def test_impact_wider_than_the_flight_fails_closed(name):
+    with pytest.raises(MotionFixtureError, match="^motion_fixture_no_free_fall$"):
+        scenario(name, impact_width_s=0.3, descent_s=0.3)
+
+
+def test_unknown_override_fails_closed():
+    with pytest.raises(MotionFixtureError, match="^motion_fixture_unknown_override$"):
+        scenario("fall_backward", sample_rate=100.0)
+
+
+@pytest.mark.parametrize("name", ["unknown", "", None, ["fall_backward"], {}])
+def test_unknown_scenario_fails_closed(name):
     with pytest.raises(MotionFixtureError, match="^motion_fixture_unknown_scenario$"):
-        scenario("unknown")
+        scenario(name)
 
 
 def test_standard_library_only_and_no_files_or_network(monkeypatch):
