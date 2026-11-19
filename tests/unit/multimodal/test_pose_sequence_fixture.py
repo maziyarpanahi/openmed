@@ -378,6 +378,43 @@ def test_unrealizable_parameters_fail_with_stable_codes(kwargs, code):
         scenario("unknown")
 
 
+@pytest.mark.parametrize("factory", [gait_truth, far_leg_crossings])
+@pytest.mark.parametrize("fps", [0.0, -1.0, 241.0, math.nan, math.inf, True])
+def test_truth_helpers_reject_invalid_frame_rates(factory, fps):
+    with pytest.raises(PoseFixtureError, match="^pose_fixture_invalid_grid$"):
+        factory(WalkerSpec(), fps=fps, frame_count=120)
+
+
+@pytest.mark.parametrize("factory", [gait_truth, far_leg_crossings])
+@pytest.mark.parametrize("frame_count", [0, -1, 120.5, math.nan, math.inf, True])
+def test_truth_helpers_require_positive_integer_frame_counts(factory, frame_count):
+    with pytest.raises(PoseFixtureError, match="^pose_fixture_invalid_grid$"):
+        factory(WalkerSpec(), fps=30.0, frame_count=frame_count)
+
+
+@pytest.mark.parametrize("fps", [0.0, -1.0, 241.0, math.nan, math.inf, True])
+def test_scenarios_validate_frame_rates_before_rounding(fps):
+    with pytest.raises(PoseFixtureError, match="^pose_fixture_invalid_grid$"):
+        scenario("typical_adult", fps=fps)
+
+
+@pytest.mark.parametrize("half_width_s", [-0.1, math.nan, math.inf, -math.inf])
+def test_crossings_reject_invalid_occlusion_widths(half_width_s):
+    with pytest.raises(
+        PoseFixtureError, match="^pose_fixture_invalid_occlusion_width$"
+    ):
+        far_leg_crossings(
+            WalkerSpec(), fps=30.0, frame_count=120, half_width_s=half_width_s
+        )
+
+
+@pytest.mark.parametrize("start,stop", [(0.5, 3), (0, 3.5), (False, 3), (0, True)])
+def test_occlusion_bounds_must_be_integer_frame_indices(start, stop):
+    spec = WalkerSpec(occlusions=(("left_knee", start, stop),))
+    with pytest.raises(PoseFixtureError, match="^pose_fixture_invalid_occlusion$"):
+        synthetic_pose_sequence(walkers=(spec,))
+
+
 def test_standard_library_only_and_no_files_or_network(monkeypatch):
     source = Path(pose_sequences.__file__).read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(source)):

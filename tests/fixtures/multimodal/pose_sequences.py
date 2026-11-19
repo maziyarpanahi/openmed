@@ -222,8 +222,10 @@ def synthetic_pose_sequence(
 def far_leg_crossings(
     spec: WalkerSpec, *, fps: float, frame_count: int, half_width_s: float = 0.1
 ) -> tuple[tuple[str, int, int], ...]:
-    """Return occlusions hiding the far leg while it swings past the near leg."""
+    """Return far-leg occlusions with a finite, nonnegative half-width in seconds."""
     _validate(spec, fps, frame_count)
+    if not math.isfinite(half_width_s) or half_width_s < 0:
+        raise PoseFixtureError("pose_fixture_invalid_occlusion_width")
     stride = 120.0 / spec.cadence_spm
     swing_mid = (spec.stance_fraction + (1 - spec.stance_fraction) / 2) * stride
     windows = []
@@ -273,6 +275,7 @@ def scenario(name: str, *, fps: float = 30.0, seed: int = 0) -> PoseSequenceFixt
     """Return one curated scenario from ``SCENARIOS`` on a 4 s clip."""
     if name not in SCENARIOS:
         raise PoseFixtureError("pose_fixture_unknown_scenario")
+    _validate_grid(fps, 1)
     walkers = SCENARIOS[name]
     frame_count = round(4.0 * fps)
     if name == "far_leg_occlusion":
@@ -282,7 +285,20 @@ def scenario(name: str, *, fps: float = 30.0, seed: int = 0) -> PoseSequenceFixt
     return synthetic_pose_sequence(walkers=walkers, fps=fps, noise_sd=noise, seed=seed)
 
 
+def _validate_grid(fps: float, frame_count: int) -> None:
+    """Reject invalid grids before division, rounding or event generation."""
+    if (
+        isinstance(fps, bool)
+        or not 1 <= fps <= 240
+        or isinstance(frame_count, bool)
+        or not isinstance(frame_count, int)
+        or frame_count < 1
+    ):
+        raise PoseFixtureError("pose_fixture_invalid_grid")
+
+
 def _validate(spec: WalkerSpec, fps: float, frame_count: int) -> None:
+    _validate_grid(fps, frame_count)
     checks = (
         30 <= spec.cadence_spm <= 200,
         0.3 <= spec.stride_length_m <= 2.0,
@@ -301,7 +317,14 @@ def _validate(spec: WalkerSpec, fps: float, frame_count: int) -> None:
     if (frame_count - 1) / fps < 120.0 / spec.cadence_spm:
         raise PoseFixtureError("pose_fixture_clip_shorter_than_stride")
     for joint, start, stop in spec.occlusions:
-        if joint not in JOINTS or not 0 <= start < stop <= frame_count:
+        if (
+            joint not in JOINTS
+            or any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (start, stop)
+            )
+            or not 0 <= start < stop <= frame_count
+        ):
             raise PoseFixtureError("pose_fixture_invalid_occlusion")
 
 
