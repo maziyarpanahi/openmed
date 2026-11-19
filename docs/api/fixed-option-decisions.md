@@ -171,6 +171,65 @@ TypeScript uses `client.decision(request)`. Go uses
 expose the typed result and all non-success states without remapping them to
 success.
 
+### One route, two request shapes
+
+`POST /v1/decisions` also accepts the text-only OpenAI-compatible Decisions
+body, so a client written for that API, or another OpenMed service reached
+through `DecisionServerBackend(protocol="openai_decisions")`, can call the
+route unchanged. The service picks the shape from keys that only one shape
+defines and answers in the shape it received:
+
+| Body | Recognised by | Response |
+| --- | --- | --- |
+| OpenMed request | `mode` or `input_text` | the OpenMed result |
+| OpenAI-compatible Decisions | `model` or `input` | `model`, `answers` and an `openmed` review object |
+
+`questions` exists in both shapes and does not decide anything. A body is
+classified by any one of its shape's keys, so a body missing a required key
+still gets that shape's own validation error. These bodies are refused with
+HTTP 422 before any backend runs, and the error never echoes the body:
+
+| Body | Code | `details.reason` |
+| --- | --- | --- |
+| keys of both shapes | `decision_request_ambiguous` | `both_shapes` |
+| keys of neither shape | `decision_request_ambiguous` | `no_shape` |
+| OpenAI-compatible body with `media` | `decision_media_unsupported` | `media_unsupported` |
+| OpenAI-compatible `model` other than the served backend's `model_id` | `model_not_served` | none |
+
+The OpenAI-compatible body carries no OpenMed policy fields, so the service
+applies the defaults: namespace `default`, purpose `care_review`, the default
+calibration profile, a 5,000 ms timeout and the 8,192-character input bound.
+Both shapes use the same `decisions:write` scope, request-body limit, access
+policy, backend and calibration profiles. The service never answers with a
+different model than the one named in `model`. Each answer follows the
+question order; a question that did not succeed carries `null` selections plus
+its OpenMed `state` and `code`. The `openmed` object repeats the result's
+`state`, `code`, `warnings`, `review`, `advisory`, `autonomous_action`,
+`calibration`, `backend`, `access`, `schema_version` and
+`compatibility_policy`, so the review requirement survives the conversion.
+
+```bash
+curl --request POST http://127.0.0.1:8080/v1/decisions \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "openmed/deterministic-fixed-option",
+    "input": "Synthetic review priority is urgent.",
+    "questions": [{"type": "predicate", "name": "urgent"}]
+  }'
+```
+
+The typed clients keep one method per shape: Python
+`client.openai_decisions(body)`, TypeScript `client.openaiDecisions(body)` and
+Go `client.OpenAIDecisions(ctx, openmed.OpenAIDecisionsRequest{...})`. The
+canonical JSON Schemas are `openai_decisions_request_schema()` and
+`openai_decisions_response_schema()` in
+`openmed.structured.decision_interop`, committed as
+`decision_openai_request.schema.json` and
+`decision_openai_response.schema.json`. The OpenAPI request body lists both
+shapes under `oneOf`. The shared exchanges in
+`tests/fixtures/service/decision-negotiation-v1.json` are replayed by the live
+service and by the Python, TypeScript and Go clients.
+
 ## Question sets and score levels
 
 Schema `1.1.0` adds optional fields only. A request can name one question with
@@ -528,7 +587,7 @@ requires human review.
   unknown fields fail closed;
 - safe metadata contains lengths, counts, policy identifiers, and backend
   provenance, never input text or option values;
-- for `1.1.0` requests, safe metadata and `decision_audit_record` add question
+- for `1.1.0` and later requests, safe metadata and `decision_audit_record` add question
   IDs, modes, option and level counts, and a SHA-256 digest of each question
   definition, never the input, instructions, options, or option descriptions.
 
@@ -542,16 +601,31 @@ without retaining source text.
 
 ## Compatibility
 
-The current request and result schema version is `1.1.0` with `same_major`
-compatibility. Every `1.0.0` request remains valid and decides exactly as
-before: a request that uses no `1.1.0` field and omits `schema_version`
-resolves to `1.0.0`, and its result has exactly the `1.0.0` fields. A request
-that declares `1.0.0` cannot use `1.1.0` fields. `1.1.0` results always carry
-`questions`, `level_scores`, and `expected_level`.
+The current request and result schema version is `1.2.0` with `same_major`
+compatibility. `1.1.0` added the question fields above. `1.2.0` adds the
+optional `media` field and widens backend license provenance to a bounded
+license expression plus an optional `license_sha256`; that provenance
+describes the backend, so the `1.2.0` documents allow it in results of any
+`1.x` version.
+
+A request that omits `schema_version` resolves to the lowest version carrying
+every field it uses: `1.0.0` for the base fields, `1.1.0` for the question
+fields and `1.2.0` for `media`. Requests of an earlier version therefore keep
+deciding exactly as before, and their results keep that version's fields. A
+request that declares `1.0.0` cannot use extension fields, and one that
+declares `1.1.0` cannot carry `media`. `1.1.0` and later results always carry
+`questions`, `level_scores`, and `expected_level`. Frozen `1.0.0` and `1.1.0`
+requests, results and documents are kept as compatibility fixtures and must
+keep validating and deciding exactly as recorded.
 
 Same-major migration preserves unknown result fields under `extensions`;
-different major versions are rejected. Migrating a `1.1.0` result to `1.0.0`
-moves non-empty `1.1.0` fields into `extensions`, and migrating back restores
-them; question-set results cannot be expressed in `1.0.0`. The committed JSON
-Schemas, OpenAPI artifact, MCP registry, and generated client surfaces are
-checked for drift in CI.
+different major versions are rejected. Migrating a `1.1.0` or later result to
+`1.0.0` moves non-empty question fields into `extensions`, and migrating back
+restores them; question-set results cannot be expressed in `1.0.0`. Results
+have the same fields at `1.1.0` and `1.2.0`.
+
+Every published version of each document is pinned by fingerprint. Changing a
+committed decision schema without bumping `DECISION_SCHEMA_VERSION`, freezing
+the previous documents and pinning the new fingerprints fails CI. The
+committed JSON Schemas, OpenAPI artifact, MCP registry, and client surfaces
+are checked for drift in CI.

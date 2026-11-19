@@ -1,3 +1,16 @@
+import { OpenMedKitParityError } from "./kit-parity";
+
+export {
+  KIT_PARITY_ACTIONS,
+  KIT_PARITY_CANONICAL_LABELS,
+  KIT_PARITY_PROFILE,
+  KIT_PARITY_PROFILE_VERSION,
+  OpenMedKitParityError,
+  serializeKitParityResult,
+  toKitParityResult,
+} from "./kit-parity";
+export type { KitParityResult, KitParitySpan } from "./kit-parity";
+
 export const OPENMED_REACT_NATIVE_MODULE_NAME = "OpenMedKitRN" as const;
 export const OPENMED_SPAN_SCHEMA_VERSION = 1 as const;
 
@@ -20,7 +33,12 @@ export interface OpenMedModelSource {
   modelPath: string;
   backend?: OpenMedBackendKind;
   id2LabelPath?: string;
+  /** Optional tokenizer repository ID; it never triggers a download. */
   tokenizerName?: string;
+  /**
+   * Local tokenizer folder for Core ML models. iOS loads tokenizer assets
+   * offline only and fails closed when they are missing.
+   */
   tokenizerFolderPath?: string;
   cacheKey?: string;
 }
@@ -135,12 +153,108 @@ interface ReactNativeRuntime {
 
 declare const require: undefined | ((moduleName: string) => unknown);
 
+/** Stable, value-free error codes raised by the JavaScript bridge layer. */
+export type OpenMedKitBridgeErrorCode =
+  | "openmedkit_test_double_forbidden"
+  | "openmedkit_deidentify_output_missing"
+  | "openmedkit_deidentify_output_unredacted";
+
+/**
+ * Error raised by the JavaScript bridge layer itself.
+ *
+ * Messages are fixed strings: they never include input text, spans, file paths
+ * or option values.
+ */
+export class OpenMedKitBridgeError extends Error {
+  readonly code: OpenMedKitBridgeErrorCode;
+
+  constructor(code: OpenMedKitBridgeErrorCode, message: string) {
+    super(message);
+    this.name = "OpenMedKitBridgeError";
+    this.code = code;
+  }
+}
+
+/** Where the bridge currently resolves its native module from. */
+export type OpenMedKitNativeModuleSource =
+  | "test-double"
+  | "turbo-module"
+  | "bridge-module"
+  | "unavailable";
+
 let injectedNativeModule: OpenMedKitNativeModule | null = null;
 
+/**
+ * Install a JavaScript native-module double for unit tests.
+ *
+ * Doubles are accepted only in test runners and development builds. A React
+ * Native release bundle (`__DEV__ === false`), `NODE_ENV=production`, or an
+ * unrecognised runtime rejects them, so fixture modules cannot stand in for
+ * native inference in release evidence. Passing `null` always clears a double.
+ */
 export function setOpenMedKitNativeModuleForTests(
   module: OpenMedKitNativeModule | null,
 ): void {
+  if (module !== null) {
+    assertTestDoublesAllowed();
+  }
   injectedNativeModule = module;
+}
+
+/**
+ * Report which native module the bridge would call right now.
+ *
+ * Parity harnesses use this to prove that results came from the linked native
+ * module rather than a JavaScript double.
+ */
+export function getOpenMedKitNativeModuleSource(): OpenMedKitNativeModuleSource {
+  if (injectedNativeModule) {
+    return "test-double";
+  }
+  const runtime = loadReactNative();
+  if (
+    isNativeModule(
+      runtime?.TurboModuleRegistry?.get<OpenMedKitNativeModule>(
+        OPENMED_REACT_NATIVE_MODULE_NAME,
+      ),
+    )
+  ) {
+    return "turbo-module";
+  }
+  if (isNativeModule(runtime?.NativeModules?.[OPENMED_REACT_NATIVE_MODULE_NAME])) {
+    return "bridge-module";
+  }
+  return "unavailable";
+}
+
+function assertTestDoublesAllowed(): void {
+  if (!testDoublesAllowed()) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_test_double_forbidden",
+      "OpenMedKit native-module test doubles are only allowed in tests and development builds",
+    );
+  }
+}
+
+function testDoublesAllowed(): boolean {
+  const scope = globalThis as {
+    __DEV__?: unknown;
+    process?: { env?: Record<string, string | undefined> };
+  };
+  const env = scope.process?.env ?? {};
+  if (scope.__DEV__ === false || env.NODE_ENV === "production") {
+    return false;
+  }
+  if (scope.__DEV__ === true) {
+    return true;
+  }
+  return (
+    env.NODE_ENV === "test" ||
+    env.NODE_ENV === "development" ||
+    env.NODE_TEST_CONTEXT !== undefined ||
+    env.JEST_WORKER_ID !== undefined ||
+    env.VITEST !== undefined
+  );
 }
 
 export async function loadModel(
@@ -190,18 +304,37 @@ export async function deidentify(
       : [],
     options,
   );
+  // Fail closed: never substitute the caller's original text for missing
+  // native output, and never hand back unchanged text when native reported
+  // that it rewrote at least one span.
+  const deidentifiedText =
+    stringValue(responseRecord.deidentifiedText) ??
+    stringValue(responseRecord.redactedText);
+  if (deidentifiedText === undefined) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_deidentify_output_missing",
+      "OpenMedKit native deidentify returned no de-identified text",
+    );
+  }
+  if (
+    deidentifiedText === text &&
+    spans.some((span) => span.action !== "keep")
+  ) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_deidentify_output_unredacted",
+      "OpenMedKit native deidentify returned unchanged text for rewritten spans",
+    );
+  }
   return {
     text: readString(responseRecord, "text", text),
-    deidentifiedText:
-      stringValue(responseRecord.deidentifiedText) ??
-      stringValue(responseRecord.redactedText) ??
-      text,
+    deidentifiedText,
     spans,
   };
 }
 
 function nativeModule(): OpenMedKitNativeModule {
   if (injectedNativeModule) {
+    assertTestDoublesAllowed();
     return injectedNativeModule;
   }
 
@@ -304,13 +437,22 @@ function normalizeSpans(
       : [];
 
   return rawSpans
-    .map((span) => normalizeSpan(span, options))
+    .map((span, index) => normalizeSpan(span, options, `$.spans[${index}]`))
     .sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
+/**
+ * Map one native span onto the bridge record.
+ *
+ * Native modules report Unicode scalar offsets. Missing or non-integer
+ * offsets and unknown action names are rejected with a value-free
+ * {@link OpenMedKitParityError} instead of being coerced, so a malformed
+ * native payload never reaches the app as a plausible span.
+ */
 function normalizeSpan(
   span: NativeSpan,
   options: OpenMedBridgeOptions,
+  path: string,
 ): OpenMedSpan {
   const record = asRecord(span);
   const canonicalLabel =
@@ -328,8 +470,8 @@ function normalizeSpan(
   return {
     schema_version: OPENMED_SPAN_SCHEMA_VERSION,
     doc_id: stringValue(record.doc_id) ?? stringValue(record.docId) ?? "document",
-    start: numberValue(record.start) ?? 0,
-    end: numberValue(record.end) ?? 0,
+    start: offsetValue(record, "start", path),
+    end: offsetValue(record, "end", path),
     text_hash:
       textHashValue(record.text_hash) ??
       textHashValue(record.textHash) ??
@@ -347,7 +489,7 @@ function normalizeSpan(
       options.detector ??
       `${OPENMED_REACT_NATIVE_MODULE_NAME}:${currentPlatform()}`,
     evidence: recordValue(record.evidence) ?? {},
-    action: spanActionValue(record.action) ?? "keep",
+    action: actionValue(record.action, path),
     replacement: stringValue(record.replacement) ?? null,
     reversible_id:
       stringValue(record.reversible_id) ?? stringValue(record.reversibleId) ?? null,
@@ -420,6 +562,32 @@ function textHashValue(value: unknown): TextHash | undefined {
     (value.startsWith("hmac-sha256:") || value.startsWith("sha256:"))
     ? (value as TextHash)
     : undefined;
+}
+
+function offsetValue(
+  record: Record<string, unknown>,
+  key: "start" | "end",
+  path: string,
+): number {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    throw new OpenMedKitParityError("field_missing", `${path}.${key}`);
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new OpenMedKitParityError("field_type_invalid", `${path}.${key}`);
+  }
+  return value;
+}
+
+function actionValue(value: unknown, path: string): SpanAction {
+  if (value === undefined || value === null) {
+    return "keep";
+  }
+  const action = spanActionValue(value);
+  if (action === undefined) {
+    throw new OpenMedKitParityError("action_unknown", `${path}.action`);
+  }
+  return action;
 }
 
 function spanActionValue(value: unknown): SpanAction | undefined {

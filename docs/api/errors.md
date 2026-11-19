@@ -97,6 +97,13 @@ inference failures use HTTP 500. Server-side responses set `details` to `null`
 so internal context is not exposed. FastAPI request-schema failures continue to
 use HTTP 422 with `validation_error`.
 
+The envelope is published as `service_error_envelope.schema.json` in the bundled
+schema package (`openmed.core.schemas.json`) and registered in the schema
+fingerprint snapshot, so this shape is covered by drift tests. `error` always
+carries `code`, `message`, and `details`, and includes `request_id` only when a
+request id is active. The job and webhook counterparts are documented in
+[Async De-identification Jobs](../serving/async-jobs.md).
+
 ## MCP errors
 
 MCP tools return the same code and message in structured content and set both

@@ -81,19 +81,61 @@ Offsets remain character offsets into the original note. The watchOS and
 visionOS simulator tests use the same synthetic note and iOS reference spans,
 with a one-character tolerance at each boundary.
 
+## iOS Simulator and MLX
+
+MLX cannot run on the iOS Simulator: mlx-swift aborts the process while it
+searches app bundles for its Metal library. OpenMedKit therefore checks one
+gate before any MLX entry point reads model files, downloads assets, or
+creates an MLX array or container. On the Simulator (and on Intel Macs) these
+calls throw `OpenMedMLXRuntimeError.unsupportedPlatform`:
+
+- `OpenMed(backend: .mlx(modelDirectoryURL:))`, including Privacy Filter
+  artifacts
+- `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier` and
+  `OpenMedRelationExtractor`
+- `OpenMedMaple(modelDirectoryURL:)`
+- both `OpenMedVisionLanguageModel.load` variants (the Hub variant refuses
+  before it starts a download)
+
+The error is value-free: it carries no path, model identifier or input text.
+Catch it to fall back to the CoreML backend or to tell the user that MLX
+features need a physical iPhone or iPad:
+
+```swift
+do {
+    let maple = try await OpenMedMaple(modelDirectoryURL: modelDirectory)
+    // ...
+} catch OpenMedMLXRuntimeError.unsupportedPlatform {
+    // Simulator or Intel Mac: use CoreML or hide the MLX feature.
+}
+```
+
+`OpenMed.clearRuntimeMemoryCache()` is a no-op where MLX cannot run, so
+CoreML-only callers such as the share extension can call it on the Simulator.
+
 ## Build and validation
 
 The Swift workflow performs the normal macOS tests, the iOS simulator build,
-and focused parity tests on available watchOS and visionOS simulators. Local
-checks use the same package scheme:
+an `xcodebuild test` run of `OpenMedKitTests` and `ExtensionTests` on an
+available iPhone simulator, and focused parity tests on available watchOS and
+visionOS simulators. On the iOS Simulator the CoreML, policy, offset and
+extension tests run; MLX-dependent tests are reported as skipped with the
+reason "MLX cannot run on the iOS Simulator", and the job lists them in its
+step summary. Local checks use the same package scheme:
 
 ```bash
 cd swift/OpenMedKit
+xcodebuild test -scheme OpenMedKit-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:OpenMedKitTests -only-testing:ExtensionTests \
+  -skipPackagePluginValidation
 xcodebuild build -scheme OpenMedKit \
   -destination 'generic/platform=watchOS Simulator'
 xcodebuild build -scheme OpenMedKit \
   -destination 'generic/platform=visionOS Simulator'
 ```
+
+Pick any iPhone listed by `xcrun simctl list devices available`.
 
 Use only synthetic notes in committed tests and fixtures. OpenMedKit keeps
 inference on device and does not log input text or detected span text.

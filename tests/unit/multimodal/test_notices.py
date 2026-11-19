@@ -415,6 +415,14 @@ manifest_profiles.ManifestProfile
 metadata_scrub.MetadataFinding
 metadata_scrub.ResidualMetadataReport
 metadata_scrub.MetadataScrubResult
+native_intake.IntakeLimits
+native_intake.IntakePage
+native_intake.IntakePageGeometry
+native_intake.IntakePageInput
+native_intake.IntakeRegion
+native_intake.IntakeReport
+native_intake.Recognition
+native_intake.RecognizedRegion
 notices.MultimodalNotice
 notices.NoticeBoundOutput
 ocr.OcrWord

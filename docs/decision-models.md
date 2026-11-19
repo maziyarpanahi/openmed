@@ -45,11 +45,14 @@ and
 
 Two differences matter when you bring an existing client:
 
-- Text is the default. Schema 1.1 also accepts verified local images or video
-  when the backend explicitly supports the media type (see [local images and video](#local-images-and-video)).
-- OpenMed's REST route `POST /v1/decisions` takes the OpenMed contract, not the
-  OpenAI-compatible Decisions body. A client written for that API cannot call
-  it unchanged; convert its body with the `decision_interop` helpers first.
+- Text is the default. Schema `1.2.0` also accepts verified local images or
+  video when the backend explicitly supports the media type (see
+  [local images and video](#local-images-and-video)).
+- OpenMed's REST route `POST /v1/decisions` accepts both the OpenMed contract
+  and the text-only OpenAI-compatible Decisions body, and answers in the shape
+  it received. An OpenAI-compatible body must name the model the service
+  decides with in `model`; see
+  [one route, two request shapes](api/fixed-option-decisions.md#one-route-two-request-shapes).
 
 ## How a decision runs
 
@@ -310,6 +313,108 @@ result = decide(request, backend=backend)  # Route for human review only.
 Audio is limited to 30 seconds of mono or stereo signed 16-bit PCM WAV. Approved standard sample rates are normalized to 16 kHz mono in memory (non-native rates require SciPy); overlong clips must be split explicitly. Audio result warnings include `audio_english_only`. The adapter does not transcribe. Mixed image/audio, multiple audio clips, video and audio forwarding over the System One bridge are unsupported.
 
 MedDecider-4B-NLI is the tested NLI export. No native adapter is qualified here for the larger MedDecider models.
+
+## On-device encoder runtimes
+
+OpenMedKit for Swift, OpenMedKit Android and the `openmed` web package run
+encoder decision models on the device, with no network call and no cloud
+fallback. Each kit ships the same runtime as the Python GLiClass path
+(`GLiClassOnnxRunner` with `decide`): it validates a decision request
+(schema `1.0.0`, `1.1.0` or `1.2.0`, same field names), applies the access
+policy and calibration profile, renders the GLiClass uni-encoder input, runs
+the encoder and returns a result that validates against the `1.2.0` result
+schema, including `review.required: true` and `autonomous_action: false`.
+
+| Kit | Runtime | Encoder adapter | Tokenizer |
+| --- | --- | --- | --- |
+| Swift | `OpenMedEncoderDecisionRuntime` | `OpenMedCoreMLDecisionEncoder` over a Core ML `MLModel` | `OpenMedTransformersDecisionTokenizer` (swift-transformers) or any `OpenMedDecisionTokenizer` |
+| Kotlin | `EncoderDecisionRuntime` | `OnnxDecisionEncoder` (ONNX Runtime Android, CPU) | any `DecisionTokenizer` |
+| Web | `EncoderDecisionRuntime` | `createOrtDecisionEncoder` or `loadOrtWebDecisionEncoder` (ONNX Runtime Web, local paths only) | any `DecisionTokenizer`, such as a wrapped Transformers.js tokenizer |
+
+The encoder contract is the one the Python runner enforces: `input_ids` and
+`attention_mask` of shape `[1, tokens]` in, a `[1, labels]` `logits` tensor
+out, one calibrated logit per `<<LABEL>>` slot. The tokenizer must add the
+checkpoint's special tokens and must not truncate or pad.
+
+The runtimes keep the Python behaviour:
+
+- `fixed_choice`, `boolean_choice` and `ordered_preference` use a softmax over
+  the options, `multi_label` a sigmoid per option, and `scalar_score` scores
+  the runtime's score levels and returns the expected level scaled to `[0, 1]`.
+- The instruction prompt, few-shot examples and score levels are runtime
+  configuration. A request that carries `instructions`, option descriptions or
+  `levels` returns `unsupported` with `backend_unsupported` instead of being
+  scored without its wording.
+- GLiClass control tokens in the input or options, and inputs over the token
+  budget, return `unsupported`; inputs are never truncated. A label-slot
+  mismatch or short or non-finite logits return `conflict`; an encoder error
+  returns `failure` with `backend_failure`; a slow encoder returns `failure`
+  with `backend_timeout`.
+- Calibration profiles are plain objects with the eight result fields
+  (`calibration_id` to `out_of_domain_digest`). Pass the profiles a device may
+  use; a request selects one by `calibration_id`, and an unknown ID returns
+  `unsupported` with `calibration_unavailable`. Without profiles the runtime
+  uses `openmed.synthetic.fixed_option.v1`.
+- The runtimes are text-only. A request with `media` returns `unsupported`
+  with `backend_unsupported`; media bytes are checked for shape only and never
+  decoded.
+- Contract violations throw a typed error with a `kind`
+  (`invalid_request`, `unsupported_contract` or `invalid_configuration`) and a
+  fixed `reason` code. Errors and request descriptions never contain the input,
+  options, prompt, examples or file paths.
+
+```swift
+// Swift: a compiled Core ML export and its tokenizer.json, both local.
+let runtime = try OpenMedEncoderDecisionRuntime(
+    encoder: OpenMedCoreMLDecisionEncoder(model: try MLModel(contentsOf: compiledModelURL)),
+    tokenizer: OpenMedTransformersDecisionTokenizer(tokenizer),
+    identity: try OpenMedDecisionBackendIdentity(
+        backendID: "openmed.gliclass.v4.coreml", runtime: "coreml",
+        modelID: "knowledgator/gliclass-v4-edge", revision: pinnedRevision, licenseID: "Apache-2.0"),
+    calibrationProfiles: [try OpenMedDecisionCalibrationProfile(json: profileJSON)])
+let result = try runtime.decide(json: requestJSON)  // Route for human review only.
+```
+
+```kotlin
+// Kotlin: a local ONNX export and a tokenizer wrapper.
+val runtime = EncoderDecisionRuntime(
+    encoder = OnnxDecisionEncoder(File(modelDirectory, "model_q8.onnx")),
+    tokenizer = tokenizer,
+    identity = DecisionBackendIdentity(
+        "openmed.gliclass.v4.onnxruntime-android", "onnxruntime-android",
+        "knowledgator/gliclass-v4-edge", pinnedRevision, "Apache-2.0",
+    ),
+    calibrationProfiles = listOf(DecisionCalibrationProfile.fromJson(profileJson)),
+)
+val result = runtime.decide(requestJson) // Route for human review only.
+```
+
+```ts
+// Web: a same-origin ONNX export and ONNX Runtime Web assets.
+const runtime = new EncoderDecisionRuntime({
+  encoder: await loadOrtWebDecisionEncoder({ modelPath: "/models/gliclass/model_q8.onnx", assetPath: "/ort/" }),
+  tokenizer,
+  identity: { backend_id: "openmed.gliclass.v4.onnxruntime-web", runtime: "onnxruntime-web",
+    model_id: "knowledgator/gliclass-v4-edge", revision: pinnedRevision, license_id: "Apache-2.0" },
+  calibrationProfiles: [profile],
+});
+const result = await runtime.decide(request); // Route for human review only.
+```
+
+`tests/fixtures/parity/decision_encoder_v1.json` holds the shared vectors:
+requests, encoder inputs, logits and full expected results produced by the
+Python reference path over a tiny randomly initialised encoder and word-level
+tokenizer built in `tests/unit/structured/test_decision_encoder_parity.py`.
+All three kits replay the same tokenizer and encoder from the fixture's
+weights, compare encoder inputs exactly and scores within `1e-6` (logits within
+`1e-5`, because encoders emit float32). Regenerate the fixture with
+`python -m tests.unit.structured.test_decision_encoder_parity --write`.
+
+Two small differences remain. Option uniqueness folds case by upper- then
+lower-casing instead of Python's `casefold`, and the web runtime cannot tell an
+integer `timeout_ms` from the same value written with a decimal point. The
+vectors use synthetic weights only: no real decision checkpoint, Core ML
+conversion or device latency and memory figure is part of this evidence.
 
 ## Local images and video
 

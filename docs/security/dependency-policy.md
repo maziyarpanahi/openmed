@@ -73,11 +73,12 @@ mirrored in the frozen resolver constraints without overriding parent dependency
 bounds. Neither package is added to the base or development-only environment.
 
 The frozen resolver also requires the patched transitive releases
-`dnspython>=2.9.0` (CVE-2026-114605, through `airflow` and `beam`),
-`msgpack>=1.2.3` (CVE-2026-114613, through `ray`), `nltk>=3.10.4`
-(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras) and
-`tornado>=6.6` (CVE-2026-115927, CVE-2026-116577 and CVE-2026-116578,
-through the notebook and development tooling).
+`dnspython>=2.9.2` (CVE-2026-114605 and CVE-2026-128089, through `airflow`
+and `beam`), `msgpack>=1.2.3` (CVE-2026-114613, through `ray`),
+`nltk>=3.10.4` (GHSA-j456-xh4h-cpf2, through the NLTK-backed integration
+extras) and `tornado>=6.6.1` (CVE-2026-115927, CVE-2026-116577,
+CVE-2026-116578 and CVE-2026-126347, through the notebook and development
+tooling).
 
 PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
 storage API, but callers using upstream Beam MongoDB IO must account for that
@@ -159,12 +160,61 @@ does not inherit uv project overrides, so ordinary pip cannot resolve the
 `snowflake` extra until upstream lifts the cap. Use the frozen environment the
 [Snowflake guide](../snowflake-udf.md) shows.
 
+## Android dependency locking and verification
+
+Every Android Gradle module (the `:openmedkit` library, the optional
+`:openmedkit-mlkit` module, the `:consumer-r8-smoke` app and each demo app)
+locks its resolvable configurations in a committed `gradle.lockfile`.
+`android/gradle/dependency-locking.gradle.kts` applies this to every
+subproject in STRICT mode. A dependency added or upgraded without a lockfile
+update fails resolution, and so does a new module or configuration that has
+no lock state. Only configurations the build never resolves are left
+unlocked: Kotlin's IDE-only `*DependenciesMetadata` configurations and the
+legacy `default` and `archives` configurations.
+
+`android/gradle/verification-metadata.xml` records a SHA-256 checksum for every
+artifact and metadata file the build downloads, including the Android Gradle
+Plugin, Kotlin tooling and the `aapt2` binary for Linux, macOS and Windows
+hosts. Gradle fails the build when a downloaded file has no matching checksum.
+Only IDE-downloaded `-sources.jar` and `-javadoc.jar` files are trusted
+without one.
+
+Android CI runs `./gradlew verifyDependencyLocks`, which resolves every locked
+configuration in every module. It also runs a negative control: it adds one
+already-verified dependency to the library's release classpath through an init
+script and requires the build to fail on the lock state.
+
+After an intentional dependency change, regenerate both files on the same
+branch from `android/` with JDK 17 and the Android SDK:
+
+```bash
+./gradlew verifyDependencyLocks --write-locks
+./gradlew build :openmedkit:publishReleasePublicationToMavenLocal \
+  verifyDependencyLocks --continue --write-verification-metadata sha256
+```
+
+Review the lockfile and checksum diff like any other dependency change. Gradle
+records only the artifacts the build resolves on the current host. When the
+Android Gradle Plugin version changes, resolve the new `aapt2` version's
+`linux`, `osx` and `windows` classifiers in the same run so that every host
+keeps a checksum. `tests/unit/android/test_android_dependency_locking.py`
+checks that every locked module has a checksum entry and that the library lock
+matches the version catalog.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency
 updates are grouped into one pull request, and GitHub Actions updates are
 grouped into one pull request. Dependabot PRs are reviewed and tested manually;
 auto-merge is intentionally out of scope.
+
+Dependabot also checks the OpenMedKit platform kits weekly: npm (each package
+under `js/` and `clients/typescript`), Gradle (`android/`), Swift (the root and
+`swift/OpenMedKit` packages) and Cargo (the Tauri crate). For each of these
+ecosystems, minor and patch version updates are grouped into one pull request,
+while major updates and security updates open their own pull requests, as for
+GitHub Actions. A Gradle update must also refresh the lockfiles and
+verification metadata above before it can pass Android CI.
 
 ## GitHub Actions references and permissions
 

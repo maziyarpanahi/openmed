@@ -246,15 +246,18 @@ def client(monkeypatch, fake_loader_cls):
         yield test_client
 
 
-def test_health_returns_ok_and_version(client):
+def test_health_returns_ok_and_metadata_route_reports_version(client):
     response = client.get("/health")
+    metadata = client.get("/service/metadata")
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["service"] == "openmed-rest"
-    assert payload["version"] == openmed.__version__
-    assert payload["profile"] == "test"
+    assert response.json() == {"status": "ok", "service": "openmed-rest"}
+    assert metadata.status_code == 200
+    assert metadata.json() == {
+        "service": "openmed-rest",
+        "version": openmed.__version__,
+        "profile": "test",
+    }
 
 
 def test_analyze_success_returns_prediction_result_shape(
@@ -737,10 +740,13 @@ def test_app_defaults_to_prod_profile_when_env_missing(monkeypatch, fake_loader_
     app = create_app()
 
     with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
-        response = test_client.get("/health")
+        response = test_client.get("/service/metadata")
 
-    assert response.status_code == 200
-    assert response.json()["profile"] == "prod"
+    # With no profile set the service runs as prod, so the fail-closed
+    # security profile refuses requests until authentication is configured.
+    assert app.state.runtime.profile == "prod"
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "security_profile_invalid"
 
 
 def test_preload_models_are_parsed_deduped_and_warmed(monkeypatch, fake_loader_cls):

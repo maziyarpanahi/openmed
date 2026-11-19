@@ -343,6 +343,13 @@ than the span schema, run the relation gate, and return a signed
 `RelationScorecard`. `run_relation_suite` exposes the same flow directly when a
 caller needs to supply a signing key, key id, or baseline explicitly.
 
+OpenMed ships no built-in signing key. Pass `signing_key`, or set
+`OPENMED_RELATION_SCORECARD_KEY` (the only option through `run_suite`). Without
+either, the run raises `ValueError` before any fixture is scored. The federated
+leakage harness works the same way with `OPENMED_FEDERATED_EVAL_KEY`. Keep these
+keys out of source control, as anyone holding one can sign a scorecard that
+verifies.
+
 The fixture file is JSONL with one schema-version `1` document per line. Every
 row requires a globally unique `id`, source `text`, `metadata.synthetic=true`,
 and non-empty `entities` and `relations` arrays. Entity rows require unique
