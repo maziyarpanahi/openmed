@@ -168,7 +168,7 @@ def test_master_defaults_reject_stand_ins_and_block_pending_integrations(
     assert "security_profile_report_invalid:security-profile" in packet.blocking_codes
     assert "no_egress_attestation_invalid:no-egress" in packet.blocking_codes
     assert "typed_loader_unavailable:migration-rehearsal" in packet.blocking_codes
-    assert "typed_loader_unavailable:protocol-map" in packet.blocking_codes
+    assert "protocol_map_invalid:protocol-map" in packet.blocking_codes
     blocked = {
         row["kind"] for row in packet.evidence_kinds if row["state"] != "present"
     }
@@ -977,3 +977,119 @@ def test_real_producer_loaders_participate_in_signed_gate(tmp_path):
     packet = _evaluate(root, manifest, loaders=loaders)
     assert packet.decision == SERVICE_RELEASE_READY, packet.blocking_codes
     assert packet.verify(fx.TEST_ONLY_SIGNING_KEY)
+
+
+def _protocol_document():
+    from openmed.service.protocol_map import DEFAULT_PROTOCOL_MAP_PATH
+
+    return json.loads(DEFAULT_PROTOCOL_MAP_PATH.read_text(encoding="utf-8"))
+
+
+def test_protocol_loader_compares_actual_transport_contracts(monkeypatch):
+    from openmed.eval import service_release as gate
+
+    # The real discovery runs. Git binding is tested separately so this unit
+    # test can also run in an intentionally modified development checkout.
+    monkeypatch.setattr(gate, "_require_protocol_candidate", lambda candidate: None)
+    document = _protocol_document()
+    result = gate.load_protocol_map_evidence(_producer_source("protocol_map", document))
+    assert result.blocking_codes == ()
+    assert result.summary["clean"] is True
+    assert result.summary["operations"] == 4
+
+    document["operations"][0]["scopes"] = ["models:read"]
+    result = gate.load_protocol_map_evidence(_producer_source("protocol_map", document))
+    assert result.blocking_codes == ("protocol_map_drift",)
+    assert result.summary["drift_count"] > 0
+    assert result.summary["clean"] is False
+
+
+@pytest.mark.parametrize("document", [None, [], {}, {"contract": "synthetic-invalid"}])
+def test_protocol_loader_refuses_invalid_maps(document):
+    from openmed.eval.service_release import load_protocol_map_evidence
+
+    result = load_protocol_map_evidence(_producer_source("protocol_map", document))
+    assert result.blocking_codes == ("protocol_map_invalid",)
+    assert result.summary == {}
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "none",
+        "wrong_commit",
+        "service",
+        "openapi",
+        "graphql",
+        "staged",
+        "untracked",
+    ],
+)
+def test_protocol_candidate_guard_checks_real_git_state(tmp_path, change):
+    import subprocess
+
+    from openmed.eval import service_release as gate
+
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=tmp_path, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    paths = {
+        "service": "openmed/service/auth.py",
+        "openapi": "docs/api/openapi.json",
+        "graphql": "docs/api/graphql-schema.graphql",
+    }
+    for relative in paths.values():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic original\n")
+    git("init", "--quiet")
+    git("add", ".")
+    git(
+        "-c",
+        "user.name=Maziyar Panahi",
+        "-c",
+        "user.email=maziyar@live.co.uk",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--quiet",
+        "-m",
+        "Synthetic fixture",
+    )
+    candidate = git("rev-parse", "HEAD")
+    if change == "wrong_commit":
+        candidate = fx.OTHER_COMMIT
+    elif change in paths:
+        (tmp_path / paths[change]).write_text("synthetic changed\n")
+    elif change == "staged":
+        (tmp_path / paths["service"]).write_text("synthetic changed\n")
+        git("add", paths["service"])
+    elif change == "untracked":
+        (tmp_path / "openmed/service/graphql_new.py").write_text("synthetic new\n")
+    if change == "none":
+        gate._require_protocol_candidate(candidate, root=tmp_path)
+    else:
+        with pytest.raises(gate.ServiceReleaseError) as error:
+            gate._require_protocol_candidate(candidate, root=tmp_path)
+        assert error.value.codes == ("protocol_map_checkout_mismatch",)
+        assert str(tmp_path) not in str(error.value)
+
+
+def test_protocol_loader_refuses_unavailable_checkout_without_leaking(monkeypatch):
+    import subprocess
+
+    from openmed.eval import service_release as gate
+
+    monkeypatch.setattr(gate, "_git_head", lambda root: fx.CANDIDATE)
+
+    def fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, "git", stderr=fx.PLANTED_SENTINEL)
+
+    monkeypatch.setattr(gate.subprocess, "run", fail)
+    result = gate.load_protocol_map_evidence(
+        _producer_source("protocol_map", _protocol_document())
+    )
+    assert result.blocking_codes == ("protocol_map_checkout_mismatch",)
+    assert fx.PLANTED_SENTINEL not in repr(result)

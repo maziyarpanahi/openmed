@@ -23,9 +23,10 @@ moved out of the release, and when a moved P1 or P2 item would narrow a
 protected invariant.
 
 Evidence is read through loaders keyed by kind. Security-profile and no-egress
-reports use their production contracts. Kinds whose typed integration is still
-pending block with ``typed_loader_unavailable``; callers may inject a typed
-loader. A required kind with no entry is reported as ``not_present``.
+reports use their production contracts. The protocol map is checked against
+the candidate's transport source and contracts. Kinds whose typed integration
+is still pending block with ``typed_loader_unavailable``; callers may inject a
+typed loader. A required kind with no entry is reported as ``not_present``.
 
 The packet reuses the Journey gate's canonical JSON, caller-keyed
 HMAC-SHA256 and atomic writer (:mod:`openmed.eval.journey_release`). It holds
@@ -274,6 +275,9 @@ SERVICE_RELEASE_REASON_CODES: Final = (
     "packet_too_large",
     "packet_unreadable",
     "policy_invalid",
+    "protocol_map_checkout_mismatch",
+    "protocol_map_drift",
+    "protocol_map_invalid",
     "release_fields_invalid",
     "release_mismatch",
     "release_target_invalid",
@@ -966,6 +970,83 @@ def load_no_egress_evidence(source: ServiceEvidenceSource) -> ServiceEvidenceRes
     return ServiceEvidenceResult(tuple(codes), summary, document=document)
 
 
+def _require_protocol_candidate(candidate: str, *, root: Path | None = None) -> None:
+    # Discovery imports route policies and protobuf descriptors from this
+    # package as well as reading source files. Its own checkout must therefore
+    # be the candidate, even when evaluate_service_release receives another root.
+    root = Path(__file__).resolve().parents[2] if root is None else root
+    try:
+        if _git_head(root) != candidate:
+            raise ServiceReleaseError("protocol_map_checkout_mismatch")
+        paths = (
+            "openmed/service",
+            "docs/api/openapi.json",
+            "docs/api/graphql-schema.graphql",
+        )
+        # Include staged, unstaged and untracked inputs. File names stay local
+        # and never become a result code or part of the retained packet.
+        status = subprocess.run(
+            [
+                "git",
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=normal",
+                "--",
+                *paths,
+            ],
+            cwd=root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+        if status.stdout:
+            raise ServiceReleaseError("protocol_map_checkout_mismatch")
+    except (JourneyReleaseError, OSError, subprocess.SubprocessError):
+        raise ServiceReleaseError("protocol_map_checkout_mismatch") from None
+
+
+def load_protocol_map_evidence(source: ServiceEvidenceSource) -> ServiceEvidenceResult:
+    """Check the retained protocol map against the exact candidate's transports.
+
+    Args:
+        source: Digest-bound JSON protocol map from the release manifest.
+
+    Returns:
+        A typed result with controlled counts and a drift verdict. The loader
+        refuses malformed maps, a different checkout, modified transport
+        inputs and any discrepancy with the discovered REST, GraphQL or gRPC
+        contracts. It neither starts the service nor loads a model.
+    """
+    from openmed.service.protocol_map import (
+        ProtocolMapError,
+        check_protocol_map,
+        parse_protocol_map,
+    )
+
+    try:
+        document = source.read_json()
+        parsed = parse_protocol_map(document)
+        _require_protocol_candidate(source.release["candidate_commit"])
+        report = check_protocol_map(parsed)
+    except ServiceReleaseError as exc:
+        return ServiceEvidenceResult(exc.codes)
+    except (ProtocolMapError, KeyError, TypeError, ValueError):
+        return ServiceEvidenceResult(("protocol_map_invalid",))
+    return ServiceEvidenceResult(
+        () if report.is_clean else ("protocol_map_drift",),
+        {
+            **report.counts,
+            "contract_version": report.contract_version,
+            "drift_count": len(report.issues),
+            "clean": report.is_clean,
+        },
+        document=document,
+    )
+
+
 def load_recovery_drill_evidence(
     source: ServiceEvidenceSource,
 ) -> ServiceEvidenceResult:
@@ -1167,7 +1248,7 @@ DEFAULT_EVIDENCE_LOADERS: Final[Mapping[str, ServiceEvidenceLoader]] = MappingPr
         NO_EGRESS_ATTESTATION: load_no_egress_evidence,
         RECOVERY_DRILL_REPORT: load_recovery_drill_evidence,
         MIGRATION_REHEARSAL_MATRIX: load_unavailable_evidence,
-        PROTOCOL_MAP: load_unavailable_evidence,
+        PROTOCOL_MAP: load_protocol_map_evidence,
         FIXTURE: load_digest_only_evidence,
         FAILURE_CODE_INVENTORY: load_failure_code_inventory_evidence,
         P0_STATUS: load_p0_status_evidence,
@@ -2440,6 +2521,7 @@ __all__ = [
     "load_unavailable_evidence",
     "load_security_profile_evidence",
     "load_no_egress_evidence",
+    "load_protocol_map_evidence",
     "main",
     "required_failure_codes",
     "scan_for_sentinels",
