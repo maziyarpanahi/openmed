@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Authenticate the ephemeral production-profile load test with a fresh scoped
+  API key so the nightly harness can pass the service readiness preflight.
 - Preserve raw bytes when reading service diagnostics and secret files on
   Windows, reject non-regular sources with consistent error codes, and refuse
   raced dangling symlinks before creating export-observation files. Keep
