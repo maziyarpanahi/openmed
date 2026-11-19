@@ -215,6 +215,13 @@ email-msg-gpl = [
   "extract-msg>=0.56,<0.57",
 ]
 
+biomedclip = [
+  "numpy>=1.26",
+  "torch>=2.13.0",
+  "open_clip_torch>=2.24",
+  "pillow>=10",
+]
+
 multimodal = [
   "filelock>=4.2.1",
   "setuptools>=84.1.0",

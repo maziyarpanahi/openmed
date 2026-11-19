@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `openmed.multimodal.vision.retrieval.biomedclip`, a local BiomedCLIP
+  image/text embedder over caller-supplied, digest-pinned checkpoints behind the
+  new `biomedclip` extra, with an offline guard and protected embeddings that
+  serialize only digests and dimensions (#5035).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
