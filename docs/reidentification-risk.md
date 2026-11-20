@@ -909,3 +909,17 @@ invented or computed through an unbounded combinatorial count.
 
 For the broader legal and operational boundary, see
 [Compliance Posture](compliance.md).
+
+## Checking successive releases
+
+`openmed.risk.release_composition.assess_release_composition` takes two or more
+`ReleasedTable` objects with keyed unit tokens, declared QIs and an optional
+generalization node and hierarchy. Supply level zero for values already
+generalized. The comparison uses distinct units present in every release.
+
+The result gives k for each individual release and for the joint intersection,
+the number of linked units below target and the one-based release pairs whose
+intersection shrinks a unit’s class below its size in both releases. Higher-order intersections can
+shrink classes further. Use `result.evidence` as the composition input to the
+expert-review report. Missing keys or an empty common cohort yield an
+unassessed result.
