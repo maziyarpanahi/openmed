@@ -43,6 +43,9 @@ PRIVATE_KEY: Final = "private_key"
 ENVIRONMENT_SECRET: Final = "environment_secret"
 """Category for secret-looking values assigned to configuration names."""
 
+PRIVATE_PATH: Final = "private_path"
+"""Category for account-name segments of user home-directory paths."""
+
 _SECRET_CATEGORIES = frozenset(
     {
         ACCESS_KEY,
@@ -51,6 +54,7 @@ _SECRET_CATEGORIES = frozenset(
         AUTHORIZATION_HEADER,
         ENVIRONMENT_SECRET,
         PRIVATE_KEY,
+        PRIVATE_PATH,
     }
 )
 _FINGERPRINT_PREFIX = "sha256:"
@@ -321,8 +325,50 @@ _PLACEHOLDER_PREFIXES = (
     "your_",
 )
 _RUNTIME_VALUE_PATTERN = re.compile(
-    r"(?ix)^(?:\$\{|\$[A-Za-z_]|\{\{|os\.environ|os\.getenv|"
-    r"getenv\(|process\.env|secrets\.)"
+    r"(?ix)^(?:\$\{|\$[A-Za-z_]|\{\{|%[A-Za-z_][A-Za-z0-9_]*%|os\.environ|"
+    r"os\.getenv|getenv\(|process\.env|secrets\.)"
+)
+
+_POSIX_HOME_PATH_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9._-])/(?:Users|home)/(?P<name>[\w.$%~@-]+)"
+)
+_WINDOWS_HOME_PATH_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_/\\])[A-Za-z]:[\\/](?i:Users)[\\/](?P<name>[\w.$%~@-]+)"
+)
+_NON_IDENTIFYING_ACCOUNT_NAMES = frozenset(
+    {
+        "account",
+        "admin",
+        "administrator",
+        "anonymous",
+        "default",
+        "demo",
+        "docker",
+        "example",
+        "guest",
+        "home",
+        "jenkins",
+        "local",
+        "me",
+        "name",
+        "owner",
+        "profile",
+        "public",
+        "root",
+        "runner",
+        "shared",
+        "system",
+        "test",
+        "testing",
+        "unknown",
+        "user",
+        "username",
+        "users",
+        "you",
+        "your-name",
+        "your_name",
+        "~",
+    }
 )
 
 
@@ -347,6 +393,18 @@ def _looks_like_secret(value: str) -> bool:
     if not (
         _MIN_SECRET_VALUE_LENGTH <= len(normalized) <= _MAX_ENVIRONMENT_VALUE_LENGTH
     ):
+        return False
+    if _is_placeholder(normalized):
+        return False
+    return any(character.isalnum() for character in normalized)
+
+
+def _is_account_name(name: str) -> bool:
+    """Return whether a home-directory segment can identify a person."""
+    normalized = name.strip()
+    if len(normalized) < 2:
+        return False
+    if normalized.casefold() in _NON_IDENTIFYING_ACCOUNT_NAMES:
         return False
     if _is_placeholder(normalized):
         return False
@@ -535,6 +593,24 @@ def _private_key_candidates(text: str) -> list[_Candidate]:
     return candidates
 
 
+def _private_path_candidates(text: str) -> list[_Candidate]:
+    """Report only the account-name segment of a user home-directory path."""
+    candidates: list[_Candidate] = []
+    for pattern in (_POSIX_HOME_PATH_PATTERN, _WINDOWS_HOME_PATH_PATTERN):
+        for match in pattern.finditer(text):
+            if not _is_account_name(match.group("name")):
+                continue
+            candidates.append(
+                _Candidate(
+                    start=match.start("name"),
+                    end=match.end("name"),
+                    category=PRIVATE_PATH,
+                    priority=70,
+                )
+            )
+    return candidates
+
+
 def _collect_candidates(text: str) -> list[_Candidate]:
     """Collect deterministic candidates without retaining matched surfaces."""
     candidates: list[_Candidate] = []
@@ -551,6 +627,7 @@ def _collect_candidates(text: str) -> list[_Candidate]:
                 candidates.append(candidate)
 
     candidates.extend(_private_key_candidates(text))
+    candidates.extend(_private_path_candidates(text))
 
     for match in _AUTHORIZATION_HEADER_PATTERN.finditer(text):
         candidate = _header_candidate(text, match)
@@ -663,6 +740,7 @@ __all__ = [
     "AUTHORIZATION_HEADER",
     "ENVIRONMENT_SECRET",
     "PRIVATE_KEY",
+    "PRIVATE_PATH",
     "SecretDetector",
     "SecretFinding",
     "SecretMatch",

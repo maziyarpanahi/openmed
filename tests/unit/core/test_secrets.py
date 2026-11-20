@@ -14,6 +14,7 @@ from openmed.core.secrets import (
     AUTHORIZATION_HEADER,
     ENVIRONMENT_SECRET,
     PRIVATE_KEY,
+    PRIVATE_PATH,
     SecretDetector,
     SecretFinding,
     detect_secrets,
@@ -131,6 +132,45 @@ def test_bracket_wrapping_does_not_hide_real_environment_secrets():
     (finding,) = detect_secrets(text)
 
     assert finding.offset == (text.index(value), text.index(value) + len(value))
+
+
+def test_private_path_reports_only_the_account_name_segment():
+    text = 'Traceback (most recent call last): File "/Users/synthetic-person/notes.txt"'
+
+    (finding,) = detect_secrets(text)
+
+    start = text.index("synthetic-person")
+    assert finding.category == PRIVATE_PATH
+    assert finding.offset == (start, start + len("synthetic-person"))
+    assert "synthetic-person" not in json.dumps(finding.to_dict())
+
+
+def test_windows_private_paths_match_both_separator_styles():
+    text = r"copy C:\Users\first-person\notes.txt and C:/Users/second-person/notes.txt"
+
+    findings = detect_secrets(text)
+
+    assert [finding.category for finding in findings] == [PRIVATE_PATH, PRIVATE_PATH]
+    assert [text[finding.start : finding.end] for finding in findings] == [
+        "first-person",
+        "second-person",
+    ]
+
+
+def test_generic_and_placeholder_account_names_are_not_reported():
+    text = (
+        "/home/user/project /home/runner/work/repo "
+        "/Users/$USER/notes.txt /Users/<name>/notes.txt "
+        "/Users/%USERNAME%/notes.txt"
+    )
+
+    assert detect_secrets(text) == []
+
+
+def test_home_directory_segments_inside_urls_are_not_private_paths():
+    text = "https://example.invalid/home/synthetic-person/page"
+
+    assert detect_secrets(text) == []
 
 
 def test_near_miss_placeholders_are_not_reported():
