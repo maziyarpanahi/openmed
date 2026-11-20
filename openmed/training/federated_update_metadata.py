@@ -2,6 +2,9 @@
 
 The caller supplies trusted expected metadata separately from the update. This
 module never reads tensors or verifies their contents, lineage, or clipping.
+Bind the declared ``update_digest`` to canonical payload bytes with
+``openmed.training.federated_update_encoding.admit_federated_update`` before
+aggregation.
 """
 
 from __future__ import annotations
@@ -118,7 +121,9 @@ class FederatedUpdateMetadata:
         adapter_format: Declared representation, currently only ``dense``.
         parameters: Complete declared parameter metadata.
         total_elements: Claimed sum of the products of parameter dimensions.
-        update_digest: Declared update SHA-256 reference; not a content check.
+        update_digest: Declared update SHA-256 reference; not a content check
+            here. ``admit_federated_update`` verifies it against the
+            canonical encoded payload bytes before aggregation.
         clipped: Whether the submitter declares the update has been clipped.
         policy: Trusted coordinator policy, required even for construction.
             It is used for validation and is not stored or serialized.
