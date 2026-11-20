@@ -12,7 +12,8 @@ JSON Schemas describe model packs and path-free route records.
 ## Why the router is separate
 
 Span extraction, classification, pair scoring, relation extraction, assertion,
-temporality, and token classification have different output shapes. A single
+temporality, token classification, passage embedding, and reranking have
+different output shapes. A single
 implicit model selection rule makes those shapes difficult to reproduce and
 can silently substitute a generative model for a bounded decision.
 
