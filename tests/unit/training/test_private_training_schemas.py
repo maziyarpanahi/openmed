@@ -51,6 +51,7 @@ from openmed.training.private_training_schemas import (
     build_private_training_schemas,
     build_schema,
     render_private_training_schemas,
+    render_schema,
 )
 
 MODEL = "sha256:" + "a" * 64
@@ -221,10 +222,28 @@ def test_catalog_exposes_every_schema_name_exactly_once() -> None:
     }
     for name in catalog:
         assert catalog[name]["$schema"] == PRIVATE_TRAINING_SCHEMA_DIALECT
-    with pytest.raises(PrivateTrainingSchemaError):
-        build_schema("not_a_catalog_name")
-    with pytest.raises(PrivateTrainingSchemaError):
+    expected_names = ", ".join(sorted(PRIVATE_TRAINING_SCHEMA_BUILDERS))
+    expected_message = (
+        f"unknown private-training schema; expected one of: {expected_names}"
+    )
+
+    sentinel = "sentinel_unknown_catalog_key_12345"
+    with pytest.raises(PrivateTrainingSchemaError) as exc_info:
+        build_schema(sentinel)
+    assert str(exc_info.value) == expected_message
+    assert sentinel not in str(exc_info.value)
+
+    with pytest.raises(PrivateTrainingSchemaError) as exc_info_int:
         build_schema(3)
+    assert str(exc_info_int.value) == expected_message
+
+    with pytest.raises(PrivateTrainingSchemaError) as exc_info_render:
+        render_schema(sentinel)
+    assert str(exc_info_render.value) == expected_message
+
+    with pytest.raises(PrivateTrainingSchemaError) as exc_info_render_int:
+        render_schema(3)
+    assert str(exc_info_render_int.value) == expected_message
 
 
 def test_schemas_are_bounded_and_closed() -> None:
