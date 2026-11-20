@@ -35,6 +35,7 @@ on:
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
+      - 'tests/fixtures/model_catalog/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -69,6 +70,7 @@ on:
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
+      - 'tests/fixtures/model_catalog/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
