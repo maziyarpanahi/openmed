@@ -18,6 +18,13 @@ from openmed.clinical.review_packet import (
 )
 from openmed.multimodal.evidence import EvidenceNode, NodeKind
 from openmed.multimodal.vision.providers.base import Confidence
+from openmed.multimodal.vision.safety.instruction_injection import (
+    DocumentRegion,
+    InstructionPolicy,
+    PreparedDocumentPrompt,
+    prepare_document_prompt,
+    screen_document_regions,
+)
 
 ROUTING_VERSION = "openmed.ocr-vlm-routing.v1"
 ROUTING_NOTICE = "Agreement between observations is not clinical verification; retain downstream transcription, association and clinical review gates."
@@ -508,3 +515,67 @@ def prepare_agreed_values(
         ),
         report.to_json(),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ScreenedPairs:
+    """OCR/VLM pairs whose OCR text passed instruction screening.
+
+    Quarantined OCR regions are absent from ``pairs`` and from ``prompt``, so
+    they can neither reach a VLM prompt nor corroborate an answer. Only the
+    count and digests are reportable; the held text is never recorded.
+    """
+
+    pairs: tuple[ReadingPair, ...]
+    prompt: PreparedDocumentPrompt | None = field(repr=False)
+    quarantined_count: int
+    screening_digest: str
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return content-free result metadata (count and digest, never text)."""
+        return {
+            "ocr_regions_quarantined": self.quarantined_count,
+            "ocr_screening_digest": self.screening_digest,
+        }
+
+
+def screen_ocr_pairs_for_vlm(
+    pairs: tuple[ReadingPair, ...],
+    policy: InstructionPolicy,
+    *,
+    language: str = "en",
+) -> ScreenedPairs:
+    """Screen each pair's OCR text before it can feed a VLM prompt or corroboration.
+
+    Args:
+        pairs: Complete OCR/VLM observations, in intended prompt reading order.
+        policy: Explicit instruction-screening policy; its rules are unchanged.
+        language: Declared OCR language tag passed to the screener.
+
+    Returns:
+        Pairs with a non-quarantined OCR region, a prompt payload built only from
+        those regions (None when nothing remains), and the quarantined count.
+    """
+    _require(type(pairs) is tuple and all(type(item) is ReadingPair for item in pairs))
+    regions = tuple(
+        DocumentRegion(
+            evidence=item.ocr.evidence,
+            text=item.ocr.text,
+            recognition_complete=True,
+            language=language,
+        )
+        for item in pairs
+    )
+    if not regions:
+        return ScreenedPairs((), None, 0, "")
+    report = screen_document_regions(regions, policy)
+    held = {a.evidence.node_id for a in report.regions if a.quarantined}
+    kept = tuple(item for item in pairs if item.ocr.evidence.node_id not in held)
+    prompt = (
+        prepare_document_prompt(
+            tuple(r for r in regions if r.evidence.node_id not in held), policy
+        )
+        if kept
+        else None
+    )
+    return ScreenedPairs(kept, prompt, len(pairs) - len(kept), report.screening_digest)
