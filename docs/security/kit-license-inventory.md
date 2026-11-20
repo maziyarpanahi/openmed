@@ -267,6 +267,7 @@ the tables. Rows that no manifest uses any more are counted as
 | npm | `@babel/runtime` | `MIT` | React Native parity example; build tooling |
 | npm | `@electron/fuses` | `MIT` | Electron packaging harness; build tooling |
 | npm | `@huggingface/tokenizers` | `Apache-2.0` | web kit tokenizer conformance tests |
+| npm | `@microsoft/api-extractor` | `MIT` | web kit declaration API report (`npm run api:check`); build tooling |
 | npm | `@huggingface/transformers` | `Apache-2.0` | optional peer of the web kit |
 | npm | `@react-native-community/cli` | `MIT` | React Native parity example; build tooling |
 | npm | `@react-native-community/cli-platform-android` | `MIT` | React Native parity example; build tooling |

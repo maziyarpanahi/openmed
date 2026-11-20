@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Commit API Extractor reports of the `openmed` web package's public declarations under `js/openmedkit-web/api/`, one per `exports` entry; `npm run api:check` fails in CI when the declarations differ from the reviewed baseline and `npm run api:update` refreshes it (#5361).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
