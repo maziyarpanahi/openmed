@@ -61,7 +61,7 @@
     "test:node": "tsx --test ../../tests/web/test_electron_ipc.spec.ts ../../tests/web/test_electron_kit_parity.spec.ts ../../tests/web/test_electron_bundle_lifecycle.spec.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.6",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
