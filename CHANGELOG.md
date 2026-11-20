@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a versioned FHIR R4 reference-server compatibility suite that reports only
+  server name, declared version, case, outcome and a fixed reason code, with an
+  opt-in local container profile (#3197).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
