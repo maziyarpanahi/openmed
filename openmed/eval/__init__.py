@@ -327,6 +327,7 @@ from openmed.eval.domain_coverage import (
 )
 from openmed.eval.drift_monitor import (
     DEFAULT_DRIFT_THRESHOLD,
+    DEFAULT_MINIMUM_SAMPLE_COUNT,
     DEFAULT_REFERENCE_PATH,
     DEFAULT_SCORE_BINS,
     DEFAULT_WARNING_THRESHOLD,
@@ -339,6 +340,7 @@ from openmed.eval.drift_monitor import (
     SCORE_HISTOGRAM_FAMILY,
     SCRIPT_HISTOGRAM_FAMILY,
     VERDICT_DRIFT,
+    VERDICT_INSUFFICIENT_DATA,
     VERDICT_STABLE,
     VERDICT_WARNING,
     DriftAggregateWindow,
@@ -1572,6 +1574,7 @@ __all__ = [
     "DatasetProvenance",
     "DistributionShiftEstimate",
     "DEFAULT_DRIFT_THRESHOLD",
+    "DEFAULT_MINIMUM_SAMPLE_COUNT",
     "DEFAULT_REFERENCE_PATH",
     "DEFAULT_SCORE_BINS",
     "DEFAULT_WARNING_THRESHOLD",
@@ -1584,6 +1587,7 @@ __all__ = [
     "SCORE_HISTOGRAM_FAMILY",
     "SCRIPT_HISTOGRAM_FAMILY",
     "VERDICT_DRIFT",
+    "VERDICT_INSUFFICIENT_DATA",
     "VERDICT_STABLE",
     "VERDICT_WARNING",
     "DriftAggregateWindow",

@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Return an `insufficient_data` drift verdict, with `drift_detected` false,
+  when the observation window is smaller than the new `minimum_sample_count`
+  keyword of `compute_drift_report`, so the retrain trigger adds no drift
+  score for it, and reject drift windows whose declared `sample_count` is
+  below their label total (#4548).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer
