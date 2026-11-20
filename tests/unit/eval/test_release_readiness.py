@@ -613,6 +613,152 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
     return root
 
 
+@pytest.fixture
+def lts_repository(tmp_path):
+    root = _sdk_repository(tmp_path)
+    subprocess.run(["git", "tag", "v4.3.0"], cwd=root, check=True)
+    path = root / "gates/api_compat_report.json"
+    api_diff = json.loads(path.read_text())
+    api_diff.update(before_ref="v4.3.0", after_ref="candidate")
+    api_diff["summary"].update(after_symbols=100, added=0)
+    path.write_text(json.dumps(api_diff), encoding="utf-8")
+    (root / "CHANGELOG.md").write_text(
+        "## [Unreleased]\n\n### Added\n\n- Future feature.\n\n"
+        "## [4.3.1] - 2027-03-01\n\n### Fixed\n\n- Fix a regression.\n\n"
+        "## [4.3.0] - 2027-02-01\n\n### Added\n\n- First release.\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_lts_patch_cli_accepts_only_fixes(lts_repository):
+    output = lts_repository / "readiness.json"
+    result = main(
+        [
+            "--repo-root",
+            str(lts_repository),
+            "--sdk-baseline",
+            "v4.3.0",
+            "--version",
+            "4.3.1",
+            "--lts",
+            "--output",
+            str(output),
+            "--signing-key",
+            READINESS_KEY,
+        ]
+    )
+
+    report = ReadinessReport.from_dict(json.loads(output.read_text()))
+    assert result == 0
+    assert report.decision == READY
+    assert report.verify(READINESS_KEY)
+    assert any(check.gate == "lts_patch" and check.passed for check in report.checks)
+
+
+@pytest.mark.parametrize(
+    "summary, reason",
+    [
+        ({"added": 1, "after_symbols": 101}, "lts_api_addition"),
+        ({"after_symbols": 101}, "lts_api_addition"),
+        ({"breaking": 1}, "lts_api_break"),
+    ],
+)
+def test_lts_patch_rejects_api_changes(lts_repository, summary, reason):
+    path = lts_repository / "gates/api_compat_report.json"
+    api_diff = json.loads(path.read_text())
+    api_diff["summary"].update(summary)
+    path.write_text(json.dumps(api_diff), encoding="utf-8")
+
+    report = evaluate_readiness(
+        repo_root=lts_repository, version="4.3.1", sdk_baseline="v4.3.0", lts=True
+    )
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].details["reason_code"] == reason
+    if not summary.get("breaking"):
+        ordinary = evaluate_readiness(
+            repo_root=lts_repository, version="4.3.1", sdk_baseline="v4.3.0"
+        )
+        assert ordinary.decision == READY
+
+
+def test_lts_patch_rejects_an_export_in_the_generated_api_diff(lts_repository):
+    (lts_repository / "openmed" / "extra.py").write_text(
+        "def new_export():\n    return 1\n", encoding="utf-8"
+    )
+    diff_script = (
+        Path(__file__).resolve().parents[3] / "scripts/release/api_surface_diff.py"
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(diff_script),
+            "v4.3.0",
+            "WORKTREE",
+            "--repo-root",
+            str(lts_repository),
+            "--json",
+            str(lts_repository / "gates/api_compat_report.json"),
+        ],
+        cwd=lts_repository,
+        check=True,
+        capture_output=True,
+    )
+
+    report = evaluate_readiness(
+        repo_root=lts_repository, version="4.3.1", sdk_baseline="v4.3.0", lts=True
+    )
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].details["reason_code"] == "lts_api_addition"
+
+
+def test_lts_patch_rejects_added_changelog_section(lts_repository):
+    path = lts_repository / "CHANGELOG.md"
+    path.write_text(
+        path.read_text().replace("### Fixed", "### Added"), encoding="utf-8"
+    )
+
+    report = evaluate_readiness(
+        repo_root=lts_repository, version="4.3.1", sdk_baseline="v4.3.0", lts=True
+    )
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].details["reason_code"] == "lts_changelog_added"
+
+
+@pytest.mark.parametrize(
+    "version, baseline, reason",
+    [
+        ("4.3.2", "v4.3.0", "lts_baseline_mismatch"),
+        ("4.3.0", "v4.3.0", "lts_invalid_version"),
+        ("4.4.1", "v4.3.0", "lts_invalid_version"),
+        ("4.3.1", "v1.0.0", "lts_baseline_mismatch"),
+    ],
+)
+def test_lts_patch_requires_prior_patch_tag(lts_repository, version, baseline, reason):
+    report = evaluate_readiness(
+        repo_root=lts_repository, version=version, sdk_baseline=baseline, lts=True
+    )
+    assert report.decision == NOT_READY
+    assert reason in {
+        check.details.get("reason_code") for check in report.failing_checks()
+    }
+
+
+def test_lts_patch_requires_api_evidence_for_baseline(lts_repository):
+    path = lts_repository / "gates/api_compat_report.json"
+    api_diff = json.loads(path.read_text())
+    api_diff["before_ref"] = "v4.2.0"
+    path.write_text(json.dumps(api_diff), encoding="utf-8")
+
+    report = evaluate_readiness(
+        repo_root=lts_repository, version="4.3.1", sdk_baseline="v4.3.0", lts=True
+    )
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].details["reason_code"] == (
+        "lts_api_baseline_mismatch"
+    )
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
 def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
@@ -866,6 +1012,31 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
             "v2.5.0",
             "docs/migration/2.5-to-3.0.md",
         ),
+        ("pull_request", "4.3.0", "release/v4.3", False, "v4.3.0", ""),
+        (
+            "pull_request",
+            "4.3.1",
+            "release/v4.3",
+            True,
+            "v4.3.0",
+            "docs/migration/4.2-to-4.3.md",
+        ),
+        (
+            "push",
+            "4.3.1",
+            "release/v4.3",
+            True,
+            "v4.3.0",
+            "docs/migration/4.2-to-4.3.md",
+        ),
+        (
+            "pull_request",
+            "4.3.1",
+            "release/v4.3.1",
+            True,
+            "v4.3.0",
+            "docs/migration/4.2-to-4.3.md",
+        ),
     ]:
         with subtests.test(
             event=event,
@@ -879,7 +1050,9 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
             root = tmp_path / "repository"
             (root / "openmed").mkdir(parents=True)
             about = root / "openmed/__about__.py"
-            about.write_text('__version__ = "3.0.0"\n')
+            lts_case = release_branch.startswith("release/v4.3")
+            base_version = "4.3.0" if lts_case else "3.0.0"
+            about.write_text(f'__version__ = "{base_version}"\n')
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(["git", "add", "."], cwd=root, check=True)
             subprocess.run(
@@ -899,11 +1072,17 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
             base = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=root, text=True
             ).strip()
+            if lts_case:
+                subprocess.run(["git", "tag", "v4.3.0"], cwd=root, check=True)
             about.write_text(f'__version__ = "{declared}"\n')
             (root / "docs/migration").mkdir(parents=True)
             (root / "docs/migration/2.5-to-3.0.md").write_text(
                 "Reviewed prior boundary"
             )
+            if lts_case:
+                (root / "docs/migration/4.2-to-4.3.md").write_text(
+                    "Reviewed 4.3 boundary"
+                )
             subprocess.run(["git", "add", "."], cwd=root, check=True)
             subprocess.run(
                 [
@@ -954,6 +1133,7 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
             assert values["version"] == declared
             assert values["api_base"] == expected_base
             assert values["migration"] == expected_guide
+            assert values["lts_patch"] == str(declared == "4.3.1").lower()
             evidence = json.loads(
                 (root / "artifacts/sdk-readiness/scope.json").read_text()
             )
@@ -961,6 +1141,7 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
                 "CANDIDATE" if expected else "NOT_A_CANDIDATE"
             )
             assert evidence["release_readiness_required"] is expected
+            assert evidence["lts_patch"] is (declared == "4.3.1")
             assert not (root / "artifacts/sdk-readiness/readiness.json").exists()
             required = {
                 "Check version and API compatibility",

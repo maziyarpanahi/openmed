@@ -14875,7 +14875,7 @@
       },
       "evaluate_readiness": {
         "kind": "function",
-        "signature": "(kw:version=..., kw:repo_root=..., kw:gate_report=..., kw:gate_report_key=..., kw:migration_guide=..., kw:api_compat_report=..., kw:e2e_report=..., kw:signing_key=..., kw:key_id=..., kw:sdk_baseline=...)"
+        "signature": "(kw:version=..., kw:repo_root=..., kw:gate_report=..., kw:gate_report_key=..., kw:migration_guide=..., kw:api_compat_report=..., kw:e2e_report=..., kw:signing_key=..., kw:key_id=..., kw:sdk_baseline=..., kw:lts=...)"
       },
       "evaluate_reid_risk_gate": {
         "kind": "function",

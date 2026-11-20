@@ -124,6 +124,14 @@ Minor and patch SDK releases must have no breaking APIs except for the exact
 v3.1.0 security removals documented above. A major release may
 include intentional breaking APIs only when every reported symbol is covered
 by its migration guide; the readiness report retains their count and guide hash.
+
+For candidates after 4.3.0 on the 4.3 LTS line, add `--lts` and use the
+immediately preceding 4.3 tag as `--sdk-baseline`. For example, 4.3.2 uses
+`v4.3.1` for both the SDK baseline and the API diff. The LTS gate rejects API
+additions and breaks, and it rejects an `Added` section in the candidate's
+changelog entry. The SDK Release Candidate workflow selects this mode for
+4.3 patch candidates, including those on `release/v4.3`.
+
 Model candidates use `--gate-report` with signed evaluation evidence; the two
 CLI modes cannot be combined. Both streams require API, documentation,
 disclaimer, and golden-suite checks, and emit signed readiness reports.
