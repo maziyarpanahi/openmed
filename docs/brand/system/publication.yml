@@ -605,6 +605,7 @@ classification:
     - multimodal/audio-resampling-plans.md
     - multimodal/audio-windows.md
     - multimodal/frame-sampling-manifests.md
+    - multimodal/pose-sequences.md
     - multimodal/speech-endpoints.md
     - multimodal/ambient-session-policy.md
     - multimodal/apple-audio-capture.md

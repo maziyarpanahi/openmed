@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a privacy-safe pose keypoint sequence contract
+  (`openmed.multimodal.pose.sequence`): a closed 21-joint canonical vocabulary,
+  normalized coordinates with visibility and presence, frames keyed by
+  frame-sampling manifest ticks, declared depth kind, digest-only estimator
+  provenance, coordinate-free reports and errors, and a synthetic parity
+  fixture for later Swift and Kotlin ports (#4669).
 - Add a standard-library synthetic side-view walker fixture for pose and gait
   tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
   double-support truth, asymmetry, far-leg occlusion, joint jitter and a
