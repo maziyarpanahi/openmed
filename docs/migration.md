@@ -163,3 +163,35 @@ promoting the new version.
 - [OpenMed 1.9.1 Release Notes](release/v1.9.1.md)
 - [OpenMed 1.9.0 Release Notes](release/v1.9.0.md)
 - [Configuration & Validation](configuration.md)
+
+## Planned 5.0 changes
+
+The [removals ledger](migration/5.0-removals.json) tracks the warning status and
+replacement for each planned change. Run
+`python scripts/release/check_removals_ledger.py` from the repository root to
+check the entries against source.
+
+### Typed span evidence
+
+Free-form span evidence is planned to move to typed evidence references.
+
+### Audit chain
+
+The compliance audit log is planned to converge on the core audit chain.
+
+### Policy receipts
+
+De-identification and decision responses are planned to carry policy receipts.
+
+### Generated clients
+
+The TypeScript and Go clients are planned to move to generated OpenAPI clients.
+
+### Service settings
+
+Service configuration is planned to use a single validated loader.
+
+### Android model acquisition
+
+Android apps using MLX-named cache and download methods will migrate to the
+format-aware model acquisition API.
