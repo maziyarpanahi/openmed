@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a standard-library synthetic side-view walker fixture for pose and gait
+  tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
+  double-support truth, asymmetry, far-leg occlusion, joint jitter and a
+  second walker, plus seven curated scenarios with literature-grounded
+  parameters and pinned digests. The truth is checked against the generated
+  contact geometry and an independent pelvis-relative event detector (#4760).
+- Added a body-signal model license provenance page listing code, weight and
+  training-data licenses, intended use and check dates for candidate pose,
+  audio, sleep and chest X-ray models, and marking models with unstated weight
+  licenses as user-supplied only (#4759).
 - Pin calendar conversions with synthetic golden vectors for every registered calendar, including leap days and the supported-range edges of the table calendars, so ports can reuse `tests/fixtures/parity/calendar_conversion_v1.json` (#4872).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
