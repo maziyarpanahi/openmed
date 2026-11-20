@@ -1,0 +1,533 @@
+{
+  "version": 1,
+  "description": "Pinned calendar conversions. Gregorian dates are independent literals; day_number is the proleptic Gregorian ordinal (datetime.date.toordinal). Synthetic dates only.",
+  "calendars": {
+    "bikram_sambat": {
+      "cases": [
+        {
+          "native": [
+            2000,
+            1,
+            1
+          ],
+          "gregorian": "1943-04-14",
+          "day_number": 709404,
+          "note": "first supported date"
+        },
+        {
+          "native": [
+            2077,
+            1,
+            1
+          ],
+          "gregorian": "2020-04-13",
+          "day_number": 737528,
+          "note": "Nepali new year 2077"
+        },
+        {
+          "native": [
+            2078,
+            1,
+            1
+          ],
+          "gregorian": "2021-04-14",
+          "day_number": 737894,
+          "note": "Nepali new year 2078"
+        },
+        {
+          "native": [
+            2080,
+            1,
+            1
+          ],
+          "gregorian": "2023-04-14",
+          "day_number": 738624,
+          "note": "Nepali new year 2080"
+        },
+        {
+          "native": [
+            2081,
+            1,
+            1
+          ],
+          "gregorian": "2024-04-13",
+          "day_number": 738989,
+          "note": "Nepali new year 2081"
+        },
+        {
+          "native": [
+            2082,
+            1,
+            1
+          ],
+          "gregorian": "2025-04-14",
+          "day_number": 739355,
+          "note": "Nepali new year 2082"
+        },
+        {
+          "native": [
+            2083,
+            12,
+            30
+          ],
+          "gregorian": "2027-04-13",
+          "day_number": 740084,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            2081,
+            1,
+            1
+          ],
+          "days": 366,
+          "to": [
+            2082,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "ethiopian": {
+      "cases": [
+        {
+          "native": [
+            1891,
+            1,
+            1
+          ],
+          "gregorian": "1898-09-10",
+          "day_number": 693118,
+          "note": "first supported date"
+        },
+        {
+          "native": [
+            2000,
+            1,
+            1
+          ],
+          "gregorian": "2007-09-12",
+          "day_number": 732931,
+          "note": "Ethiopian millennium"
+        },
+        {
+          "native": [
+            2015,
+            13,
+            6
+          ],
+          "gregorian": "2023-09-11",
+          "day_number": 738774,
+          "note": "sixth Pagume of a leap year"
+        },
+        {
+          "native": [
+            2016,
+            1,
+            1
+          ],
+          "gregorian": "2023-09-12",
+          "day_number": 738775,
+          "note": "new year after a six-day Pagume"
+        },
+        {
+          "native": [
+            2017,
+            1,
+            1
+          ],
+          "gregorian": "2024-09-11",
+          "day_number": 739140,
+          "note": "new year after a five-day Pagume"
+        },
+        {
+          "native": [
+            2017,
+            4,
+            29
+          ],
+          "gregorian": "2025-01-07",
+          "day_number": 739258,
+          "note": "Genna (Ethiopian Christmas)"
+        },
+        {
+          "native": [
+            2114,
+            13,
+            5
+          ],
+          "gregorian": "2122-09-11",
+          "day_number": 774933,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            2015,
+            13,
+            6
+          ],
+          "days": 1,
+          "to": [
+            2016,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "gregorian": {
+      "cases": [
+        {
+          "native": [
+            1,
+            1,
+            1
+          ],
+          "gregorian": "0001-01-01",
+          "day_number": 1,
+          "note": "first supported date"
+        },
+        {
+          "native": [
+            1900,
+            2,
+            28
+          ],
+          "gregorian": "1900-02-28",
+          "day_number": 693654,
+          "note": "1900 is not a leap year"
+        },
+        {
+          "native": [
+            1970,
+            1,
+            1
+          ],
+          "gregorian": "1970-01-01",
+          "day_number": 719163,
+          "note": "Unix epoch"
+        },
+        {
+          "native": [
+            2000,
+            2,
+            29
+          ],
+          "gregorian": "2000-02-29",
+          "day_number": 730179,
+          "note": "leap day in a 400-year leap year"
+        },
+        {
+          "native": [
+            2024,
+            2,
+            29
+          ],
+          "gregorian": "2024-02-29",
+          "day_number": 738945,
+          "note": "leap day"
+        },
+        {
+          "native": [
+            9999,
+            12,
+            31
+          ],
+          "gregorian": "9999-12-31",
+          "day_number": 3652059,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            2024,
+            2,
+            28
+          ],
+          "days": 1,
+          "to": [
+            2024,
+            2,
+            29
+          ]
+        },
+        {
+          "from": [
+            2023,
+            12,
+            31
+          ],
+          "days": 1,
+          "to": [
+            2024,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "hijri": {
+      "cases": [
+        {
+          "native": [
+            1356,
+            1,
+            1
+          ],
+          "gregorian": "1937-03-14",
+          "day_number": 707182,
+          "note": "first supported date"
+        },
+        {
+          "native": [
+            1445,
+            9,
+            1
+          ],
+          "gregorian": "2024-03-11",
+          "day_number": 738956,
+          "note": "1 Ramadan 1445"
+        },
+        {
+          "native": [
+            1446,
+            1,
+            1
+          ],
+          "gregorian": "2024-07-07",
+          "day_number": 739074,
+          "note": "1 Muharram 1446"
+        },
+        {
+          "native": [
+            1446,
+            9,
+            1
+          ],
+          "gregorian": "2025-03-01",
+          "day_number": 739311,
+          "note": "1 Ramadan 1446"
+        },
+        {
+          "native": [
+            1446,
+            10,
+            1
+          ],
+          "gregorian": "2025-03-30",
+          "day_number": 739340,
+          "note": "1 Shawwal 1446"
+        },
+        {
+          "native": [
+            1447,
+            1,
+            1
+          ],
+          "gregorian": "2025-06-26",
+          "day_number": 739428,
+          "note": "1 Muharram 1447"
+        },
+        {
+          "native": [
+            1450,
+            12,
+            29
+          ],
+          "gregorian": "2029-05-13",
+          "day_number": 740845,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            1446,
+            9,
+            1
+          ],
+          "days": 29,
+          "to": [
+            1446,
+            10,
+            1
+          ]
+        }
+      ]
+    },
+    "solar_hijri": {
+      "cases": [
+        {
+          "native": [
+            1277,
+            1,
+            1
+          ],
+          "gregorian": "1898-03-21",
+          "day_number": 692945,
+          "note": "first supported date"
+        },
+        {
+          "native": [
+            1357,
+            11,
+            22
+          ],
+          "gregorian": "1979-02-11",
+          "day_number": 722491,
+          "note": "22 Bahman 1357"
+        },
+        {
+          "native": [
+            1400,
+            1,
+            1
+          ],
+          "gregorian": "2021-03-21",
+          "day_number": 737870,
+          "note": "Nowruz 1400"
+        },
+        {
+          "native": [
+            1403,
+            1,
+            1
+          ],
+          "gregorian": "2024-03-20",
+          "day_number": 738965,
+          "note": "Nowruz 1403 after a 29-day Esfand"
+        },
+        {
+          "native": [
+            1403,
+            12,
+            30
+          ],
+          "gregorian": "2025-03-20",
+          "day_number": 739330,
+          "note": "leap-year Esfand 30"
+        },
+        {
+          "native": [
+            1404,
+            1,
+            1
+          ],
+          "gregorian": "2025-03-21",
+          "day_number": 739331,
+          "note": "Nowruz 1404"
+        },
+        {
+          "native": [
+            1501,
+            12,
+            29
+          ],
+          "gregorian": "2123-03-20",
+          "day_number": 775123,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            1403,
+            12,
+            30
+          ],
+          "days": 1,
+          "to": [
+            1404,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "thai_buddhist": {
+      "cases": [
+        {
+          "native": [
+            2484,
+            1,
+            1
+          ],
+          "gregorian": "1941-01-01",
+          "day_number": 708571,
+          "note": "first supported date, first January-start year"
+        },
+        {
+          "native": [
+            2543,
+            1,
+            1
+          ],
+          "gregorian": "2000-01-01",
+          "day_number": 730120,
+          "note": "B.E. 2543"
+        },
+        {
+          "native": [
+            2543,
+            2,
+            29
+          ],
+          "gregorian": "2000-02-29",
+          "day_number": 730179,
+          "note": "leap day"
+        },
+        {
+          "native": [
+            2567,
+            2,
+            29
+          ],
+          "gregorian": "2024-02-29",
+          "day_number": 738945,
+          "note": "leap day"
+        },
+        {
+          "native": [
+            2568,
+            4,
+            13
+          ],
+          "gregorian": "2025-04-13",
+          "day_number": 739354,
+          "note": "Songkran"
+        },
+        {
+          "native": [
+            2665,
+            12,
+            31
+          ],
+          "gregorian": "2122-12-31",
+          "day_number": 775044,
+          "note": "last supported date"
+        }
+      ],
+      "shifts": [
+        {
+          "from": [
+            2567,
+            12,
+            31
+          ],
+          "days": 1,
+          "to": [
+            2568,
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  }
+}
