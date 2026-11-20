@@ -38,6 +38,7 @@ from .crosswalk import (
     UMLSCrosswalk,
     UMLSMappingSource,
     crosswalk,
+    crosswalk_resource_to_conceptmap,
     load_crosswalk,
     load_default_crosswalks,
 )
@@ -388,6 +389,7 @@ __all__ = [
     "build_or_load_index",
     "build_expression",
     "crosswalk",
+    "crosswalk_resource_to_conceptmap",
     "decompose_laterality_site_mention",
     "decompose_mention",
     "decompose_and_relink",
