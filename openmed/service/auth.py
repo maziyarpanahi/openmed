@@ -77,6 +77,8 @@ ROUTE_POLICIES = {
         ("pii:read",), "control"
     ),
     ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
+    # Same callers as /models/loaded: the descriptor lists the served models.
+    ("GET", "/v1/capabilities"): RoutePolicy(("models:read",), "control"),
     ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
     ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),
     ("POST", "/pii/extract"): RoutePolicy(("pii:read",), "model"),
