@@ -1824,6 +1824,18 @@ def run_benchmark(
         source_text=corpus_text,
         **_consistency_metric_inputs(fixtures),
     )
+    gold_by_label = defaultdict(list)
+    predictions_by_label = defaultdict(list)
+    for span in gold_spans:
+        gold_by_label[span.label].append(span)
+    for span in predicted_spans:
+        predictions_by_label[span.label].append(span)
+    metrics["exact_span_f1_by_label"] = {
+        label: compute_exact_span_f1(
+            gold_by_label[label], predictions_by_label[label]
+        ).to_dict()
+        for label in sorted(gold_by_label.keys() | predictions_by_label.keys())
+    }
     faithfulness_metrics = [
         compute_span_grounded_faithfulness(
             facts,

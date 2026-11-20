@@ -555,3 +555,16 @@ fallback; remote model identifiers are rejected rather than downloaded.
     UMLS, SNOMED CT, MIMIC, i2b2, n2c2, CPT, and other restricted or DUA-bound
     assets must stay user supplied and out of process; do not copy their text
     into alias tables, fixtures, logs, or gate diagnostics.
+
+## Projecting a credentialed span benchmark
+
+`openmed.eval.aggregate_report.project_aggregate_report(report, fixtures,
+corpus="i2b2", year=2014)` takes a local span benchmark and the ordered fixture
+set used in that run. It returns the corpus edition, a whole-set digest and
+per-label metrics. The source benchmark can contain findings and document IDs.
+Save the projection when only aggregate evidence is required.
+
+Cells with fewer than five gold spans contain only the suppression status.
+Set `minimum_gold_spans` to configure the floor. Reported cells include exact
+span TP, FN and FP counts, precision, recall and grapheme leakage. Each rate
+has a descriptive 95% Wilson interval. An empty denominator yields JSON null.
