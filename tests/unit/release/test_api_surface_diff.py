@@ -70,6 +70,69 @@ def test_deprecated_decorator_is_not_classified_as_breaking():
     assert "fixturepkg.api.retained" not in {change.symbol for change in diff.breaking}
 
 
+def test_deprecation_helpers_are_reported_without_importing():
+    api = PurePosixPath("fixturepkg/api.py")
+    legacy = PurePosixPath("fixturepkg/legacy.py")
+    before_source = """
+__all__ = ["query", "Record"]
+
+def query(value, flag=False):
+    return value
+
+class Record:
+    old = None
+    untouched = None
+"""
+    after_source = before_source.replace(
+        "def query",
+        '@warnings.deprecated_parameter("flag", since="4.3", remove_in="5.0")\n'
+        "def query",
+    ).replace(
+        "old = None",
+        'old = deprecated_attribute("current", since="4.3", remove_in="5.0")',
+    )
+    before = api_surface_diff.extract_surface_from_sources(
+        {api: before_source, legacy: 'from .api import query\n__all__ = ["query"]'},
+        "fixturepkg",
+    )
+    after = api_surface_diff.extract_surface_from_sources(
+        {
+            api: after_source,
+            legacy: """
+__all__ = ["query"]
+__getattr__ = deprecated_module(__name__, since="4.3", remove_in="5.0",
+                               replacement="fixturepkg.api")
+""",
+        },
+        "fixturepkg",
+    )
+
+    diff = api_surface_diff.diff_surfaces(
+        before, after, before_ref="base", after_ref="candidate", package="fixturepkg"
+    )
+    assert diff.breaking == ()
+    report = json.loads(json.dumps(diff.to_dict()))
+    deprecations = {
+        change["symbol"]: change["after"] for change in report["deprecated"]
+    }
+    assert set(deprecations) == {
+        "fixturepkg.api.query",
+        "fixturepkg.api.Record.old",
+        "fixturepkg.legacy.query",
+    }
+    assert deprecations["fixturepkg.api.query"]["deprecated_parameters"] == ["flag"]
+    assert deprecations["fixturepkg.api.query"]["deprecated"] is False
+    assert deprecations["fixturepkg.api.Record.old"]["deprecated"] is True
+    assert deprecations["fixturepkg.legacy.query"]["deprecated"] is True
+    assert (
+        deprecations["fixturepkg.legacy.query"]["signature"] == "(value, flag = False)"
+    )
+    assert (
+        "deprecated_parameters"
+        not in after["fixturepkg.api.Record.untouched"].public_dict()
+    )
+
+
 def test_module_all_hides_unlisted_symbol():
     before = api_surface_diff.extract_surface_from_path(
         FIXTURES / "before" / "fixturepkg"
