@@ -1,0 +1,109 @@
+[
+  {
+    "id": "E2",
+    "surfaces": [
+      "python",
+      "json-schema",
+      "web"
+    ],
+    "symbols": {
+      "openmed/core/schemas/json/span.schema.json": [
+        "evidence"
+      ],
+      "js/openmedkit-web/src/types.ts": [
+        "evidence"
+      ]
+    },
+    "replacement": "Typed EvidenceRef entries",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#typed-span-evidence"
+  },
+  {
+    "id": "P3",
+    "surfaces": [
+      "python"
+    ],
+    "symbols": {
+      "openmed/compliance/audit_chain.py": [
+        "HashChainAuditLog"
+      ]
+    },
+    "replacement": "openmed.core.audit_chain.AuditChain",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#audit-chain"
+  },
+  {
+    "id": "P5",
+    "surfaces": [
+      "rest"
+    ],
+    "symbols": {
+      "docs/api/openapi.json": [
+        "POST /pii/deidentify",
+        "POST /v1/decisions"
+      ]
+    },
+    "replacement": "Policy receipts attached to de-identification and decision responses",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#policy-receipts"
+  },
+  {
+    "id": "G2",
+    "surfaces": [
+      "typescript",
+      "go"
+    ],
+    "symbols": {
+      "clients/typescript/src/index.ts": [
+        "OpenMedClient"
+      ],
+      "clients/go/client.go": [
+        "Client"
+      ]
+    },
+    "replacement": "Clients generated from the OpenAPI contract",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#generated-clients"
+  },
+  {
+    "id": "C2",
+    "surfaces": [
+      "python"
+    ],
+    "symbols": {
+      "openmed/service/request_limits.py": [
+        "request_limits_from_env",
+        "request_body_read_limits_from_env",
+        "server_connection_limits_from_env"
+      ],
+      "openmed/service/logging.py": [
+        "service_log_config_from_env"
+      ],
+      "openmed/service/tracing.py": [
+        "service_trace_config_from_env",
+        "service_tracing_from_env"
+      ]
+    },
+    "replacement": "Validated service settings loader",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#service-settings"
+  },
+  {
+    "id": "android-mlx",
+    "surfaces": [
+      "android"
+    ],
+    "symbols": {
+      "android/openmedkit/src/main/kotlin/com/openmed/openmedkit/OpenMedKit.kt": [
+        "OpenMedMLXModelCacheState",
+        "downloadMLXModel",
+        "cachedMLXModelDirectory",
+        "isMLXModelCached",
+        "mlxModelCacheState"
+      ]
+    },
+    "replacement": "Format-aware Android model acquisition API",
+    "status": "planned",
+    "migration_anchor": "docs/migration.md#android-model-acquisition"
+  }
+]
