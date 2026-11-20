@@ -8,7 +8,17 @@ import pytest
 from jsonschema import validate
 
 from openmed.core.labels import ID_NUM
-from openmed.core.schemas import OpenMedSpan, hmac_text_hash, load_schema
+from openmed.core.schemas import (
+    SCHEMA_NAMES,
+    OpenMedSpan,
+    build_schema_snapshot,
+    compare_schema_drift,
+    hmac_text_hash,
+    load_all_schemas,
+    load_schema,
+    load_schema_snapshot,
+    schema_aliases,
+)
 
 
 def test_hmac_rejects_empty_explicit_keys(subtests):
@@ -125,3 +135,48 @@ def test_span_validates_offsets_score_action_and_hash() -> None:
             entity_type="id_num",
             canonical_label=ID_NUM,
         )
+
+
+def test_audit_event_alias_loads_the_same_document_as_audit() -> None:
+    event = load_schema("audit_event")
+
+    assert event == load_schema("audit")
+    assert event["title"] == "OpenMedAuditEvent"
+    assert load_schema("audit_event.schema.json") == event
+    assert load_schema("audit_event.schema") == event
+
+
+def test_schema_aliases_names_both_audit_event_names() -> None:
+    aliases = schema_aliases()
+
+    assert aliases == {"audit_event": "audit"}
+    assert all(target in SCHEMA_NAMES for target in aliases.values())
+    assert not set(aliases) & set(SCHEMA_NAMES)
+
+    aliases["audit_event"] = "span"
+    assert schema_aliases() == {"audit_event": "audit"}
+    assert load_schema("audit_event")["title"] == "OpenMedAuditEvent"
+
+
+def test_alias_leaves_bundle_names_and_fingerprint_snapshot_unchanged() -> None:
+    schemas = load_all_schemas()
+
+    assert tuple(schemas) == SCHEMA_NAMES
+    assert "audit_event" not in schemas
+    assert build_schema_snapshot(schemas) == load_schema_snapshot()
+
+    drift = compare_schema_drift("audit_event")
+    assert drift.schema_name == "audit"
+    assert drift.fingerprint == compare_schema_drift("audit").fingerprint
+    assert drift.breaking_change is False
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["audit_events", "Audit_Event", "audit-event", "", "event", "audit_event.json"],
+)
+def test_unknown_schema_names_raise_key_error_with_only_the_name(name: str) -> None:
+    with pytest.raises(KeyError) as excinfo:
+        load_schema(name)
+
+    assert excinfo.value.args == (f"unknown schema: {name!r}",)

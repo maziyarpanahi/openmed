@@ -14,6 +14,7 @@ from .span import (
     load_schema,
     load_schema_bundle,
     load_schema_snapshot,
+    schema_aliases,
     schema_fingerprint,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "load_schema",
     "load_schema_bundle",
     "load_schema_snapshot",
+    "schema_aliases",
     "schema_fingerprint",
 ]
