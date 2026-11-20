@@ -40,7 +40,7 @@
     "DATE": "mask",
     "DATE_OF_BIRTH": "mask",
     "TIME": "mask",
-    "AGE": "mask",
+    "AGE": "generalize",
     "ID_NUM": "mask",
     "SSN": "mask",
     "ACCOUNT_NUMBER": "mask",
