@@ -73,6 +73,9 @@ _DEFAULT_MAX_MEMBERS = 1_000_000
 _HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 _URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _CACHE_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
+_FILTER_TOKEN_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_LOCAL_FILTER_PROPERTIES = ("code", "concept", "display", "system")
+_LOCAL_FILTER_OPERATORS = ("=", "==", "exists", "regex")
 _SNOMED_SYSTEM_URI = RESTRICTED_SYSTEM_URIS["snomed"]
 _RESTRICTED_URIS = frozenset(
     value.rstrip("/").casefold() for value in RESTRICTED_SYSTEM_URIS.values()
@@ -1349,6 +1352,7 @@ def _local_filters_match(
         else:
             raise ValueSetExpansionUnsupportedError(
                 "local hierarchy and terminology-property filters require delegation"
+                + _local_filter_details(property_name, operator)
             )
         if operator == "exists":
             expected = str(raw_value).casefold() in {"true", "1", "yes"}
@@ -1372,8 +1376,26 @@ def _local_filters_match(
             continue
         raise ValueSetExpansionUnsupportedError(
             "local ValueSet filter operator requires terminology-server delegation"
+            + _local_filter_details(property_name, operator)
         )
     return True
+
+
+def _local_filter_details(property_name: str, operator: str) -> str:
+    """Name a rejected filter without echoing free text or the filter value."""
+
+    return (
+        f" (property {_filter_token(property_name, _LOCAL_FILTER_PROPERTIES)!r},"
+        f" op {_filter_token(operator, _LOCAL_FILTER_OPERATORS)!r};"
+        f" supported properties: {', '.join(_LOCAL_FILTER_PROPERTIES)};"
+        f" supported operators: {', '.join(_LOCAL_FILTER_OPERATORS)})"
+    )
+
+
+def _filter_token(value: str, supported: tuple[str, ...]) -> str:
+    if value in supported or _FILTER_TOKEN_RE.fullmatch(value):
+        return value
+    return "<unrecognized>"
 
 
 def _mapping_sequence(value: object, field_name: str) -> tuple[Mapping[str, Any], ...]:

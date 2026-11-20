@@ -56,7 +56,10 @@ assert expanded.version == "1.0.0"
 Local support is deliberately extensional. Nested ValueSet references,
 hierarchy operators such as `is-a` and `descendent-of`, and terminology-specific
 properties raise `ValueSetExpansionUnsupportedError` instead of guessing. Send
-those definitions to a terminology server explicitly.
+those definitions to a terminology server explicitly. Local filters support the
+`code`, `concept`, `display` and `system` properties with the `=`, `==`,
+`exists` and `regex` operators; the error names the rejected `property` and
+`op` (or `<unrecognized>` for free text) and never includes the filter value.
 
 ## Delegate FHIR `$expand` or ECL
 
