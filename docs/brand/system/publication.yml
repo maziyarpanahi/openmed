@@ -821,6 +821,7 @@ classification:
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
     - tokenizer-conformance.md
+    - contract-gate.md
     - runtimes/device-capabilities.md
     - mobile/managed-model-bundles.md
     - migration/openmedkit-installed-packages.md

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/contract_gate_result.schema.json",
+  "title": "OpenMed contract gate runtime result",
+  "description": "One runtime's outcomes for the shared parity fixtures named in tests/fixtures/parity/contract_gate.json. It carries fixture ids, the digest of each fixture the runtime read, case ids, counts and snake_case reason codes only: no fixture text, inputs, outputs, assertion messages, paths or timestamps.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "runtime", "manifest_sha256", "fixtures"],
+  "properties": {
+    "schema": {"const": "openmed.contract_gate.result"},
+    "schema_version": {"const": 1},
+    "runtime": {
+      "description": "Runtime id declared in the manifest, for example python, swift, kotlin or web.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "manifest_sha256": {
+      "description": "SHA-256 of the contract_gate.json bytes the reporter read.",
+      "$ref": "#/$defs/sha256"
+    },
+    "fixtures": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/fixture_result"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reason": {
+      "description": "Controlled snake_case reason code; never free text.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "case_id": {
+      "description": "<group key>/<case id or list index>, or <group key> for an object group.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}(/[A-Za-z0-9][A-Za-z0-9._-]{0,95})?$"
+    },
+    "case_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "reason"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/case_id"},
+        "reason": {"$ref": "#/$defs/reason"}
+      }
+    },
+    "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "fixture_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixture_id", "fixture_sha256", "passed", "failed", "skipped"],
+      "properties": {
+        "fixture_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "fixture_sha256": {
+          "description": "SHA-256 of the fixture bytes the runtime actually read.",
+          "$ref": "#/$defs/sha256"
+        },
+        "passed": {
+          "type": "array",
+          "maxItems": 8192,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/case_id"}
+        },
+        "failed": {
+          "type": "array",
+          "maxItems": 8192,
+          "items": {"$ref": "#/$defs/case_outcome"}
+        },
+        "skipped": {
+          "type": "array",
+          "maxItems": 8192,
+          "items": {"$ref": "#/$defs/case_outcome"}
+        },
+        "errors": {
+          "description": "Fixture-level reason codes, for example when the fixture could not be read and no case ids could be derived.",
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason"}
+        },
+        "tests": {
+          "description": "Counts of the runtime's test executions that covered this fixture; errors count as failed.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "failed", "skipped"],
+          "properties": {
+            "passed": {"$ref": "#/$defs/count"},
+            "failed": {"$ref": "#/$defs/count"},
+            "skipped": {"$ref": "#/$defs/count"}
+          }
+        }
+      }
+    }
+  }
+}
