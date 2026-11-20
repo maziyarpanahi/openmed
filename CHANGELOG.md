@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Draft multilingual lexical injection cue packs for Spanish, French, German,
+  Portuguese, Chinese and Hindi, with offset-only findings, synthetic coverage
+  budgets and explicit pending fluent contributor review (#3782).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
