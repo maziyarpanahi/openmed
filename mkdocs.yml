@@ -821,6 +821,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - 4.3 LTS Backport Policy: release/lts-backport-policy.md
       - Migrate from 2.5 to 3.0: migration/2.5-to-3.0.md
       - Migrate from 2.3 to 2.5: migration/2.3-to-2.5.md
       - Migrate from 2.2 to 2.3: migration/2.2-to-2.3.md
