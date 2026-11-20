@@ -1,7 +1,11 @@
 package com.openmed.openmedkit.catalog
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +34,36 @@ class ModelCatalogTest {
             ),
             catalog.byRepoId("OpenMed/tiny-onnx"),
         )
+    }
+
+    @Test
+    fun ignoresNewManifestFields() {
+        val row = SAMPLE_CATALOG.lineSequence().first()
+        val original = Json.parseToJsonElement(row).jsonObject
+        val unknown = Json.parseToJsonElement(
+            """{"regulatory_tier":"example","capability":{"id":"example"},"evidence":[{"version":1}]}""",
+        ).jsonObject
+
+        val extended = JsonObject(original + unknown)
+
+        assertEquals(
+            ModelCatalog.fromJsonLines(row).entries,
+            ModelCatalog.fromJsonLines(extended.toString()).entries,
+        )
+    }
+
+    @Test
+    fun stillRejectsMissingRepoIdWhenNewFieldsArePresent() {
+        val row = SAMPLE_CATALOG.lineSequence().first()
+        val original = Json.parseToJsonElement(row).jsonObject
+        val newFields = Json.parseToJsonElement("""{"regulatory_tier":"example"}""").jsonObject
+        val missingId = JsonObject(original + newFields - "repo_id")
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            ModelCatalog.fromJsonLines("$row\n$missingId")
+        }
+
+        assertEquals("Catalog entry missing repo_id on line 2", error.message)
     }
 
     @Test
