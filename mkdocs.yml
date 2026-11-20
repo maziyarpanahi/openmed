@@ -584,6 +584,7 @@ nav:
           - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
           - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
           - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+          - Body-signal Model License Provenance: multimodal/body-signal-model-licenses.md
           - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
           - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
           - Generated Text Release Guard: multimodal/generated-text-guard.md
