@@ -253,26 +253,26 @@ answer when the router has no evidence. A silent error is an accepted wrong
 answer.
 
 Results for the pinned revision `e173bca1f0c4217d7a55b3b0c705d5ece8a0218d`
-(514 samples, CPU), remeasured on 2026-10-30 with Torch 2.13.0, GLiNER2 2.1.0
-and Transformers 5.12.1, seed 0 and four CPU threads. The checkpoint was cached
-and every socket was blocked. The dataset digest is
-`sha256:af23c29f96904705fc1e22f506703e96efff33668d5705c882ea27e15f4c95b5`.
+(530 samples, CPU), remeasured on 2026-11-20 with Torch 2.13.0, GLiNER2 2.1.0
+and Transformers 5.12.1 and four CPU threads. The checkpoint was cached
+and loaded with `--local-files-only`. The dataset digest is
+`sha256:6d7d82e2c17561f85e86d131ae2ca1f09f03b46df59c82d8b89808f9a194b859`.
 
 | Kind | n | Router accuracy | Evidence-backed router: coverage / accuracy | Model top-1 | Model coverage / accuracy | Model fallback: coverage / silent errors |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `language` | 151 | 43.0% | 27.2% / 100.0% | 22.5% | 8.0% / 66.7% | 34.4% / 2.0% |
-| `language_in_script` | 129 | 34.1% | 16.3% / 100.0% | 41.9% | 36.4% / 72.3% | 48.1% / 8.5% |
-| `script` | 85 | 100.0% | 100.0% / 100.0% | 11.8% | 1.2% / 0.0% | 100.0% / 0.0% |
+| `language` | 156 | 43.0% | 27.6% / 100.0% | 22.4% | 7.7% / 66.7% | 34.6% / 1.9% |
+| `language_in_script` | 132 | 33.3% | 15.9% / 100.0% | 42.4% | 35.6% / 72.3% | 47.0% / 8.3% |
+| `script` | 88 | 100.0% | 100.0% / 100.0% | 11.4% | 1.1% / 0.0% | 100.0% / 0.0% |
 | `dialect` | 17 | 58.8% | 0.0% / n/a | 70.6% | 70.6% / 91.7% | 70.6% / 5.9% |
-| `code_switch` | 132 | 90.9% | 16.7% / 100.0% | 69.7% | 65.1% / 75.6% | 69.7% / 15.9% |
+| `code_switch` | 137 | 91.2% | 17.5% / 100.0% | 70.1% | 65.0% / 76.4% | 69.3% / 15.3% |
 
 On these synthetic fixtures, every evidence-backed router answer was correct,
-and deterministic script detection matched all 85 script questions. The
+and deterministic script detection matched all 88 script questions. The
 coverage figures above bound that result; it is not a guarantee for new text.
-On the 129 script-conditioned language questions, model top-1 was 54/129; its
+On the 132 script-conditioned language questions, model top-1 was 56/132; its
 confidence-gated fallback accepted 62 answers, including 11 wrong answers.
 
-The model abstained on 139 of 151 open-set language questions with 58 options.
+The model abstained on 144 of 156 open-set language questions with 58 options.
 It identified declared code-mixing on 3 of 28 mixed notes and gave a confident
 wrong answer on its only accepted script question. On dialects it matched
 12 of 17 labels against the default locale's 10 of 17, with one confident error.
