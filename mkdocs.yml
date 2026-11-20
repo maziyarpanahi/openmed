@@ -441,6 +441,7 @@ nav:
       - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
       - Offline Planner Qualification: evaluation/planner-qualification.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
+      - Credentialed i2b2 De-identification: evaluation/credentialed-i2b2.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
       - Document-type Calibration: evaluation/doctype-calibration.md

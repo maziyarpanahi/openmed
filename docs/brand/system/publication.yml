@@ -504,6 +504,7 @@ classification:
     - evaluation/agent-run-summary-fixtures.md
     - evaluation/planner-qualification.md
     - evaluation/privacy-corpus.md
+    - evaluation/credentialed-i2b2.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
     - evaluation/doctype-calibration.md
