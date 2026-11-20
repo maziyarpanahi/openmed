@@ -100,6 +100,7 @@ from .loaders import (
     RxNormLoader,
     RxNormLoaderError,
     RxNormVocabularyLoader,
+    loinc_check_digit_is_valid,
 )
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .multilingual import (
@@ -406,6 +407,7 @@ __all__ = [
     "load_crosswalk",
     "load_default_crosswalks",
     "load_index",
+    "loinc_check_digit_is_valid",
     "normalize_language",
     "normalize_term",
     "provenance_version_pins",
