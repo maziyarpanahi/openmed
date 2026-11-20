@@ -211,3 +211,27 @@ register_security_check(
 
 Bump the profile version when a change alters which checks are required or
 what they accept.
+
+## Checking declared secure processing environment controls
+
+Run `openmed compliance ehds-spe check --profile deployment.json` against a
+local declaration. The command reports each control separately and exits
+successfully only when all seven pass. Omitted controls are unassessed.
+This complements the service preflight with declarations for controls that
+may be operated outside the application.
+
+```json
+{
+  "outbound_egress_denied": true,
+  "authentication_enabled": true,
+  "audit_recording_enabled": true,
+  "encryption_at_rest": true,
+  "export_classes": ["anonymised", "aggregate"],
+  "access_logging_enabled": true,
+  "minimum_necessary_configured": true
+}
+```
+
+An empty export list declares that all exports are disabled. The output
+contains controlled status and reason codes and describes the scope of the
+technical check.
