@@ -586,7 +586,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.icu4j)
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
     testImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.runner)
