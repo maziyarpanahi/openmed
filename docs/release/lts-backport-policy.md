@@ -4,6 +4,22 @@ The planned 4.3 Library/SDK support window runs for 12 months from its first
 stable release through February 2028. Python 3.11 remains supported throughout
 that window. Maintainers issue patch releases as eligible fixes become ready.
 
+## Maintenance branch
+
+Use `release/v4.3` for all 4.3 patch backports. After the first stable 4.3 tag
+exists, the maintainer creates the branch from that exact tag:
+
+```sh
+git fetch origin tag v4.3.0
+git branch release/v4.3 v4.3.0
+git push origin refs/heads/release/v4.3
+```
+
+The release workflow branch filters match this name. Patch candidates must
+declare a 4.3 version and use the previous reachable stable SDK tag as their
+API baseline. The protected release-branch rules and commit attribution check
+apply to every backport.
+
 ## Eligibility and approval
 
 The OpenMed maintainer approves backports that address a security defect,
