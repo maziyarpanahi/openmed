@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -365,6 +366,176 @@ def test_schema_is_read_only() -> None:
     assert "type Query" in sdl
     assert "type Mutation" not in sdl
     assert "type Subscription" not in sdl
+
+
+SPAN_SNAPSHOT_PATH = (
+    Path(__file__).resolve().parent / "fixtures" / "graphql_openmed_span_snapshot.json"
+)
+SPAN_SNAPSHOT_QUERY = """
+query Spans($analyze: AnalyzeInput!, $deidentify: DeidentifyInput!) {
+  analyze(input: $analyze) { spans { ...SpanFields } }
+  deidentify(input: $deidentify) { spans { ...SpanFields } }
+}
+fragment SpanFields on OpenMedSpan {
+  label start end text schemaVersion docId textHash entityType canonicalLabel
+  policyLabel regulatoryTags score detector evidence action replacement
+  reversibleId section metadata
+}
+"""
+
+
+def _sdl_span_type(sdl: str):
+    from graphql import build_schema
+
+    return build_schema(sdl).get_type("OpenMedSpan")
+
+
+def test_every_span_schema_property_is_on_the_sdl_with_its_mapped_type() -> None:
+    from openmed.core.schemas import load_schema
+    from scripts.codegen.span_graphql import camel_case, graphql_type
+
+    schema = load_schema("span")
+    for sdl in (
+        DEFAULT_OUTPUT_PATH.read_text(encoding="utf-8"),
+        render_graphql_schema(),
+    ):
+        fields = _sdl_span_type(sdl).fields
+        for name, prop in schema["properties"].items():
+            field = fields[camel_case(name)]
+            assert str(field.type) == graphql_type(name, prop), name
+            assert field.deprecation_reason is None, name
+
+
+def test_exported_sdl_deprecates_label_and_text() -> None:
+    sdl = DEFAULT_OUTPUT_PATH.read_text(encoding="utf-8")
+    fields = _sdl_span_type(sdl).fields
+
+    assert "canonicalLabel" in fields["label"].deprecation_reason
+    assert "textHash" in fields["text"].deprecation_reason
+    assert "5.0" in fields["label"].deprecation_reason
+    assert "5.0" in fields["text"].deprecation_reason
+    assert str(fields["label"].type) == "String!"
+    assert str(fields["text"].type) == "String"
+    assert sdl.count("@deprecated") == 2
+
+
+def test_strawberry_span_type_and_generated_module_match_the_schema() -> None:
+    from scripts.codegen.span_graphql import check
+
+    assert check() == []
+
+
+def test_span_codegen_check_command_passes_on_committed_files() -> None:
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, "scripts/codegen/span_graphql.py", "--check"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("edit", "expected"),
+    [
+        (
+            lambda schema: schema["properties"].update(
+                {"synthetic_note_ref": {"type": ["string", "null"]}}
+            ),
+            "OpenMedSpan is missing canonical field syntheticNoteRef",
+        ),
+        (
+            lambda schema: schema["properties"]["score"].update({"type": "string"}),
+            "OpenMedSpan.score is Float, expected String",
+        ),
+        (
+            lambda schema: schema["properties"].pop("section"),
+            "OpenMedSpan.section is not in the span schema",
+        ),
+    ],
+)
+def test_synthetic_schema_change_without_regeneration_fails_the_check(
+    tmp_path: Path, edit, expected: str
+) -> None:
+    import json
+
+    from scripts.codegen.span_graphql import (
+        DEFAULT_MODULE_PATH,
+        DEFAULT_SCHEMA_PATH,
+        check,
+        main,
+    )
+
+    schema = json.loads(DEFAULT_SCHEMA_PATH.read_text(encoding="utf-8"))
+    edit(schema)
+    if "section" not in schema["properties"]:
+        schema["required"].remove("section")
+    schema_path = tmp_path / "span.schema.json"
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    problems = check(schema_path=schema_path, module_path=DEFAULT_MODULE_PATH)
+
+    assert problems[0] == "graphql_span_fields.py differs from the span schema"
+    assert expected in problems
+    module_path = tmp_path / "graphql_span_fields.py"
+    assert main(["--schema", str(schema_path), "--module", str(module_path)]) == 0
+    regenerated = check(schema_path=schema_path, module_path=module_path)
+    assert "graphql_span_fields.py differs from the span schema" not in regenerated
+    assert expected in regenerated
+
+
+def test_span_codegen_rejects_unsupported_types_and_legacy_collisions() -> None:
+    from scripts.codegen.span_graphql import (
+        SpanGraphQLCodegenError,
+        canonical_fields,
+        graphql_type,
+    )
+
+    for prop in (
+        {"type": ["string", "integer"]},
+        {"type": "array"},
+        {"type": "array", "items": {"type": ["string", "null"]}},
+        {},
+    ):
+        with pytest.raises(SpanGraphQLCodegenError):
+            graphql_type("synthetic", prop)
+    with pytest.raises(SpanGraphQLCodegenError, match="legacy"):
+        canonical_fields({"properties": {"label": {"type": "string"}}})
+    assert graphql_type("synthetic", {"type": "boolean"}) == "Boolean"
+    assert graphql_type(
+        "synthetic", {"type": "array", "items": {"type": "object"}}
+    ) == ("[JSON!]!")
+
+
+def test_full_span_selection_keeps_the_committed_response_shape(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    monkeypatch.setattr(openmed, "analyze_text", lambda *a, **k: _prediction_result())
+    monkeypatch.setattr(
+        openmed, "deidentify", lambda *a, **k: _deidentification_result()
+    )
+    response = client.post(
+        "/graphql",
+        json={
+            "query": SPAN_SNAPSHOT_QUERY,
+            "variables": {
+                "analyze": {"text": SYNTHETIC_TEXT},
+                "deidentify": {"text": SYNTHETIC_TEXT},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == json.loads(SPAN_SNAPSHOT_PATH.read_text(encoding="utf-8"))
 
 
 def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
