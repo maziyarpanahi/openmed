@@ -14,7 +14,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Final
+from typing import Any, Final, NoReturn, TypeVar
 
 from ..frame_sampling_manifest import FrameSamplingManifest, SamplingMode
 
@@ -65,6 +65,7 @@ MAX_POSE_FRAMES: Final = 100_000
 MAX_OBSERVATIONS: Final = 1_000_000
 MAX_RELATIVE_DEPTH: Final = 10.0
 _METRIC_DEPTH_LIMIT_M: Final = 100.0
+_E = TypeVar("_E", bound=Enum)
 _JOINT_ORDER = {name: index for index, name in enumerate(CANONICAL_JOINTS)}
 _ESTIMATOR_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -82,8 +83,32 @@ class DepthKind(str, Enum):
     METRIC = "metric"
 
 
-def _reject(code: str) -> None:
+def _reject(code: str) -> NoReturn:
     raise PoseContractError(code)
+
+
+def _member(enum: type[_E], value: object) -> _E | None:
+    """Return the enum member for ``value``, or ``None`` if there is none.
+
+    Callers raise outside the handler so no exception carrying the raw value
+    survives, not even as ``__context__``.
+    """
+    try:
+        return enum(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_manifest(fields: dict[str, Any]) -> FrameSamplingManifest | None:
+    """Build the manifest, or return ``None`` for unknown or missing fields.
+
+    The ``TypeError`` names the offending key, so it is dropped here rather
+    than chained to the value-free contract error.
+    """
+    try:
+        return FrameSamplingManifest(**fields)
+    except TypeError:
+        return None
 
 
 def _finite(value: object) -> bool:
@@ -226,10 +251,9 @@ class PoseSequence:
     def __post_init__(self) -> None:
         if type(self.manifest) is not FrameSamplingManifest:
             _reject("manifest_invalid")
-        try:
-            depth = DepthKind(self.depth_kind)
-        except (TypeError, ValueError):
-            raise PoseContractError("depth_kind_invalid") from None
+        depth = _member(DepthKind, self.depth_kind)
+        if depth is None:
+            _reject("depth_kind_invalid")
         if type(self.provenance) is not PoseEstimatorProvenance:
             _reject("provenance_invalid")
         if type(self.frames) not in (tuple, list) or not (
@@ -324,6 +348,14 @@ class PoseSequence:
             )
         ):
             _reject("record_invalid")
+        # Enforce the size limits before building any observation, so an
+        # oversized record is rejected without materializing it.
+        if not 1 <= len(frames) <= MAX_POSE_FRAMES:
+            _reject("frames_invalid")
+        if any(len(frame["joints"]) > len(CANONICAL_JOINTS) for frame in frames):
+            _reject("joints_invalid")
+        if sum(len(frame["joints"]) for frame in frames) > MAX_OBSERVATIONS:
+            _reject("resource_limit")
         built = []
         for frame in frames:
             joints = []
@@ -336,21 +368,18 @@ class PoseSequence:
             built.append(PoseFrame(frame["tick"], tuple(joints)))
         manifest_fields = dict(manifest)
         if "sampling_mode" in manifest_fields:
-            try:
-                manifest_fields["sampling_mode"] = SamplingMode(
-                    manifest_fields["sampling_mode"]
-                )
-            except (TypeError, ValueError):
-                raise PoseContractError("manifest_invalid") from None
+            mode = _member(SamplingMode, manifest_fields["sampling_mode"])
+            if mode is None:
+                _reject("manifest_invalid")
+            manifest_fields["sampling_mode"] = mode
         if (
             "timestamps" in manifest_fields
             and type(manifest_fields["timestamps"]) is list
         ):
             manifest_fields["timestamps"] = tuple(manifest_fields["timestamps"])
-        try:
-            bound = FrameSamplingManifest(**manifest_fields)
-        except TypeError:
-            raise PoseContractError("manifest_invalid") from None
+        bound = _build_manifest(manifest_fields)
+        if bound is None:
+            _reject("manifest_invalid")
         return cls(
             manifest=bound,
             frames=tuple(built),

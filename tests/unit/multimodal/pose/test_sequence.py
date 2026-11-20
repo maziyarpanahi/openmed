@@ -281,6 +281,57 @@ def test_records_with_unknown_or_missing_keys_fail_closed(mutate):
         PoseSequence.from_record(record)
 
 
+@pytest.mark.parametrize(
+    ("mutate", "code"),
+    [
+        (lambda r: r.update(depth_kind="synthetic-secret"), "depth_kind_invalid"),
+        (
+            lambda r: r["manifest"].update(sampling_mode="synthetic-secret"),
+            "manifest_invalid",
+        ),
+        (lambda r: r["manifest"].update(synthetic_secret=1), "manifest_invalid"),
+    ],
+)
+def test_replaced_errors_keep_no_raw_exception_context(mutate, code):
+    record = _sequence().to_record()
+    mutate(record)
+    with pytest.raises(PoseContractError, match=f"^{code}$") as caught:
+        PoseSequence.from_record(record)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "synthetic" not in repr(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("limits", "frame_count", "joints_per_frame", "code"),
+    [
+        ({"MAX_POSE_FRAMES": 2}, 3, 1, "frames_invalid"),
+        ({}, 1, 50_000, "joints_invalid"),
+        ({"MAX_OBSERVATIONS": 3}, 2, 2, "resource_limit"),
+    ],
+)
+def test_oversized_records_fail_before_any_observation_is_built(
+    monkeypatch, limits, frame_count, joints_per_frame, code
+):
+    from openmed.multimodal.pose import sequence as module
+
+    record = _sequence().to_record()
+    joint = record["frames"][0]["joints"][0]
+    record["frames"] = [
+        {"tick": tick, "joints": [dict(joint)] * joints_per_frame}
+        for tick in range(frame_count)
+    ]
+    for name, value in limits.items():
+        monkeypatch.setattr(module, name, value)
+    built = []
+    monkeypatch.setattr(
+        module, "PoseJointObservation", lambda **fields: built.append(fields)
+    )
+    with pytest.raises(PoseContractError, match=f"^{code}$"):
+        PoseSequence.from_record(record)
+    assert built == []
+
+
 def _encode(document):
     head = {key: value for key, value in document.items() if key != "cases"}
     lines = [
