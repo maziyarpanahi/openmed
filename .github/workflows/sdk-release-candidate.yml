@@ -77,14 +77,24 @@ jobs:
                           return value
               raise SystemExit("candidate metadata must declare a stable SDK version")
 
+          def patch_migration_guide(line):
+              guides = sorted(Path("docs/migration").glob("*-to-" + line + ".md"))
+              if len(guides) != 1:
+                  raise SystemExit("patch candidate requires one existing migration guide")
+              return guides[0].as_posix()
+
           head_source = subprocess.check_output(
               ["git", "show", os.environ["CANDIDATE_SHA"] + ":openmed/__about__.py"],
               text=True,
           )
           declared = version_from_source(head_source)
+          event = os.environ["GITHUB_EVENT_NAME"]
           release_branch = os.environ.get("RELEASE_BASE_REF", "")
           on_release_branch = release_branch.startswith("release/v")
-          if os.environ["GITHUB_EVENT_NAME"] == "pull_request" and not on_release_branch:
+          on_lts_branch = release_branch == "release/v4.3"
+          if on_lts_branch and not declared.startswith("4.3."):
+              raise SystemExit("LTS branch requires a 4.3 SDK version")
+          if event == "pull_request" and (not on_release_branch or on_lts_branch):
               base_source = subprocess.check_output(
                   ["git", "show", os.environ["PR_BASE_SHA"] + ":openmed/__about__.py"],
                   text=True,
@@ -100,27 +110,39 @@ jobs:
                   if tuple(map(int, version.split("."))) <= tuple(map(int, base.split("."))):
                       raise SystemExit("candidate version must increase over its PR base")
                   if source_line == target_line:
-                      guides = sorted(Path("docs/migration").glob("*-to-" + target_line + ".md"))
-                      if len(guides) != 1:
-                          raise SystemExit("patch candidate requires one existing migration guide")
-                      migration = guides[0].as_posix()
+                      migration = patch_migration_guide(target_line)
                   else:
                       migration = "docs/migration/" + source_line + "-to-" + target_line + ".md"
           else:
               version = (
                   os.environ["REQUESTED_VERSION"]
-                  if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch"
+                  if event == "workflow_dispatch"
                   else declared
               )
               if declared != version:
                   raise SystemExit("requested SDK version differs from candidate metadata")
-              if on_release_branch and release_branch != "release/v" + version:
+              if on_release_branch and not on_lts_branch and release_branch != "release/v" + version:
                   raise SystemExit("release branch differs from candidate version")
               api_base = os.environ["REQUESTED_API_BASE"]
               migration = os.environ["REQUESTED_MIGRATION"]
               evaluate = True
+              if event == "push" and on_lts_branch:
+                  # Backports can land before the version is bumped for release.
+                  released = subprocess.run(
+                      ["git", "merge-base", "--is-ancestor", "refs/tags/v" + version, "HEAD"],
+                      stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL,
+                      check=False,
+                  )
+                  evaluate = released.returncode != 0
           if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
               raise SystemExit("invalid stable candidate version")
+          lts_patch = re.fullmatch(r"4\.3\.([1-9][0-9]*)", version)
+          if evaluate and on_lts_branch and lts_patch is None:
+              raise SystemExit("LTS release candidates need a patch version after 4.3.0")
+          if evaluate and lts_patch is not None and event != "workflow_dispatch":
+              api_base = "v4.3." + str(int(lts_patch[1]) - 1)
+              migration = patch_migration_guide("4.3")
           if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", api_base):
               raise SystemExit("invalid stable API baseline tag")
           if evaluate:
@@ -130,6 +152,7 @@ jobs:
           outputs = {
               "evaluate": str(evaluate).lower(), "version": version,
               "api_base": api_base, "migration": migration,
+              "lts_patch": str(lts_patch is not None).lower(),
           }
           with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
               for key, value in outputs.items():
@@ -140,6 +163,7 @@ jobs:
               "api_base_ref": api_base, "migration_guide": migration,
               "classification": "CANDIDATE" if evaluate else "NOT_A_CANDIDATE",
               "release_readiness_required": evaluate,
+              "lts_patch": lts_patch is not None,
           }
           Path("artifacts/sdk-readiness").mkdir(parents=True, exist_ok=True)
           Path("artifacts/sdk-readiness/scope.json").write_text(json.dumps(evidence, indent=2) + "\n")
@@ -189,12 +213,19 @@ jobs:
           PY
       - name: Verify SDK readiness without model promotion
         if: steps.candidate.outputs.evaluate == 'true'
+        shell: bash
         env:
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
           API_BASE_REF: ${{ steps.candidate.outputs.api_base }}
           MIGRATION_GUIDE: ${{ steps.candidate.outputs.migration }}
+          LTS_PATCH: ${{ steps.candidate.outputs.lts_patch }}
         run: |
+          lts_args=()
+          if [ "$LTS_PATCH" = "true" ]; then
+            lts_args+=(--lts)
+          fi
           uv run --frozen python -m openmed.eval.release_readiness \
+            "${lts_args[@]}" \
             --sdk-baseline "$API_BASE_REF" \
             --migration-guide "$MIGRATION_GUIDE" \
             --api-compat-report artifacts/sdk-readiness/api-compat.json \
