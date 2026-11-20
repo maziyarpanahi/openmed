@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -167,3 +169,46 @@ def test_safe_finding_constructor_rejects_untrusted_report_fields():
 
     with pytest.raises(ValueError, match="sha256 format"):
         SecretFinding(API_KEY, (0, 1), "sha256:synthetic-secret-value")
+
+
+_NEGATIVE_CONTROLS_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "secrets"
+    / "negative_controls.jsonl"
+)
+_NEGATIVE_CONTROLS = [
+    record
+    for record in (
+        json.loads(line)
+        for line in _NEGATIVE_CONTROLS_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+]
+
+
+@pytest.mark.parametrize(
+    ("index", "kind"),
+    [
+        (index, record["kind"])
+        for index, record in enumerate(_NEGATIVE_CONTROLS, start=1)
+    ],
+    ids=[
+        f"{record['kind']}-{index:02d}"
+        for index, record in enumerate(_NEGATIVE_CONTROLS, start=1)
+    ],
+)
+def test_high_entropy_non_secrets_are_not_flagged(index: int, kind: str) -> None:
+    """Report only the kind and line number, never the control's text."""
+    text = _NEGATIVE_CONTROLS[index - 1]["text"]
+    findings = detect_secrets(text)
+
+    assert findings == [], f"negative control {kind} at line {index} was flagged"
+
+
+def test_negative_control_kinds_have_at_least_two_lines() -> None:
+    counts = Counter(record["kind"] for record in _NEGATIVE_CONTROLS)
+
+    assert len(_NEGATIVE_CONTROLS) >= 30
+    assert counts
+    assert min(counts.values()) >= 2, counts
