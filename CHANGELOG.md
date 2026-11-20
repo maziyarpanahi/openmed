@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extend schema fingerprint drift detection to every bundled `*.schema.json` file: `scripts/release/check_schema_fingerprints.py --check` compares them with the committed `scripts/release/schema_fingerprints.json`, reads integer, semver and label versions, and fails on a removed field without a version bump, a removed schema or a schema without an entry (#5332).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
