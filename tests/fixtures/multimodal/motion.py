@@ -85,9 +85,11 @@ class MotionSpec:
     is added. ``trough_g`` is the lowest magnitude during a fall or sit-down
     descent, and ``descent_s`` the length of the descent, of the flight of a
     jump, or of the free fall of a dropped device. ``direction`` sets the end
-    posture of a fall. ``gaps`` are half-open ``(start_s, stop_s)`` intervals
-    whose samples are reported as ``None``. Noise is Gaussian per axis, clipped
-    at three standard deviations, and readings are clipped at ``range_g``.
+    posture of a fall. ``gaps`` are half-open ``(start_s, stop_s)`` intervals;
+    every sample whose timestamp falls inside one is reported as ``None``.
+    Noise is Gaussian per axis, clipped at three standard deviations. A window
+    whose readings could reach ``range_g`` is refused rather than clipped, and
+    ``peak_g`` is only checked against ``range_g`` when the window has an event.
 
     Every number is checked before use: ``rate_hz`` lies in 1 to 1000 Hz,
     ``duration_s`` in (0, 600] s, ``impact_width_s`` in (0, 0.3] s and, for a
@@ -173,6 +175,8 @@ def synthetic_motion_window(spec: MotionSpec) -> MotionWindow:
             raise MotionFixtureError("motion_fixture_onset_not_peak")
     rng = random.Random(spec.seed)
     bound = 3.0 * spec.noise_g
+    if max(abs(v) for sample in clean for v in sample) + bound + _ROUND > spec.range_g:
+        raise MotionFixtureError("motion_fixture_signal_above_range")
     samples: list[tuple[float, float, float] | None] = []
     for sample in clean:
         noisy = []
@@ -288,10 +292,10 @@ def _validate(spec: MotionSpec) -> tuple[int, int | None, tuple[tuple[int, int],
     count = round(spec.duration_s * spec.rate_hz)
     if count < 2:
         raise MotionFixtureError("motion_fixture_too_few_samples")
-    if spec.peak_g + 2 * _noise_bound(spec) + _ROUND > spec.range_g:
-        raise MotionFixtureError("motion_fixture_peak_above_range")
     onset = None
     if spec.kind not in ("standing", "walking"):
+        if spec.peak_g + 2 * _noise_bound(spec) + _ROUND > spec.range_g:
+            raise MotionFixtureError("motion_fixture_peak_above_range")
         onset = round(spec.onset_s * spec.rate_hz)
         if not 0 <= onset < count:
             raise MotionFixtureError("motion_fixture_onset_outside_window")
@@ -309,7 +313,7 @@ def _validate(spec: MotionSpec) -> tuple[int, int | None, tuple[tuple[int, int],
     gaps = []
     previous = 0
     for start_s, stop_s in spec.gaps:
-        start, stop = round(start_s * spec.rate_hz), round(stop_s * spec.rate_hz)
+        start, stop = _first_index_at(start_s, spec), _first_index_at(stop_s, spec)
         if not previous <= start < stop <= count:
             raise MotionFixtureError("motion_fixture_invalid_gap")
         gaps.append((start, stop))
@@ -413,6 +417,16 @@ def _walk(spec, t):
     forward = 0.12 * math.sin(2 * math.pi * step_hz * t + 1.2)
     lateral = 0.08 * math.sin(math.pi * step_hz * t)
     return (lateral, vertical, forward)
+
+
+def _first_index_at(time_s, spec):
+    """Index of the first sample whose timestamp is at or after ``time_s``.
+
+    Gaps cover the half-open interval ``[start_s, stop_s)``, so a sample
+    belongs to a gap exactly when its timestamp ``index / rate_hz`` falls in
+    that interval, whether or not the bounds sit on the sample grid.
+    """
+    return math.ceil(time_s * spec.rate_hz - 1e-9)
 
 
 def _noise_bound(spec):

@@ -293,6 +293,42 @@ def test_gaps_hide_exactly_the_requested_samples():
     assert covered.samples[covered.truth.onset_index] is None
 
 
+@pytest.mark.parametrize(
+    ("gap", "hidden", "onset_hidden"),
+    [
+        ((4.004, 4.1), range(401, 410), False),
+        ((3.9, 4.004), range(390, 401), True),
+        ((3.995, 4.0), range(400, 400), None),
+        ((4.0, 4.001), range(400, 401), True),
+        ((3.9049, 3.9151), range(391, 392), False),
+    ],
+)
+def test_gaps_hide_samples_by_time_in_half_open_interval(gap, hidden, onset_hidden):
+    if not hidden:
+        with pytest.raises(MotionFixtureError, match="^motion_fixture_invalid_gap$"):
+            scenario("fall_backward", gaps=(gap,))
+        return
+    window = scenario("fall_backward", gaps=(gap,))
+    rate = window.spec.rate_hz
+    expected = [i for i in range(len(window.samples)) if gap[0] <= i / rate < gap[1]]
+    assert expected == list(hidden)
+    assert [i for i, s in enumerate(window.samples) if s is None] == expected
+    assert window.truth.onset_in_gap is onset_hidden
+
+
+def test_event_free_windows_ignore_the_unused_peak_parameter():
+    for name in ("standing", "walking"):
+        window = scenario(name, range_g=2.0)
+        assert window.truth.peak_g is None
+        assert all(abs(v) <= 2.0 for s in window.samples for v in s)
+        assert window.samples == scenario(name).samples
+
+
+def test_event_free_signal_that_would_clip_fails_with_stable_code():
+    with pytest.raises(MotionFixtureError, match="^motion_fixture_signal_above_range$"):
+        scenario("walking", range_g=1.2)
+
+
 def test_doubling_the_rate_doubles_the_onset_index():
     for name in EVENT_SCENARIOS:
         slow = scenario(name, rate_hz=50.0).truth
