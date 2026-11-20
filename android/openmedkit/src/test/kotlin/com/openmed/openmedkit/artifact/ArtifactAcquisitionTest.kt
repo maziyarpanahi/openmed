@@ -340,12 +340,14 @@ class ArtifactAcquisitionTest {
     @Test
     fun cancellationMidDownloadKeepsBytesForResumeAndNeverExposesThem() = runBlocking<Unit> {
         val server = server()
-        val acquisition = ArtifactAcquisition(newCache(), server.client())
+        val cache = newCache()
+        val acquisition = ArtifactAcquisition(cache, server.client())
         val ref = onnxRef(server)
         server.pauseAfterBytes.set(64 * 1024)
 
         val pending = async(Dispatchers.Default) { acquisition.acquire(request(ref)) }
         assertTrue(server.paused.await(30, TimeUnit.SECONDS))
+        awaitPartialModel(cache, ref)
         assertNull(acquisition.cachedArtifact(ref))
         assertTrue(acquisition.cancel(ref))
         server.release.countDown()
@@ -366,7 +368,8 @@ class ArtifactAcquisitionTest {
     @Test
     fun cancellingTheOnlyCallerStopsTheSharedTransfer() = runBlocking<Unit> {
         val server = server()
-        val acquisition = ArtifactAcquisition(newCache(), server.client())
+        val cache = newCache()
+        val acquisition = ArtifactAcquisition(cache, server.client())
         val ref = onnxRef(server)
         server.pauseAfterBytes.set(64 * 1024)
 
@@ -374,6 +377,7 @@ class ArtifactAcquisitionTest {
             acquisition.acquire(request(ref))
         }
         assertTrue(server.paused.await(30, TimeUnit.SECONDS))
+        awaitPartialModel(cache, ref)
         caller.cancel()
         caller.join()
         server.release.countDown()
@@ -383,6 +387,17 @@ class ArtifactAcquisitionTest {
         assertIs<ArtifactAcquisitionResult.Downloaded>(resumed)
         assertTrue(resumed.resumed)
         assertEquals(2, server.cdnRequests("model.onnx").size)
+    }
+
+    private suspend fun awaitPartialModel(cache: ModelCache, ref: ArtifactRef) {
+        // The server's flush only fills the socket buffer. A resume test must
+        // wait until the client has actually written model bytes before cancelling.
+        val partial = File(cache.resumableStagingDirectory(ref.identity), "model.onnx")
+        withTimeout(30_000) {
+            while (partial.length() == 0L) {
+                delay(5)
+            }
+        }
     }
 
     @Test

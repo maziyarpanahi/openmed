@@ -66,6 +66,7 @@ _OPEN_FLAGS = (
     | getattr(os, "O_NOCTTY", 0)
     # A FIFO would otherwise block the open until a writer appears.
     | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_BINARY", 0)
 )
 
 
@@ -221,6 +222,13 @@ def read_secret_file(
     # Errors are raised outside ``except`` blocks so that no OSError (which
     # carries the path) is chained to, or kept as context of, the failure.
     descriptor: Optional[int]
+    regular: bool | None
+    try:
+        regular = stat.S_ISREG(os.stat(path).st_mode)
+    except (OSError, TypeError, ValueError):
+        regular = None
+    if regular is False:
+        raise SecretSourceError(setting, SECRET_FILE_NOT_REGULAR)
     try:
         descriptor = os.open(path, _OPEN_FLAGS)
     except (OSError, TypeError, ValueError):

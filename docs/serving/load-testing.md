@@ -14,7 +14,7 @@ credentials, or production URLs.
 
 ## Run locally
 
-Install Docker, `curl`, and [k6](https://grafana.com/docs/k6/latest/). From the
+Install Docker, `curl`, OpenSSL, and [k6](https://grafana.com/docs/k6/latest/). From the
 repository root, run:
 
 ```bash
@@ -23,7 +23,11 @@ deploy/loadtest/run.sh
 
 The wrapper builds `deploy/docker/Dockerfile`, starts an ephemeral container on
 `127.0.0.1:18080`, waits for `/readyz`, warms the three routes, runs k6, and
-removes the container on exit. Model downloads are performed by the service
+removes the container on exit. It keeps the production security profile and
+enables authentication with a fresh, random API key scoped to the three tested
+routes. The container receives only the key's SHA-256 hash; warmup requests and
+k6 use the key, which is not included in the SLO report. The container also gets
+a separate temporary service digest key. Model downloads are performed by the service
 only when the image's local cache does not already contain the preloaded
 models. To use a prebuilt image or skip warmup:
 
@@ -42,6 +46,10 @@ BASE_URL=http://127.0.0.1:8080 \
 LOADTEST_RESULT_FILE=/tmp/openmed-loadtest-summary.json \
 k6 run deploy/loadtest/scenario.js
 ```
+
+For an authenticated existing service, set `LOADTEST_API_KEY` in the client
+environment to a key with `analyze:write`, `pii:write`, and `pii:read` scopes.
+The wrapper always generates its own temporary key.
 
 ## SLO gates and reports
 

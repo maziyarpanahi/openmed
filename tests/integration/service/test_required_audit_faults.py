@@ -129,11 +129,17 @@ def test_disk_full_after_effect_then_restart_completes_once(tmp_path, monkeypatc
     assert len(sink.applied) == 1
 
 
-def test_interrupted_directory_sync_is_reconciled_from_ledger(tmp_path, monkeypatch):
+@pytest.mark.parametrize("boundary", ["link_ack", "directory_sync"])
+def test_interrupted_commit_ack_is_reconciled_from_ledger(
+    tmp_path, monkeypatch, boundary
+):
+    if boundary == "directory_sync" and os.name == "nt":
+        pytest.skip("Windows does not expose directory fsync through os.open")
     coord = build(tmp_path)
     sink = Sink()
     ledger_dir = str(tmp_path / "ledger")
     real_open = os.open
+    real_link = os.link
     seen = {"count": 0}
 
     def open_(path, flags, *args, **kwargs):
@@ -143,7 +149,16 @@ def test_interrupted_directory_sync_is_reconciled_from_ledger(tmp_path, monkeypa
                 raise OSError(errno.EIO, "synthetic")
         return real_open(path, flags, *args, **kwargs)
 
-    monkeypatch.setattr(f"{LEDGER_MODULE}.open", open_)
+    def link_(source, target, *args, **kwargs):
+        real_link(source, target, *args, **kwargs)
+        seen["count"] += 1
+        if seen["count"] == 3:
+            raise OSError(errno.EIO, "synthetic")
+
+    if boundary == "directory_sync":
+        monkeypatch.setattr(f"{LEDGER_MODULE}.open", open_)
+    else:
+        monkeypatch.setattr(f"{LEDGER_MODULE}.link", link_)
 
     receipt = coord.perform(
         OP, request_key=KEY, operation_digest=DIGEST, effect=sink.apply

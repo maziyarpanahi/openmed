@@ -71,6 +71,7 @@ def test_inline_value_is_returned_unchanged_and_unset_is_none() -> None:
         (b"synthetic", "synthetic"),
         (b"synthetic\n", "synthetic"),
         (b"synthetic\r\n", "synthetic"),
+        (b"synthetic\x1aend\r\n", "synthetic\x1aend"),
         (b"synthetic\n\n", "synthetic\n"),
         (b"  synthetic  \n", "  synthetic  "),
         ("pässwörd\n".encode(), "pässwörd"),

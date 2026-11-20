@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -116,12 +117,21 @@ def _packaging_tree(tmp_path: Path, *, complete: bool, module_type: bool) -> Pat
 def test_packaging_check_fails_closed_without_the_4478_packaging(
     tmp_path: Path, complete: bool, module_type: bool, expected: int
 ) -> None:
-    if shutil.which("bash") is None or shutil.which("node") is None:
+    bash = shutil.which("bash")
+    if os.name == "nt":
+        # System32/bash.exe launches WSL, which need not have a distribution.
+        # Git for Windows supplies the shell used by the hosted CI steps.
+        git = shutil.which("git")
+        if git is not None:
+            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+            if git_bash.is_file():
+                bash = str(git_bash)
+    if bash is None or shutil.which("node") is None:
         pytest.skip("bash and node are required for the packaging check")
     script = _packaging_tree(tmp_path, complete=complete, module_type=module_type)
 
     completed = subprocess.run(
-        ["bash", str(script)],
+        [bash, script.as_posix()],
         check=False,
         capture_output=True,
         text=True,

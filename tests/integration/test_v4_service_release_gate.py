@@ -122,10 +122,10 @@ def test_master_cli_flow_signs_not_ready_and_verifies_offline(tmp_path: Path) ->
         fx.GENERATED_AT,
         cwd=root,
     )
-    assert drilled.returncode == 1, drilled.stderr
+    assert drilled.returncode == 0, drilled.stderr
     report = json.loads((root / "evidence" / "drill.json").read_text())
     assert report["candidate_commit"] == commit
-    assert report["state"] == drill.DRILL_INCOMPLETE
+    assert report["state"] == drill.DRILL_COMPLETE
 
     inventory = _run(
         GATE,
@@ -164,8 +164,8 @@ def test_master_cli_flow_signs_not_ready_and_verifies_offline(tmp_path: Path) ->
     )
     assert built.returncode == 1, built.stderr
     assert "NOT_READY" in built.stdout
-    assert "typed_loader_unavailable:security-profile" in built.stdout
-    assert "drill_step_not_available:recovery-drill" in built.stdout
+    assert "security_profile_report_invalid:security-profile" in built.stdout
+    assert "drill_step_not_available:recovery-drill" not in built.stdout
     for leaked in (str(tmp_path), fx.TEST_ONLY_SIGNING_KEY.decode()):
         assert leaked not in built.stdout + built.stderr
 

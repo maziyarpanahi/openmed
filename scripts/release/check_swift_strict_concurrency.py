@@ -60,7 +60,7 @@ IOS_DESTINATION = "generic/platform=iOS Simulator"
 FAILURE_TAIL_LINES = 40
 
 _DIAGNOSTIC_RE = re.compile(
-    r"^(?P<path>/[^:\n]+\.swift):(?P<line>\d+):(?P<column>\d+): "
+    r"^(?P<path>(?:/|[A-Za-z]:[\\/])[^\n]+\.swift):(?P<line>\d+):(?P<column>\d+): "
     r"(?P<severity>warning|error): (?P<message>.*)$"
 )
 
@@ -130,7 +130,9 @@ def parse_diagnostics(lines: Iterable[str], *, root: Path = ROOT) -> list[Diagno
             continue
         message = match["message"]
         for spelling in roots:
-            message = message.replace(spelling + os.sep, "")
+            for separator in ("/", "\\"):
+                message = message.replace(spelling + separator, "")
+        message = message.replace("\\", "/")
         found.add(
             Diagnostic(
                 path=relative.as_posix(),
@@ -223,7 +225,9 @@ def _log_tail(log_path: Path, *, hidden: Sequence[Path]) -> list[str]:
     tail = []
     for line in lines:
         for spelling in spellings:
-            line = line.replace(spelling + os.sep, "").replace(spelling, ".")
+            for separator in ("/", "\\"):
+                line = line.replace(spelling + separator, "")
+            line = line.replace(spelling, ".")
         tail.append(line)
     return tail
 

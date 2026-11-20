@@ -137,6 +137,7 @@ __all__ = [
     "ScenarioResult",
     "SQLitePostgresDouble",
     "rehearse_service_migrations",
+    "validate_rehearsal_report",
 ]
 
 REHEARSAL_SCHEMA = "openmed.service.migration-rehearsal.v1"
@@ -2706,6 +2707,341 @@ def _rehearse(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def validate_rehearsal_report(
+    payload: Mapping[str, Any], *, verification_key: bytes | None = None
+) -> RehearsalReport:
+    """Parse and validate retained evidence against this binary's registry.
+
+    Args:
+        payload: A decoded report produced by :func:`rehearse_service_migrations`.
+        verification_key: Caller-owned key required when the report is signed.
+            Unsigned reports can be bound by a separately signed release packet.
+
+    Returns:
+        The typed report after checking component and scenario coverage, the
+        declared skips, required assertions, derived verdict and canonical
+        digest. A partial or failed report remains partial or failed.
+
+    Raises:
+        ValueError: ``migration_rehearsal_invalid`` for malformed, inconsistent,
+            stale-registry or unauthenticated signed evidence. No input values
+            are included in the error.
+    """
+    try:
+        return _parse_rehearsal_report(payload, verification_key)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise ValueError("migration_rehearsal_invalid") from None
+
+
+def _parse_rehearsal_report(
+    payload: Mapping[str, Any], verification_key: bytes | None
+) -> RehearsalReport:
+    schemas = durable_schemas()
+    by_id = {schema.component: schema for schema in schemas}
+    if (
+        payload["schema"] != REHEARSAL_SCHEMA
+        or payload["registry_digest"] != registry_digest()
+        or payload["release"] != str(__version__)
+        or payload["previous_release"] != PREVIOUS_RELEASE
+        or not isinstance(payload["components"], list)
+    ):
+        raise ValueError
+    timestamp = payload["generated_at"]
+    if not isinstance(timestamp, str) or not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", timestamp
+    ):
+        raise ValueError
+    datetime.fromisoformat(timestamp)
+    components = tuple(
+        _parse_rehearsal_component(item, by_id[item["component"]])
+        for item in payload["components"]
+    )
+    selected = {item.component for item in components}
+    if [item.component for item in components] != [
+        schema.component for schema in schemas if schema.component in selected
+    ]:
+        raise ValueError
+    codes = list(registry_findings(schemas))
+    for item in components:
+        if item.presence != Presence.PRESENT.value:
+            continue
+        if item.rollback_class == RollbackClass.RELEASE_BLOCKING.value:
+            codes.append(f"{item.component}:release_blocking")
+        for row in item.failed:
+            codes.append(
+                f"{item.component}:{row.scenario.value}:v{row.source_version}:"
+                f"{row.code or 'failed'}"
+            )
+    state = "blocked" if codes else "partial" if selected != set(by_id) else "passed"
+    signature = payload["signature"]
+    parsed_signature = None
+    if signature is not None:
+        if (
+            set(signature) != {"algorithm", "key_id", "value"}
+            or signature["algorithm"] != SIGNATURE_ALGORITHM
+            or not isinstance(signature["key_id"], str)
+            or not _KEY_ID_RE.fullmatch(signature["key_id"])
+            or not isinstance(signature["value"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", signature["value"])
+        ):
+            raise ValueError
+        parsed_signature = AuditSignature.from_dict(signature)
+    report = RehearsalReport(
+        components=components,
+        gate_state=state,
+        gate_codes=tuple(sorted(set(codes))),
+        registry_digest=registry_digest(),
+        generated_at=timestamp,
+        packet_digest=payload["packet_digest"],
+        signature=parsed_signature,
+    )
+    if report.packet_digest != report.recompute_packet_digest() or _canonical_json(
+        report.to_dict()
+    ) != _canonical_json(payload):
+        raise ValueError
+    if parsed_signature is not None and (
+        not isinstance(verification_key, bytes)
+        or len(verification_key) < 32
+        or not report.verify(verification_key)
+    ):
+        raise ValueError
+    return report
+
+
+def _parse_rehearsal_component(
+    payload: Mapping[str, Any], schema: DurableSchema
+) -> ComponentRehearsal:
+    present = schema.presence is Presence.PRESENT
+    engines = (
+        (
+            {"native_engine_sqlite_dbapi_double", "native_engine_postgresql_server"}
+            if schema.component == JOURNEY_POSTGRES
+            else {"native_engine"}
+        )
+        if present
+        else {"none"}
+    )
+    if payload["engine"] not in engines or not isinstance(payload["scenarios"], list):
+        raise ValueError
+    rows = tuple(_parse_rehearsal_scenario(row, schema) for row in payload["scenarios"])
+    expected = (
+        [
+            (scenario, source)
+            for scenario in Scenario
+            for source in schema.source_versions
+            if scenario is not Scenario.PREVIOUS_BINARY
+            or source == schema.current_version
+        ]
+        if present
+        else []
+    )
+    if [(row.scenario, row.source_version) for row in rows] != expected:
+        raise ValueError
+    result = ComponentRehearsal(
+        component=schema.component,
+        presence=schema.presence.value,
+        current_version=schema.current_version,
+        rollback_class=None
+        if schema.rollback_class is None
+        else schema.rollback_class.value,
+        engine=payload["engine"],
+        scenarios=rows,
+        tracking_issue=schema.tracking_issue,
+    )
+    if _canonical_json(result.to_dict()) != _canonical_json(payload):
+        raise ValueError
+    return result
+
+
+def _rehearsal_skip(
+    schema: DurableSchema, scenario: Scenario, source: int
+) -> tuple[ScenarioOutcome, str | None, str] | None:
+    if scenario is Scenario.INTERRUPTED:
+        interruptible = (
+            range(int(schema.current_version or 0))
+            if schema.component in {JOURNEY_SQLITE, JOURNEY_POSTGRES}
+            else _ADAPTERS[schema.component].interruptible
+        )
+        if source not in interruptible:
+            return ScenarioOutcome.NOT_APPLICABLE, "no_pending_migration", "none"
+    if scenario is Scenario.DRIFT:
+        first_history = 2 if schema.component == MODEL_REGISTRY else 1
+        if source < first_history:
+            return ScenarioOutcome.NOT_APPLICABLE, "no_recorded_history", "none"
+    if scenario is Scenario.PREVIOUS_BINARY:
+        if schema.component == JOURNEY_SQLITE:
+            return None
+        if (
+            schema.component == JOURNEY_POSTGRES
+            and schema.previous_release_version == schema.current_version
+        ):
+            return None
+        if schema.previous_binary is PreviousBinary.IGNORES:
+            return ScenarioOutcome.NOT_APPLICABLE, "introduced_in_release", "declared"
+        return (
+            ScenarioOutcome.DECLARED,
+            schema.previous_binary_code
+            or (
+                "previous_release_reads"
+                if schema.previous_binary is PreviousBinary.READS
+                else None
+            ),
+            "declared",
+        )
+    if scenario in {Scenario.RESTORE_ROLLBACK, Scenario.RETRY_AFTER_RECOVERY}:
+        if (
+            source in schema.restorable_versions
+            and schema.recovery_category is not None
+        ):
+            return None
+        if schema.recovery_point is RecoveryPointKind.OPERATOR_DATABASE_BACKUP:
+            return ScenarioOutcome.EXTERNAL, "operator_database_backup", "external"
+        code = (
+            "rollback_not_required"
+            if schema.recovery_point is RecoveryPointKind.NOT_REQUIRED
+            else "no_prior_state"
+            if source == 0
+            else "source_not_restorable"
+        )
+        return ScenarioOutcome.NOT_APPLICABLE, code, "none"
+    return None
+
+
+_REHEARSAL_CHECKS = {
+    Scenario.FORWARD_UPGRADE: {"ready", "current_version", "counts_preserved"},
+    Scenario.REPEAT: {
+        "first_ready",
+        "second_ready",
+        "schema_unchanged",
+        "state_unchanged",
+    },
+    Scenario.INTERRUPTED: {
+        "interrupted",
+        "not_ready_after_interruption",
+        "no_half_upgraded_schema",
+        "retry_ready",
+        "retry_current_version",
+    },
+    Scenario.DRIFT: {"refused", "controlled_code", "refused_before_mutation"},
+    Scenario.UNKNOWN_VERSION: {
+        "refused",
+        "controlled_code",
+        "refused_before_mutation",
+        "observed_refusing_state",
+    },
+    Scenario.PREVIOUS_BINARY: {"matches_declaration"},
+    Scenario.RESTORE_ROLLBACK: {
+        "backup_completed",
+        "upgraded",
+        "restore_completed",
+        "not_ready_before_activation",
+        "activation_completed",
+        "restored_version",
+        "restored_state_identical",
+    },
+    Scenario.RETRY_AFTER_RECOVERY: {
+        "retry_ready",
+        "retry_current_version",
+        "plan_ready",
+    },
+}
+
+
+def _parse_rehearsal_scenario(
+    payload: Mapping[str, Any], schema: DurableSchema
+) -> ScenarioResult:
+    source, observed = payload["source_version"], payload["observed_version"]
+    checks, counts = payload["checks"], payload["counts"]
+    code, evidence = payload["code"], payload["evidence"]
+    scenario, outcome = (
+        Scenario(payload["scenario"]),
+        ScenarioOutcome(payload["outcome"]),
+    )
+    if (
+        type(source) is not int
+        or source not in schema.source_versions
+        or (observed is not None and (type(observed) is not int or observed < 0))
+        or (code is not None and _controlled(code) is None)
+        or evidence
+        not in {
+            "native_engine",
+            "killed_process",
+            "connection_lost",
+            "fault_injected",
+            "previous_release_chain",
+            "service_recovery_point",
+            "none",
+            "declared",
+            "external",
+        }
+        or not isinstance(checks, dict)
+        or not isinstance(counts, dict)
+        or any(
+            _controlled(key) is None or type(value) is not bool
+            for key, value in checks.items()
+        )
+        or any(
+            _controlled(key) is None or type(value) is not int or not 0 <= value < 2**53
+            for key, value in counts.items()
+        )
+    ):
+        raise ValueError
+    skip = _rehearsal_skip(schema, scenario, source)
+    if outcome is ScenarioOutcome.FAILED:
+        if code is None or (checks and all(checks.values())):
+            raise ValueError
+    elif skip is not None:
+        if (outcome, code, evidence) != skip or checks or counts:
+            raise ValueError
+        if observed != (
+            schema.current_version if scenario is Scenario.PREVIOUS_BINARY else None
+        ):
+            raise ValueError
+    elif (
+        outcome is not ScenarioOutcome.PASSED
+        or not _REHEARSAL_CHECKS[scenario] <= checks.keys()
+        or not all(checks.values())
+    ):
+        raise ValueError
+    elif outcome is ScenarioOutcome.PASSED:
+        expected_evidence = {
+            Scenario.PREVIOUS_BINARY: "previous_release_chain",
+            Scenario.RESTORE_ROLLBACK: "service_recovery_point",
+        }.get(scenario, "native_engine")
+        if scenario is Scenario.INTERRUPTED:
+            expected_evidence = (
+                "connection_lost"
+                if schema.component == JOURNEY_POSTGRES
+                else "fault_injected"
+                if schema.component == RECOVERY_MANIFEST
+                else "killed_process"
+            )
+        if evidence != expected_evidence:
+            raise ValueError
+        expected_version = (
+            source if scenario is Scenario.RESTORE_ROLLBACK else schema.current_version
+        )
+        if (
+            scenario not in {Scenario.DRIFT, Scenario.UNKNOWN_VERSION}
+            and observed != expected_version
+        ):
+            raise ValueError
+    result = ScenarioResult(
+        component=schema.component,
+        scenario=scenario,
+        source_version=source,
+        outcome=outcome,
+        code=code,
+        evidence=evidence,
+        observed_version=observed,
+        checks=checks,
+        counts=counts,
+    )
+    if _canonical_json(result.to_dict()) != _canonical_json(payload):
+        raise ValueError
+    return result
 
 
 def _controlled(value: Any) -> str | None:

@@ -889,7 +889,15 @@ class DiagnosticSection:
         limits = shared.limits
         shared.open_file()
         try:
-            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+            # Windows cannot open directories through os.open. Classify the
+            # source first, then repeat the check on the opened descriptor to
+            # retain the race-safe validation below.
+            if not stat.S_ISREG(path.stat().st_mode):
+                raise _SourceProblem("source_unsafe")
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0),
+            )
         except FileNotFoundError:
             raise _SourceProblem("source_absent") from None
         except OSError:

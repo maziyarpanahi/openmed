@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Authenticate the ephemeral production-profile load test with a fresh scoped
+  API key so the nightly harness can pass the service readiness preflight.
+- Preserve raw bytes when reading service diagnostics and secret files on
+  Windows, reject non-regular sources with consistent error codes, and refuse
+  raced dangling symlinks before creating export-observation files. Keep
+  generated parity JSON canonical across platforms and exercise worker-thread
+  startup, audit recovery and packaging checks with the host's actual runtime.
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer

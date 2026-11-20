@@ -265,7 +265,7 @@ def _reads(store: LocalJourneyStore) -> dict[str, Any]:
 
 def _files_containing(root: Path, needle: bytes) -> list[str]:
     return sorted(
-        str(path.relative_to(root))
+        path.relative_to(root).as_posix()
         for path in root.rglob("*")
         if path.is_file() and needle in path.read_bytes()
     )

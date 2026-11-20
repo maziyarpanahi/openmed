@@ -117,6 +117,7 @@ const jsonParams = {
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
+    ...(__ENV.LOADTEST_API_KEY ? { "X-API-Key": __ENV.LOADTEST_API_KEY } : {}),
   },
 };
 
