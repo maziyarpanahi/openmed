@@ -114,10 +114,27 @@ jobs:
               )
               if declared != version:
                   raise SystemExit("requested SDK version differs from candidate metadata")
-              if on_release_branch and release_branch != "release/v" + version:
-                  raise SystemExit("release branch differs from candidate version")
               api_base = os.environ["REQUESTED_API_BASE"]
               migration = os.environ["REQUESTED_MIGRATION"]
+              if release_branch == "release/v4.3":
+                  if not version.startswith("4.3."):
+                      raise SystemExit("LTS branch requires a 4.3 patch version")
+                  if os.environ["GITHUB_EVENT_NAME"] != "workflow_dispatch":
+                      tags = subprocess.check_output(
+                          ["git", "tag", "--merged", os.environ["CANDIDATE_SHA"]], text=True
+                      ).splitlines()
+                      target = tuple(map(int, version.split(".")))
+                      previous = [
+                          (tuple(map(int, tag[1:].split("."))), tag) for tag in tags
+                          if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag)
+                      ]
+                      prior = [item for item in previous if item[0] < target]
+                      if not prior:
+                          raise SystemExit("LTS candidate requires a prior reachable stable SDK tag")
+                      api_base = max(prior)[1]
+                      migration = "docs/migration/4.2-to-4.3.md"
+              elif on_release_branch and release_branch != "release/v" + version:
+                  raise SystemExit("release branch differs from candidate version")
               evaluate = True
           if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
               raise SystemExit("invalid stable candidate version")
