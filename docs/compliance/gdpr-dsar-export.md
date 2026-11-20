@@ -99,3 +99,18 @@ vault store under its own key-custody and governance controls.
 
 - Identity verification of the requester is out of scope.
 - Automated cross-system data discovery outside OpenMed is out of scope.
+
+## Coordinating local withdrawal
+
+An application can register its local store adapters with
+`openmed.compliance.withdrawal.WithdrawalCoordinator`. Supply a keyed subject
+reference digest. Calling `withdraw(subject_ref_digest)` previews the counts
+and computes a confirmation token. After reviewing the preview, pass the same
+digest and `confirmation=plan.confirmation_token` to apply and verify the
+selected records. A change in membership or revision requires a fresh plan.
+
+Adapters bind their selection digest to the affected records and check it again
+under the store's mutation lock before erasure. Receipts identify the stores
+by code and report counts, including unattributable holdings. A partial receipt
+identifies which stores still need verification. Training and private-round
+withdrawal use their own workflows.
