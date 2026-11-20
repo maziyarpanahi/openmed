@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-built subset for tests only. Elements and text are excerpted
+     unchanged from the public-domain CMS FY2027 ICD-10-CM tabular XML
+     (icd10cm_tabular_2027.xml); codes not listed here were removed, so the
+     hierarchy is partial. Not a complete or current release: do not use
+     for coding. -->
+<ICD10CM.tabular>
+  <version>2027-subset</version>
+  <chapter>
+    <name>4</name>
+    <desc>Endocrine, nutritional and metabolic diseases (E00-E89)</desc>
+    <section id="E08-E13">
+      <desc>Diabetes mellitus (E08-E13)</desc>
+      <diag>
+        <name>E11</name>
+        <desc>Type 2 diabetes mellitus</desc>
+        <includes>
+          <note>diabetes (mellitus) due to insulin secretory defect</note>
+          <note>diabetes NOS</note>
+          <note>insulin resistant diabetes (mellitus)</note>
+        </includes>
+        <useAdditionalCode>
+          <note>code to identify control using:</note>
+          <note>injectable non-insulin antidiabetic drugs (Z79.85)</note>
+          <note>insulin (Z79.4)</note>
+          <note>oral antidiabetic drugs (Z79.84)</note>
+          <note>oral hypoglycemic drugs (Z79.84)</note>
+        </useAdditionalCode>
+        <excludes1>
+          <note>diabetes mellitus due to underlying condition (E08.-)</note>
+          <note>drug or chemical induced diabetes mellitus (E09.-)</note>
+          <note>gestational diabetes (O24.4-)</note>
+          <note>neonatal diabetes mellitus (P70.2)</note>
+          <note>postpancreatectomy diabetes mellitus (E13.-)</note>
+          <note>postprocedural diabetes mellitus (E13.-)</note>
+          <note>secondary diabetes mellitus NEC (E13.-)</note>
+          <note>type 1 diabetes mellitus (E10.-)</note>
+        </excludes1>
+        <diag>
+          <name>E11.2</name>
+          <desc>Type 2 diabetes mellitus with kidney complications</desc>
+          <diag>
+            <name>E11.21</name>
+            <desc>Type 2 diabetes mellitus with diabetic nephropathy</desc>
+            <inclusionTerm>
+              <note>Type 2 diabetes mellitus with intercapillary glomerulosclerosis</note>
+              <note>Type 2 diabetes mellitus with intracapillary glomerulonephrosis</note>
+              <note>Type 2 diabetes mellitus with Kimmelstiel-Wilson disease</note>
+            </inclusionTerm>
+          </diag>
+          <diag>
+            <name>E11.22</name>
+            <desc>Type 2 diabetes mellitus with diabetic chronic kidney disease</desc>
+            <useAdditionalCode>
+              <note>code to identify stage of chronic kidney disease (N18.1-N18.6)</note>
+            </useAdditionalCode>
+          </diag>
+        </diag>
+        <diag>
+          <name>E11.3</name>
+          <desc>Type 2 diabetes mellitus with ophthalmic complications</desc>
+          <diag>
+            <name>E11.32</name>
+            <desc>Type 2 diabetes mellitus with mild nonproliferative diabetic retinopathy</desc>
+            <inclusionTerm>
+              <note>Type 2 diabetes mellitus with nonproliferative diabetic retinopathy NOS</note>
+            </inclusionTerm>
+            <sevenChrNote>
+              <note>One of the following 7th characters is to be assigned to codes in subcategory E11.32 to designate laterality of the disease:</note>
+            </sevenChrNote>
+            <sevenChrDef>
+              <extension char="1">right eye</extension>
+              <extension char="2">left eye</extension>
+              <extension char="3">bilateral</extension>
+              <extension char="9">unspecified eye</extension>
+            </sevenChrDef>
+            <diag>
+              <name>E11.329</name>
+              <desc>Type 2 diabetes mellitus with mild nonproliferative diabetic retinopathy without macular edema</desc>
+            </diag>
+          </diag>
+        </diag>
+        <diag>
+          <name>E11.4</name>
+          <desc>Type 2 diabetes mellitus with neurological complications</desc>
+          <diag>
+            <name>E11.40</name>
+            <desc>Type 2 diabetes mellitus with diabetic neuropathy, unspecified</desc>
+          </diag>
+          <diag>
+            <name>E11.42</name>
+            <desc>Type 2 diabetes mellitus with diabetic polyneuropathy</desc>
+            <inclusionTerm>
+              <note>Type 2 diabetes mellitus with diabetic neuralgia</note>
+            </inclusionTerm>
+          </diag>
+        </diag>
+        <diag>
+          <name>E11.5</name>
+          <desc>Type 2 diabetes mellitus with circulatory complications</desc>
+          <diag>
+            <name>E11.51</name>
+            <desc>Type 2 diabetes mellitus with diabetic peripheral angiopathy without gangrene</desc>
+          </diag>
+        </diag>
+        <diag>
+          <name>E11.6</name>
+          <desc>Type 2 diabetes mellitus with other specified complications</desc>
+          <diag>
+            <name>E11.64</name>
+            <desc>Type 2 diabetes mellitus with hypoglycemia</desc>
+            <useAdditionalCode>
+              <note>code for hypoglycemia level, if applicable (E16.A-)</note>
+            </useAdditionalCode>
+            <diag>
+              <name>E11.649</name>
+              <desc>Type 2 diabetes mellitus with hypoglycemia without coma</desc>
+            </diag>
+          </diag>
+          <diag>
+            <name>E11.65</name>
+            <desc>Type 2 diabetes mellitus with hyperglycemia</desc>
+          </diag>
+        </diag>
+        <diag>
+          <name>E11.8</name>
+          <desc>Type 2 diabetes mellitus with unspecified complications</desc>
+        </diag>
+        <diag>
+          <name>E11.9</name>
+          <desc>Type 2 diabetes mellitus without complications</desc>
+          <excludes1>
+            <note>type 2 diabetes mellitus, without complications in remission (E11.A)</note>
+          </excludes1>
+        </diag>
+      </diag>
+    </section>
+    <section id="E20-E35">
+      <desc>Disorders of other endocrine glands (E20-E35)</desc>
+      <diag>
+        <name>E35</name>
+        <desc>Disorders of endocrine glands in diseases classified elsewhere</desc>
+        <codeFirst>
+          <note>underlying disease, such as:</note>
+          <note>late congenital syphilis of thymus gland [Dubois disease] (A50.59)</note>
+        </codeFirst>
+        <excludes1>
+          <note>Echinococcus granulosus infection of thyroid gland (B67.3)</note>
+          <note>meningococcal hemorrhagic adrenalitis (A39.1)</note>
+          <note>syphilis of endocrine gland (A52.79)</note>
+          <note>tuberculosis of adrenal gland, except calcification (A18.7)</note>
+          <note>tuberculosis of endocrine gland NEC (A18.82)</note>
+          <note>tuberculosis of thyroid gland (A18.81)</note>
+          <note>Waterhouse-Friderichsen syndrome (A39.1)</note>
+        </excludes1>
+      </diag>
+    </section>
+    <section id="E65-E68">
+      <desc>Overweight, obesity and other hyperalimentation (E65-E68)</desc>
+      <diag>
+        <name>E66</name>
+        <desc>Overweight and obesity</desc>
+        <codeFirst>
+          <note>obesity complicating pregnancy, childbirth and the puerperium, if applicable (O99.21-)</note>
+        </codeFirst>
+        <useAdditionalCode>
+          <note>code to identify body mass index (BMI), if known, for adults (Z68.1-Z68.45) or pediatrics (Z68.5-)</note>
+        </useAdditionalCode>
+        <excludes2>
+          <note>adiposogenital dystrophy (E23.6)</note>
+          <note>lipomatosis dolorosa [Dercum] (E88.2)</note>
+          <note>lipomatosis NOS (E88.2)</note>
+          <note>Prader-Willi syndrome (Q87.11)</note>
+        </excludes2>
+        <diag>
+          <name>E66.0</name>
+          <desc>Obesity due to excess calories</desc>
+          <diag>
+            <name>E66.01</name>
+            <desc>Morbid (severe) obesity due to excess calories</desc>
+            <excludes1>
+              <note>morbid (severe) obesity with alveolar hypoventilation (E66.2)</note>
+            </excludes1>
+          </diag>
+          <diag>
+            <name>E66.09</name>
+            <desc>Other obesity due to excess calories</desc>
+          </diag>
+        </diag>
+        <diag>
+          <name>E66.9</name>
+          <desc>Obesity, unspecified</desc>
+          <inclusionTerm>
+            <note>Obesity NOS</note>
+          </inclusionTerm>
+        </diag>
+      </diag>
+    </section>
+  </chapter>
+  <chapter>
+    <name>9</name>
+    <desc>Diseases of the circulatory system (I00-I99)</desc>
+    <section id="I10-I1A">
+      <desc>Hypertensive diseases (I10-I1A)</desc>
+      <diag>
+        <name>I10</name>
+        <desc>Essential (primary) hypertension</desc>
+        <includes>
+          <note>high blood pressure</note>
+          <note>hypertension (arterial) (benign) (essential) (malignant) (primary) (systemic)</note>
+        </includes>
+        <excludes1>
+          <note>hypertensive disease complicating pregnancy, childbirth and the puerperium (O10-O11, O13-O16)</note>
+        </excludes1>
+        <excludes2>
+          <note>essential (primary) hypertension involving vessels of brain (I60-I69)</note>
+          <note>essential (primary) hypertension involving vessels of eye (H35.0-)</note>
+        </excludes2>
+      </diag>
+      <diag>
+        <name>I11</name>
+        <desc>Hypertensive heart disease</desc>
+        <includes>
+          <note>any condition in I50.- or I51.4-I51.7, I51.89, I51.9 due to hypertension</note>
+        </includes>
+        <diag>
+          <name>I11.0</name>
+          <desc>Hypertensive heart disease with heart failure</desc>
+          <inclusionTerm>
+            <note>Hypertensive heart failure</note>
+          </inclusionTerm>
+          <useAdditionalCode>
+            <note>code to identify type of heart failure (I50.-)</note>
+          </useAdditionalCode>
+        </diag>
+        <diag>
+          <name>I11.9</name>
+          <desc>Hypertensive heart disease without heart failure</desc>
+          <inclusionTerm>
+            <note>Hypertensive heart disease NOS</note>
+          </inclusionTerm>
+        </diag>
+      </diag>
+      <diag>
+        <name>I12</name>
+        <desc>Hypertensive chronic kidney disease</desc>
+        <includes>
+          <note>any condition in N18 and N26 - due to hypertension</note>
+          <note>arteriosclerosis of kidney</note>
+          <note>arteriosclerotic nephritis (chronic) (interstitial)</note>
+          <note>hypertensive nephropathy</note>
+          <note>nephrosclerosis</note>
+        </includes>
+        <excludes1>
+          <note>hypertension due to kidney disease (I15.0, I15.1)</note>
+          <note>renovascular hypertension (I15.0)</note>
+          <note>secondary hypertension (I15.-)</note>
+        </excludes1>
+        <excludes2>
+          <note>acute kidney failure (N17.-)</note>
+        </excludes2>
+        <diag>
+          <name>I12.9</name>
+          <desc>Hypertensive chronic kidney disease with stage 1 through stage 4 chronic kidney disease, or unspecified chronic kidney disease</desc>
+          <inclusionTerm>
+            <note>Hypertensive chronic kidney disease NOS</note>
+            <note>Hypertensive renal disease NOS</note>
+          </inclusionTerm>
+          <useAdditionalCode>
+            <note>code to identify the stage of chronic kidney disease (N18.1-N18.4, N18.9)</note>
+          </useAdditionalCode>
+        </diag>
+      </diag>
+    </section>
+  </chapter>
+</ICD10CM.tabular>
