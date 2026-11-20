@@ -909,3 +909,13 @@ invented or computed through an unbounded combinatorial count.
 
 For the broader legal and operational boundary, see
 [Compliance Posture](compliance.md).
+
+## Recording a release history
+
+Use `openmed.risk.release_history.ReleaseHistory(path, lineage_id)` to keep
+successive releases in a local SQLite ledger. Pass the result of
+`anonymize_release` to `history.append(result, released_on=release_date)`.
+Each append returns a chain head that can be retained independently. The
+ledger records the dataset and schema digests, declared QI columns and levels,
+suppressed row count, achieved k and release date. `history.entries()` verifies
+the retained head, record digests and chain links before returning the history.

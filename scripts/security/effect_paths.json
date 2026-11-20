@@ -476,6 +476,21 @@
       "module": "openmed.processing.spark_executor"
     },
     {
+      "module": "openmed.risk.release_history",
+      "function": "ReleaseHistory.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.risk.release_history",
+      "function": "ReleaseHistory.append",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.risk.release_history",
+      "function": "ReleaseHistory.entries",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "KServeV2HttpTransport.infer",
       "module": "openmed.service.backends.remote_inference"
