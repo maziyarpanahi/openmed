@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
 - Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
 - Add post-restore authorization reconciliation that opens a new recovery epoch, burns pre-restore approval nonces, rechecks recorded authority against current status, and holds or requires fresh review instead of reviving spent or revoked authority (#3707).
+- Generate the protobuf `OpenMedSpan` message from `span.schema.json` with
+  `scripts/codegen/span_proto.py`, keep wire numbers stable through a committed field map
+  that reserves removed fields, and run its `--check` mode in `make grpc-proto-check` (#5335).
 - Add fail-closed required audit for declared service operations: durable intent/commit receipts on the action ledger, denied or reconcile-required outcomes when audit storage fails, and exactly-once reconciliation that never re-runs a committed effect (#3708).
 - Declare the v3.4 reference deployment, supported transports with their security posture, replica modes, durable components with recovery objectives, and unsupported deployments in a schema-validated file with a matching docs page (#3919).
 - Add a local `openmed service-recovery` operator CLI with read-only inspect, plan and verify commands and explicit apply commands that bind single-use approvals to the exact plan, active generation and state digest (#3703).
