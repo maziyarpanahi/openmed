@@ -18,6 +18,7 @@ import os
 import tempfile
 import unicodedata
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from math import isfinite
 from numbers import Real
@@ -473,6 +474,32 @@ class InMemorySurrogateStore:
         with self._lock:
             return tuple(self._entries[key] for key in sorted(self._entries))
 
+    @contextmanager
+    def locked(self):
+        """Keep selection and a coordinated store update on the same snapshot."""
+        with self._lock:
+            yield
+
+    def erase_selected(
+        self, keys: frozenset[SurrogateKey], expected: tuple[SurrogateEntry, ...]
+    ) -> int:
+        """Erase exactly the unchanged selection and persist file-backed stores."""
+        with self._lock:
+            before = self.entries()
+            matched = tuple(entry for entry in before if entry.key in keys)
+            if matched != expected:
+                raise ValueError("vault withdrawal selection changed")
+            if not matched:
+                return 0
+            self.replace_entries(entry for entry in before if entry.key not in keys)
+            if isinstance(self, JsonFileSurrogateStore):
+                try:
+                    self.save()
+                except Exception:
+                    self.replace_entries(before)
+                    raise
+            return len(matched)
+
     def used_surrogates(self, *, canonical_label: str, lang: str) -> AbstractSet[str]:
         """Return surrogates already used for the label/language bucket."""
 
@@ -702,6 +729,10 @@ class JsonFileSurrogateStore(InMemorySurrogateStore):
     def save(self) -> None:
         """Atomically write the deterministic JSON vault payload."""
 
+        with self._lock:
+            self._save_snapshot()
+
+    def _save_snapshot(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = json.dumps(
             self.to_payload(),

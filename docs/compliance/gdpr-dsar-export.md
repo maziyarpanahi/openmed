@@ -114,3 +114,16 @@ under the store's mutation lock before erasure. Receipts identify the stores
 by code and report counts, including unattributable holdings. A partial receipt
 identifies which stores still need verification. Training and private-round
 withdrawal use their own workflows.
+
+Register `VaultWithdrawalParticipant(vault, identifiers)` from
+`openmed.compliance.dsar` under `ParticipantCode.SURROGATE_VAULT`. Use the
+DSAR package's `subject_ref` for preview and confirmation. Selection matches
+the full label, language and keyed identifier used by the export. The adapter
+persists a file-backed vault even when automatic saves are disabled.
+
+For an associated AES-SIV reversible mapping, pass
+`encrypted_mapping=(path, crypto)` with the controller's `SurrogateVaultCrypto`
+instance. Only exact surrogate/source pairs belonging to selected vault
+holdings are removed. Mirrored copies count once with their vault holdings.
+Keep the file-backed vault under a single writer during withdrawal, as for
+other mutations of a live vault object.

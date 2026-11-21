@@ -196,3 +196,72 @@ def test_erasure_preview_is_audit_logged_non_destructively():
 
     assert log.records[0].event_type == "dsar.erasure_preview"
     assert log.records[0].payload.get("destructive") is False
+
+
+def test_confirmed_vault_withdrawal_erases_exact_dsar_selection(tmp_path):
+    from openmed.compliance.dsar import VaultWithdrawalParticipant
+    from openmed.compliance.withdrawal import ParticipantCode, WithdrawalCoordinator
+    from openmed.core.surrogate_vault_crypto import SurrogateVaultCrypto
+
+    path = tmp_path / "vault.json"
+    vault = SurrogateVault.from_file(path, hmac_secret=SECRET)
+    _seed(vault, "12345", "id_num", "synthetic-id")
+    _seed(vault, "12345", "phone", "synthetic-phone")
+    _seed(vault, "12345", "id_num", "synthetic-fr", lang="fr")
+    ids = [SubjectIdentifier("12345", "id_num")]
+    package = assemble_dsar_package(ids, vault)
+    mirror = tmp_path / "encrypted.json"
+    crypto = SurrogateVaultCrypto(bytes(range(32)))
+    crypto.write(
+        mirror,
+        {"synthetic-id": "12345", "synthetic-phone": "12345", "synthetic-fr": "12345"},
+    )
+    participant = VaultWithdrawalParticipant(
+        vault, ids, encrypted_mapping=(mirror, crypto)
+    )
+    coordinator = WithdrawalCoordinator({ParticipantCode.SURROGATE_VAULT: participant})
+    preview = coordinator.plan(package.subject_ref)
+    assert preview.participants[0][1].count == len(package.entries) == 1
+    receipt = coordinator.withdraw(
+        package.subject_ref, confirmation=preview.confirmation_token
+    )
+    assert receipt.state == "success" and receipt.participants[0].applied == 1
+    assert "12345" not in str(receipt.to_dict()) and "synthetic-id" not in str(
+        receipt.to_dict()
+    )
+    reopened = SurrogateVault.from_file(path, hmac_secret=SECRET, create=False)
+    assert not assemble_dsar_package(ids, reopened).entries
+    assert {e.surrogate for e in reopened.entries()} == {
+        "synthetic-phone",
+        "synthetic-fr",
+    }
+    assert crypto.read(mirror) == {"synthetic-phone": "12345", "synthetic-fr": "12345"}
+    assert b"synthetic-phone" not in mirror.read_bytes()
+    assert participant.verify(package.subject_ref)
+    crypto.write(mirror, {"synthetic-id": "12345"})
+    assert not participant.verify(package.subject_ref)
+
+
+def test_vault_erasure_rejects_stale_selection_and_restores_failed_save(
+    tmp_path, monkeypatch
+):
+    import pytest
+
+    from openmed.compliance.dsar import VaultWithdrawalParticipant
+
+    vault = SurrogateVault.from_file(tmp_path / "vault", hmac_secret=SECRET)
+    ids = _subject_ids()
+    package = assemble_dsar_package(ids, vault)
+    participant = VaultWithdrawalParticipant(vault, ids)
+    stale = participant.plan(package.subject_ref)
+    _seed(vault, "MRN-12345", "id_num", "synthetic-id")
+    with pytest.raises(ValueError, match="selection changed"):
+        participant.apply(package.subject_ref, stale)
+
+    def fail_write():
+        raise OSError("fixture error")
+
+    monkeypatch.setattr(vault.store, "save", fail_write)
+    with pytest.raises(OSError):
+        participant.apply(package.subject_ref, participant.plan(package.subject_ref))
+    assert len(assemble_dsar_package(ids, vault).entries) == 1

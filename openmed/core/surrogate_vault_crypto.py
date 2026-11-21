@@ -23,6 +23,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from openmed.service._state_files import exclusive_lock
+
 SCHEMA_VERSION = 1
 ENCRYPTION_SCHEME = "AES-256-SIV"
 KEY_BYTES = 32
@@ -119,7 +121,36 @@ class SurrogateVaultCrypto:
         """
 
         encrypted = self.encrypt(mapping)
-        _atomic_write(Path(path), encrypted)
+        path = Path(path)
+        try:
+            with exclusive_lock(path.with_name(path.name + ".lock")):
+                _atomic_write(path, encrypted)
+        except OSError:
+            raise SurrogateVaultCryptoError(
+                "could not write encrypted surrogate mapping"
+            ) from None
+
+    def erase_selected(
+        self,
+        path: Path,
+        *,
+        candidates: set[tuple[str, str]],
+        expected: Mapping[str, str],
+    ) -> int:
+        """Erase only exact surrogate/source pairs while preserving unrelated updates."""
+        with exclusive_lock(path.with_name(path.name + ".lock")):
+            mapping = self.read(path)
+            pairs = {
+                key: value for key, value in candidates if mapping.get(key) == value
+            }
+            if pairs != expected:
+                raise SurrogateVaultCryptoError("vault withdrawal selection changed")
+            if pairs:
+                _atomic_write(
+                    path,
+                    self.encrypt({k: v for k, v in mapping.items() if k not in pairs}),
+                )
+            return len(pairs)
 
     def read(self, path: str | Path) -> dict[str, str]:
         """Read, authenticate, and decrypt an encrypted mapping from ``path``."""
