@@ -643,6 +643,7 @@ class ReleaseGate:
         thresholds_matrix: Mapping[str, Any] | None = None,
         thresholds_matrix_path: str | Path | None = None,
         model_steward_config: Mapping[str, Any] | ModelStewardConfig | None = None,
+        fixture_preservation_ceiling: float | None = None,
         cross_document_linkage_ceiling: float = (
             DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING
         ),
@@ -658,6 +659,13 @@ class ReleaseGate:
         )
         self.model_steward_config = ModelStewardConfig.from_mapping(
             model_steward_config
+        )
+        self.fixture_preservation_ceiling = (
+            None
+            if fixture_preservation_ceiling is None
+            else _probability_ceiling(
+                fixture_preservation_ceiling, name="fixture_preservation_ceiling"
+            )
         )
         self.cross_document_linkage_ceiling = _probability_ceiling(
             cross_document_linkage_ceiling,
@@ -821,6 +829,13 @@ class ReleaseGate:
         )
         checks.append(_per_language_residual_leakage_check(metrics, metadata))
         checks.append(_membership_leakage_check(metrics, metadata))
+        if self.fixture_preservation_ceiling is not None:
+            checks.append(
+                evaluate_fixture_preservation_gate(
+                    metrics.get("fixture_preservation"),
+                    ceiling=self.fixture_preservation_ceiling,
+                )
+            )
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
         checks.append(_live_surrogate_quality_release_check(metrics, metadata))
@@ -3459,6 +3474,42 @@ def _per_language_residual_leakage_check(
             "violations": violations,
         },
     )
+
+
+def evaluate_fixture_preservation_gate(counts: Any, *, ceiling: float) -> GateCheck:
+    """Quarantine on missing evidence or a paired-fixture rate over the ceiling."""
+    ceiling = _probability_ceiling(ceiling, name="fixture_preservation_ceiling")
+    gate = "fixture_preservation"
+    denominators = {
+        "unchanged_dates": "date_pairs",
+        "preserved_prefixes": "surrogate_pairs",
+        "preserved_check_digits": "surrogate_pairs",
+    }
+    fields = set(denominators) | set(denominators.values())
+    if counts is None:
+        return GateCheck(gate, False, "not_assessed")
+    if (
+        not isinstance(counts, Mapping)
+        or set(counts) != fields
+        or any(_strict_nonnegative_int(counts[key]) is None for key in fields)
+    ):
+        return GateCheck(gate, False, "invalid_evidence")
+    details = dict(counts)
+    rates = []
+    for key, denominator in denominators.items():
+        n, total = counts[key], counts[denominator]
+        if n > total:
+            return GateCheck(gate, False, "invalid_evidence")
+        if total:
+            rate = n / total
+            details[key + "_rate"] = rate
+            rates.append(rate)
+    details["ceiling"] = ceiling
+    if any(rate > ceiling for rate in rates):
+        return GateCheck(gate, False, "preservation_above_ceiling", details)
+    if len(rates) != len(denominators):
+        return GateCheck(gate, False, "not_assessed", details)
+    return GateCheck(gate, True, "ok", details)
 
 
 def _membership_leakage_check(

@@ -143,3 +143,62 @@ def test_longitudinal_linkage_attack_stays_below_reported_bound() -> None:
     assert "patient-alpha" not in payload
     assert "Jordan Vale" not in payload
     assert "rare alpha syndrome" not in payload
+
+
+def test_fixture_preservation_release_gate_uses_only_aggregate_evidence():
+    from datetime import date, timedelta
+
+    from openmed.eval.attacks.reid import assess_fixture_preservation
+    from openmed.eval.release_gates import (
+        ReleaseGate,
+        evaluate_fixture_preservation_gate,
+    )
+
+    golden = json.loads(
+        (FIXTURE_PATH.parents[1] / "journey/v3/golden.json").read_text()
+    )
+    source = date.fromisoformat(
+        golden["omop"]["projection"]["tables"]["measurement"][0]["measurement_date"]
+    )
+    counts = assess_fixture_preservation(
+        date_pairs=[(source, source), (source, source + timedelta(days=10))],
+        surrogate_pairs=[("AB1117", "AB9997"), ("AB1117", "ZZ2229")],
+    )
+    gate = evaluate_fixture_preservation_gate(counts, ceiling=0)
+    assert not gate.passed and gate.details["unchanged_dates_rate"] == 0.5
+    assert (
+        gate.details["preserved_check_digits_rate"]
+        == gate.details["preserved_prefixes_rate"]
+        == 0.5
+    )
+    assert "AB1117" not in json.dumps(gate.to_dict())
+    report = {"metrics": {"fixture_preservation": counts}}
+    assert all(c.gate != gate.gate for c in ReleaseGate().preview(report).gate_results)
+    assert (
+        gate in ReleaseGate(fixture_preservation_ceiling=0).preview(report).gate_results
+    )
+    assert evaluate_fixture_preservation_gate(counts, ceiling=0.5).passed
+    assert (
+        evaluate_fixture_preservation_gate(
+            assess_fixture_preservation(), ceiling=0
+        ).reason
+        == "not_assessed"
+    )
+    for partial in (
+        assess_fixture_preservation(surrogate_pairs=[("AB1117", "ZZ2229")]),
+        assess_fixture_preservation(date_pairs=[(source, source + timedelta(days=10))]),
+    ):
+        check = evaluate_fixture_preservation_gate(partial, ceiling=0)
+        assert not check.passed and check.reason == "not_assessed"
+    observed_failure = assess_fixture_preservation(date_pairs=[(source, source)])
+    assert (
+        evaluate_fixture_preservation_gate(observed_failure, ceiling=0).reason
+        == "preservation_above_ceiling"
+    )
+    for invalid in (
+        {**counts, "unexpected": "sensitive"},
+        {**counts, "preserved_prefixes": 3},
+        {**counts, "date_pairs": False},
+    ):
+        result = evaluate_fixture_preservation_gate(invalid, ceiling=1)
+        assert not result.passed and not result.details
