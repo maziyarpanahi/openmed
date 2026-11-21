@@ -347,3 +347,17 @@ review artifacts, keep their text out of logs and general reports, and remember
 that the grapheme check is a conservative guard, not full Unicode segmentation.
 Errors carry only field names and closed codes. Native review supports language
 validation only and does not make or trigger clinical decisions.
+
+## Comparing reviews of active and candidate outputs
+
+Pass `ModelReviewDecision` records to `model_review_disagreement_report`. Each
+record has a pseudonymous case and reviewer, a `ReviewedModel` role, a final
+`ModelReviewOutcome` and an optional typed disagreement reason. A reviewer may
+decide the same case once for each role. Each model rate uses all of its review
+decisions as the denominator. Each reason rate uses reviews within that model
+and reason. Unspecified reasons form their own group.
+
+Rejection and correction rates share a denominator. If an accepted, corrected
+or rejected count is positive and below the threshold, both rates are
+suppressed. A suppressed reason cell withholds the model's entire reason
+breakdown so totals cannot reveal a rare outcome by subtraction.

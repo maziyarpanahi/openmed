@@ -1027,10 +1027,14 @@ from openmed.eval.reviewer_disagreement import (
     DEFAULT_MINIMUM_CELL_SIZE,
     REVIEWER_DISAGREEMENT_SCHEMA_VERSION,
     DisagreementReason,
+    ModelReviewDecision,
+    ModelReviewOutcome,
     PublishedRate,
     ReasonAdjudicationRate,
+    ReviewedModel,
     ReviewerDecision,
     ReviewerDisagreementReport,
+    model_review_disagreement_report,
     reviewer_disagreement_report,
 )
 from openmed.eval.robustness import (
@@ -2370,6 +2374,10 @@ __all__ = [
     "ReasonAdjudicationRate",
     "ReviewerDecision",
     "ReviewerDisagreementReport",
+    "ReviewedModel",
+    "ModelReviewOutcome",
+    "ModelReviewDecision",
+    "model_review_disagreement_report",
     "reviewer_disagreement_report",
     # Unsupported summary claim metric (#2749).
     "APPROVED_EVIDENCE_DISCLAIMER",
