@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "request": {
+    "model": "local-fixture",
+    "messages": [{"role": "user", "content": [
+      {"type": "text", "text": "Contact Avery Example."},
+      {"type": "text", "text": "The synthetic phone is 555-0100."}
+    ]}]
+  }
+}

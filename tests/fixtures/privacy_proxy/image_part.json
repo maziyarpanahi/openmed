@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "request": {
+    "model": "local-fixture",
+    "messages": [{"role": "user", "content": [
+      {"type": "text", "text": "Review the synthetic image for Avery Example."},
+      {"type": "image_url", "image_url": {"url": "https://example.invalid/synthetic.png"}}
+    ]}]
+  }
+}
