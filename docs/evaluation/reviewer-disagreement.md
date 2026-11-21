@@ -347,3 +347,18 @@ review artifacts, keep their text out of logs and general reports, and remember
 that the grapheme check is a conservative guard, not full Unicode segmentation.
 Errors carry only field names and closed codes. Native review supports language
 validation only and does not make or trigger clinical decisions.
+
+## Local shadow evaluation
+
+Wrap two locally configured functions with
+`ShadowRunner(active, candidate, timeout=5.0)` from `openmed.eval.shadow_mode`.
+Call `runner.extract_pii(text)` for extraction or `runner.deidentify(text)` for
+redaction. Both return the active pipeline's result. Bind the candidate model
+and its options before constructing the runner. Only the input passes to the
+candidate, so an active audit destination or surrogate vault is not forwarded.
+
+The snapshot contains comparison counts by canonical and policy label, missed
+direct identifiers, candidate failures, timeouts and busy skips. One candidate
+runs at a time. After a timeout its eventual result is discarded. An uncooperative
+candidate continues occupying its slot until it returns. Use local, non-logging
+candidate functions configured without result caching or persistence.
