@@ -182,3 +182,89 @@ def bridge_text_qis(
             },
         },
     )
+
+
+def text_qi_risk(
+    spans_by_unit: Iterable[TextQIDocument],
+    policy: TextQIPolicy,
+    reference_population: Iterable[TextQIDocument] | None = None,
+    target_k: int | None = None,
+    target_k_map: int | None = None,
+    *,
+    span_hmac_key: str | bytes | None = None,
+) -> dict:
+    """Measure k and optional exact k-map for generalized text QIs.
+
+    Args:
+        spans_by_unit: Documents with keyed privacy-unit digests.
+        policy: Generalization rules shared by sample and reference.
+        reference_population: Reference documents with the same unit semantics.
+        target_k: Explicit minimum sample class size.
+        target_k_map: Explicit minimum reference class size when supplied.
+        span_hmac_key: Local key for verifying OpenMedSpan source binding.
+    """
+    from openmed.risk.kanon import kanon_report
+    from openmed.risk.population import _analysis_unit_profiles
+
+    if type(target_k) is not int or target_k < 1:
+        raise ValueError("explicit positive target_k required")
+    if reference_population is None and target_k_map is not None:
+        raise ValueError("reference_population required for k-map")
+    if reference_population is not None and (
+        type(target_k_map) is not int or target_k_map < 1
+    ):
+        raise ValueError("explicit positive target_k_map required")
+    sample = bridge_text_qis(
+        spans_by_unit, policy, by_unit=True, span_hmac_key=span_hmac_key
+    )
+    if not sample.rows:
+        raise ValueError("empty sample")
+    columns = tuple(sample.profile["columns"])
+    kanon = kanon_report(sample.rows, quasi_identifiers=columns)
+    population = None
+    if reference_population is not None:
+        reference = bridge_text_qis(
+            reference_population, policy, by_unit=True, span_hmac_key=span_hmac_key
+        )
+        if not reference.rows:
+            raise ValueError("empty reference population")
+
+        # Each bridge row already represents one distinct keyed unit. Use the
+        # population scorer's typed joint profiles without exposing their keys.
+        def frequencies(rows):
+            return Counter(
+                _analysis_unit_profiles(rows, columns, privacy_unit=None).values()
+            )
+
+        sample_counts, reference_counts = (
+            frequencies(sample.rows),
+            frequencies(reference.rows),
+        )
+        k_map = min(reference_counts[key] for key in sample_counts)
+        consistent = all(
+            reference_counts[key] >= count for key, count in sample_counts.items()
+        )
+        population = {
+            "reference_unit_count": len(reference.rows),
+            "achieved_k_map": k_map,
+            "target_k_map": target_k_map,
+            "reference_model_consistent": consistent,
+            "meets_k_map": consistent and k_map >= target_k_map,
+        }
+    return {
+        "schema_version": 1,
+        "artifact": "text_qi_risk",
+        "profile": sample.profile,
+        "kanon": {
+            "k": kanon["k"],
+            "target_k": target_k,
+            "class_count": kanon["class_count"],
+            "meets_k": kanon["k"] >= target_k,
+        },
+        "population": population,
+        "limitations": [
+            "detected_spans_only",
+            "caller_defined_generalization",
+            "qualified_expert_review_required",
+        ],
+    }
