@@ -399,3 +399,11 @@ controlled messages without incorporating the underlying error or its cause.
 Cache option keys distinguish scalar types, signed zero, arrays and plain objects,
 with sorted object keys; runtime, loader, function and opaque object identities
 remain distinct. Symbol option values are unsupported and reject before loading.
+
+### Offline crisis guidance
+
+Call `new CrisisRouting().route(locale, signal)` with an explicit host-supplied
+boolean. Display the returned notice before results. A positive signal yields
+the generic guidance even when there are no local entries. The constructor
+accepts an optional resource-table object with the Python schema to override
+individual locales. The helper returns labels and URLs for the host to render.
