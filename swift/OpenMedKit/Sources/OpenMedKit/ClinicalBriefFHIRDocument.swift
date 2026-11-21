@@ -20,8 +20,6 @@ public struct ClinicalBriefFHIRDocument: Sendable, CustomStringConvertible {
         "profile_sections_unavailable", "source_payloads_omitted", "evaluation_metrics_omitted",
         "review_packet_details_omitted", "model_details_omitted",
     ]
-    private static let disclaimer =
-        "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment."
     private let response: Data
     private let audit: Data
     public let briefDigest: String
@@ -228,7 +226,7 @@ public struct ClinicalBriefFHIRDocument: Sendable, CustomStringConvertible {
         guard output[end...].allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else {
             throw ClinicalBriefFHIRDocumentError.invalidDocument
         }
-        sections.append(["title": "Limitations", "text": narrative(disclaimer)])
+        sections.append(["title": "Limitations", "text": narrative(try OpenMedDisclaimer.clinicalBriefLimitation)])
         resources[0] = [
             "resourceType": "Composition", "id": "brief", "status": "preliminary", "type": ["text": "Clinical brief"],
             "date": date, "author": [["reference": fullURL(seed, 1)]], "title": "Clinical brief for human review",

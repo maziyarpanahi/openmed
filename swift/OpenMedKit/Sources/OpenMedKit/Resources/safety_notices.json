@@ -1,0 +1,111 @@
+{
+  "capabilities": {
+    "analyze_text": "openmed.clinical",
+    "brief": "openmed.clinical",
+    "clinical_measurements": "openmed.restricted",
+    "decisions": "openmed.restricted",
+    "deidentify": "openmed.non_clinical",
+    "ecg": "openmed.multimodal.measurement_for_review.v1",
+    "extract_pii": "openmed.non_clinical",
+    "generate_text": "openmed.clinical",
+    "ground": "openmed.clinical",
+    "journey": "openmed.clinical",
+    "mental_health": "openmed.restricted",
+    "nli": "openmed.clinical",
+    "review_evidence": "openmed.clinical",
+    "structured_extraction": "openmed.clinical",
+    "summarize": "openmed.clinical",
+    "transcribe": "openmed.clinical",
+    "visual_qa": "openmed.multimodal.visual_description.v1",
+    "waveform": "openmed.multimodal.measurement_for_review.v1"
+  },
+  "clinical_brief_limitation": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.",
+  "notices": {
+    "openmed.clinical": {
+      "id": "openmed.clinical",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "OpenMed clinical outputs are assistive software outputs, not a medical device, diagnosis, or substitute for qualified clinical judgment.",
+      "tier": "assistive_review",
+      "version": "1",
+      "version_digest": "sha256:81a2c40b9c512914075b36c4e88bbe9be9018b712fc8279c55868059f25ecc87"
+    },
+    "openmed.informational": {
+      "id": "openmed.informational",
+      "locale": "en",
+      "requires_acknowledgement": false,
+      "text": "For information only. Review the source before use.",
+      "tier": "informational",
+      "version": "1",
+      "version_digest": "sha256:6f92c5f262c6b301c0596a4bda0391361a6f792ec3febd3f863fcab7cd164bc9"
+    },
+    "openmed.maple": {
+      "id": "openmed.maple",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "Maple output is assistive and may be incomplete or incorrect. It must be reviewed by a qualified person and must not trigger a diagnosis, treatment, disclosure, or other clinical decision automatically.",
+      "tier": "assistive_review",
+      "version": "1",
+      "version_digest": "sha256:02d5c3716042f489748c9da1603c71f842f5ef84e6cc2abe2a456a9233dd2713"
+    },
+    "openmed.multimodal.draft_for_review.v1": {
+      "id": "openmed.multimodal.draft_for_review.v1",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "Draft for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision.",
+      "tier": "assistive_review",
+      "version": "1",
+      "version_digest": "sha256:e3669fa76dfcaff464c4d0fbbfc579481b151eef6b4f3498b4e08d6e6855bb7a"
+    },
+    "openmed.multimodal.measurement_for_review.v1": {
+      "id": "openmed.multimodal.measurement_for_review.v1",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "Measurement candidate for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision.",
+      "tier": "restricted",
+      "version": "1",
+      "version_digest": "sha256:ff1bf73b4a86a84faf560a986c8988947820318aee52f03ea8588149425ec177"
+    },
+    "openmed.multimodal.visual_description.v1": {
+      "id": "openmed.multimodal.visual_description.v1",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "Visual description for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision.",
+      "tier": "restricted",
+      "version": "1",
+      "version_digest": "sha256:9aeced47b086b1116174ef9b9d7a98082d3a3d56fb409abbbdcf10ce78666d79"
+    },
+    "openmed.non_clinical": {
+      "id": "openmed.non_clinical",
+      "locale": "en",
+      "requires_acknowledgement": false,
+      "text": "Review privacy processing results before release.",
+      "tier": "non_clinical",
+      "version": "1",
+      "version_digest": "sha256:29d49fd604e07a994751c55fda4167c63c9e53422a0670c4c0206024392f6bad"
+    },
+    "openmed.restricted": {
+      "id": "openmed.restricted",
+      "locale": "en",
+      "requires_acknowledgement": true,
+      "text": "Restricted to clinician review. A qualified clinician must independently verify the source before consequential use.",
+      "tier": "restricted",
+      "version": "1",
+      "version_digest": "sha256:fa1788f696f18cdd80866d9c9132fa2e799bd7ffe353493c52034396b954cdad"
+    }
+  },
+  "overrides": {
+    "openmed.MapleClinicalAssistant.chat": "openmed.maple",
+    "openmed.MapleClinicalAssistant.complete_task": "openmed.maple",
+    "openmed.build_maple_task_messages": "openmed.maple",
+    "openmed.mlx.maple.MapleClinicalAssistant.chat": "openmed.maple",
+    "openmed.mlx.maple.MapleClinicalAssistant.complete_task": "openmed.maple",
+    "openmed.parse_maple_task_response": "openmed.maple"
+  },
+  "tiers": {
+    "assistive_review": "openmed.clinical",
+    "informational": "openmed.informational",
+    "non_clinical": "openmed.non_clinical",
+    "restricted": "openmed.restricted"
+  }
+}

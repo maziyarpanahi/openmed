@@ -1132,3 +1132,11 @@ installed kit. Lookup returns `nil` for an unregistered capability. The
 Future tier values decode as `.unknown` and carry the restricted obligations.
 Refresh the Swift resource with `python3 scripts/manifest/export_intended_use.py`
 and verify it with the same command plus `--check`.
+
+Use `try OpenMedDisclaimer.forTier(.restricted)` or
+`try OpenMedDisclaimer.forCapability("ecg")` to load a bundled notice.
+Pass the notice to `OpenMedDisclaimerView(notice:onAcknowledged:content:)`.
+The view constructs result content after acknowledgement for assistive and
+restricted tiers. The callback receives only the notice ID, version digest
+and UTC timestamp. A changed notice version requires a fresh acknowledgement.
+Headless hosts can apply the same rule with `permitsResults(with:)`.
