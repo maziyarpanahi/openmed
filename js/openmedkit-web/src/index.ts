@@ -17,6 +17,9 @@ import {
   type TokenClassificationPipeline,
 } from "./types";
 
+export { effectiveRegulatoryTier, getIntendedUse, regulatoryObligations } from "./intended-use";
+export type { IntendedUse, RegulatoryTier } from "./types";
+
 export {
   CANONICAL_LABELS,
   OPENMED_SPAN_SCHEMA_VERSION,
