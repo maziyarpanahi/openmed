@@ -562,6 +562,10 @@ def preserve_existing_enrichment(
             preserved_fields = BASE_MODEL_PRESERVED_FIELDS
         if previous is None or previous.get("family") != row.get("family"):
             continue
+        if previous.get("repo_id") == row.get("repo_id") and previous.get(
+            "task"
+        ) == row.get("task"):
+            preserved_fields = (*preserved_fields, "regulatory_tier", "capability")
         for field in preserved_fields:
             if field == "script_coverage" and row.get("family") != "PII":
                 continue

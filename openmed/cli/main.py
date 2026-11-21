@@ -7775,6 +7775,9 @@ def _handle_models_info(args: argparse.Namespace) -> int:
         "entity_types": info.entity_types,
         "size_category": info.size_category,
         "recommended_confidence": info.recommended_confidence,
+        "regulatory_tier": info.regulatory_tier,
+        "capability": info.capability,
+        "regulatory_obligations": sorted(info.regulatory_obligations),
         "size_mb": info.size_mb,
     }
     if max_length is not None:

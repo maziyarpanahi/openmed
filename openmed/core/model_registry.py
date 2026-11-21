@@ -13,7 +13,8 @@ from types import MappingProxyType
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from . import labels as label_taxonomy
-from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+from .intended_use import RegulatoryTier
+from .manifest_schema import LANGUAGE_SCRIPT_TARGETS, validate_intended_use_fields
 from .registry_slots import (
     load_registry_state,
     pointer_targets,
@@ -58,6 +59,15 @@ class ModelInfo:
     released: Optional[str] = None
     provenance: Dict[str, Any] = field(default_factory=dict)
     semantic_version: str = "0.0.0"
+    regulatory_tier: str = "unknown"
+    capability: Optional[str] = None
+
+    @property
+    def regulatory_obligations(self) -> frozenset[str]:
+        """Return the strictest safeguards when no tier has been declared."""
+        if self.regulatory_tier == "unknown":
+            return RegulatoryTier.RESTRICTED.obligations
+        return RegulatoryTier(self.regulatory_tier).obligations
 
     @property
     def size_mb(self) -> Optional[int]:
@@ -642,6 +652,10 @@ def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
                 raise ValueError(
                     f"Invalid JSON in {path} line {line_number}: {exc}"
                 ) from exc
+            if isinstance(row, dict):
+                errors = validate_intended_use_fields(row, line_number)
+                if errors:
+                    raise ValueError(str(errors[0]))
             rows.append(row)
     return rows
 
@@ -884,6 +898,8 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         if isinstance(row.get("provenance"), dict)
         else {},
         semantic_version=semantic_version(str(row["repo_id"])),
+        regulatory_tier=row.get("regulatory_tier", "unknown"),
+        capability=row.get("capability"),
     )
 
 

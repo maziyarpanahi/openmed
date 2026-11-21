@@ -149,3 +149,13 @@ python scripts/manifest/regenerate_surfaces.py
 
 This step reads only local committed inputs. Remote Hugging Face discovery is
 limited to the explicit refresh command above.
+
+### Intended use
+
+The optional `regulatory_tier` field accepts `non_clinical`, `informational`,
+`assistive_review` or `restricted`. The optional `capability` field identifies a
+stable code from the packaged intended-use registry, such as `deidentify`.
+Omit a field when its value is undeclared. Both fields survive manifest reads
+and appear in `openmed models info` output. For older rows, the SDK reports
+`regulatory_tier="unknown"` and applies the full restricted obligation set.
+The existing `tier` field continues to describe the model's size tier.
