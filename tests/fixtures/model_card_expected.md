@@ -31,6 +31,19 @@ This model card is rendered from the OpenMed model manifest. Update `models.json
 | Reproducibility hash | `sha256:1111111111111111111111111111111111111111111111111111111111111111` |
 | Released | 2026-06-14 |
 
+## Intended Use and Limitations
+
+| Field | Value |
+|---|---|
+| Capability | Undeclared |
+| Regulatory tier | unknown |
+| Effective safeguards | restricted |
+| Purpose | Undeclared |
+| Intended users | Undeclared |
+| Oversight | clinician review |
+| Excluded uses | autonomous action, diagnosis, emergency detection, treatment selection, triage without review |
+| Obligations | acknowledgement required, clinician mode required, crisis routing required, notice required |
+
 ## Benchmark
 
 | Dataset | Micro F1 | Recall |

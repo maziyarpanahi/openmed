@@ -321,3 +321,30 @@ def test_publish_model_card_uploads_rendered_readme():
     assert captured["token"] == "secret-token"
     assert captured["commit_message"] == DEFAULT_MODEL_CARD_COMMIT_MESSAGE
     assert captured["path_or_fileobj"] == render_model_card(row).encode("utf-8")
+
+
+def test_cards_render_reviewed_tiers_and_ignore_row_supplied_claims():
+    from openmed.eval.model_card_builder import _intended_use, render_datasheet_markdown
+
+    for code, tier, expected in (
+        ("extract_pii", "non_clinical", "No tier obligations"),
+        ("visual_qa", "restricted", "clinician mode required"),
+        ("extract_pii", None, "clinician mode required"),
+        ("visual_qa", "non_clinical", "clinician mode required"),
+    ):
+        row = {
+            **_fixture_row(),
+            "capability": code,
+            "regulatory_tier": tier,
+            "excluded_uses": ["unreviewed free text"],
+            "obligations": [],
+        }
+        intended_use = _intended_use(row)
+        for card in (
+            render_model_card(row),
+            render_datasheet_markdown({"intended_use": intended_use}),
+        ):
+            assert f"| Regulatory tier | {tier or 'unknown'} |" in card
+            assert expected in card
+            assert "treatment selection" in card
+            assert "unreviewed free text" not in card

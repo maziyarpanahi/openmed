@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.audit import manifest_hash, stable_hash
-from openmed.core.model_card import append_model_card_sections, render_model_card
+from openmed.core.model_card import (
+    append_model_card_sections,
+    intended_use_table_rows,
+    model_card_intended_use,
+    render_model_card,
+)
 from openmed.core.repro_hash import load_training_provenance
 from openmed.eval import release_gates
 from openmed.eval.release_gates import GateReport
@@ -158,6 +163,7 @@ def render_datasheet_markdown(datasheet: Mapping[str, Any]) -> str:
         f"| Languages | {_markdown_values(intended_use.get('languages'))} |",
         f"| Tier | {_string(intended_use.get('tier'), 'Not specified')} |",
         f"| Formats | {_markdown_values(intended_use.get('formats'))} |",
+        *intended_use_table_rows(intended_use),
         "",
         "### Training Data Lineage",
         "",
@@ -390,6 +396,7 @@ def _model_summary(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _intended_use(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
+        **model_card_intended_use(row),
         "family": row.get("family"),
         "formats": _string_list(row.get("formats")),
         "languages": _string_list(row.get("languages")),

@@ -165,3 +165,8 @@ To preview the reviewed family/task rules against the current manifest, run
 the rule version, counts per tier and the IDs requiring individual review. Omit
 `--dry-run` to fill missing declarations and then run
 `python -m scripts.manifest.regenerate_surfaces` to refresh the derived catalog.
+
+Generated model cards and evaluation datasheets show the capability, regulatory
+tier, exclusions and oversight from the local registry. The effective safeguards
+include the requirements of both the model and its capability. Missing tier or
+capability metadata produces restricted safeguards and clinician review.
