@@ -77,3 +77,17 @@ Use `ledger.to_dict()` to export the events and their core audit chain. Loading
 the snapshot with `CorrectiveActionLedger.from_dict()` verifies the chain and
 replays the transitions. A local note is omitted from both records and chain
 material.
+
+Run the following commands against a local ledger directory. Each subcommand
+accepts `--json` for the shared CLI result envelope.
+
+```sh
+openmed compliance capa new --directory /var/lib/openmed/capa --id CAPA-2026-0001 --source incident --severity high --capability deidentify --version 4.3.0
+openmed compliance capa transition --directory /var/lib/openmed/capa --id CAPA-2026-0001 --state investigating
+openmed compliance capa list --directory /var/lib/openmed/capa
+openmed compliance capa verify --directory /var/lib/openmed/capa
+```
+
+A rejected transition exits with status 2. A ledger that fails verification
+exits with status 1. Use `--allow-repo` for synthetic fixtures stored inside a
+checkout.

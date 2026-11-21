@@ -1346,6 +1346,51 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     compliance_sub = compliance_parser.add_subparsers(dest="compliance_command")
 
+    capa = compliance_sub.add_parser(
+        "capa", help="Manage a local corrective-action ledger."
+    )
+    actions = capa.add_subparsers(dest="capa_action", required=True)
+    for action, help_text in (
+        ("new", "Open a corrective action."),
+        ("transition", "Advance an existing corrective action."),
+        ("list", "List current corrective actions."),
+        ("verify", "Verify the audit chain and replay its transitions."),
+    ):
+        command = actions.add_parser(action, help=help_text)
+        command.add_argument(
+            "--directory", type=Path, required=True, help="Local ledger directory."
+        )
+        command.add_argument(
+            "--allow-repo",
+            action="store_true",
+            help="Allow a synthetic ledger inside a Git checkout.",
+        )
+        command.set_defaults(handler=_handle_capa)
+        if action in {"new", "transition"}:
+            command.add_argument("--id", dest="record_id", required=True)
+            command.add_argument(
+                "--artifact-digest", dest="artifact_digests", action="append"
+            )
+            command.add_argument("--before-evidence-digest")
+        if action == "new":
+            command.add_argument("--severity", required=True)
+            command.add_argument("--source", required=True)
+            command.add_argument(
+                "--capability", action="append", dest="capabilities", required=True
+            )
+            command.add_argument(
+                "--version", action="append", dest="versions", required=True
+            )
+        if action == "transition":
+            command.add_argument("--state", required=True)
+            command.add_argument("--root-cause")
+            command.add_argument("--correction", action="append", dest="corrections")
+            command.add_argument(
+                "--preventive-action", action="append", dest="preventive_actions"
+            )
+            command.add_argument("--release-tag", action="append", dest="release_tags")
+            command.add_argument("--after-evidence-digest")
+
     safe_harbor_parser = compliance_sub.add_parser(
         "safe-harbor",
         help="Generate a HIPAA Safe Harbor attestation from an audit report.",
@@ -4118,6 +4163,102 @@ def _audit_summary_payload(report: Any) -> dict[str, Any]:
         "action_counts": dict(sorted(action_counts.items())),
         "residual_risk": dict(report.residual_risk) if report.residual_risk else {},
     }
+
+
+def _handle_capa(args: argparse.Namespace) -> int:
+    """Read or atomically update the explicitly selected local action ledger."""
+    from filelock import FileLock
+
+    from ..compliance.corrective_action import CorrectiveAction, CorrectiveActionLedger
+    from ..core.audit_chain import _atomic_write_text
+
+    root = args.directory.resolve()
+    if not args.allow_repo and any(
+        (p / ".git").exists() for p in (root, *root.parents)
+    ):
+        raise CliError(
+            "Repository storage requires --allow-repo.",
+            code="capa_repository_path",
+            exit_code=EXIT_USAGE,
+        )
+    path = root / "corrective-actions.json"
+    lock_path = root / ".corrective-actions.lock"
+    if path.is_symlink() or lock_path.is_symlink():
+        raise CliError(
+            "Invalid ledger location.",
+            code="invalid_capa_location",
+            exit_code=EXIT_USAGE,
+        )
+
+    def load():
+        try:
+            return CorrectiveActionLedger.from_dict(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+        except (ValueError, OSError, RecursionError):
+            raise CliError(
+                "Corrective-action ledger could not be verified.",
+                code="invalid_corrective_action_ledger",
+                exit_code=EXIT_ERROR,
+            ) from None
+
+    if args.capa_action in {"list", "verify"}:
+        ledger = load()
+        if args.capa_action == "list":
+            data = {"records": [record.to_dict() for record in ledger.records()]}
+        else:
+            data = {"verified": True, "record_count": len(ledger.records())}
+    else:
+        root.mkdir(parents=True, exist_ok=True)
+        with FileLock(str(lock_path)):
+            ledger = (
+                CorrectiveActionLedger()
+                if args.capa_action == "new" and not path.exists()
+                else load()
+            )
+            updates = {
+                name: getattr(args, name)
+                for name in (
+                    "artifact_digests",
+                    "before_evidence_digest",
+                    "root_cause",
+                    "corrections",
+                    "preventive_actions",
+                    "release_tags",
+                    "after_evidence_digest",
+                )
+                if getattr(args, name, None) is not None
+            }
+            try:
+                if args.capa_action == "new":
+                    record = ledger.open(
+                        CorrectiveAction(
+                            record_id=args.record_id,
+                            source=args.source,
+                            severity=args.severity,
+                            capabilities=args.capabilities,
+                            versions=args.versions,
+                            **updates,
+                        )
+                    )
+                else:
+                    record = ledger.transition(args.record_id, args.state, **updates)
+            except ValueError as exc:
+                code = (
+                    "invalid_corrective_action_transition"
+                    if str(exc) == "invalid_corrective_action_transition"
+                    else "invalid_corrective_action"
+                )
+                raise CliError(
+                    "Corrective-action request rejected.",
+                    code=code,
+                    exit_code=EXIT_USAGE,
+                ) from None
+            _atomic_write_text(
+                path, json.dumps(ledger.to_dict(), sort_keys=True) + "\n"
+            )
+            data = record.to_dict()
+    return emit(args, data, human=json.dumps(data, indent=2))
 
 
 def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
