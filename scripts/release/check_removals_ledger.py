@@ -41,7 +41,24 @@ def _python_markers(path: Path) -> set[str]:
         for child in ast.iter_child_nodes(node):
             visit(child, parents)
 
-    visit(ast.parse(path.read_bytes()), ())
+    module = ast.parse(path.read_bytes())
+    for statement in module.body:
+        call = getattr(statement, "value", None)
+        if (
+            isinstance(call, ast.Call)
+            and ast.unparse(call.func).rsplit(".", 1)[-1] == "deprecated_module"
+            and call.args
+            and isinstance(call.args[0], ast.Name)
+            and call.args[0].id == "__name__"
+            and any(
+                k.arg == "remove_in"
+                and isinstance(k.value, ast.Constant)
+                and k.value.value == "5.0"
+                for k in call.keywords
+            )
+        ):
+            markers.add("__module__")
+    visit(module, ())
     return markers
 
 

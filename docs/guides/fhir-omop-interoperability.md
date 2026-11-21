@@ -282,7 +282,7 @@ FHIR Bulk Data uses one resource per NDJSON line. Process it as a stream so raw
 resources are not materialized as a second complete file:
 
 ```python
-from openmed.interop.fhir_bulk import deidentify_ndjson
+from openmed.interop.fhir.bulk import deidentify_ndjson
 
 summary = deidentify_ndjson(
     "/secure/incoming/Patient.ndjson",

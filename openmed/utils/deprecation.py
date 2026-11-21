@@ -211,7 +211,13 @@ def deprecated_attribute(
 
 
 def deprecated_module(
-    module: str, /, *, since: str, remove_in: str, replacement: str
+    module: str,
+    /,
+    *,
+    since: str,
+    remove_in: str,
+    replacement: str,
+    warn_on_import: bool = False,
 ) -> Callable[[str], Any]:
     """Build a module ``__getattr__`` that warns and forwards to a new module.
 
@@ -220,6 +226,7 @@ def deprecated_module(
         since: First OpenMed version that warns about the old import path.
         remove_in: Earliest release in which removal is planned.
         replacement: Absolute import path of the new module.
+        warn_on_import: Warn when the alias is installed, once per module load.
 
     Returns:
         A lazy getter that returns the original object from the new module.
@@ -234,6 +241,9 @@ def deprecated_module(
         raise ValueError("replacement must name a different absolute module")
     message = _message(module, since, remove_in, replacement)
 
+    if warn_on_import:
+        warnings.warn(message, DeprecationWarning, stacklevel=2)
+
     def __getattr__(name: str) -> Any:
         if not name.startswith("__"):
             target = import_module(replacement)
@@ -242,7 +252,8 @@ def deprecated_module(
             except AttributeError:
                 pass
             else:
-                warnings.warn(message, DeprecationWarning, stacklevel=2)
+                if not warn_on_import:
+                    warnings.warn(message, DeprecationWarning, stacklevel=2)
                 return value
         raise AttributeError(f"module {module!r} has no attribute {name!r}")
 
