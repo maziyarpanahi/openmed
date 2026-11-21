@@ -24,9 +24,16 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from openmed.core.audit import stable_hash
+
+if TYPE_CHECKING:
+    from openmed.compliance.expert_review import CompositionEvidence
+    from openmed.eval.attacks.linkage import LinkageAttackResult
+    from openmed.risk.membership import MembershipSelfTestResult
+    from openmed.risk.release import ReleaseAssessment
+
 
 __all__ = [
     "MAX_TABULAR_RISK_CELL_STRING_CHARS",
@@ -397,6 +404,10 @@ def tabular_risk_report(
     suppression: int | Sequence[int] | Mapping[str, Any] | None = None,
     suppression_count: int | None = None,
     thresholds: TabularRiskThresholds | Mapping[str, Any] | None = None,
+    linkage: LinkageAttackResult | None = None,
+    composition: CompositionEvidence | None = None,
+    disclosure: ReleaseAssessment | None = None,
+    membership: MembershipSelfTestResult | None = None,
 ) -> TabularRiskReport:
     """Build an aggregate re-identification risk report for tabular rows.
 
@@ -419,6 +430,10 @@ def tabular_risk_report(
             for already-omitted rows, or a mapping with ``row_indices`` and/or
             ``count``.  ``suppression`` is an alias.
         suppression_count: Additional count for rows omitted before ``rows``.
+        linkage: Existing external linkage measurement for the analyzed release.
+        composition: Existing assessment across releases including this release.
+        disclosure: Release assessment with l-diversity and t-closeness results.
+        membership: Existing structured membership self-test on the same release.
         thresholds: A :class:`TabularRiskThresholds` or mapping with its
             field names (and common ``target_k``/``maximum_*`` aliases).
 
@@ -590,6 +605,36 @@ def tabular_risk_report(
         "dataset_digest": dataset_digest,
         "caveats": caveats,
     }
+    evidence = {}
+    if linkage is not None and linkage.record_count:
+        if linkage.record_count != analyzed_row_count:
+            raise ValueError("linkage release count mismatch")
+        evidence["unique_match_rate"] = linkage.unique_match_rate
+    if (
+        composition is not None
+        and composition.risk_status != "not_assessed"
+        and (
+            composition.longitudinal_linkage_assessed
+            or composition.prior_release_overlap_assessed
+        )
+    ):
+        evidence["composition_status"] = composition.risk_status
+        evidence["composition_digest"] = composition.evidence_digest
+    if disclosure is not None and disclosure.attributes:
+        from openmed.risk.release import release_dataset_digest
+
+        if disclosure.dataset_digest != release_dataset_digest(analyzed_rows):
+            raise ValueError("disclosure release digest mismatch")
+        evidence["minimum_l"] = min(row.achieved_l for row in disclosure.attributes)
+        evidence["maximum_t"] = max(row.achieved_t for row in disclosure.attributes)
+    if membership is not None and membership.candidate_count:
+        if membership.release_count != analyzed_row_count:
+            raise ValueError("membership release count mismatch")
+        evidence["membership_inference_rate"] = membership.membership_inference_rate
+    payload["edpb_criteria"] = {
+        "linkability": {"metrics": evidence},
+        "inference": {"metrics": evidence},
+    }
     return TabularRiskReport(payload)
 
 
@@ -751,6 +796,9 @@ def render_tabular_risk_markdown(
         ]
     )
     lines.extend(f"- {caveat}" for caveat in payload["caveats"])
+    lines.extend(["", "## EDPB criteria", ""])
+    for criterion, item in payload["edpb_criteria"].items():
+        lines.append(f"- {criterion}: {item['status']}")
     lines.extend(
         [
             "",
@@ -1156,6 +1204,61 @@ def _safe_report_payload(
     return TabularRiskReport(report).to_dict()
 
 
+def _edpb_criteria(raw, dataset_digest, minimum_k, singleton_rate, has_qis):
+    """Rebuild statuses and evidence digests from allowlisted measurements."""
+    block = _safe_mapping(raw, field_name="edpb_criteria", max_items=3)
+    result = {}
+    for criterion, names in (
+        ("singling_out", ()),
+        (
+            "linkability",
+            ("unique_match_rate", "composition_status", "composition_digest"),
+        ),
+        ("inference", ("minimum_l", "maximum_t", "membership_inference_rate")),
+    ):
+        item = _safe_mapping(block.get(criterion), field_name=criterion, max_items=3)
+        supplied = _safe_mapping(
+            item.get("metrics"), field_name="criterion metrics", max_items=8
+        )
+        metrics = {}
+        for name in names:
+            if name not in supplied:
+                continue
+            value = supplied[name]
+            if name == "composition_status":
+                valid = type(value) is str and value in (
+                    "increase_observed",
+                    "no_material_increase_observed",
+                    "inconclusive",
+                )
+            elif name == "composition_digest":
+                valid = type(value) is str and _DIGEST_PATTERN.fullmatch(value)
+            else:
+                valid = type(value) in (float, int) and 0 <= value <= (
+                    MAX_TABULAR_RISK_ROWS if name == "minimum_l" else 1
+                )
+            if not valid:
+                raise ValueError("invalid tabular criterion measurement")
+            metrics[name] = value
+        if criterion == "singling_out" and has_qis and minimum_k:
+            metrics = {"minimum_k": minimum_k, "singleton_rate": singleton_rate}
+        if ("composition_status" in metrics) != ("composition_digest" in metrics):
+            raise ValueError("incomplete composition evidence")
+        assessed = (
+            bool(metrics) if criterion != "inference" else len(metrics) == len(names)
+        )
+        result[criterion] = {
+            "status": "assessed" if assessed else "not_assessed",
+            "metrics": metrics,
+            "evidence_digest": stable_hash(
+                {"release": dataset_digest, "criterion": criterion, "metrics": metrics}
+            )
+            if metrics
+            else None,
+        }
+    return result
+
+
 def _project_report_payload(
     report: Mapping[str, Any] | TabularRiskReport,
 ) -> dict[str, Any]:
@@ -1387,6 +1490,13 @@ def _project_report_payload(
         "status": status,
         "schema_digest": schema_digest,
         "dataset_digest": dataset_digest,
+        "edpb_criteria": _edpb_criteria(
+            raw.get("edpb_criteria"),
+            dataset_digest,
+            minimum_k,
+            singleton_rate,
+            bool(qi_columns),
+        ),
         "caveats": safe_caveats,
     }
 
