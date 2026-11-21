@@ -324,3 +324,82 @@ def test_renderer_rejects_hostile_digest_without_echoing_values() -> None:
     with pytest.raises(ValueError, match="schema digest is invalid") as error:
         render_tabular_risk_json(unsafe)
     assert "synthetic-sensitive-value" not in str(error.value)
+
+
+def test_edpb_criteria_project_existing_results_without_row_values():
+    from openmed.compliance.expert_review import CompositionEvidence
+    from openmed.risk.membership import membership_inference_self_test
+    from openmed.risk.release import AnonymityPolicy, assess_release
+
+    rows = _synthetic_rows()
+    qis = ("age", "region")
+    assessment = assess_release(
+        rows,
+        AnonymityPolicy(
+            qis,
+            2,
+            sensitive_attributes=("diagnosis",),
+            direct_identifiers=("record_id",),
+        ),
+    )
+    membership = membership_inference_self_test(rows, rows, quasi_identifiers=qis)
+    composition = CompositionEvidence(
+        2, True, True, "increase_observed", "sha256:" + "d" * 64
+    )
+    report = tabular_risk_report(
+        rows,
+        quasi_identifiers=qis,
+        disclosure=assessment,
+        membership=membership,
+        composition=composition,
+    )
+    criteria = report["edpb_criteria"]
+    assert all(
+        v["status"] == "assessed" and v["evidence_digest"].startswith("sha256:")
+        for v in criteria.values()
+    )
+    assert (
+        criteria["inference"]["metrics"]["membership_inference_rate"]
+        == membership.membership_inference_rate
+    )
+    assert (
+        criteria["linkability"]["metrics"]["composition_digest"]
+        == composition.evidence_digest
+    )
+    assert criteria["singling_out"]["metrics"] == {
+        "minimum_k": 1,
+        "singleton_rate": 0.2,
+    }
+    assert "synthetic-condition" not in json.dumps(criteria)
+    assert (
+        json.loads(render_tabular_risk_json(report.to_dict()))["edpb_criteria"]
+        == criteria
+    )
+    assert "Qualified expert review" in report.to_markdown()
+    partial = tabular_risk_report(rows, quasi_identifiers=qis, disclosure=assessment)[
+        "edpb_criteria"
+    ]
+    assert (
+        partial["inference"]["status"]
+        == partial["linkability"]["status"]
+        == "not_assessed"
+    )
+    with pytest.raises(ValueError, match="disclosure release digest mismatch"):
+        tabular_risk_report(rows[:2], quasi_identifiers=qis, disclosure=assessment)
+
+
+def test_edpb_legacy_and_forged_status_do_not_create_evidence():
+    payload = tabular_risk_report([]).to_dict()
+    payload.pop("edpb_criteria")
+    assert all(
+        v["status"] == "not_assessed"
+        for v in TabularRiskReport(payload)["edpb_criteria"].values()
+    )
+    payload["edpb_criteria"] = {
+        "inference": {"status": "assessed", "metrics": {"private": "raw"}}
+    }
+    assert TabularRiskReport(payload)["edpb_criteria"]["inference"] == {
+        "status": "not_assessed",
+        "metrics": {},
+        "evidence_digest": None,
+    }

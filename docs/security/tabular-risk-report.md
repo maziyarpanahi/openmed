@@ -83,3 +83,13 @@ The exact-match risk indicators are local sample indicators: a class of size
 `k` contributes `1/k` risk for each row. They do not estimate population risk,
 attacker auxiliary-data risk, or a legal safe harbor. Use a qualified expert
 and the relevant release policy before sharing a structured export.
+
+The JSON `edpb_criteria` block groups the observed minimum k and singleton rate
+under singling out. A caller can supply existing `linkage` or `composition`
+results for linkability, and a release assessment (`disclosure`) plus a
+structured membership self-test (`membership`) for inference. Use results
+from the same analyzed release. The report validates the disclosure dataset
+digest and checks the linkage and membership release counts. Matching counts
+alone cannot establish common provenance. Each criterion retains aggregate
+measurements and their digest. Missing inputs are marked `not_assessed`.
+An assessed result can show high risk and still requires qualified expert review.
