@@ -1,0 +1,13 @@
+{
+  "generic_notice": "If someone is in immediate danger, contact local emergency services now.",
+  "cases": [
+    {"locale": "en-AU", "matched": "en-AU", "ids": ["healthdirect_emergency_departments"]},
+    {"locale": "EN_gb", "matched": "en-GB", "ids": ["nhs_emergency_departments"]},
+    {"locale": "en_latn_AU", "matched": "en-AU", "ids": ["healthdirect_emergency_departments"]},
+    {"locale": "en", "matched": null, "ids": []},
+    {"locale": "en-US", "matched": null, "ids": []},
+    {"locale": "und", "matched": null, "ids": []},
+    {"locale": "en-GB-private", "matched": null, "ids": []},
+    {"locale": "", "matched": null, "ids": []}
+  ]
+}

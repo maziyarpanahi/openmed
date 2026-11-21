@@ -1,6 +1,7 @@
 import json
 import socket
 from dataclasses import asdict
+from pathlib import Path
 
 import pytest
 
@@ -22,17 +23,21 @@ def test_locale_vectors_are_offline_and_fail_closed(monkeypatch):
         socket.socket, "connect", lambda *args: pytest.fail("network access")
     )
     router = CrisisRouting()
-    for locale, key in [
-        ("en-AU", "en-AU"),
-        ("en_latn_AU", "en-AU"),
-        ("EN_gb", "en-GB"),
-        ("en-US", None),
-        ("en", None),
-        ("unknown", None),
-    ]:
-        notice = route(router, locale)
-        assert notice.mandatory and notice.text == GENERIC_NOTICE
-        assert notice.matched_locale == key and bool(notice.resources) == bool(key)
+    root = Path(__file__).resolve().parents[3]
+    vectors = json.loads(
+        (root / "tests/fixtures/parity/crisis_routing_v1.json").read_bytes()
+    )
+    bundled = root / "openmed/clinical/data/crisis_resources.json"
+    swift = root / "swift/OpenMedKit/Sources/OpenMedKit/Resources/crisis_resources.json"
+    assert swift.read_bytes() == bundled.read_bytes()
+    for row in vectors["cases"]:
+        notice = route(router, row["locale"])
+        assert (
+            notice.mandatory
+            and notice.text == GENERIC_NOTICE == vectors["generic_notice"]
+        )
+        assert notice.matched_locale == row["matched"]
+        assert [item.id for item in notice.resources] == row["ids"]
     assert route(router, "en-AU", signal=False) is None
     for capability in ["mental_health", "ecg", "unregistered"]:
         with pytest.raises(CrisisRoutingError, match="^crisis_notice_required$"):
