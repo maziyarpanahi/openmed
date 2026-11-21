@@ -529,18 +529,87 @@ def _validate_spans(case_id: str, text: str, spans: Any) -> None:
             raise ValueError(f"{case_id} span text_hash does not match offsets")
 
 
+SAFETY_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "tests/fixtures/parity/safety_primitives_v1.json"
+)
+
+
+def safety_primitive_vectors() -> dict[str, Any]:
+    """Generate reviewed cross-kit notice, acknowledgement and obligation vectors."""
+    from dataclasses import asdict
+    from datetime import datetime, timezone
+
+    from openmed.clinical.use_errors import UseErrorCode
+    from openmed.core.disclaimer import OpenMedDisclaimer, notice_catalog
+    from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
+
+    instant = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    notices = []
+    for notice_id, notice in sorted(notice_catalog().items()):
+        receipt = notice.acknowledge(at=instant)
+        notices.append(
+            {
+                "id": notice_id,
+                "version": notice.version,
+                "version_digest": notice.version_digest,
+                "locale": notice.locale,
+                "text": notice.text,
+                "tier": notice.tier.value,
+                "requires_acknowledgement": notice.requires_acknowledgement,
+                "acknowledgement": asdict(receipt) if receipt is not None else None,
+            }
+        )
+    registry = load_intended_use_registry()
+    by_capability = {
+        code: OpenMedDisclaimer.for_capability(code).notice_id
+        for code in sorted(registry.declarations)
+    }
+    return {
+        "schema_version": 1,
+        "acknowledged_at": instant.isoformat(),
+        "tiers": [
+            {
+                "tier": tier.value,
+                "obligations": sorted(tier.obligations),
+                "notice_id": OpenMedDisclaimer.for_tier(tier).notice_id,
+            }
+            for tier in RegulatoryTier
+        ],
+        "notices": notices,
+        "capability_notices": by_capability,
+        "entry_point_overrides": {
+            name: notice_id
+            for name, code in sorted(registry.entry_points.items())
+            if (notice_id := OpenMedDisclaimer.for_capability(name).notice_id)
+            != by_capability[code]
+        },
+        "use_error_codes": sorted(code.value for code in UseErrorCode),
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate Android span parity fixtures from an ONNX export.",
     )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--safety-primitives",
+        action="store_true",
+        help="Generate shared safety vectors from the Python catalog.",
+    )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check a generated safety fixture without writing it.",
+    )
+    source.add_argument(
         "--export-dir",
-        required=True,
         help="Directory produced by openmed.onnx.convert --profile android.",
     )
     parser.add_argument(
         "--output",
-        default=DEFAULT_OUTPUT_PATH,
+        default=None,
         help="Output JSON fixture path.",
     )
     parser.add_argument(
@@ -555,12 +624,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.safety_primitives:
+        if args.cases or args.skip_model_validation:
+            parser.error("model options require --export-dir")
+        output = Path(args.output) if args.output else SAFETY_FIXTURE
+        wire = (
+            json.dumps(
+                safety_primitive_vectors(), sort_keys=True, ensure_ascii=False, indent=2
+            )
+            + "\n"
+        ).encode("utf-8")
+        if args.check:
+            if output.is_file() and output.read_bytes() == wire:
+                return 0
+            print("safety_primitives_fixture_stale")
+            return 1
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(wire)
+        return 0
+    if args.check:
+        parser.error("--check requires --safety-primitives")
     payload = build_fixture_payload(
         args.export_dir,
         cases=load_cases(args.cases),
         validate_model=not args.skip_model_validation,
     )
-    output_path = write_fixture(payload, args.output)
+    output_path = write_fixture(payload, args.output or DEFAULT_OUTPUT_PATH)
     print(output_path)
     return 0
 
