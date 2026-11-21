@@ -61,3 +61,13 @@ def test_marker_must_apply_to_named_declaration(suffix, source):
     path = Path("fixture." + suffix)
     assert _has_marker(path, "old", source)
     assert not _has_marker(path, "other", source)
+
+
+def test_parameter_marker_tracks_only_the_named_parameter(tmp_path):
+    from scripts.release.check_removals_ledger import _python_markers
+
+    source = tmp_path / "fixture.py"
+    source.write_text(
+        '@deprecated_parameter("old", since="4.3", remove_in="5.0", replacement="new")\ndef setup(*, old=None, new=None): pass'
+    )
+    assert _python_markers(source) == {"setup.old"}

@@ -119,5 +119,22 @@
     "replacement": "Loopback bind behind an authenticated reverse proxy or the PHI-free server",
     "status": "deprecated",
     "migration_anchor": "docs/migration.md#mcp-non-loopback-http-binds"
+  },
+  {
+    "id": "mcp-auth-config-alias",
+    "surfaces": [
+      "python",
+      "mcp"
+    ],
+    "symbols": {
+      "openmed/mcp/server.py": [
+        "create_mcp_server.auth_config"
+      ]
+    },
+    "since": "4.3",
+    "remove_in": "5.0",
+    "replacement": "create_mcp_server(authorization_config=config)",
+    "status": "deprecated",
+    "migration_anchor": "docs/mcp-clients.md#python-authorization-configuration"
   }
 ]
