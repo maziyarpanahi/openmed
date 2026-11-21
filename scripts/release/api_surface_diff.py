@@ -1029,7 +1029,6 @@ def diff_surfaces(
                     replacement=new.replacement,
                 )
             )
-            continue
         reasons = _narrowing_reasons(old, new)
         if reasons:
             breaking.append(

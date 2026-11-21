@@ -9,6 +9,8 @@ on:
       - '.github/workflows/sdk-release-candidate.yml'
       - 'openmed/__about__.py'
       - 'openmed/eval/release_readiness.py'
+      - 'scripts/release/deprecation_gate.py'
+      - 'scripts/release/api_surface_diff.py'
       - 'CHANGELOG.md'
       - 'docs/migration/**'
       - 'docs/release/**'
@@ -159,6 +161,11 @@ jobs:
             "$API_BASE_REF" "$CANDIDATE_SHA" \
             --json artifacts/sdk-readiness/api-compat.json \
             --check "$MIGRATION_GUIDE"
+      - name: Check released deprecations for major candidates
+        if: steps.candidate.outputs.evaluate == 'true' && endsWith(steps.candidate.outputs.version, '.0.0')
+        env:
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+        run: uv run --frozen python scripts/release/deprecation_gate.py --version "$RELEASE_VERSION" --candidate "$CANDIDATE_SHA"
       - name: Run end-to-end golden suite
         if: steps.candidate.outputs.evaluate == 'true'
         run: |
