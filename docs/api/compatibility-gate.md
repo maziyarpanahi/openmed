@@ -134,3 +134,10 @@ deterministic.
 
 The gate is a release-safety check, not a compliance certification or a
 clinical decision guarantee.
+
+For major SDK candidates, the release deprecation gate also compares
+`docs/api/openapi.json` in Git with the newest stable tag of the previous
+major. A removed operation or property needs a released `deprecated: true`
+on the same contract in that major. The gate examines component schemas and
+request/response properties, including local references, arrays and composed
+schemas. Removing a whole operation checks its operation-level notice.
