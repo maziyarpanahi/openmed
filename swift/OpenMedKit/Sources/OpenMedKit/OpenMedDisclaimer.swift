@@ -88,6 +88,11 @@ public struct OpenMedDisclaimer: Decodable, Equatable, Sendable {
         )
     }
 
+    /// Record a skipped required acknowledgement when the host leaves this notice.
+    public func didLeave(with receipt: OpenMedNoticeAcknowledgement?, recorder: OpenMedUseErrorRecorder?) {
+        if !permitsResults(with: receipt) { recorder?.record(.acknowledgementSkipped) }
+    }
+
     /// Accept only an acknowledgement bound to this exact notice and version.
     public func permitsResults(with receipt: OpenMedNoticeAcknowledgement?) -> Bool {
         guard requiresAcknowledgement else { return true }
@@ -102,6 +107,7 @@ public struct OpenMedDisclaimer: Decodable, Equatable, Sendable {
 #if canImport(SwiftUI)
     /// Hosts restricted results behind a version-bound acknowledgement.
     public struct OpenMedDisclaimerView<Content: View>: View {
+        private let recorder: OpenMedUseErrorRecorder?
         private let notice: OpenMedDisclaimer
         private let content: () -> Content
         private let onAcknowledged: (OpenMedNoticeAcknowledgement) -> Void
@@ -109,9 +115,11 @@ public struct OpenMedDisclaimer: Decodable, Equatable, Sendable {
 
         public init(
             notice: OpenMedDisclaimer,
+            recorder: OpenMedUseErrorRecorder? = OpenMedUseErrorRecorder.current,
             onAcknowledged: @escaping (OpenMedNoticeAcknowledgement) -> Void = { _ in },
             @ViewBuilder content: @escaping () -> Content
         ) {
+            self.recorder = recorder
             self.notice = notice
             self.onAcknowledged = onAcknowledged
             self.content = content
@@ -131,6 +139,7 @@ public struct OpenMedDisclaimer: Decodable, Equatable, Sendable {
                     }
                 }
             }
+            .onDisappear { notice.didLeave(with: receipt, recorder: recorder) }
             .interactiveDismissDisabled(!notice.permitsResults(with: receipt))
         }
     }

@@ -61,10 +61,14 @@ public actor OpenMedClinicianMode {
 
     @discardableResult
     public func enable(purpose: OpenMedClinicianPurpose, acknowledgement: OpenMedNoticeAcknowledgement?) throws -> OpenMedClinicianModeReceipt {
-        guard let ack = acknowledgement else { throw OpenMedClinicianModeError.acknowledgementRequired }
+        guard let ack = acknowledgement else {
+            OpenMedUseErrorRecorder.current?.record(.acknowledgementSkipped)
+            throw OpenMedClinicianModeError.acknowledgementRequired
+        }
         guard let notice = try OpenMedDisclaimer.notice(id: ack.noticeID), notice.tier == .restricted,
             notice.permitsResults(with: ack)
         else {
+            OpenMedUseErrorRecorder.current?.record(.acknowledgementSkipped)
             throw OpenMedClinicianModeError.invalidAcknowledgement
         }
         grant?.revoke()
@@ -87,6 +91,7 @@ public actor OpenMedClinicianMode {
         if tier.obligations.contains("clinician_mode_required"),
             OpenMedClinicianReviewScope.invocation?.active != true
         {
+            OpenMedUseErrorRecorder.current?.record(.restrictedCapabilityRefused)
             throw OpenMedClinicianModeError.clinicianModeRequired
         }
     }

@@ -1154,3 +1154,14 @@ next session, which checks the current notice version again.
 The throwing decision JSON, waveform evaluation and image-conditioned Compass
 entry points enforce this scope. The existing nonthrowing typed decision API
 expresses refusal as a denied result with code `clinician_mode_required`.
+
+### Count use errors locally
+
+Create an `OpenMedUseErrorRecorder` for a review session. Pass it to
+`OpenMedDisclaimerView` or `MultimodalReviewView`. For calls to a restricted
+runtime or a reviewed export, wrap the operation in
+`OpenMedUseErrorRecorder.$current.withValue(recorder) { ... }`. A required
+notice dismissed without acknowledgement, a restricted-capability refusal and
+an attempted export before review each have their own code. A snapshot is a
+detached dictionary of codes and counts held in memory. The recorder performs
+no logging, persistence or network I/O.

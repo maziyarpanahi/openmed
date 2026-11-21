@@ -111,3 +111,13 @@ def test_concurrent_events_and_detached_snapshots(tmp_path, monkeypatch, caplog)
     assert "private-marker" not in json.dumps(recorder.snapshot())
     assert not list(tmp_path.iterdir())
     assert not caplog.records
+
+
+def test_swift_shared_code_vector():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    vector = json.loads(
+        (root / "tests/fixtures/parity/use_error_codes_v1.json").read_bytes()
+    )
+    assert sorted(code.value for code in UseErrorCode) == vector

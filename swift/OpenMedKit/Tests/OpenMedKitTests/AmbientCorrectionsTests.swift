@@ -136,7 +136,11 @@ final class AmbientCorrectionsTests: XCTestCase {
     func testConfirmationReverificationAndAuthorityFailures() throws {
         let book = try ledger()
         try approveAll(book)
-        conflict(.confirmationRequired) { _ = try book.exportReviewed(revision: book.current.revision, reviewerID: self.opaque(900), reviewerConfirmed: false) }
+        let recorder = OpenMedUseErrorRecorder()
+        OpenMedUseErrorRecorder.$current.withValue(recorder) {
+            conflict(.confirmationRequired) { _ = try book.exportReviewed(revision: book.current.revision, reviewerID: self.opaque(900), reviewerConfirmed: false) }
+        }
+        XCTAssertEqual(recorder.snapshot(), ["export_before_review": 1])
         try review(book, opaque(11), .verify)
         XCTAssertNil(book.current.claims[0].approvalEvent)
         conflict(.confirmationRequired) { try self.review(book, self.opaque(11), .approve, confirmed: false) }

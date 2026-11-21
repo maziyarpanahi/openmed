@@ -9,11 +9,14 @@ public struct MultimodalReviewView: View {
 
     public init(
         review: MultimodalReviewCase, source: any LocalMultimodalReviewSource,
+        recorder: OpenMedUseErrorRecorder? = OpenMedUseErrorRecorder.current,
         onDecision: @escaping (MultimodalReviewDecision) -> Void
     ) {
         self.review = review
         self.source = source
-        self.onDecision = onDecision
+        self.onDecision = { decision in
+            OpenMedUseErrorRecorder.$current.withValue(recorder) { onDecision(decision) }
+        }
     }
 
     public var body: some View {
