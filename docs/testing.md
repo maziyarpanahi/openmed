@@ -227,3 +227,17 @@ corpus edition, dataset digest, model ID, SHA-256 of the resolved commit ID
 and suppressed per-label aggregate metrics. Predictions stay in memory. A
 cache miss returns exit code 2 with `model_not_cached`. Keep real results
 under the applicable data-use agreement.
+
+For a paired comparison, repeat `--format` with `onnx-fp32`, `onnx-fp16`,
+`onnx-int8`, `mlx-fp`, `mlx-4bit`, or `mlx-8bit`. A bare format selects
+the cached reference snapshot. For a separate cached export, specify
+`--format onnx-int8=org/model-onnx@<40-character-commit>`. The export
+manifest must identify the same source repository and resolved reference
+commit. Pre-cache the appropriate tokenizer, weights, and runtime.
+
+The runner scores each variant on the same records and reports candidate
+recall minus reference recall for each unsuppressed label. A negative
+delta means measured recall loss. A skipped variant carries a reason
+(e.g. `model_not_cached`, `source_revision_unverified`, or
+`runtime_unavailable`), with no inferred delta. This command neither
+downloads nor exports models.

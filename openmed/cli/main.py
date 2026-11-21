@@ -3302,6 +3302,13 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     credentialed.add_argument("--year", required=True, type=int, choices=[2006, 2014])
     credentialed.add_argument("--model", required=True)
     credentialed.add_argument("--revision", default="main")
+    credentialed.add_argument(
+        "--format",
+        dest="formats",
+        action="append",
+        default=[],
+        help="Additional cached FORMAT or FORMAT=REPOSITORY@COMMIT (repeatable).",
+    )
     credentialed.add_argument("--output", required=True)
     credentialed.set_defaults(handler=_handle_eval_credentialed)
 
@@ -6316,6 +6323,7 @@ def _handle_eval_credentialed(args: argparse.Namespace) -> int:
             model_id=args.model,
             output=args.output,
             revision=args.revision,
+            formats=args.formats,
         )
     except CredentialedEvalError as exc:
         raise CliError(str(exc), code=str(exc), exit_code=2) from None
