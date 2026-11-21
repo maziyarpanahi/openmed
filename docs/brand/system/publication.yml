@@ -872,6 +872,7 @@ classification:
     - supply-chain/sbom.md
     - supply-chain/image-signing.md
     - release/semver-and-channels.md
+    - release/recall-backstop.md
     - migration/2.5-to-3.0.md
     - migration/2.3-to-2.5.md
     - migration/2.2-to-2.3.md
