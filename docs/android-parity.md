@@ -151,3 +151,18 @@ ANDROID_HOME="$HOME/Library/Android/sdk" ./android/gradlew -p android --offline 
 These tests need no model, network, microphone, camera, or Android device.
 The Gradle toolchain, SDK, and build dependencies must already be installed
 and cached for `--offline` execution.
+
+## Shared safety primitives
+
+Python, Swift, Kotlin and web kit tests can read
+`tests/fixtures/parity/safety_primitives_v1.json`. It pins each tier's
+obligations, canonical notice IDs, versions, wording and digests, plus the
+receipt expected for a fixed UTC acknowledgement instant. Capability mappings
+include entry-point-specific notice overrides. Nullable receipts identify
+tiers that require no acknowledgement. The file also records the common
+closed use-error codes.
+
+Regenerate with `python scripts/android/generate_parity_fixtures.py --safety-primitives`.
+Add `--check` for a read-only byte comparison. Run
+`python -m pytest tests/unit/core/test_safety_primitive_vectors.py -q` to
+check the committed vectors against Python's public behavior offline.
