@@ -257,7 +257,7 @@ replacements, and the store gains format-aware entry points that delegate to
 | `OpenMedModelStore.mlxModelCacheState(repoID, revision, cacheDirectory)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` |
 | `OpenMedMLXModelCacheState` | `ArtifactCacheState` |
 
-The deprecated members keep compiling. `downloadMLXModel` still returns a
+Removal is scheduled for 5.0. The deprecated members compile with warnings in 4.x. `downloadMLXModel` still returns a
 directory that already carries the legacy ready marker and otherwise throws
 `UnsupportedOperationException`. Legacy scaffold directories that would resolve
 outside the cache root, including through a symlink, now raise

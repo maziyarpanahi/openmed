@@ -469,11 +469,12 @@ class OpenMed(
 }
 
 /**
- * Cache state names kept for source compatibility with the MLX-shaped scaffold.
+ * Legacy MLX cache state. Scheduled for removal in 5.0.
  */
 @Deprecated(
-    "Android does not run MLX artifacts. Use the format-aware ArtifactCacheState.",
+    "Scheduled for removal in 5.0. Use the format-aware ArtifactCacheState.",
     ReplaceWith("ArtifactCacheState", "com.openmed.openmedkit.artifact.ArtifactCacheState"),
+    level = DeprecationLevel.WARNING,
 )
 enum class OpenMedMLXModelCacheState {
     missing,
@@ -519,12 +520,14 @@ object OpenMedModelStore {
     fun artifactCacheState(ref: ArtifactRef, cacheDirectory: File): ArtifactCacheState =
         ArtifactAcquisition(ModelCache(cacheDirectory)).cacheState(ref)
 
-    @Deprecated(
-        MLX_UNSUPPORTED,
-        ReplaceWith("OpenMedModelStore.acquireArtifact(request, cacheDirectory)"),
-    )
+    /** Legacy cache lookup. Scheduled for removal in 5.0; use [acquireArtifact]. */
     @JvmStatic
     @Suppress("DEPRECATION")
+    @Deprecated(
+        "Scheduled for removal in 5.0. " + MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.acquireArtifact(request, cacheDirectory)"),
+        level = DeprecationLevel.WARNING,
+    )
     fun downloadMLXModel(
         repoID: String,
         revision: String = "main",
@@ -538,16 +541,17 @@ object OpenMedModelStore {
     }
 
     /**
-     * Legacy scaffold directory for `repoID` and `revision`.
+     * Legacy scaffold directory for `repoID` and `revision`. Scheduled for removal in 5.0.
      *
      * @throws IllegalArgumentException when the resolved directory would leave
      *   the cache root, including through a symlinked component.
      */
-    @Deprecated(
-        MLX_UNSUPPORTED,
-        ReplaceWith("OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory"),
-    )
     @JvmStatic
+    @Deprecated(
+        "Scheduled for removal in 5.0. " + MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory"),
+        level = DeprecationLevel.WARNING,
+    )
     fun cachedMLXModelDirectory(
         repoID: String,
         revision: String = "main",
@@ -568,15 +572,17 @@ object OpenMedModelStore {
         return modelDirectory
     }
 
+    /** Legacy ready-marker check. Scheduled for removal in 5.0; use [artifactCacheState]. */
+    @JvmStatic
+    @Suppress("DEPRECATION")
     @Deprecated(
-        MLX_UNSUPPORTED,
+        "Scheduled for removal in 5.0. " + MLX_UNSUPPORTED,
         ReplaceWith(
             "OpenMedModelStore.artifactCacheState(ref, cacheDirectory) == ArtifactCacheState.READY",
             "com.openmed.openmedkit.artifact.ArtifactCacheState",
         ),
+        level = DeprecationLevel.WARNING,
     )
-    @JvmStatic
-    @Suppress("DEPRECATION")
     fun isMLXModelCached(
         repoID: String,
         revision: String = "main",
@@ -589,13 +595,14 @@ object OpenMedModelStore {
         ) == OpenMedMLXModelCacheState.ready
     }
 
-    /** Legacy scaffold state; an unsafe path is reported as `missing`, never `ready`. */
-    @Deprecated(
-        MLX_UNSUPPORTED,
-        ReplaceWith("OpenMedModelStore.artifactCacheState(ref, cacheDirectory)"),
-    )
+    /** Legacy scaffold state. Scheduled for removal in 5.0; use [artifactCacheState]. */
     @JvmStatic
     @Suppress("DEPRECATION")
+    @Deprecated(
+        "Scheduled for removal in 5.0. " + MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.artifactCacheState(ref, cacheDirectory)"),
+        level = DeprecationLevel.WARNING,
+    )
     fun mlxModelCacheState(
         repoID: String,
         revision: String = "main",

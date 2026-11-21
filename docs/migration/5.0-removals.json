@@ -103,7 +103,7 @@
       ]
     },
     "replacement": "Format-aware Android model acquisition API",
-    "status": "planned",
+    "status": "deprecated",
     "migration_anchor": "docs/migration.md#android-model-acquisition"
   }
 ]
