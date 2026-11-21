@@ -689,3 +689,62 @@ def test_safe_metadata_never_contains_input_or_option_values() -> None:
     assert "Synthetic secret marker" not in rendered
     assert "alpha" not in rendered
     assert "beta" not in rendered
+
+
+def test_calibration_report_adds_binned_ece_brier_and_confident_error_rate() -> None:
+    scores = {
+        "hit-1": [0.8, 0.2],
+        "hit-2": [0.8, 0.2],
+        "miss-1": [0.95, 0.05],
+        "miss-2": [0.95, 0.05],
+    }
+    backend = EncoderDecisionBackend(
+        backend_id="synthetic.encoder.v1",
+        model_id="synthetic/encoder",
+        revision="abc123",
+        license_id="Apache-2.0",
+        scorer=lambda text, _options, _mode: scores[text],
+    )
+
+    def example(
+        slice_name: str, text: str, expected: str
+    ) -> DecisionCalibrationExample:
+        return DecisionCalibrationExample(
+            slice_name=slice_name,
+            request=_request(input_text=text, options=("x", "y")),
+            expected_choices=(expected,),
+        )
+
+    examples = (
+        example("mixed", "hit-1", "x"),
+        example("mixed", "hit-2", "x"),
+        example("mixed", "miss-1", "y"),
+        example("mixed", "miss-2", "y"),
+    )
+    (report_slice,) = evaluate_decision_calibration(examples, backend=backend)["slices"]
+
+    # Plain ECE keeps its single-bin value: |mean(0.8, 0.8, 0.95, 0.95) - 0.5|.
+    assert report_slice["expected_calibration_error"] == pytest.approx(0.375)
+    # Bin 8: 2/4 * |0.8 - 1.0| = 0.1; bin 9: 2/4 * |0.95 - 0.0| = 0.475.
+    assert report_slice["binned_expected_calibration_error"] == pytest.approx(0.575)
+    # (2 * 0.2**2 + 2 * 0.95**2) / 4
+    assert report_slice["brier_score"] == pytest.approx(0.47125)
+    # Two of four covered answers are wrong with confidence >= 0.9.
+    assert report_slice["confident_error_rate"] == pytest.approx(0.5)
+
+
+def test_calibration_report_new_metrics_are_null_without_covered_examples() -> None:
+    examples = (
+        DecisionCalibrationExample(
+            slice_name="uncovered",
+            request=_request(input_text="Synthetic evidence is unclear."),
+            expected_choices=("urgent",),
+        ),
+    )
+    (report_slice,) = evaluate_decision_calibration(examples)["slices"]
+
+    assert report_slice["covered"] == 0
+    assert report_slice["expected_calibration_error"] == 0.0
+    assert report_slice["binned_expected_calibration_error"] is None
+    assert report_slice["brier_score"] is None
+    assert report_slice["confident_error_rate"] is None
