@@ -15,8 +15,8 @@
       ]
     },
     "replacement": "Typed EvidenceRef entries",
-    "status": "planned",
-    "migration_anchor": "docs/migration.md#typed-span-evidence"
+    "status": "deprecated",
+    "migration_anchor": "docs/migration/4.2-to-4.3.md#free-form-span-evidence"
   },
   {
     "id": "P3",

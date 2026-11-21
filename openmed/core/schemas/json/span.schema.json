@@ -78,7 +78,9 @@
       "type": "string"
     },
     "evidence": {
-      "type": "object"
+      "type": "object",
+      "deprecated": true,
+      "description": "Free-form evidence keys are deprecated in 4.3. The object remains readable and writable throughout 4.x."
     },
     "metadata": {
       "type": "object"
