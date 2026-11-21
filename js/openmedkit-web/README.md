@@ -399,3 +399,15 @@ controlled messages without incorporating the underlying error or its cause.
 Cache option keys distinguish scalar types, signed zero, arrays and plain objects,
 with sorted object keys; runtime, loader, function and opaque object identities
 remain distinct. Symbol option values are unsupported and reject before loading.
+
+### Capability intended use
+
+`getIntendedUse("deidentify")` returns an immutable local declaration with its
+regulatory tier, excluded uses and required safeguards. An unregistered capability
+returns `undefined`. Use `regulatoryObligations(tier)` when reading tier metadata
+from another source. An unknown tier receives the full restricted obligation set.
+
+Regenerate the web copy from the repository root with
+`python3 scripts/manifest/export_intended_use.py --output js/openmedkit-web/src/intended-use.json`.
+Add `--check` to detect drift. The Node test suite also checks every declaration
+against the Python source.

@@ -228,3 +228,20 @@ export type ModelLoader = (
   model: string,
   options?: LoadModelOptions,
 ) => Promise<TokenClassificationPipeline>;
+
+/** Effective operational tier for an intended-use declaration. */
+export type RegulatoryTier = "non_clinical" | "informational" | "assistive_review" | "restricted";
+
+export interface IntendedUse {
+  readonly schema_version: string;
+  readonly regulatory_tier: RegulatoryTier;
+  readonly purpose: string;
+  readonly intended_users: readonly string[];
+  readonly excluded_uses: readonly string[];
+  readonly input_modalities: readonly string[];
+  readonly languages: readonly string[];
+  readonly human_oversight: string;
+  readonly autonomous_clinical_action: false;
+  readonly summary?: string;
+  readonly obligations: readonly string[];
+}

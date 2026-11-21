@@ -1,0 +1,424 @@
+{
+  "analyze_text": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "extraction",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "brief": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text",
+      "structured"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "summarization",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "clinical_measurements": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "text",
+      "structured"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "measurement",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  },
+  "decisions": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "text",
+      "structured"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "decision_support",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  },
+  "deidentify": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "operator_review",
+    "input_modalities": [
+      "text",
+      "document",
+      "structured"
+    ],
+    "intended_users": [
+      "operator"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "privacy",
+    "regulatory_tier": "non_clinical",
+    "schema_version": "1.0.0"
+  },
+  "ecg": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "waveform"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "zxx"
+    ],
+    "purpose": "measurement",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  },
+  "extract_pii": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "operator_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "operator"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "privacy",
+    "regulatory_tier": "non_clinical",
+    "schema_version": "1.0.0"
+  },
+  "generate_text": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "generation",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "ground": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "grounding",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "journey": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "structured"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "extraction",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "mental_health": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "extraction",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  },
+  "nli": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "verification",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "review_evidence": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "structured",
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "verification",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "structured_extraction": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "document",
+      "structured"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "extraction",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "summarize": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "text"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "summarization",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "transcribe": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "human_review",
+    "input_modalities": [
+      "audio"
+    ],
+    "intended_users": [
+      "reviewer"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "transcription",
+    "regulatory_tier": "assistive_review",
+    "schema_version": "1.0.0"
+  },
+  "visual_qa": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "image",
+      "text"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "und"
+    ],
+    "purpose": "visual_qa",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  },
+  "waveform": {
+    "autonomous_clinical_action": false,
+    "excluded_uses": [
+      "autonomous_action",
+      "diagnosis",
+      "emergency_detection",
+      "treatment_selection",
+      "triage_without_review"
+    ],
+    "human_oversight": "clinician_review",
+    "input_modalities": [
+      "waveform"
+    ],
+    "intended_users": [
+      "clinician"
+    ],
+    "languages": [
+      "zxx"
+    ],
+    "purpose": "measurement",
+    "regulatory_tier": "restricted",
+    "schema_version": "1.0.0"
+  }
+}
