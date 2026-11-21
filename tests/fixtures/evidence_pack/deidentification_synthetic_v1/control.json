@@ -1,0 +1,8 @@
+{
+  "purpose": "Synthetic scoring control for pack serialization and verification. Scores are fixed test inputs and were not produced by a clinical model.",
+  "text": "Test ID: X123",
+  "masked_text": "Test ID: ****",
+  "reference": [[9, 13, "ID_NUM"]],
+  "scored_spans": [[9, 13, "ID_NUM", 0.9], [0, 4, "ID_NUM", 0.1]],
+  "score_threshold": 0.5
+}
