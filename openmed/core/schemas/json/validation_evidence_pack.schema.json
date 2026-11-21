@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/validation-evidence-pack/1.0.0",
+  "title": "Capability validation evidence pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capability",
+    "version",
+    "generated_at",
+    "intended_use_digest",
+    "regulatory_tier",
+    "lanes",
+    "frozen_inputs",
+    "licenses",
+    "exceptions",
+    "claims",
+    "limitations",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "capability": {
+      "$ref": "#/$defs/code"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?![\\s\\S])"
+    },
+    "generated_at": {
+      "$ref": "#/$defs/time"
+    },
+    "intended_use_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "regulatory_tier": {
+      "$ref": "#/$defs/tier"
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/lane"
+      }
+    },
+    "frozen_inputs": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/input"
+      }
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/exception"
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/claim"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/limitation"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "not_clinically_validated"
+          }
+        },
+        {
+          "contains": {
+            "const": "not_a_medical_device"
+          }
+        }
+      ]
+    },
+    "signature": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/signature"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}(?![\\s\\S])"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z(?![\\s\\S])"
+    },
+    "state": {
+      "enum": [
+        "success",
+        "partial",
+        "unknown",
+        "conflict",
+        "unsupported",
+        "denied",
+        "failure"
+      ]
+    },
+    "tier": {
+      "enum": [
+        "non_clinical",
+        "informational",
+        "assistive_review",
+        "restricted"
+      ]
+    },
+    "claim": {
+      "enum": [
+        "human_review_for_high_risk",
+        "local_first",
+        "offline_after_assets_downloaded",
+        "synthetic_release_evidence",
+        "typed_failure_states",
+        "measured_on_declared_inputs"
+      ]
+    },
+    "limitation": {
+      "enum": [
+        "no_autonomous_clinical_action",
+        "not_a_medical_device",
+        "not_clinically_validated",
+        "requires_local_validation",
+        "restricted_assets_user_supplied",
+        "synthetic_evidence_only"
+      ]
+    },
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "mandatory",
+        "state",
+        "report_digest",
+        "required_metrics",
+        "metrics",
+        "claims"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "mandatory": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "report_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_metrics": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code"
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/code"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "claims": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/claim"
+          }
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "origin": {
+          "enum": [
+            "aggregate",
+            "configuration",
+            "software",
+            "synthetic"
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_id",
+        "asset_type",
+        "distribution",
+        "license_id",
+        "redistributable",
+        "use"
+      ],
+      "properties": {
+        "asset_id": {
+          "$ref": "#/$defs/code"
+        },
+        "asset_type": {
+          "enum": [
+            "dataset",
+            "model",
+            "software",
+            "vocabulary"
+          ]
+        },
+        "distribution": {
+          "enum": [
+            "bundled",
+            "metadata_only",
+            "out_of_process",
+            "user_supplied"
+          ]
+        },
+        "license_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]{0,63}(?![\\s\\S])"
+        },
+        "redistributable": {
+          "type": "boolean"
+        },
+        "use": {
+          "enum": [
+            "build",
+            "eval",
+            "runtime",
+            "train"
+          ]
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "lane",
+        "severity",
+        "disposition",
+        "expires_at"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/code"
+        },
+        "lane": {
+          "$ref": "#/$defs/code"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "accepted",
+            "expired",
+            "pending",
+            "rejected"
+          ]
+        },
+        "expires_at": {
+          "$ref": "#/$defs/time"
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "key_id",
+        "value",
+        "payload_digest"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "HMAC-SHA256"
+        },
+        "key_id": {
+          "$ref": "#/$defs/code"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}
