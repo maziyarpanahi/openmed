@@ -246,3 +246,9 @@ To check a received certification offline, obtain the trusted signer's raw
 SHA-256 digest, Ed25519 signature, per-label arithmetic and overall decision.
 A verified `NOT_CERTIFIED` result is a valid signed failure. The verifier
 returns exit code 0 for either valid decision and 2 on invalid input.
+
+The status generator reads signed certification JSON files from
+`docs/leaderboard/credentialed/`. Set `OPENMED_G1A_PUBLIC_KEY_FILE` to the
+separately trusted raw reviewer public key before regeneration and docs builds.
+Only place results there when authorized to publish them. Every row reports
+the minimum observed recall across assessed labels and lists unassessed labels.
