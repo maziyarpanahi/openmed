@@ -792,6 +792,96 @@ def _digest(value: str | bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def render_decision_qualification_markdown(
+    report: DecisionQualificationReport,
+) -> str:
+    """Render a value-free Markdown summary for reviewers.
+
+    The output carries only fields already present in the report payload
+    (status, counts, metrics, thresholds, controlled reason codes and digests),
+    so it holds no input text, option values, identifiers or file paths.
+
+    Args:
+        report: A qualification report.
+
+    Returns:
+        Markdown ending in a newline.
+
+    Raises:
+        DecisionQualificationError: If ``report`` is not a report.
+    """
+    if not isinstance(report, DecisionQualificationReport):
+        raise DecisionQualificationError("invalid_report")
+    data = report.to_dict()
+
+    def number(value: Any) -> str:
+        return "-" if value is None else f"{value:.4f}"
+
+    lines = [
+        "# Decision qualification report",
+        "",
+        "## Status",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Status | {data['status']} |",
+        f"| Qualified | {str(data['qualified']).lower()} |",
+        f"| Human review required | {str(data['human_review_required']).lower()} |",
+        f"| Reasons | {', '.join(f'`{item}`' for item in data['reasons']) or 'none'} |",
+        f"| Backend | `{data['backend']['backend_id']}` ({data['backend']['kind']}) |",
+        f"| Report schema | {data['schema_version']} |",
+        f"| Report digest | `{data['report_digest']}` |",
+        "",
+        "## Inputs",
+        "",
+        "| Split | Records | Digest |",
+        "| --- | ---: | --- |",
+    ]
+    for split, item in sorted(data["inputs"].items()):
+        lines.append(f"| {split} | {item['records']} | `{item['digest']}` |")
+    lines += [
+        "",
+        "## Policy",
+        "",
+        "| Setting | Value |",
+        "| --- | ---: |",
+    ]
+    for name, value in sorted(data["policy"].items()):
+        lines.append(f"| {name} | {value} |")
+    lines += [
+        "",
+        "## Per-mode results",
+        "",
+        "| Mode | Split | Total | Covered | Coverage | Accuracy | ECE |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for mode, item in sorted(data["modes"].items()):
+        for split in ("development", "evaluation"):
+            row = item.get(split)
+            if row is None:
+                continue
+            lines.append(
+                f"| {mode} | {split} | {row['total']} | {row['covered']} "
+                f"| {number(row['coverage'])} | {number(row['accuracy'])} "
+                f"| {number(row['expected_calibration_error'])} |"
+            )
+    lines += [
+        "",
+        "## Frozen thresholds",
+        "",
+        "| Mode | Threshold | Value |",
+        "| --- | --- | ---: |",
+    ]
+    for mode, item in sorted(data["fit"]["modes"].items()):
+        thresholds = item.get("thresholds")
+        if not thresholds:
+            lines.append(f"| {mode} | none selected | - |")
+            continue
+        for name, value in sorted(thresholds.items()):
+            lines.append(f"| {mode} | {name} | {number(value)} |")
+    return "\n".join(lines) + "\n"
+
+
 __all__ = [
     "DECISION_QUALIFICATION_METHOD",
     "DECISION_QUALIFICATION_SCHEMA_VERSION",
@@ -803,4 +893,5 @@ __all__ = [
     "DecisionQualificationReport",
     "fit_decision_thresholds",
     "qualify_decision_backend",
+    "render_decision_qualification_markdown",
 ]

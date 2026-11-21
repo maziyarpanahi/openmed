@@ -534,6 +534,12 @@ coverage meet `--accuracy-floor` and `--coverage-floor` (default 0.5). Data
 problems give `status: insufficient`; unmet floors or backend errors give
 `not_qualified`. The exit status is 0 only for `qualified`.
 
+`--markdown-output PATH` additionally writes a value-free Markdown summary
+(status, per-mode coverage and accuracy, frozen thresholds, input and report
+digests) for pull requests or change records. It is a new file that is never
+overwritten, and the JSON report is unchanged. The same text is available from
+`openmed.eval.decision_qualification.render_decision_qualification_markdown`.
+
 Profiles appear in the report's `profiles` field, and in `--profile-output`
 (a new file with mode 0600 that is never overwritten), only when the run
 qualifies. One profile is emitted per mode and named
