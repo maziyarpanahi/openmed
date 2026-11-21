@@ -62,3 +62,18 @@ waiver or policy identifiers.
 
 This helper does not decide whether a waiver should be approved, whether a
 policy exception is lawful, or whether a deployment is clinically safe.
+
+## Corrective actions
+
+Track a release finding with
+`openmed.compliance.corrective_action.CorrectiveActionLedger`. Open a
+`CorrectiveAction` with a CAPA identifier, source, severity, affected
+capabilities and versions. Advance through investigating, action planned,
+implemented, verified and closed. Verification requires an after-evidence
+digest. Corrections, preventive actions and root causes use the codes in
+`corrective_action.schema.json`.
+
+Use `ledger.to_dict()` to export the events and their core audit chain. Loading
+the snapshot with `CorrectiveActionLedger.from_dict()` verifies the chain and
+replays the transitions. A local note is omitted from both records and chain
+material.
