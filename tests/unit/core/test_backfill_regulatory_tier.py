@@ -2,7 +2,7 @@
 
 import json
 
-from scripts.manifest.backfill_regulatory_tier import main
+from scripts.manifest.backfill_regulatory_tier import backfill, main
 
 
 def test_backfill_dry_run_and_apply(tmp_path, capsys):
@@ -59,3 +59,31 @@ def test_backfill_dry_run_and_apply(tmp_path, capsys):
     assert main(args) == 0
     assert json.loads(capsys.readouterr().out)["changed"] == 0
     assert manifest.read_bytes() == output
+
+
+def test_reviewed_visual_qa_models_and_unreviewed_sibling(tmp_path):
+    repos = [
+        "OpenMed/Ministral-3B-Medical-v1",
+        "OpenMed/Qwen2.5-VL-3B-Medical-v1",
+        "OpenMed/Qwen3.5-2B-Medical-v1",
+        "OpenMed/other-visual-model",
+    ]
+    manifest = tmp_path / "models.jsonl"
+    rows = [{"repo_id": repo, "family": "General", "task": "unknown"} for repo in repos]
+    manifest.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    report = backfill(manifest, dry_run=False)
+    assert report["changed"] == 3
+    assert report["counts"] == {"restricted": 3}
+    assert report["review"] == [{"repo_id": repos[-1], "reason": "unknown_family_task"}]
+    actual = [json.loads(line) for line in manifest.read_text().splitlines()]
+    assert actual == [
+        *(
+            dict(row, capability="visual_qa", regulatory_tier="restricted")
+            for row in rows[:3]
+        ),
+        rows[-1],
+    ]
+    first = manifest.read_bytes()
+    assert backfill(manifest, dry_run=False)["changed"] == 0
+    assert manifest.read_bytes() == first
