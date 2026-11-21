@@ -527,3 +527,36 @@ def test_release_assumption_privacy_unit_matches_policy_semantics() -> None:
             validation=row_validation,
             assumptions=_assumptions(),
         )
+
+
+def test_measured_text_qis_are_bound_to_expert_review():
+    from openmed.compliance.expert_review import ExpertReviewEvidenceReport
+    from openmed.core.schemas.span import hmac_text_hash
+    from openmed.processing.outputs import EntityPrediction
+    from openmed.risk.text_qi_bridge import TextQIDocument, TextQIPolicy, text_qi_risk
+
+    doc = TextQIDocument(
+        "12345",
+        [EntityPrediction("12345", "ZIPCODE", 1, 0, 5)],
+        hmac_text_hash("sample", b"test"),
+    )
+    risk = text_qi_risk([doc], TextQIPolicy(10), target_k=2)
+    result = _result()
+    args = dict(
+        validation=validate_released_output(result.records, result),
+        assumptions=_assumptions(),
+    )
+    old = build_release_expert_review_evidence(result, **args)
+    assert "assessed_modalities" not in old.to_dict()
+    report = build_release_expert_review_evidence(result, **args, text_qi_report=risk)
+    summary = report.to_dict()["assessed_modalities"]["free_text"]
+    assert summary["k"] == 1 and summary["meets_k"] is False
+    assert summary["risk_report_digest"] == stable_hash(risk)
+    assert set(report.unsupported_modalities) == {"images", "genomic_data"}
+    assert report.disclaimer == old.disclaimer
+    assert "12345" not in report.to_json()
+    assert "detected spans" in report.to_markdown()
+    assert ExpertReviewEvidenceReport.from_json(report.to_json()).verify()
+    risk["kanon"]["meets_k"] = True
+    with pytest.raises(ValueError):
+        build_release_expert_review_evidence(result, **args, text_qi_report=risk)

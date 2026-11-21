@@ -19,6 +19,7 @@ from .expert_review import (
     CompositionEvidence,
     EvidenceDigests,
     ExpertReviewEvidenceReport,
+    FreeTextQIEvidence,
     PrivacyModelEvidence,
     ReleaseAssumptions,
     SearchEvidence,
@@ -65,7 +66,8 @@ def build_release_expert_review_evidence(
     assumptions: ReleaseAssumptions,
     composition: CompositionEvidence | None = None,
     limitations: tuple[str, ...] = _MANDATORY_RELEASE_LIMITATIONS,
-    unsupported_modalities: tuple[str, ...] = _MANDATORY_UNSUPPORTED_MODALITIES,
+    unsupported_modalities: tuple[str, ...] | None = None,
+    text_qi_report: Mapping[str, Any] | None = None,
 ) -> ExpertReviewEvidenceReport:
     """Build a strict aggregate evidence bundle from an anonymization result.
 
@@ -91,9 +93,17 @@ def build_release_expert_review_evidence(
         mandatory=_MANDATORY_RELEASE_LIMITATIONS,
         name="limitations",
     )
+    free_text = (
+        _text_qi_evidence(text_qi_report) if text_qi_report is not None else None
+    )
+    mandatory_modalities = (
+        ("images", "genomic_data") if free_text else _MANDATORY_UNSUPPORTED_MODALITIES
+    )
+    if unsupported_modalities is None:
+        unsupported_modalities = mandatory_modalities
     resolved_unsupported_modalities = _with_mandatory_codes(
         unsupported_modalities,
-        mandatory=_MANDATORY_UNSUPPORTED_MODALITIES,
+        mandatory=mandatory_modalities,
         name="unsupported_modalities",
     )
 
@@ -258,7 +268,51 @@ def build_release_expert_review_evidence(
         composition=resolved_composition,
         limitations=resolved_limitations,
         unsupported_modalities=resolved_unsupported_modalities,
+        free_text=free_text,
     )
+
+
+def _text_qi_evidence(report: Mapping[str, Any]) -> FreeTextQIEvidence:
+    from openmed.risk.text_qi_bridge import _COLS
+
+    try:
+        if (
+            report["artifact"] != "text_qi_risk"
+            or type(report["schema_version"]) is not int
+            or report["schema_version"] != 1
+        ):
+            raise ValueError
+        profile, kanon = report["profile"], report["kanon"]
+        if not set(_COLS).issubset(profile["columns"]) or report["limitations"] != [
+            "detected_spans_only",
+            "caller_defined_generalization",
+            "qualified_expert_review_required",
+        ]:
+            raise ValueError
+        detected = unmapped = 0
+        for cell in profile["columns"].values():
+            total, missed = cell["span_count"], cell["unmapped_count"]
+            if (
+                type(total) is not int
+                or type(missed) is not int
+                or not 0 <= missed <= total
+            ):
+                raise ValueError
+            detected += total
+            unmapped += missed
+        item = FreeTextQIEvidence(
+            profile["row_count"],
+            kanon["k"],
+            kanon["target_k"],
+            detected,
+            unmapped,
+            stable_hash(report),
+        )
+        if kanon["meets_k"] is not (item.k >= item.target_k):
+            raise ValueError
+        return item
+    except (KeyError, TypeError, AttributeError, ValueError):
+        raise ValueError("invalid aggregate text-QI risk report") from None
 
 
 def _with_mandatory_codes(
