@@ -2469,3 +2469,5 @@ The committed manifest contains 47 model rows with named benchmark evidence. Mis
 | `OpenMed/privacy-filter-nemotron-v2-mlx-8bit` | - | nvidia/Nemotron-PII | - | - | - |
 <!-- END MANIFEST BENCHMARK TABLE -->
 <!-- END MANIFEST CATALOG SURFACES -->
+
+The registry coherence workflow runs `python -m openmed.core.catalog_coherence`. Every manifest row must name a registered capability and its declared regulatory tier. Review missing declarations before updating the manifest.
