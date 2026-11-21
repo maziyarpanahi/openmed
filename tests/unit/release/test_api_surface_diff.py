@@ -70,6 +70,109 @@ def test_deprecated_decorator_is_not_classified_as_breaking():
     assert "fixturepkg.api.retained" not in {change.symbol for change in diff.breaking}
 
 
+def test_deprecated_symbol_records_since_remove_in_and_replacement():
+    source = (
+        "from openmed.utils import deprecated\n\n"
+        "@deprecated(since='4.3', remove_in='5.0')\n"
+        "def versioned_func(value: str) -> str:\n"
+        "    return value\n\n"
+        "@deprecated(since='4.3', remove_in='5.0', replacement='pkg.api.modern')\n"
+        "def replaced_func(value: str) -> str:\n"
+        "    return value\n\n"
+        "@deprecated(since='4.3', remove_in='5.0')\n"
+        "class VersionedClass:\n"
+        "    pass\n"
+    )
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): source}, "fixturepkg"
+    )
+
+    func = surface["fixturepkg.api.versioned_func"]
+    assert func.deprecated is True
+    assert func.since == "4.3"
+    assert func.remove_in == "5.0"
+    assert func.replacement is None
+    func_dict = func.public_dict()
+    assert func_dict["deprecated"] is True
+    assert func_dict["since"] == "4.3"
+    assert func_dict["remove_in"] == "5.0"
+    assert func_dict["replacement"] is None
+
+    replaced = surface["fixturepkg.api.replaced_func"]
+    assert replaced.deprecated is True
+    assert replaced.since == "4.3"
+    assert replaced.remove_in == "5.0"
+    assert replaced.replacement == "pkg.api.modern"
+    replaced_dict = replaced.public_dict()
+    assert replaced_dict["since"] == "4.3"
+    assert replaced_dict["remove_in"] == "5.0"
+    assert replaced_dict["replacement"] == "pkg.api.modern"
+
+    cls = surface["fixturepkg.api.VersionedClass"]
+    assert cls.deprecated is True
+    assert cls.since == "4.3"
+    assert cls.remove_in == "5.0"
+    cls_dict = cls.public_dict()
+    assert cls_dict["since"] == "4.3"
+    assert cls_dict["remove_in"] == "5.0"
+
+
+def test_symbols_without_decorator_report_no_deprecation_fields():
+    source = (
+        "def plain_func(value: str) -> str:\n"
+        "    return value\n\n"
+        "class PlainClass:\n"
+        "    def method(self) -> None:\n"
+        "        pass\n"
+    )
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): source}, "fixturepkg"
+    )
+
+    for symbol_name in (
+        "fixturepkg.api.plain_func",
+        "fixturepkg.api.PlainClass",
+        "fixturepkg.api.PlainClass.method",
+    ):
+        symbol = surface[symbol_name]
+        assert symbol.deprecated is False
+        assert symbol.since is None
+        assert symbol.remove_in is None
+        assert symbol.replacement is None
+        pub_dict = symbol.public_dict()
+        assert pub_dict["deprecated"] is False
+        assert "since" not in pub_dict
+        assert "remove_in" not in pub_dict
+        assert "replacement" not in pub_dict
+
+
+def test_deprecated_symbol_with_non_constant_arguments_leaves_fields_none():
+    source = (
+        "DYNAMIC_SINCE = '4.3'\n"
+        "@deprecated(since=DYNAMIC_SINCE, remove_in='5.0', replacement=123)\n"
+        "def dynamic_func():\n"
+        "    pass\n\n"
+        "@deprecated\n"
+        "def bare_decorated():\n"
+        "    pass\n"
+    )
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): source}, "fixturepkg"
+    )
+
+    dynamic = surface["fixturepkg.api.dynamic_func"]
+    assert dynamic.deprecated is True
+    assert dynamic.since is None
+    assert dynamic.remove_in == "5.0"
+    assert dynamic.replacement is None
+
+    bare = surface["fixturepkg.api.bare_decorated"]
+    assert bare.deprecated is True
+    assert bare.since is None
+    assert bare.remove_in is None
+    assert bare.replacement is None
+
+
 def test_module_all_hides_unlisted_symbol():
     before = api_surface_diff.extract_surface_from_path(
         FIXTURES / "before" / "fixturepkg"
