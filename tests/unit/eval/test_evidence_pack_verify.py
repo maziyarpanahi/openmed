@@ -132,3 +132,85 @@ def test_offline_cli(tmp_path, capsys, monkeypatch):
     output = capsys.readouterr()
     assert "sensitive-fixture-marker" not in output.out + output.err
     assert "invalid_pack_json" in output.out + output.err
+
+
+def test_corrective_action_ledger_on_signed_pack(tmp_path, capsys):
+    from openmed.compliance.corrective_action import (
+        CorrectiveAction,
+        CorrectiveActionLedger,
+    )
+
+    ledger = CorrectiveActionLedger()
+
+    def add(number, severity="high", capability="deidentify", version="1.0.0"):
+        return ledger.open(
+            CorrectiveAction(
+                record_id=f"CAPA-2026-{number:04d}",
+                severity=severity,
+                source="audit",
+                capabilities=[capability],
+                versions=[version],
+                local_note="private-note-marker",
+            )
+        ).record_id
+
+    closed = add(1)
+    for state in [
+        "investigating",
+        "action_planned",
+        "implemented",
+        "verified",
+        "closed",
+    ]:
+        ledger.transition(closed, state, after_evidence_digest="sha256:" + "a" * 64)
+    add(2, capability="ecg")
+    add(3, version="4.3.0")
+    add(4, severity="medium")
+    pack = signed(unsigned()).to_json()
+    assert (
+        verify(pack, corrective_action_ledger=json.dumps(ledger.to_dict())).exit_code
+        == 0
+    )
+    first = add(5, severity="critical")
+    second = add(6)
+    ledger.transition(second, "investigating")
+    snapshot = ledger.to_dict()
+    result = verify(pack, corrective_action_ledger=json.dumps(snapshot))
+    assert result.exit_code == 1
+    assert result.reasons == ("open_corrective_action",)
+    assert result.corrective_action_ids == (first, second)
+
+    path, key, ledger_file = (tmp_path / name for name in ["pack", "key", "ledger"])
+    path.write_text(pack)
+    key.write_bytes(KEY)
+    ledger_file.write_text(json.dumps(snapshot))
+    args = [
+        "evidence",
+        "verify",
+        str(path),
+        "--key-id",
+        "review",
+        "--key-file",
+        str(key),
+        "--as-of",
+        NOW.isoformat(),
+        "--max-age-days",
+        "1",
+        "--corrective-action-ledger",
+        str(ledger_file),
+        "--json",
+    ]
+    assert main(args) == 1
+    out = capsys.readouterr().out
+    assert (
+        first in out
+        and second in out
+        and closed not in out
+        and "private-note-marker" not in out
+    )
+    assert "open_corrective_action" in out
+    snapshot["records"][-1]["severity"] = "low"
+    ledger_file.write_text(json.dumps(snapshot))
+    assert main(args) == 2
+    out = capsys.readouterr()
+    assert "invalid_corrective_action_ledger" in out.out + out.err

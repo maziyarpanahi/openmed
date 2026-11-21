@@ -615,6 +615,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--as-of", required=True, help="Timezone-aware evaluation timestamp."
     )
     verify.add_argument("--max-age-days", type=int, required=True)
+    verify.add_argument(
+        "--corrective-action-ledger",
+        type=Path,
+        help="Local corrective-action ledger snapshot.",
+    )
     add_json_flag(verify)
     verify.set_defaults(handler=_handle_evidence_verify)
     _add_audit_command(subparsers)
@@ -3619,6 +3624,11 @@ def _handle_evidence_verify(args: argparse.Namespace) -> int:
 
     try:
         raw = args.pack.read_bytes()
+        ledger = (
+            args.corrective_action_ledger.read_bytes()
+            if args.corrective_action_ledger is not None
+            else None
+        )
         key = args.key_file.read_bytes()
         as_of = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
         max_age = timedelta(days=args.max_age_days)
@@ -3627,16 +3637,23 @@ def _handle_evidence_verify(args: argparse.Namespace) -> int:
             "Invalid verification input.", code="invalid_input", exit_code=EXIT_USAGE
         ) from None
     result = verify_evidence_pack(
-        raw, key_id=args.key_id, key=key, as_of=as_of, max_age=max_age
+        raw,
+        key_id=args.key_id,
+        key=key,
+        as_of=as_of,
+        max_age=max_age,
+        corrective_action_ledger=ledger,
     )
     payload = {"ready": result.exit_code == 0, "reasons": list(result.reasons)}
+    if result.corrective_action_ids:
+        payload["corrective_action_ids"] = list(result.corrective_action_ids)
     if result.exit_code == EXIT_USAGE:
         reason = result.reasons[0]
         raise CliError(reason, code=reason, exit_code=EXIT_USAGE)
     return emit(
         args,
         payload,
-        human=" ".join(result.reasons) or "ready",
+        human=" ".join((*result.reasons, *result.corrective_action_ids)) or "ready",
         outcome="check_failed" if result.reasons else "completed",
     )
 
