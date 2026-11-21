@@ -331,8 +331,14 @@ public final class TranscriptHoldGate {
 
     /// Return a permit only after current holds clear and the clinician explicitly reviews.
     public func exportReviewed(_ statementID: Int, reviewerConfirmed: Bool) throws -> TranscriptReviewedPermit {
-        guard try statementHolds(statementID).isEmpty else { throw TranscriptHoldError.unresolvedTokenHold }
-        guard reviewerConfirmed else { throw TranscriptHoldError.reviewRequired }
+        guard try statementHolds(statementID).isEmpty else {
+            OpenMedUseErrorRecorder.current?.record(.exportBeforeReview)
+            throw TranscriptHoldError.unresolvedTokenHold
+        }
+        guard reviewerConfirmed else {
+            OpenMedUseErrorRecorder.current?.record(.exportBeforeReview)
+            throw TranscriptHoldError.reviewRequired
+        }
         return TranscriptReviewedPermit(
             statementID: statementID, revision: revision,
             evidenceDigest: evidenceDigest, notice: Self.notice)

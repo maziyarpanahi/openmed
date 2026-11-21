@@ -294,8 +294,10 @@ public final class AmbientCorrectionLedger {
         try ambientRevision(revision)
         try requireAmbient(revision == current.revision, .staleRevision)
         try authorize(reviewerID, "export")
+        let reviewed = current.claims.allSatisfy { $0.verificationEvent != nil && $0.approvalEvent != nil }
+        if !reviewerConfirmed || !reviewed { OpenMedUseErrorRecorder.current?.record(.exportBeforeReview) }
         try requireAmbient(reviewerConfirmed, .confirmationRequired)
-        try requireAmbient(current.claims.allSatisfy { $0.verificationEvent != nil && $0.approvalEvent != nil }, .reviewRequired)
+        try requireAmbient(reviewed, .reviewRequired)
         return AmbientReviewedDraft(
             schemaVersion: 1, advisory: Self.advisory, nonDiagnostic: true, reviewerConfirmed: true, draft: current)
     }
