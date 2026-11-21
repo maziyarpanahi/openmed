@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   training-data licenses, intended use and check dates for candidate pose,
   audio, sleep and chest X-ray models, and marking models with unstated weight
   licenses as user-supplied only (#4759).
+- Generate the environment-variable reference page `docs/configuration/environment-variables.md` from the settings schema with `scripts/docs/render_settings_reference.py`, grouped by section with type, default, bounds, secret flag and owning module; secrets render as "secret, no default" and the docs publication tests run its `--check` drift mode (#5339).
+- Declare every `OPENMED_SERVICE_*` setting the service reads, plus the core `OpenMedConfig` environment variables, in a sectioned Draft 2020-12 `openmed/core/settings.schema.json` with type, default, bounds, secret flag and owning module, covered by the schema fingerprint snapshot and an AST scan of service environment reads; `openmed.core.settings_registry` returns the declarations without reading the environment (#5337).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
@@ -36,7 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `label_not_allowed`), so callers can branch on why a Maple response was
   rejected without parsing the message. Messages and parsing behaviour are
   unchanged, and unknown codes fall back to `invalid_response` (#5086).
+- Fail tests when code under `openmed/` reads an `OPENMED_*` environment variable, or carries an `OPENMED_*` identifier, that `settings.schema.json` does not declare; failures name the variable and its `path:line` only, runtime-built names need a reasoned allowlist entry, and the seeded allowlist for not-yet-declared sections only shrinks (#5340).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Declare the MCP, OpenHIM, Journey, evaluation-dataset, integration, runtime and release-evidence settings in `settings.schema.json`, with dataset paths marked user-supplied and without defaults, and list `OPENMED_*` constants that only look like settings in `x-excluded-identifiers` with a reason; the undeclared-read allowlist is now empty (#5386).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
 - Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
