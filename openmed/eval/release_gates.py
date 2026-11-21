@@ -3504,13 +3504,12 @@ def evaluate_fixture_preservation_gate(counts: Any, *, ceiling: float) -> GateCh
             rate = n / total
             details[key + "_rate"] = rate
             rates.append(rate)
-    if not rates:
-        return GateCheck(gate, False, "not_assessed", details)
-    passed = max(rates) <= ceiling
     details["ceiling"] = ceiling
-    return GateCheck(
-        gate, passed, "ok" if passed else "preservation_above_ceiling", details
-    )
+    if any(rate > ceiling for rate in rates):
+        return GateCheck(gate, False, "preservation_above_ceiling", details)
+    if len(rates) != len(denominators):
+        return GateCheck(gate, False, "not_assessed", details)
+    return GateCheck(gate, True, "ok", details)
 
 
 def _membership_leakage_check(

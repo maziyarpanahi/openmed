@@ -184,6 +184,17 @@ def test_fixture_preservation_release_gate_uses_only_aggregate_evidence():
         ).reason
         == "not_assessed"
     )
+    for partial in (
+        assess_fixture_preservation(surrogate_pairs=[("AB1117", "ZZ2229")]),
+        assess_fixture_preservation(date_pairs=[(source, source + timedelta(days=10))]),
+    ):
+        check = evaluate_fixture_preservation_gate(partial, ceiling=0)
+        assert not check.passed and check.reason == "not_assessed"
+    observed_failure = assess_fixture_preservation(date_pairs=[(source, source)])
+    assert (
+        evaluate_fixture_preservation_gate(observed_failure, ceiling=0).reason
+        == "preservation_above_ceiling"
+    )
     for invalid in (
         {**counts, "unexpected": "sensitive"},
         {**counts, "preserved_prefixes": 3},

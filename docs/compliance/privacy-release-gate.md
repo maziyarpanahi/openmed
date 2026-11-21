@@ -56,5 +56,6 @@ Pass its aggregate counters in `metrics.fixture_preservation` and set
 `ReleaseGate(fixture_preservation_ceiling=0.0)` to quarantine on any unchanged
 date, preserved prefix or preserved check digit. Each rate uses its own
 assessed denominator. A zero denominator yields no rate for that metric.
-A requested check with no assessed pairs or invalid evidence blocks the release.
+A passing check requires assessed pairs for both dates and surrogates. A missing
+category blocks release even when all observed rates are within the ceiling.
 These rates measure directly observed preservation in the supplied fixture.
