@@ -193,3 +193,14 @@ personal data into a public model card.
 - [OpenMed DPA template](dpa-template.md)
 - [OpenMed model manifest](../model-manifest.md)
 - [OpenMed evaluation harness](../eval-harness.md)
+
+## Generate a local draft
+
+Run `openmed compliance ai-act-docs --capability deidentify` for the Markdown
+draft, or append `--format json`. Supply an exact `--model` repository ID to
+select its current manifest row, with optional `--manifest models.jsonl`.
+Add a matching local `--benchmark`, signed `--gate` and `--gate-key`,
+signed `--evidence-pack` and `--pack-key`, verified `--capa` ledger, or
+signed `--audit` report and `--audit-key`. Key options take local file paths.
+The command writes the draft to standard output and includes source digests.
+Missing fields and accountable-person reviews remain visible.
