@@ -70,3 +70,22 @@ profiles for their own data contract. A selector accepts at most 256 purpose
 mappings, 256 profiles, 512 fields per declaration, and 4,096 available fields;
 the corresponding `MAX_*` constants are public. Identifiers must use a compact
 ASCII-safe form. Examples above use synthetic values only.
+
+### Verify a prepared export against a permit
+
+Supply the purpose codes, permitted fields and output forms from the issued
+permit. Check the final export schema immediately before handing it to a writer.
+
+```python
+from openmed.compliance.data_permit import DataPermit, OutputForm, check_export_manifest
+
+permit = DataPermit(("research",), ("age_band", "count"), (OutputForm.AGGREGATE,))
+decision = check_export_manifest(
+    permit, purpose="research", fields=("age_band", "count"), output_form="aggregate"
+)
+decision.require_allowed()
+```
+
+A denied decision exposes controlled violation codes and disallowed field codes.
+The host supplies schema codes and the assessed output form. The check evaluates
+those declarations locally and does not inspect records or establish anonymity.
