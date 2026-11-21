@@ -1784,7 +1784,9 @@ public final class com/openmed/openmedkit/catalog/ModelCatalog {
 	public synthetic fun <init> (Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun byRepoId (Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
 	public final fun filter (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public final fun filter (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
 	public static synthetic fun filter$default (Lcom/openmed/openmedkit/catalog/ModelCatalog;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public static synthetic fun filter$default (Lcom/openmed/openmedkit/catalog/ModelCatalog;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
 	public final fun getEntries ()Ljava/util/List;
 }
 
@@ -1797,6 +1799,9 @@ public final class com/openmed/openmedkit/catalog/ModelCatalog$Companion {
 
 public final class com/openmed/openmedkit/catalog/ModelCatalogEntry {
 	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/util/List;
 	public final fun component3 ()Ljava/lang/String;
@@ -1804,13 +1809,20 @@ public final class com/openmed/openmedkit/catalog/ModelCatalogEntry {
 	public final fun component5 ()Ljava/util/List;
 	public final fun component6 ()Ljava/lang/String;
 	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ljava/lang/String;
 	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
 	public static synthetic fun copy$default (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCapability ()Ljava/lang/String;
 	public final fun getFormats ()Ljava/util/List;
 	public final fun getLanguages ()Ljava/util/List;
 	public final fun getLicense ()Ljava/lang/String;
 	public final fun getParamCount ()Ljava/lang/Long;
+	public final fun getRegulatoryObligations ()Ljava/util/Set;
+	public final fun getRegulatoryTier ()Ljava/lang/String;
 	public final fun getRepoId ()Ljava/lang/String;
 	public final fun getReproducibilityHash ()Ljava/lang/String;
 	public final fun getTier ()Ljava/lang/String;
@@ -4485,6 +4497,41 @@ public final class com/openmed/openmedkit/policy/PolicyThreshold {
 	public final fun getEscalateBelowPpm ()I
 	public final fun getKeepFloorPpm ()I
 	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/safety/OpenMedDisclaimer {
+	public static final field Companion Lcom/openmed/openmedkit/safety/OpenMedDisclaimer$Companion;
+	public final fun acknowledge (Ljava/time/Instant;)Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLocale ()Ljava/lang/String;
+	public final fun getRequiresAcknowledgement ()Z
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTier ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+	public final fun getVersionDigest ()Ljava/lang/String;
+	public final fun permitsResults (Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;)Z
+}
+
+public final class com/openmed/openmedkit/safety/OpenMedDisclaimer$Companion {
+	public final fun byId (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/OpenMedDisclaimer;
+	public final fun forCapability (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/OpenMedDisclaimer;
+	public final fun forTier (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/OpenMedDisclaimer;
+}
+
+public final class com/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAcknowledgedAt ()Ljava/lang/String;
+	public final fun getNoticeId ()Ljava/lang/String;
+	public final fun getVersionDigest ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
 	public fun toString ()Ljava/lang/String;
 }
 

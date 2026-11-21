@@ -14,6 +14,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.openmed.openmedkit.safety.OpenMedDisclaimer
+import com.openmed.openmedkit.safety.OpenMedNoticeAcknowledgement
+import java.time.Instant
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +38,8 @@ fun ResultScreen(
     source: ScanSource?,
     onCaptureAnother: () -> Unit,
 ) {
+    val notice = remember(result.reviewTier) { OpenMedDisclaimer.forTier(result.reviewTier) }
+    var receipt by remember(result, notice.versionDigest) { mutableStateOf<OpenMedNoticeAcknowledgement?>(null) }
     Card(
         modifier = Modifier.widthIn(max = 860.dp),
         shape = RoundedCornerShape(8.dp),
@@ -40,6 +49,13 @@ fun ResultScreen(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Text(text = notice.text, style = MaterialTheme.typography.bodyMedium)
+            if (!notice.permitsResults(receipt)) {
+                Button(onClick = { receipt = notice.acknowledge(Instant.now()) }) {
+                    Text("Acknowledge")
+                }
+                return@Column
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

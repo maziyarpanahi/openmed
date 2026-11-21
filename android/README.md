@@ -385,3 +385,10 @@ The offline model catalog exposes `regulatoryTier`, `capability` and
 `regulatoryObligations` on each entry. Use
 `catalog.filter(regulatoryTier = "assistive_review")` to select matching rows.
 Older entries and unknown tier codes require the full restricted safeguards.
+
+The scan demo uses an assistive-review notice for its human review screen.
+It displays result text and span counts after the current notice is acknowledged.
+The kit loads reviewed notices from the local catalog. Use
+`OpenMedDisclaimer.forTier(tier)` or `forCapability(code)` and call
+`acknowledge(instant)` after acceptance. The receipt contains a notice ID,
+version digest and UTC instant. The demo keeps it only in memory.

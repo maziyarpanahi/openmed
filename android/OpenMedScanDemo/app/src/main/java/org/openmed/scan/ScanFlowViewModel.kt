@@ -124,6 +124,7 @@ class ScanFlowViewModel(
 class ScanPipeline(
     private val ocrAdapter: OcrAdapter,
     private val deidentifier: OnDeviceDeidentifier,
+    private val reviewTier: String = "assistive_review",
 ) {
     suspend fun recognize(image: OcrImage): OcrResult = ocrAdapter.recognize(image)
 
@@ -134,6 +135,7 @@ class ScanPipeline(
         val deidentified = deidentifier.deidentify(ocrResult)
         return ScanPipelineResult(
             deidentified = deidentified,
+            reviewTier = reviewTier,
             ocrTokenCount = ocrResult.tokens.size,
             ocrEngine = ocrResult.metadata["engine"] ?: "unknown",
         )
@@ -144,6 +146,7 @@ data class ScanPipelineResult(
     val deidentified: DeidentifiedResult,
     val ocrTokenCount: Int,
     val ocrEngine: String,
+    val reviewTier: String = "assistive_review",
 )
 
 data class DeidentifiedResult(
