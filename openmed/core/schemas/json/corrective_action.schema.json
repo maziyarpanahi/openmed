@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/corrective-action/1.0.0",
+  "title": "Corrective and preventive action record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "source",
+    "severity",
+    "state",
+    "capabilities",
+    "versions",
+    "artifact_digests",
+    "root_cause",
+    "corrections",
+    "preventive_actions",
+    "before_evidence_digest",
+    "after_evidence_digest",
+    "release_tags"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "record_id": {
+      "type": "string",
+      "pattern": "^CAPA-[0-9]{4}-[0-9]{4,8}$"
+    },
+    "source": {
+      "enum": [
+        "release_gate",
+        "incident",
+        "user_report",
+        "audit",
+        "recall_regression",
+        "privacy_leakage"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "state": {
+      "enum": [
+        "open",
+        "investigating",
+        "action_planned",
+        "implemented",
+        "verified",
+        "closed"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "deidentify",
+          "extract_pii",
+          "analyze_text",
+          "ground",
+          "summarize",
+          "brief",
+          "decisions",
+          "nli",
+          "generate_text",
+          "ecg",
+          "waveform",
+          "visual_qa",
+          "transcribe",
+          "structured_release",
+          "journey"
+        ]
+      }
+    },
+    "versions": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+      }
+    },
+    "artifact_digests": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 0,
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "root_cause": {
+      "enum": [
+        "unknown",
+        "implementation",
+        "configuration",
+        "dataset",
+        "model",
+        "process",
+        "dependency"
+      ]
+    },
+    "corrections": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 0,
+      "items": {
+        "enum": [
+          "patch",
+          "rollback",
+          "configuration_change",
+          "test_coverage",
+          "validation_update",
+          "policy_update",
+          "training_update",
+          "documentation_update",
+          "monitoring_update"
+        ]
+      }
+    },
+    "preventive_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 0,
+      "items": {
+        "enum": [
+          "patch",
+          "rollback",
+          "configuration_change",
+          "test_coverage",
+          "validation_update",
+          "policy_update",
+          "training_update",
+          "documentation_update",
+          "monitoring_update"
+        ]
+      }
+    },
+    "before_evidence_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "after_evidence_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "release_tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 0,
+      "items": {
+        "type": "string",
+        "pattern": "^v(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "verified",
+              "closed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "after_evidence_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  ]
+}
