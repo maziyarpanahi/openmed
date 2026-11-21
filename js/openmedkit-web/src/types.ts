@@ -1,3 +1,5 @@
+import type { ReviewOptions } from "./disclaimer";
+
 export const OPENMED_SPAN_SCHEMA_VERSION = 1 as const;
 
 export const CANONICAL_LABELS = [
@@ -150,6 +152,7 @@ export interface DecodedEntitySpan {
 }
 
 export interface ExtractPiiOptions {
+  review?: ReviewOptions;
   pipeline?: RawTokenClassificationPipeline;
   model?: string;
   modelLoader?: ModelLoader;

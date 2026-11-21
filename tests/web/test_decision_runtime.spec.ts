@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   DECISION_SCHEMA_VERSION,
+  acknowledgeNotice,
+  disclaimerForCapability,
   DecisionEncoderError,
   DecisionRuntimeError,
   EncoderDecisionRuntime,
@@ -33,6 +35,11 @@ const rootDir = fileURLToPath(new URL("../..", import.meta.url));
 const fixture = JSON.parse(
   readFileSync(join(rootDir, "tests", "fixtures", "parity", "decision_encoder_v1.json"), "utf8"),
 ) as Fixture;
+
+const reviewedDecision = {
+  clinicianMode: true,
+  acknowledgement: acknowledgeNotice(disclaimerForCapability("decisions"), new Date("2000-01-01T00:00:00Z")),
+};
 
 interface Fixture {
   schema_version: string;
@@ -287,7 +294,9 @@ test("shared vectors match the Python reference through ONNX Runtime Web", async
       ...(row.calibration_profiles === null ? {} : { calibrationProfiles: row.calibration_profiles }),
     });
 
-    const result = await runtime.decide(JSON.stringify(row.request));
+    await assert.rejects(runtime.decide(row.request), { code: "clinician_mode_required" });
+    assert.deepEqual(session.calls, []);
+    const result = await runtime.decide(JSON.stringify(row.request), reviewedDecision);
     assertClose(result, row.expected.result, fixture.tolerance.scores, row.id);
     assert.equal(result.autonomous_action, false, row.id);
     assert.equal(result.review.required, true, row.id);
@@ -348,7 +357,7 @@ test("timeouts are typed failures", async () => {
     input_text: "Synthetic urgent note.",
     options: ["urgent", "routine"],
     timeout_ms: 100,
-  });
+  }, reviewedDecision);
   assert.equal(result.state, "failure");
   assert.equal(result.code, "backend_timeout");
   assert.deepEqual(result.option_scores, []);

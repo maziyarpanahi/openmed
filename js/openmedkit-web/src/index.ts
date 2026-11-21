@@ -1,3 +1,4 @@
+import { requireCapabilityAccess, type OpenMedDisclaimer } from "./disclaimer";
 import { decodeBioTokenSpans } from "./decoder";
 import {
   assertLocalModelReference,
@@ -16,6 +17,9 @@ import {
   type SpanAction,
   type TokenClassificationPipeline,
 } from "./types";
+
+export { acknowledgeNotice, CapabilityReviewError, disclaimerById, disclaimerForCapability, disclaimerForTier, requireCapabilityAccess } from "./disclaimer";
+export type { NoticeAcknowledgement, OpenMedDisclaimer, ReviewOptions } from "./disclaimer";
 
 export { effectiveRegulatoryTier, getIntendedUse, regulatoryObligations } from "./intended-use";
 export type { IntendedUse, RegulatoryTier } from "./types";
@@ -538,6 +542,7 @@ export async function extractPii(
   text: string,
   options: ExtractPiiOptions = {},
 ): Promise<OpenMedSpan[]> {
+  requireCapabilityAccess("extract_pii", options.review);
   options = withAcquisitionPolicy(options);
   const hashSecret =
     options.hashSecret == null
@@ -636,7 +641,8 @@ function withAcquisitionPolicy(options: ExtractPiiOptions): ExtractPiiOptions {
 export async function deidentify(
   text: string,
   options: DeidentifyOptions = {},
-): Promise<OpenMedDeidentifyResult> {
+): Promise<OpenMedDeidentifyResult & { readonly notice: OpenMedDisclaimer }> {
+  const notice = requireCapabilityAccess("deidentify", options.review);
   const spans = await extractPii(text, options);
   const redactionSpans = spans.map((span) => {
     const replacement = options.replacement?.(span) ?? `[${span.canonical_label}]`;
@@ -648,6 +654,7 @@ export async function deidentify(
   });
   return {
     text,
+    notice,
     deidentifiedText: spansToRedactedText(text, redactionSpans),
     spans: redactionSpans,
   };
