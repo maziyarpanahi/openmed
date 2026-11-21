@@ -89,6 +89,7 @@ from .artifact_size_budget import (
 from .audit_chain import (
     AuditRecord,
     AuditSink,
+    CoreAuditSink,
     HashChainAuditLog,
 )
 from .audit_envelope import (
@@ -441,6 +442,7 @@ from .waiver_ledger import (
 __all__ = [
     "AuditRecord",
     "AuditSink",
+    "CoreAuditSink",
     "HashChainAuditLog",
     "DEFAULT_DATA_USE_POLICY",
     "DEFAULT_DENIED_ACTIONS",

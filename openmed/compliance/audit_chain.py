@@ -1,25 +1,21 @@
-"""Minimal hash-chained append-only audit log for compliance workflows.
+"""Compliance event receipts and a core-backed audit sink.
 
-GDPR access and erasure workflows must record *that* an export or preview was
-generated without persisting the underlying personal data. This module provides
-a narrow :class:`AuditSink` protocol and a self-contained
-:class:`HashChainAuditLog` default implementation: an append-only ledger where
-each record commits to its predecessor's hash, so any later mutation is
-detectable via :meth:`HashChainAuditLog.verify`.
-
-The interface is deliberately small so it can be swapped for the shared,
-tamper-evident audit chain (OM-305) when that lands, without changing callers.
-Records hold event metadata, provenance, and content hashes only -- never raw
-PHI.
+DSAR and Part 11 workflows append event metadata to an AuditSink. A
+CoreAuditSink binds each export-compatible record to the core AuditChain.
+The legacy HashChainAuditLog remains available during the 4.x transition.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Any, Protocol, runtime_checkable
 
-from openmed.core.audit import stable_hash
+from openmed.__about__ import __version__
+from openmed.core.audit import AuditReport, hash_text, stable_hash
+from openmed.core.audit_chain import AuditChain
+from openmed.utils.deprecation import deprecated
 
 
 @dataclass
@@ -74,7 +70,7 @@ class AuditSink(Protocol):
         ...
 
 
-class HashChainAuditLog:
+class _ComplianceRecordLog:
     """A self-contained, tamper-evident append-only audit log."""
 
     #: Anchor that the first record's ``previous_hash`` links to.
@@ -94,6 +90,11 @@ class HashChainAuditLog:
     def append(self, event_type: str, payload: Mapping[str, Any]) -> AuditRecord:
         """Append an event, linking it to the current chain head."""
 
+        record = self._next_record(event_type, payload)
+        self._records.append(record)
+        return record
+
+    def _next_record(self, event_type: str, payload: Mapping[str, Any]) -> AuditRecord:
         if not isinstance(payload, Mapping):
             raise TypeError("audit payload must be a mapping")
 
@@ -107,7 +108,6 @@ class HashChainAuditLog:
             previous_hash=previous_hash,
         )
         record.record_hash = record.compute_hash()
-        self._records.append(record)
         return record
 
     def verify(self) -> bool:
@@ -133,8 +133,72 @@ class HashChainAuditLog:
         }
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="CoreAuditSink(openmed.core.audit_chain.AuditChain())",
+)
+class HashChainAuditLog(_ComplianceRecordLog):
+    """Legacy self-contained compliance record log."""
+
+
+class CoreAuditSink(_ComplianceRecordLog):
+    """Commit compliance record digests to a core chain and keep export compatibility.
+
+    The Part 11 export retains its existing record format. Persist the supplied
+    AuditChain separately to retain the additional core-chain receipts.
+    """
+
+    def __init__(self, chain: AuditChain | None = None) -> None:
+        super().__init__()
+        self.chain = chain if chain is not None else AuditChain()
+        self._core_sequences: list[int] = []
+        self._lock = RLock()
+
+    def append(self, event_type: str, payload: Mapping[str, Any]) -> AuditRecord:
+        """Append a content commitment before making the compatibility record visible."""
+        with self._lock:
+            record = self._next_record(event_type, payload)
+            receipt = AuditReport(
+                policy="compliance_event_v1",
+                resolved_profile={},
+                detectors=[],
+                safety_sweep={},
+                spans=[],
+                thresholds={},
+                residual_risk={},
+                openmed_version=__version__,
+                manifest_hash=stable_hash({"format": "compliance_event_v1"}),
+                document_length=0,
+                input_hash=record.record_hash,
+                deidentified_text_hash=hash_text(""),
+            )
+            entry = self.chain.append(receipt)
+            self._core_sequences.append(entry.sequence)
+            self._records.append(record)
+            return record
+
+    def verify(self) -> bool:
+        """Verify both chains and each retained record's core commitment."""
+        with self._lock:
+            if (
+                not super().verify()
+                or not self.chain.verify()
+                or len(self._records) != len(self._core_sequences)
+            ):
+                return False
+            for record, sequence in zip(
+                self._records, self._core_sequences, strict=True
+            ):
+                entry = self.chain.entry_at(sequence)
+                if entry is None or entry.input_hash != record.record_hash:
+                    return False
+            return True
+
+
 __all__ = [
     "AuditRecord",
     "AuditSink",
+    "CoreAuditSink",
     "HashChainAuditLog",
 ]

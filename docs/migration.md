@@ -177,7 +177,13 @@ Free-form span evidence is planned to move to typed evidence references.
 
 ### Audit chain
 
-The compliance audit log is planned to converge on the core audit chain.
+Direct construction of `HashChainAuditLog` is deprecated in 4.3 for removal
+in 5.0. Pass `CoreAuditSink(chain)` from `openmed.compliance` to
+`assemble_dsar_package(..., audit_sink=sink)` or `Part11AuditEmitter(audit_sink=sink)`,
+where `chain` is an `openmed.core.audit_chain.AuditChain`. The core ledger
+holds only commitments. Existing Part 11 exports keep their wire format.
+Persist the core chain separately with `chain.write(path)` for independent
+verification with `openmed audit verify`.
 
 ### Policy receipts
 
