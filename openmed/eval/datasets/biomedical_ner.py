@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.labels import (
+    ANATOMY,
     CANONICAL_LABELS,
     CONDITION,
     MEDICATION,
@@ -38,6 +39,7 @@ NCBI_DISEASE = "ncbi_disease"
 JNLPBA = "jnlpba"
 SPECIES_800 = "species_800"
 BC2GM = "bc2gm"
+ANATEM = "anat_em"
 DEFAULT_SPLIT = "test"
 
 BIOMEDICAL_NER_CORPORA: tuple[str, ...] = (
@@ -46,6 +48,7 @@ BIOMEDICAL_NER_CORPORA: tuple[str, ...] = (
     JNLPBA,
     SPECIES_800,
     BC2GM,
+    ANATEM,
 )
 
 RowsLoader = Callable[
@@ -176,8 +179,31 @@ class BiomedicalNerCorpus:
 _JNLPBA_PARQUET_REVISION = "c4d4db8684c996b6257b5f10f8a8f5c6e47b4cb4"
 _SPECIES_800_PARQUET_REVISION = "095d7c7223e891ad110a14c4a538faa3f4f5d903"
 _BLURB_PARQUET_REVISION = "2588833475f354bc8a5bfaa93e6688671cdd68a8"
+_ANATEM_PARQUET_REVISION = "4859b1a00c4ba64aec6325a9eb398bf4e6533b20"
 
 BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
+    ANATEM: BiomedicalNerSource(
+        corpus=ANATEM,
+        display_name="AnatEM",
+        repository="bigbio/anat_em",
+        config="anat_em_source",
+        revision=_ANATEM_PARQUET_REVISION,
+        # Collapse anatomical granularity to the existing ANATOMY concept.
+        label_mapping={
+            "anatomicalsystem": ANATOMY,
+            "cancer": ANATOMY,
+            "cell": ANATOMY,
+            "cellularcomponent": ANATOMY,
+            "developinganatomicalstructure": ANATOMY,
+            "immaterialanatomicalentity": ANATOMY,
+            "multitissuestructure": ANATOMY,
+            "organ": ANATOMY,
+            "organismsubdivision": ANATOMY,
+            "organismsubstance": ANATOMY,
+            "pathologicalformation": ANATOMY,
+            "tissue": ANATOMY,
+        },
+    ),
     BC5CDR: BiomedicalNerSource(
         corpus=BC5CDR,
         display_name="BC5CDR",
@@ -998,6 +1024,7 @@ def _int(value: Any) -> int:
 
 
 __all__ = [
+    "ANATEM",
     "BC2GM",
     "BC5CDR",
     "BIOMEDICAL_NER",

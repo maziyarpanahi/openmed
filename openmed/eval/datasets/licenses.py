@@ -301,6 +301,18 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "reference and stores no corpus rows in the repository."
         ),
     ),
+    "anat_em": DatasetLicense(
+        dataset="anat_em",
+        license_id="CC-BY-SA-3.0",
+        source_url="https://huggingface.co/datasets/bigbio/anat_em",
+        redistribution="not redistributed by OpenMed",
+        notes=(
+            "BigBIO's dataset card lists CC-BY-SA-3.0. The corpus LICENSE "
+            "applies it to annotations; PubMed abstracts retain NLM copyright "
+            "terms and PMC extracts retain article-specific terms. Rows are "
+            "loaded by reference and cached locally on demand, never bundled."
+        ),
+    ),
     "species_800": DatasetLicense(
         dataset="species_800",
         license_id="Medline-restrictions",
