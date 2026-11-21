@@ -549,3 +549,47 @@ def test_writer_does_not_replace_a_destination_created_during_write(
         write_journey_release_packet(packet, output)
     assert output.read_text(encoding="utf-8") == "other writer"
     assert not tuple(tmp_path.glob(".racing-packet.json.tmp-*"))
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_journey_pack_profile_matches_the_release_fixture(tmp_path, blocked):
+    from datetime import datetime, timedelta
+
+    from openmed.eval.evidence_pack.verify import verify_evidence_pack
+    from openmed.eval.journey_release import build_journey_release
+
+    root, _, manifest = make_release_repository(tmp_path)
+    if blocked:
+        gate_report(manifest, "privacy")["metrics"]["critical_leakage_count"] = 1
+    pack, view = build_journey_release(
+        manifest, repo_root=root, signing_key=SIGNING_KEY, key_id="journey_test"
+    )
+    document = pack.to_dict()
+    args = dict(
+        key=SIGNING_KEY.encode(),
+        key_id="journey_test",
+        as_of=datetime.fromisoformat(
+            manifest["release"]["evaluated_at"].replace("Z", "+00:00")
+        ),
+        max_age=timedelta(days=1),
+    )
+    result = verify_evidence_pack(pack.to_json(), profile="journey", **args)
+    assert (
+        result.exit_code
+        == int(blocked)
+        == int(view.decision == JOURNEY_RELEASE_NOT_READY)
+    )
+    assert result.reasons == (
+        ("privacy:nonzero:critical_leakage_count",) if blocked else ()
+    )
+    assert [lane["id"] for lane in document["lanes"]] == list(JOURNEY_RELEASE_GATES)
+    assert document["licenses"] and "typed_failure_states" in document["claims"]
+    assert (
+        "evidence_profile_mismatch"
+        in verify_evidence_pack(pack.to_json(), **args).reasons
+    )
+    document["journey_release"]["source_commit"] = "0" * 40
+    assert (
+        "signature_mismatch"
+        in verify_evidence_pack(json.dumps(document), profile="journey", **args).reasons
+    )

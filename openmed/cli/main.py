@@ -628,6 +628,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--as-of", required=True, help="Timezone-aware evaluation timestamp."
     )
     verify.add_argument("--max-age-days", type=int, required=True)
+    verify.add_argument(
+        "--profile", choices=("capability", "journey"), default="capability"
+    )
     add_json_flag(verify)
     verify.set_defaults(handler=_handle_evidence_verify)
     _add_audit_command(subparsers)
@@ -3675,7 +3678,12 @@ def _handle_evidence_verify(args: argparse.Namespace) -> int:
             "Invalid verification input.", code="invalid_input", exit_code=EXIT_USAGE
         ) from None
     result = verify_evidence_pack(
-        raw, key_id=args.key_id, key=key, as_of=as_of, max_age=max_age
+        raw,
+        key_id=args.key_id,
+        key=key,
+        as_of=as_of,
+        max_age=max_age,
+        profile=args.profile,
     )
     payload = {"ready": result.exit_code == 0, "reasons": list(result.reasons)}
     if result.exit_code == EXIT_USAGE:

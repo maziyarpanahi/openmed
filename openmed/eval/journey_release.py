@@ -18,7 +18,7 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from importlib import resources
 from pathlib import Path
 from typing import Any, Final
@@ -493,14 +493,14 @@ class JourneyReleasePacket:
         )
 
 
-def evaluate_journey_release(
+def build_journey_release(
     manifest: Mapping[str, Any],
     *,
     repo_root: str | Path,
     signing_key: bytes | str,
     key_id: str = "journey-release",
-) -> JourneyReleasePacket:
-    """Evaluate and sign one v3 Journey release manifest.
+):
+    """Build a capability pack and its compatible signed packet from one v3 Journey release manifest.
 
     The repository must be checked out at the exact commit named by the
     manifest, and the named tag must resolve to that commit.  Inputs are read
@@ -550,17 +550,6 @@ def evaluate_journey_release(
         evaluated_at=evaluated_at,
     )
 
-    binding_ok = repository_binding["verified"] is True
-    gates_ok = all(item.passed for item in gate_results)
-    decision = (
-        JOURNEY_RELEASE_READY
-        if binding_ok
-        and gates_ok
-        and not input_blockers
-        and not policy_blockers
-        and not exception_blockers
-        else JOURNEY_RELEASE_NOT_READY
-    )
     release_payload = {
         "evaluated_at": release["evaluated_at"],
         "git_commit": release["git_commit"],
@@ -577,7 +566,7 @@ def evaluate_journey_release(
     packet = JourneyReleasePacket(
         release=release_payload,
         environment=normalized["environment"],
-        decision=decision,
+        decision=JOURNEY_RELEASE_NOT_READY,
         repository_binding=repository_binding,
         frozen_inputs=frozen_inputs,
         gates=gate_results,
@@ -588,7 +577,141 @@ def evaluate_journey_release(
         manifest_digest=stable_hash(normalized),
         reproduction=reproduction,
     )
-    return packet.sign(signing_key, key_id=key_id)
+    from openmed.eval.evidence_pack.verify import verify_evidence_pack
+
+    key = _key_bytes(signing_key)
+    pack = _journey_pack(packet, normalized["licenses"], key, key_id)
+    verdict = verify_evidence_pack(
+        pack.to_json(),
+        key=key,
+        key_id=pack.to_dict()["signature"]["key_id"],
+        as_of=evaluated_at,
+        max_age=timedelta(seconds=max_age),
+        profile="journey",
+    )
+    decision = (
+        JOURNEY_RELEASE_READY if verdict.exit_code == 0 else JOURNEY_RELEASE_NOT_READY
+    )
+    return pack, replace(packet, decision=decision).sign(key, key_id=key_id)
+
+
+def evaluate_journey_release(
+    manifest, *, repo_root, signing_key, key_id="journey-release"
+) -> JourneyReleasePacket:
+    """Evaluate through the shared pack verifier and return the legacy wire view."""
+    _, packet = build_journey_release(
+        manifest, repo_root=repo_root, signing_key=signing_key, key_id=key_id
+    )
+    return packet
+
+
+def _pack_code(value: str) -> str:
+    if re.fullmatch("[a-z][a-z0-9_]{0,63}", value):
+        return value
+    return "journey_" + hashlib.sha256(value.encode()).hexdigest()[:48]
+
+
+def _journey_pack(packet, licenses, key, key_id):
+    from openmed.core.intended_use import load_intended_use_registry
+    from openmed.eval.evidence_pack import ValidationEvidencePack
+    from openmed.eval.evidence_pack.verify import sign_evidence_pack
+
+    declaration = load_intended_use_registry().declarations["journey"]
+    profile = journey_release_profile()
+    blockers = set(packet.repository_binding["blocking_codes"])
+    blockers.update(packet.reproduction["policy_blocking_codes"])
+    blockers.update(packet.reproduction["exception_blocking_codes"])
+    claim_lane = {
+        "human_review_for_high_risk": "clinical_nlp",
+        "local_first": "security",
+        "offline_after_assets_downloaded": "security",
+        "synthetic_release_evidence": "provenance",
+        "typed_failure_states": "application",
+    }
+    claims = sorted(set(packet.claims) & claim_lane.keys())
+    lanes = []
+    for gate in packet.gates:
+        blockers.update(f"{gate.gate}:{reason}" for reason in gate.blocking_codes)
+        lanes.append(
+            {
+                "id": gate.gate,
+                "mandatory": True,
+                "state": gate.state,
+                "report_digest": gate.artifact_digest,
+                "required_metrics": list(profile[gate.gate]),
+                "metrics": {
+                    k: v for k, v in gate.metrics.items() if k in profile[gate.gate]
+                },
+                "claims": [c for c in claims if claim_lane[c] == gate.gate],
+            }
+        )
+    payload = {
+        "schema_version": "1.0.0",
+        "capability": "journey",
+        "version": re.split(r"[-+]", packet.release["version"])[0],
+        "generated_at": _parse_timestamp(
+            packet.release["evaluated_at"], "evaluated_at"
+        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "regulatory_tier": declaration.regulatory_tier.value,
+        "intended_use_digest": declaration.digest(),
+        "lanes": lanes,
+        "claims": claims,
+        "licenses": [
+            {
+                **item,
+                "asset_id": _pack_code(item["asset_id"]),
+                "license_id": item["license_id"]
+                if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+-]{0,63}", item["license_id"])
+                else _pack_code(item["license_id"]).replace("_", "-"),
+            }
+            for item in licenses
+        ],
+        "exceptions": [
+            {
+                "code": _pack_code(e["code"]),
+                "lane": e["gate"],
+                "severity": e["severity"],
+                "disposition": e["disposition"],
+                "expires_at": e["expires_at"],
+            }
+            for e in packet.exceptions
+        ],
+        "frozen_inputs": [
+            {
+                "id": "release_manifest",
+                "origin": "configuration",
+                "digest": packet.manifest_digest,
+            },
+            *[
+                {"id": g.gate, "origin": "aggregate", "digest": g.artifact_digest}
+                for g in packet.gates
+            ],
+            *[
+                {
+                    "id": _pack_code("input_" + f["id"]),
+                    "origin": f["origin"],
+                    "digest": f["digest"],
+                }
+                for f in packet.frozen_inputs
+            ],
+        ],
+        "limitations": sorted(
+            (set(packet.limitations) & _REQUIRED_LIMITATIONS)
+            | {"not_clinically_validated", "not_a_medical_device"}
+        ),
+        "signature": None,
+        "journey_release": {
+            "source_commit": packet.release["git_commit"],
+            "manifest_digest": packet.manifest_digest,
+            "context_digest": stable_hash(
+                {k: v for k, v in packet._unsigned_payload().items() if k != "decision"}
+            ),
+            "blocking_codes": sorted(blockers),
+        },
+    }
+    # Historical key identifiers allow punctuation outside the pack's code vocabulary.
+    pack_key = _pack_code(key_id)
+    return sign_evidence_pack(ValidationEvidencePack(payload), key_id=pack_key, key=key)
 
 
 def load_journey_release_manifest(path: str | Path) -> dict[str, Any]:
@@ -686,6 +809,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--output-format", choices=("packet", "pack"), default="packet")
     parser.add_argument("--signing-key-file", type=Path)
     parser.add_argument("--key-id", default="journey-release")
     parser.add_argument("--overwrite", action="store_true")
@@ -700,13 +824,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         key = _load_signing_key(args.signing_key_file)
         manifest = load_journey_release_manifest(args.manifest)
-        packet = evaluate_journey_release(
+        pack, packet = build_journey_release(
             manifest,
             repo_root=args.repo_root,
             signing_key=key,
             key_id=args.key_id,
         )
-        write_journey_release_packet(packet, args.output, overwrite=args.overwrite)
+        output = pack.to_dict() if args.output_format == "pack" else packet.to_dict()
+        _write_release_json(output, args.output, overwrite=args.overwrite)
     except JourneyReleaseError as exc:
         print(f"journey-release: {exc}", file=sys.stderr)
         return 2
@@ -715,7 +840,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     if args.json:
-        print(json.dumps(packet.to_dict(), indent=2, sort_keys=True))
+        print(json.dumps(output, indent=2, sort_keys=True))
     else:
         print(f"Journey Release: {packet.release['version']} -> {packet.decision}")
         for gate in packet.gates:
@@ -1104,23 +1229,7 @@ def _evaluate_gate_reports(
             age = 0
         elif age > max_age_seconds:
             blockers.append("artifact_stale")
-        for metric in _ZERO_BLOCKERS[gate]:
-            if metric not in metrics:
-                blockers.append(f"missing:{metric}")
-            elif metrics[metric] != 0:
-                blockers.append(f"nonzero:{metric}")
-        for metric in _POSITIVE_COUNTS[gate]:
-            if metrics[metric] <= 0:
-                blockers.append(f"empty:{metric}")
-        if gate == "performance":
-            blockers.extend(_performance_blockers(metrics))
-        if gate == "privacy":
-            checked = metrics.get("consistency_checked_format_count")
-            unsupported = metrics.get("consistency_unsupported_format_count")
-            if checked is None:
-                blockers.append("missing:consistency_checked_format_count")
-            elif checked != 5 or unsupported != 0:
-                blockers.append("consistency_coverage_incomplete")
+        blockers.extend(journey_metric_blockers(gate, metrics))
         results.append(
             JourneyGateResult(
                 gate=gate,
@@ -1133,6 +1242,37 @@ def _evaluate_gate_reports(
             )
         )
     return tuple(results)
+
+
+def journey_metric_blockers(gate: str, metrics: Mapping[str, Any]) -> list[str]:
+    """Evaluate Journey thresholds against the aggregate observations for one lane."""
+    blockers = []
+    for metric in _ZERO_BLOCKERS[gate]:
+        if metric not in metrics:
+            blockers.append(f"missing:{metric}")
+        elif metrics[metric] != 0:
+            blockers.append(f"nonzero:{metric}")
+    for metric in _POSITIVE_COUNTS[gate]:
+        if metrics[metric] <= 0:
+            blockers.append(f"empty:{metric}")
+    if gate == "performance":
+        blockers.extend(_performance_blockers(metrics))
+    if gate == "privacy":
+        checked = metrics.get("consistency_checked_format_count")
+        unsupported = metrics.get("consistency_unsupported_format_count")
+        if checked is None:
+            blockers.append("missing:consistency_checked_format_count")
+        elif checked != 5 or unsupported != 0:
+            blockers.append("consistency_coverage_incomplete")
+    return blockers
+
+
+def journey_release_profile() -> dict[str, tuple[str, ...]]:
+    """Return the ten mandatory lanes and their numeric evidence requirements."""
+    return {
+        gate: tuple(sorted(_METRIC_FIELDS[gate] - {"quantization", "dataset_digest"}))
+        for gate in JOURNEY_RELEASE_GATES
+    }
 
 
 def _performance_blockers(metrics: Mapping[str, Any]) -> list[str]:

@@ -120,6 +120,36 @@
           "type": "null"
         }
       ]
+    },
+    "journey_release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "manifest_digest",
+        "context_digest",
+        "blocking_codes"
+      ],
+      "properties": {
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "context_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "blocking_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:+/@-]{0,255}(?![\\s\\S])"
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -384,5 +414,21 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "journey_release"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capability": {
+            "const": "journey"
+          }
+        }
+      }
+    }
+  ]
 }
