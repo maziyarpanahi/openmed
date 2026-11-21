@@ -139,3 +139,46 @@ def test_missing_inputs_unknown_and_generic_metrics_refused(tmp_path):
     data["use_error_snapshot_digest"] = "sha256:" + "f" * 64
     with pytest.raises(EvidencePackError, match="use_error_digest_mismatch"):
         build_human_factors_pack(tmp_path, data)
+
+
+def test_structured_membership_lane_uses_bounded_report(tmp_path):
+    from openmed.eval.evidence_pack.lanes import membership_lane
+    from openmed.risk.membership import membership_inference_self_test
+
+    (tmp_path / "reports.json").write_text("[]")
+
+    def build():
+        return build_evidence_pack(
+            "structured_release", tmp_path, generated_at=datetime.now(timezone.utc)
+        )
+
+    assert "state:membership_inference:unknown" in build().lane_blockers()
+    rows = [{"group": "synthetic-private"}]
+    source = membership_inference_self_test(
+        rows, rows, quasi_identifiers=["group"], max_inference_rate=1
+    ).to_dict()
+    raw = json.dumps(source).encode()
+    digest = hashlib.sha256(raw).hexdigest()
+    (tmp_path / (digest + ".json")).write_bytes(raw)
+    index = [
+        {
+            "lane": "membership_inference",
+            "type": "membership_self_test",
+            "sha256": digest,
+        }
+    ]
+    (tmp_path / "reports.json").write_text(json.dumps(index))
+    pack = build()
+    assert not pack.lane_blockers()
+    assert "synthetic-private" not in pack.to_json()
+    assert membership_lane({**source, "max_inference_rate": None}) == ("unknown", {})
+    assert (
+        membership_lane({**source, "max_inference_rate": 0, "meets_policy": False})[0]
+        == "failure"
+    )
+    with pytest.raises(EvidencePackError, match="invalid_membership_report"):
+        membership_lane({**source, "unique_match_count": 0})
+    index[0]["type"] = "review_metrics"
+    (tmp_path / "reports.json").write_text(json.dumps(index))
+    with pytest.raises(EvidencePackError, match="membership_self_test_required"):
+        build()

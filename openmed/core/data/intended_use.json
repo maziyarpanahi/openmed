@@ -892,6 +892,34 @@
       "openmed.structured.structure_table"
     ]
   },
+  "structured_release": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "operator_review",
+      "input_modalities": [
+        "structured"
+      ],
+      "intended_users": [
+        "operator"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "privacy",
+      "regulatory_tier": "non_clinical",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.structured.privacy_lab.build_structured_privacy_evidence"
+    ]
+  },
   "summarize": {
     "declaration": {
       "autonomous_clinical_action": false,

@@ -100,6 +100,28 @@ def verify_evidence_pack(
                 reasons.add("missing_required_lane")
             elif not set(metrics) <= lane["metrics"].keys():
                 reasons.add("missing_required_metric")
+        if code == "structured_release" and (
+            lane := actual.get("membership_inference")
+        ):
+            metrics = lane["metrics"]
+            if not (
+                0
+                <= metrics.get("membership_inference_rate", -1)
+                <= metrics.get("max_inference_rate", -1)
+                <= 1
+                and all(
+                    type(metrics.get(k)) is int and metrics[k] > 0
+                    for k in ("release_count", "candidate_count")
+                )
+                and lane["report_digest"]
+                and any(
+                    item["id"] == "membership_inference"
+                    and item["origin"] == "aggregate"
+                    and item["digest"] == lane["report_digest"]
+                    for item in data["frozen_inputs"]
+                )
+            ):
+                reasons.add("invalid_membership_evidence")
         if "human_factors" in required_lanes(code, tier=tier):
             sources = {
                 item["id"]

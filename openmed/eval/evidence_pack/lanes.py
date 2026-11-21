@@ -34,6 +34,14 @@ _CAPABILITIES = {
     "nli": {"claim_verification": ("macro_f1", "abstention_rate")},
     "review_evidence": {"evidence_coverage": ("evidence_coverage",)},
     "structured_extraction": _EXTRACTION,
+    "structured_release": {
+        "membership_inference": (
+            "release_count",
+            "candidate_count",
+            "membership_inference_rate",
+            "max_inference_rate",
+        )
+    },
     "summarize": _GENERATION,
     "transcribe": {"transcription": ("word_error_rate",)},
     "visual_qa": {"visual_description": ("abstention_rate", "reviewed_count")},
@@ -258,3 +266,66 @@ def human_factors_lane(capability: str, data: dict) -> tuple[str, dict, list[dic
         {"use_error_count": total, "review_disagreement_rate": (d - n) / d},
         refs,
     )
+
+
+def membership_lane(report: dict) -> tuple[str, dict]:
+    """Project an existing bounded structured membership self-test into a pack."""
+    import re
+
+    from openmed.risk.membership import MembershipSelfTestResult
+
+    if not isinstance(report, dict):
+        raise EvidencePackError("invalid_membership_report")
+    if report.get("status") == "not_run" or report.get("max_inference_rate") is None:
+        return "unknown", {}
+    try:
+        result = MembershipSelfTestResult(
+            **{
+                field: report[field]
+                for field in MembershipSelfTestResult.__dataclass_fields__
+            }
+        )
+        counts = (
+            result.release_count,
+            result.candidate_count,
+            result.unique_match_count,
+            result.ambiguous_match_count,
+            result.no_match_count,
+            result.candidate_limit,
+        )
+        if (
+            result.to_dict() != report
+            or type(result.schema_version) is not int
+            or result.schema_version != 1
+            or any(type(v) is not int or v < 0 for v in counts)
+            or not 0 < result.candidate_count <= result.candidate_limit
+            or not result.release_count
+            or type(result.candidate_truncated) is not bool
+            or (
+                result.candidate_truncated
+                and result.candidate_count != result.candidate_limit
+            )
+            or sum(counts[2:5]) != result.release_count
+            or any(
+                type(v) not in (int, float) or not 0 <= v <= 1
+                for v in (
+                    result.membership_inference_rate,
+                    result.attacker_advantage,
+                    result.max_inference_rate,
+                )
+            )
+            or result.membership_inference_rate
+            != result.unique_match_count / result.release_count
+            or result.attacker_advantage != result.membership_inference_rate
+            or any(
+                type(v) is not str or not re.fullmatch(r"sha256:[0-9a-f]{64}", v)
+                for v in (result.release_key_digest, result.candidate_key_digest)
+            )
+        ):
+            raise ValueError
+    except (KeyError, ValueError, TypeError, OverflowError):
+        raise EvidencePackError("invalid_membership_report") from None
+    return ("success" if result.meets_policy else "failure"), {
+        key: report[key]
+        for key in _CAPABILITIES["structured_release"]["membership_inference"]
+    }
