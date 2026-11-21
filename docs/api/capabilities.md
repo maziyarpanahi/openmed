@@ -77,3 +77,10 @@ curl -sS --max-time 10 \
 
 The typed clients expose it as `OpenMedClient.capabilities()` in Python and
 TypeScript, and `Client.Capabilities` in Go.
+
+The REST descriptor also includes a sorted `capabilities` array for its mounted
+clinical operations. Each entry has a capability `code`, the bundled
+`intended_use_digest`, the `regulatory_tier`, its required `obligations` and
+the declaration's `excluded_uses`. For example, the decisions route advertises
+the clinician-mode obligation. The descriptor digest covers these entries.
+Authorization and model readiness are evaluated when the operation is called.

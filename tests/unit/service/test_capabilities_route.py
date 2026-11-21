@@ -188,7 +188,10 @@ def test_response_validates_and_matches_the_python_digest() -> None:
     body = response.json()
     validate_capability_descriptor(body)
     Draft202012Validator(load_capability_descriptor_schema()).validate(body)
-    expected = capability_descriptor(served_models=served)
+    expected = capability_descriptor(
+        served_models=served,
+        enabled_capabilities=[row["code"] for row in body["capabilities"]],
+    )
     assert body == expected
     assert body["digest"] == expected["digest"]
     assert body["digest"] == capability_descriptor_digest(body)
@@ -213,9 +216,10 @@ def test_operator_selected_served_models_reach_the_descriptor(
     assert body["digest"] == capability_descriptor_digest(body)
     assert (
         body["digest"]
-        == capability_descriptor(served_models=reversed(body["served_models"]))[
-            "digest"
-        ]
+        == capability_descriptor(
+            served_models=reversed(body["served_models"]),
+            enabled_capabilities=[row["code"] for row in body["capabilities"]],
+        )["digest"]
     )
 
 

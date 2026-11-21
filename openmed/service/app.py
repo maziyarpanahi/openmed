@@ -358,6 +358,17 @@ _MAX_MANIFEST_HEADER_BYTES = 8192
 _SYSTEM_ONE_PATH = "/v1/systemone"
 _COMPATIBILITY_PATH = "/v1/compatibility"
 CAPABILITIES_PATH = "/v1/capabilities"
+_REST_CLINICAL_ROUTES = {
+    "/analyze": "analyze_text",
+    "/brief": "brief",
+    "/ground": "ground",
+    "/pii/deidentify": "deidentify",
+    "/pii/extract": "extract_pii",
+    "/pii/extract/stream": "extract_pii",
+    "/pii/deidentify/stream": "deidentify",
+    "/v1/decisions": "decisions",
+    "/v1/journey/resources": "journey",
+}
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -2421,7 +2432,13 @@ def create_app(
         """Return the capability descriptor without paths or settings."""
         runtime = _get_service_runtime(request)
         return await run_in_threadpool(
-            capability_descriptor, served_models=runtime.served_model_ids()
+            capability_descriptor,
+            served_models=runtime.served_model_ids(),
+            enabled_capabilities={
+                _REST_CLINICAL_ROUTES[route.path]
+                for route in app.routes
+                if getattr(route, "path", None) in _REST_CLINICAL_ROUTES
+            },
         )
 
     @app.post("/models/unload")
