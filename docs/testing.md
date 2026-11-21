@@ -259,3 +259,9 @@ for that label. The recall floor alone determines the certification decision.
 The offline runner records `transformers-simple-v1` for its token aggregation
 profile. Older aggregates without profile metadata use `unspecified`. Signed
 version 1 recall-only reports remain verifiable.
+
+For a locally authorized CEGS N-GRID 2016 de-identification export, set
+`OPENMED_CEGS_NGRID_PATH` to its JSON/JSONL, XML, or paired BRAT source and
+select `--suite cegs-ngrid-2016`. The suite fixes the edition to 2016. Its
+aggregate identifies the corpus as `cegs-n-grid` and records the DBMI /
+CEGS N-GRID access terms.

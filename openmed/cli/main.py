@@ -3313,8 +3313,10 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     credentialed = eval_sub.add_parser(
         "credentialed", help="Evaluate a cached model on a local credentialed corpus."
     )
-    credentialed.add_argument("--suite", required=True, choices=["i2b2"])
-    credentialed.add_argument("--year", required=True, type=int, choices=[2006, 2014])
+    credentialed.add_argument(
+        "--suite", required=True, choices=["i2b2", "cegs-ngrid-2016"]
+    )
+    credentialed.add_argument("--year", type=int, choices=[2006, 2014, 2016])
     credentialed.add_argument("--model", required=True)
     credentialed.add_argument("--revision", default="main")
     credentialed.add_argument("--output", required=True)

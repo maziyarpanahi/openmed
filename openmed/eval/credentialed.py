@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from openmed.eval.aggregate_report import project_aggregate_report
+from openmed.eval.datasets.cegs_ngrid import CEGS_NGRID_DUA, load_cegs_ngrid
 from openmed.eval.datasets.i2b2 import I2B2_DUA_NAME, load_i2b2_deid
 from openmed.eval.harness import ModelRunner, run_benchmark
 
@@ -84,32 +85,45 @@ def _load_cached_model(model_id: str, revision: str) -> tuple[str, ModelRunner]:
 
 
 def run_credentialed(
-    *, suite: str, year: int, model_id: str, output: str | Path, revision: str = "main"
+    *,
+    suite: str,
+    year: int | None,
+    model_id: str,
+    output: str | Path,
+    revision: str = "main",
 ) -> None:
     """Score a credentialed corpus offline and write a new private aggregate file.
 
     Args:
         suite: Credentialed de-identification corpus family.
-        year: Corpus edition.
+        year: Corpus edition. The CEGS suite name selects 2016 by default.
         model_id: Hub identifier of a locally cached token classifier.
         output: New file under an existing directory outside Git worktrees.
         revision: Cached ref or immutable revision of the classifier.
     """
     try:
         target = _output_file(output)
-        if suite != "i2b2" or year not in (2006, 2014):
+        if suite == "cegs-ngrid-2016" and year in (None, 2016):
+            corpus, dua, year = "cegs-n-grid", CEGS_NGRID_DUA, 2016
+        elif suite == "i2b2" and year in (2006, 2014):
+            corpus, dua = "i2b2", I2B2_DUA_NAME
+        else:
             raise CredentialedEvalError("unsupported_corpus")
         digest, runner = _load_cached_model(model_id, revision)
         try:
-            fixtures = load_i2b2_deid(year=year)
+            fixtures = (
+                load_cegs_ngrid()
+                if suite == "cegs-ngrid-2016"
+                else load_i2b2_deid(year=year)
+            )
         except (OSError, ValueError, RuntimeError):
             raise CredentialedEvalError("corpus_unavailable") from None
         benchmark = run_benchmark(
             fixtures, suite=suite, model_name=model_id, runner=runner, cache_dir=None
         )
-        report = project_aggregate_report(benchmark, fixtures, corpus=suite, year=year)
+        report = project_aggregate_report(benchmark, fixtures, corpus=corpus, year=year)
         report.update(
-            dua=I2B2_DUA_NAME,
+            dua=dua,
             model_id=model_id,
             revision_digest=digest,
             postprocessing_profile="transformers-simple-v1",
