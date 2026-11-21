@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hmac
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from openmed.compliance.corrective_action import CorrectiveActionLedger
 from openmed.compliance.evidence_freshness import (
     EvidenceFreshnessPolicy,
     EvidenceRecord,
@@ -14,7 +16,7 @@ from openmed.compliance.evidence_freshness import (
 from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
 from openmed.eval.evidence_pack.lanes import required_lanes
-from openmed.eval.journey_release import _release_hmac
+from openmed.eval.journey_release import _reject_duplicate_keys, _release_hmac
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,7 @@ class EvidenceVerification:
 
     exit_code: int
     reasons: tuple[str, ...]
+    corrective_action_ids: tuple[str, ...] = ()
 
 
 def _signature(pack: ValidationEvidencePack, key_id: str, key: bytes) -> dict:
@@ -50,6 +53,7 @@ def verify_evidence_pack(
     key: bytes,
     as_of: datetime,
     max_age: timedelta,
+    corrective_action_ledger: str | bytes | None = None,
 ) -> EvidenceVerification:
     """Verify JSON against the caller's trusted key, clock and freshness limit.
 
@@ -102,4 +106,26 @@ def verify_evidence_pack(
                 reasons.add("missing_required_metric")
     if pack.lane_blockers():
         reasons.add("incomplete_lane")
-    return EvidenceVerification(int(bool(reasons)), tuple(sorted(reasons)))
+    blocking_ids = ()
+    if corrective_action_ledger is not None:
+        try:
+            ledger = CorrectiveActionLedger.from_dict(
+                json.loads(
+                    corrective_action_ledger, object_pairs_hook=_reject_duplicate_keys
+                )
+            )
+        except (ValueError, TypeError, RecursionError, OverflowError):
+            return EvidenceVerification(2, ("invalid_corrective_action_ledger",))
+        blocking_ids = tuple(
+            record.record_id
+            for record in ledger.records()
+            if record.state != "closed"
+            and record.severity in {"high", "critical"}
+            and code in record.capabilities
+            and data["version"] in record.versions
+        )
+        if blocking_ids:
+            reasons.add("open_corrective_action")
+    return EvidenceVerification(
+        int(bool(reasons)), tuple(sorted(reasons)), blocking_ids
+    )
