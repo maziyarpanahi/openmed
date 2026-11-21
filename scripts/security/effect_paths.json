@@ -1,6 +1,11 @@
 {
   "paths": [
     {
+      "module": "openmed.compliance.withdrawal",
+      "function": "AmbientWithdrawalParticipant.apply",
+      "classification": "governed"
+    },
+    {
       "module": "openmed.agent.admission",
       "function": "SQLiteAdmissionStore._append",
       "classification": "operational"
