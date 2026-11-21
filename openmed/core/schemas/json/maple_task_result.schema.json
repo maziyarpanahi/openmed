@@ -1,0 +1,118 @@
+{
+  "$id": "https://openmed.dev/schemas/maple-task-result/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "span": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "label"
+      ],
+      "type": "object"
+    },
+    "relation": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "label"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Output of MapleTaskResult.to_dict(). Spans are half-open [start, end) Unicode-scalar offsets and never carry source text.",
+  "properties": {
+    "answer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "disclaimer": {
+      "type": "string"
+    },
+    "entities": {
+      "items": {
+        "$ref": "#/$defs/span"
+      },
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/span"
+      },
+      "type": "array"
+    },
+    "redacted_text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/relation"
+      },
+      "type": "array"
+    },
+    "review_required": {
+      "type": "boolean"
+    },
+    "task": {
+      "enum": [
+        "pii",
+        "entities",
+        "relations",
+        "reasoning",
+        "summarize"
+      ]
+    },
+    "uncertainties": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "task",
+    "entities",
+    "relations",
+    "evidence",
+    "answer",
+    "uncertainties",
+    "redacted_text",
+    "review_required",
+    "disclaimer"
+  ],
+  "title": "MapleTaskResult",
+  "type": "object"
+}
