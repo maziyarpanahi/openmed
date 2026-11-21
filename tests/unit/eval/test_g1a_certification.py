@@ -88,3 +88,54 @@ def test_certify_cli(tmp_path, capsys):
     seed.write_bytes(b"wrong")
     assert main(args) == 2
     assert str(tmp_path) not in capsys.readouterr().err
+
+
+def _public_key():
+    from openmed.core.portable_bundle import ed25519_public_key
+
+    return ed25519_public_key(SEED)
+
+
+def test_verify_cli_requires_only_report_and_public_key(tmp_path, capsys):
+    report, key = tmp_path / "cert", tmp_path / "key"
+    report.write_text(json.dumps(sign(aggregate())))
+    key.write_bytes(_public_key())
+    args = ["eval", "verify-g1a", str(report), "--public-key-file", str(key)]
+    assert main(args) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "verified": True,
+        "state": "CERTIFIED",
+    }
+    key.write_bytes(bytes(32))
+    assert main(args) == 2
+
+
+@pytest.mark.parametrize("field", ["recall", "floor", "wilson_lower_95", "fn"])
+def test_signed_inconsistent_arithmetic_is_rejected(field):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from openmed.eval.g1a_certification import verify_g1a
+
+    report = sign(aggregate())
+    report["certification"]["by_label"]["PERSON"][field] = 0
+    raw = _canonical(report["certification"])
+    report["digest"] = hashlib.sha256(raw).hexdigest()
+    report["signature"] = Ed25519PrivateKey.from_private_bytes(SEED).sign(raw).hex()
+    with pytest.raises(ValueError):
+        verify_g1a(report, public_key=_public_key())
+
+
+def test_digest_signature_schema_and_decision():
+    from openmed.eval.g1a_certification import verify_g1a
+
+    data = aggregate()
+    data["by_label"] = {}
+    report = sign(data)
+    assert verify_g1a(report, public_key=_public_key())["state"] == "NOT_CERTIFIED"
+    for changes in (
+        {"digest": "c" * 64},
+        {"signature": "0" * 128},
+        {"private_record": "record"},
+    ):
+        with pytest.raises(ValueError):
+            verify_g1a({**report, **changes}, public_key=_public_key())

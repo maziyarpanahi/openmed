@@ -117,3 +117,45 @@ def certify_g1a(aggregate: dict, *, model_id: str, private_key: bytes) -> dict:
         .sign(encoded)
         .hex(),
     }
+
+
+def verify_g1a(report: dict, *, public_key: bytes) -> dict:
+    """Validate the envelope against the supplied trusted key and recompute G1a.
+
+    Args:
+        report: Signed certification envelope.
+        public_key: Raw 32-byte trusted Ed25519 public key obtained separately.
+
+    Returns:
+        The verified certification payload, including its pass or fail decision.
+    """
+    from importlib.resources import files
+
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from jsonschema import Draft202012Validator, FormatChecker
+
+    schema = files("openmed.core.schemas.json").joinpath(
+        "g1a_certification.schema.json"
+    )
+    validator = Draft202012Validator(
+        json.loads(schema.read_bytes()), format_checker=FormatChecker()
+    )
+    if not validator.is_valid(report):
+        raise ValueError("invalid_certification_schema")
+    payload = report["certification"]
+    encoded = _canonical(payload)
+    if hashlib.sha256(encoded).hexdigest() != report["digest"]:
+        raise ValueError("certification_digest_mismatch")
+    try:
+        Ed25519PublicKey.from_public_bytes(public_key).verify(
+            bytes.fromhex(report["signature"]), encoded
+        )
+    except (ValueError, InvalidSignature):
+        raise ValueError("untrusted_certification_signature") from None
+    decision = _decision(
+        {label: (cell["tp"], cell["fn"]) for label, cell in payload["by_label"].items()}
+    )
+    if any(payload[field] != value for field, value in decision.items()):
+        raise ValueError("inconsistent_certification_decision")
+    return payload
