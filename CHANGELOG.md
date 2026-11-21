@@ -192,6 +192,11 @@ See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration 
 - Keep synthetic federated example snapshots comparable across Windows and Unix checkouts.
 
 - Return HTTP 415 for missing, repeated, or unsupported content types on the local privacy proxy's chat routes before reading the request body (#5185).
+- Buffer privacy-proxy placeholders split across streamed OpenAI tool-call
+  `function.arguments` fragments per choice and tool call, so a partial
+  `<<OPENMED_PHI_` token never reaches the client; buffers flush before the
+  choice's finish chunk and at end of stream, and unknown placeholders are
+  rejected after reassembly (#5120).
 
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
