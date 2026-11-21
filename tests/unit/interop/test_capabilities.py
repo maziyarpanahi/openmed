@@ -92,6 +92,37 @@ def test_matrix_serialization_is_deterministic_and_phi_free() -> None:
     assert "tests/unit/interop/test_capabilities.py" not in markdown
 
 
+def test_medspacy_context_records_its_runtime_python_requirement() -> None:
+    entry = capability("medspacy_context")
+
+    assert entry.extra == "medspacy"
+    assert entry.optional_dependencies == ("medspacy>=1.3.1,<2",)
+    assert entry.module == "openmed.interop.medspacy_context"
+    assert entry.tests == ("tests/unit/interop/test_medspacy_context_adapter.py",)
+    assert entry.supported_python == ">=3.12"
+    assert entry.to_dict()["supported_python"] == ">=3.12"
+    assert all(
+        other.supported_python == ">=3.11"
+        for other in CAPABILITY_MATRIX
+        if other.name != entry.name
+    )
+    row = "| `medspacy_context` | medspaCy ConText (Python `>=3.12`) |"
+    assert row in CAPABILITY_MATRIX.to_markdown()
+    assert row in (ROOT / "docs/integrations/matrix.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("supported_python", [">=3.10", "", ">=3.12`unsafe"])
+def test_unsupported_python_requirements_fail_closed(supported_python: str) -> None:
+    entry = replace(CAPABILITY_MATRIX[0], supported_python=supported_python)
+
+    with pytest.raises(ValueError, match="supported_python is unsupported"):
+        validate_capability_matrix((entry,))
+    with pytest.raises(ValueError, match="serialized safely"):
+        entry.to_dict()
+    with pytest.raises(ValueError, match="reported safely"):
+        CapabilityMatrix((entry,)).to_markdown()
+
+
 def test_validation_does_not_open_network_connections(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
