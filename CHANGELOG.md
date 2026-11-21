@@ -204,6 +204,9 @@ See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration 
 - Ship privacy manifests with OpenMedKit and its extension products, declare the scan demo's user-defaults access, and check Swift sources for undeclared required-reason APIs in CI (#3946, #4248).
 - Localize OpenMedKit share-extension controls, messages, policy names, and accessibility labels in English, Chinese, and Hindi. Update fonts and picker rows when Dynamic Type changes, preserve the selected policy, and keep controls and the scrollable text preview usable at accessibility sizes (#3955, #4229).
 - Add a metadata-only federated round walkthrough (#4130) and enforce native Tauri checks when relevant (#4129).
+- Add `openmed-mcp --list-tools` (and `--json`) to print each registered tool's
+  name, title, version and behavior hints without starting a server or needing
+  the `mcp` package (#5186).
 
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
