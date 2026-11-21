@@ -1,5 +1,10 @@
 # OpenMed Go REST Client
 
+The hand-written REST client is deprecated in 4.3. For the 5.0 migration,
+use a client generated from the OpenAPI contract for your service version.
+The migration guide describes which application settings to carry over.
+[Generated client migration](../../docs/migration.md#generated-clients)
+
 Dependency-light Go client for the OpenMed REST service. It is built entirely on
 the standard library (`net/http`) with **no third-party dependencies**, and it
 tracks the operations and request schemas published in the committed OpenAPI

@@ -62,7 +62,7 @@
       ]
     },
     "replacement": "Clients generated from the OpenAPI contract",
-    "status": "planned",
+    "status": "deprecated",
     "migration_anchor": "docs/migration.md#generated-clients"
   },
   {

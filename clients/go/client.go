@@ -8,6 +8,8 @@
 // surfaces non-2xx responses as a typed *APIError carrying the service error
 // envelope. Every request method takes a context.Context for cancellation and
 // deadlines.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 package openmed
 
 import (
@@ -27,21 +29,29 @@ import (
 )
 
 // DefaultBaseURL is the base URL assumed when none is provided.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const DefaultBaseURL = "http://localhost:8080"
 
 // DefaultMaxResponseBodyBytes bounds buffered JSON responses. Streaming
 // responses are read incrementally and are not subject to this total limit.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const DefaultMaxResponseBodyBytes int64 = 64 << 20
 
 // DefaultMaxStreamEventBytes bounds one NDJSON event returned by a streaming
 // PII endpoint. The total stream remains unbounded and is consumed
 // incrementally.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const DefaultMaxStreamEventBytes = 4 << 20
 
 const maxErrorBodyBytes int64 = 1 << 20
 
 // ErrResponseTooLarge is returned when a buffered success response exceeds the
 // configured response-body limit.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 var ErrResponseTooLarge = errors.New("openmed: response body exceeds configured limit")
 
 // Path templates for the endpoints that take a path parameter. The {job_id}
@@ -58,9 +68,13 @@ const idempotencyKeyHeader = "Idempotency-Key"
 
 // AggregationStrategy selects how token-level predictions are grouped by the
 // /analyze endpoint.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type AggregationStrategy string
 
 // Aggregation strategies accepted by /analyze.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	AggregationSimple  AggregationStrategy = "simple"
 	AggregationFirst   AggregationStrategy = "first"
@@ -69,9 +83,13 @@ const (
 )
 
 // PIILanguage is one of the languages supported by the PII endpoints.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIILanguage string
 
 // Languages supported by the PII endpoints.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	LangAM PIILanguage = "am"
 	LangAS PIILanguage = "as"
@@ -121,9 +139,13 @@ const (
 
 // DeidentificationMethod selects how detected PII spans are transformed by the
 // /pii/deidentify endpoint and de-identification jobs.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DeidentificationMethod string
 
 // De-identification methods accepted by /pii/deidentify.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	MethodMask       DeidentificationMethod = "mask"
 	MethodRemove     DeidentificationMethod = "remove"
@@ -134,10 +156,14 @@ const (
 
 // PrivacyPolicy names a redaction policy for /pii/deidentify and
 // /privacy-gateway/complete.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PrivacyPolicy string
 
 // Built-in privacy policies. Callers may also pass any custom policy name the
 // service recognizes.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	PolicyStrict   PrivacyPolicy = "strict"
 	PolicyBalanced PrivacyPolicy = "balanced"
@@ -145,9 +171,13 @@ const (
 )
 
 // DecisionMode selects one bounded fixed-output decision shape.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DecisionMode string
 
 // Decision modes accepted by POST /v1/decisions.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	DecisionFixedChoice       DecisionMode = "fixed_choice"
 	DecisionBooleanChoice     DecisionMode = "boolean_choice"
@@ -158,8 +188,11 @@ const (
 )
 
 // DecisionState reports whether a decision succeeded or stopped safely.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DecisionState string
 
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	DecisionSuccess     DecisionState = "success"
 	DecisionAbstained   DecisionState = "abstained"
@@ -172,9 +205,13 @@ const (
 )
 
 // JourneyResourceType selects a versioned Journey resource family.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JourneyResourceType string
 
 // Journey resource families supported by the versioned read contract.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	JourneyArtifact        JourneyResourceType = "artifact"
 	JourneyJob             JourneyResourceType = "job"
@@ -195,9 +232,13 @@ const (
 )
 
 // JobStatus enumerates the lifecycle states of a de-identification job.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobStatus string
 
 // De-identification job statuses.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 const (
 	JobQueued    JobStatus = "queued"
 	JobRunning   JobStatus = "running"
@@ -207,6 +248,8 @@ const (
 )
 
 // JSONObject is an untyped JSON object, used for open-ended metadata fields.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JSONObject = map[string]any
 
 // ---------------------------------------------------------------------------
@@ -215,6 +258,8 @@ type JSONObject = map[string]any
 
 // GovernedWorkflowReference contains opaque custody references, never action content.
 // Null state/key fields are allowed only for inspection.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type GovernedWorkflowReference struct {
 	SchemaVersion       string  `json:"schema_version"`
 	RunID               string  `json:"run_id"`
@@ -225,6 +270,8 @@ type GovernedWorkflowReference struct {
 }
 
 // GovernedWorkflowMutation requires explicit state and idempotency metadata.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type GovernedWorkflowMutation struct {
 	SchemaVersion       string `json:"schema_version"`
 	RunID               string `json:"run_id"`
@@ -236,6 +283,8 @@ type GovernedWorkflowMutation struct {
 
 // GovernedWorkflowReview transports an existing consumed receipt. Receipt
 // metadata is not approval authority; the server must verify trusted custody.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type GovernedWorkflowReview struct {
 	SchemaVersion       string     `json:"schema_version"`
 	RunID               string     `json:"run_id"`
@@ -247,6 +296,8 @@ type GovernedWorkflowReview struct {
 }
 
 // AnalyzeRequest is the request body for POST /analyze.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type AnalyzeRequest struct {
 	Text                string               `json:"text"`
 	ModelName           string               `json:"model_name,omitempty"`
@@ -261,6 +312,8 @@ type AnalyzeRequest struct {
 }
 
 // BriefRequest requests a local guarded brief; review remains application-owned.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type BriefRequest struct {
 	Text     string  `json:"text"`
 	Model    string  `json:"model,omitempty"`
@@ -269,6 +322,8 @@ type BriefRequest struct {
 }
 
 // GroundRequest is the request body for POST /ground.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type GroundRequest struct {
 	Entities       []JSONObject `json:"entities,omitempty"`
 	Offline        *bool        `json:"offline,omitempty"`
@@ -279,6 +334,8 @@ type GroundRequest struct {
 }
 
 // PIIExtractRequest is the request body for POST /pii/extract.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractRequest struct {
 	Text                string      `json:"text"`
 	ModelName           string      `json:"model_name,omitempty"`
@@ -290,6 +347,8 @@ type PIIExtractRequest struct {
 }
 
 // PIIExtractStreamRequest is the request body for POST /pii/extract/stream.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractStreamRequest struct {
 	Text                  string      `json:"text"`
 	ModelName             string      `json:"model_name,omitempty"`
@@ -306,6 +365,8 @@ type PIIExtractStreamRequest struct {
 }
 
 // PIIDeidentifyRequest is the request body for POST /pii/deidentify.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifyRequest struct {
 	Text                string                 `json:"text"`
 	Method              DeidentificationMethod `json:"method,omitempty"`
@@ -325,6 +386,8 @@ type PIIDeidentifyRequest struct {
 
 // PIIDeidentifyStreamRequest is the request body for
 // POST /pii/deidentify/stream.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifyStreamRequest struct {
 	Text                string                 `json:"text"`
 	Method              DeidentificationMethod `json:"method,omitempty"`
@@ -344,6 +407,8 @@ type PIIDeidentifyStreamRequest struct {
 }
 
 // PrivacyGatewayRequest is the request body for POST /privacy-gateway/complete.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PrivacyGatewayRequest struct {
 	Text                       string        `json:"text"`
 	ModelName                  string        `json:"model_name,omitempty"`
@@ -361,6 +426,8 @@ type PrivacyGatewayRequest struct {
 // /v1/decisions. The fields after CompatibilityPolicy are optional extension
 // fields (schema 1.1.0, and 1.2.0 for Media); Questions holds named question
 // objects for DecisionQuestionSet requests.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type FixedOptionDecisionRequest struct {
 	Mode                DecisionMode `json:"mode"`
 	InputText           string       `json:"input_text"`
@@ -384,6 +451,8 @@ type FixedOptionDecisionRequest struct {
 // OpenAIDecisionsRequest is the text-only OpenAI-compatible Decisions body
 // for POST /v1/decisions. Model must name the model the service decides with;
 // Questions holds predicate, choice or score question objects.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OpenAIDecisionsRequest struct {
 	Model     string       `json:"model"`
 	Input     string       `json:"input"`
@@ -391,6 +460,8 @@ type OpenAIDecisionsRequest struct {
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractStreamSpan struct {
 	ID        string  `json:"id"`
 	Label     string  `json:"label"`
@@ -404,6 +475,8 @@ type PIIExtractStreamSpan struct {
 
 // PIIExtractStreamEvent is one NDJSON object returned by
 // POST /pii/extract/stream.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractStreamEvent struct {
 	Type        string                 `json:"type"`
 	EntityID    *string                `json:"entity_id,omitempty"`
@@ -418,6 +491,8 @@ type PIIExtractStreamEvent struct {
 // PIIDeidentifyStreamEvent is one NDJSON object returned by
 // POST /pii/deidentify/stream. Mapping is present only when reversible mapping
 // was explicitly requested and must be handled as PHI.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifyStreamEvent struct {
 	Type         string            `json:"type"`
 	Index        *int              `json:"index,omitempty"`
@@ -431,18 +506,24 @@ type PIIDeidentifyStreamEvent struct {
 // ModelUnloadRequest is the request body for POST /models/unload. Provide a
 // ModelName to unload a single model, or set All to unload every inactive
 // model.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ModelUnloadRequest struct {
 	ModelName string `json:"model_name,omitempty"`
 	All       bool   `json:"all,omitempty"`
 }
 
 // DeidentifyJobDocument is a single document submitted to a batch job.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DeidentifyJobDocument struct {
 	Text string `json:"text"`
 	ID   string `json:"id,omitempty"`
 }
 
 // JobWebhookRequest configures an optional completion webhook for a job.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobWebhookRequest struct {
 	URL            string   `json:"url"`
 	Secret         string   `json:"secret"`
@@ -451,6 +532,8 @@ type JobWebhookRequest struct {
 }
 
 // DeidentifyJobRequest is the request body for POST /jobs.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DeidentifyJobRequest struct {
 	Documents           []DeidentifyJobDocument `json:"documents"`
 	Webhook             *JobWebhookRequest      `json:"webhook,omitempty"`
@@ -474,6 +557,8 @@ type DeidentifyJobRequest struct {
 
 // SMARTBackendIngestionRequest is the request body for
 // POST /fhir/smart-backend/ingestions.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type SMARTBackendIngestionRequest struct {
 	FHIRBaseURL           string                 `json:"fhir_base_url"`
 	TokenURL              string                 `json:"token_url"`
@@ -501,6 +586,8 @@ type SMARTBackendIngestionRequest struct {
 // OMOPLoadRequest is the request body for POST /omop/load. RecordsJSONL carries
 // newline-delimited grounded note records and the response is a PHI-free load
 // summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OMOPLoadRequest struct {
 	RecordsJSONL        string   `json:"records_jsonl"`
 	VocabularyVersion   string   `json:"vocabulary_version,omitempty"`
@@ -510,12 +597,16 @@ type OMOPLoadRequest struct {
 }
 
 // ConceptAncestorRequest is one caller-supplied Athena hierarchy edge.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ConceptAncestorRequest struct {
 	AncestorConceptID   int `json:"ancestor_concept_id"`
 	DescendantConceptID int `json:"descendant_concept_id"`
 }
 
 // CohortResolveRequest is the request body for POST /cohort/resolve.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type CohortResolveRequest struct {
 	Phenotype         JSONObject               `json:"phenotype"`
 	RecordsJSONL      string                   `json:"records_jsonl"`
@@ -525,6 +616,8 @@ type CohortResolveRequest struct {
 }
 
 // ProfileRequest is the request body for POST /profile.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ProfileRequest struct {
 	RecordsJSONL      string     `json:"records_jsonl"`
 	CompletenessFloor float64    `json:"completeness_floor,omitempty"`
@@ -538,6 +631,8 @@ type ProfileRequest struct {
 
 // EntityPrediction is a single detected span in an /analyze or /pii/extract
 // response.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type EntityPrediction struct {
 	Text       string     `json:"text"`
 	Label      string     `json:"label"`
@@ -548,6 +643,8 @@ type EntityPrediction struct {
 }
 
 // PredictionResult is the response for both /analyze and /pii/extract.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PredictionResult struct {
 	Text           string             `json:"text"`
 	Entities       []EntityPrediction `json:"entities"`
@@ -558,19 +655,29 @@ type PredictionResult struct {
 }
 
 // AnalyzeResponse is returned by /analyze.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type AnalyzeResponse = PredictionResult
 
 // GroundResponse is the open grounding result returned by /ground.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type GroundResponse = JSONObject
 
 // ProfileResponse is the structured quality report returned by /profile.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ProfileResponse = JSONObject
 
 // PIIExtractResponse is returned by /pii/extract.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractResponse = PredictionResult
 
 // PIIDeidentifiedEntity describes one redacted span in a /pii/deidentify
 // response.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifiedEntity struct {
 	Text           string     `json:"text"`
 	Label          string     `json:"label"`
@@ -590,6 +697,8 @@ type PIIDeidentifiedEntity struct {
 }
 
 // PIIDeidentifyResponse is returned by /pii/deidentify.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifyResponse struct {
 	OriginalText        string                  `json:"original_text"`
 	DeidentifiedText    string                  `json:"deidentified_text"`
@@ -603,6 +712,8 @@ type PIIDeidentifyResponse struct {
 }
 
 // PrivacyGatewayResponse is returned by /privacy-gateway/complete.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PrivacyGatewayResponse struct {
 	RequestID         string         `json:"request_id"`
 	RedactedPrompt    string         `json:"redacted_prompt"`
@@ -617,6 +728,8 @@ type PrivacyGatewayResponse struct {
 }
 
 // DecisionOptionScore preserves a caller option's original position and score.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DecisionOptionScore struct {
 	Index  int     `json:"index"`
 	Option string  `json:"option"`
@@ -624,6 +737,8 @@ type DecisionOptionScore struct {
 }
 
 // DecisionLevelScore preserves an ordered score level's position and score.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DecisionLevelScore struct {
 	Index int     `json:"index"`
 	Level string  `json:"level"`
@@ -632,6 +747,8 @@ type DecisionLevelScore struct {
 
 // DecisionQuestionResult is the calibrated outcome of one named question in a
 // question-set result. Each question carries its own state.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type DecisionQuestionResult struct {
 	QuestionID    string                `json:"question_id"`
 	Mode          DecisionMode          `json:"mode"`
@@ -653,6 +770,8 @@ type DecisionQuestionResult struct {
 // FixedOptionDecisionResult is the calibrated, explicitly review-only result
 // returned by POST /v1/decisions for an OpenMed request. Schema 1.1.0 and
 // later results also carry LevelScores, ExpectedLevel and Questions.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type FixedOptionDecisionResult struct {
 	Mode                DecisionMode             `json:"mode"`
 	State               DecisionState            `json:"state"`
@@ -683,6 +802,8 @@ type FixedOptionDecisionResult struct {
 // response. Predicate answers set Probability, choice answers Choice and
 // score answers Score; a question that did not succeed carries a nil
 // selection plus its OpenMed State and Code.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OpenAIDecisionsAnswer struct {
 	Type          string         `json:"type"`
 	Name          string         `json:"name"`
@@ -698,6 +819,8 @@ type OpenAIDecisionsAnswer struct {
 // OpenAIDecisionsResponse is returned by POST /v1/decisions for an
 // OpenAI-compatible body. OpenMed carries the review requirement, advisory,
 // calibration, backend provenance and schema version of the result.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OpenAIDecisionsResponse struct {
 	Model   string                  `json:"model"`
 	Answers []OpenAIDecisionsAnswer `json:"answers"`
@@ -706,6 +829,8 @@ type OpenAIDecisionsResponse struct {
 
 // HealthResponse is returned by /health. Version and Profile are reported
 // only by the dev profile; other profiles leave them empty.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`
@@ -714,6 +839,8 @@ type HealthResponse struct {
 }
 
 // ProbeResponse is returned by the /livez and /readyz probes.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ProbeResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`
@@ -722,6 +849,8 @@ type ProbeResponse struct {
 // LoadedModelsResponse is returned by /models/loaded. The service returns an
 // open-ended map of runtime statistics, so the exposed struct captures the
 // stable top-level fields and keeps the rest in Raw.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type LoadedModelsResponse struct {
 	DefaultKeepAliveSeconds *float64              `json:"default_keep_alive_seconds"`
 	MaxResidentModels       *int                  `json:"max_resident_models"`
@@ -731,6 +860,8 @@ type LoadedModelsResponse struct {
 }
 
 // ModelUnloadResponse is returned by /models/unload.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ModelUnloadResponse struct {
 	Unloaded       *bool              `json:"unloaded"`
 	ModelName      string             `json:"model_name"`
@@ -740,6 +871,8 @@ type ModelUnloadResponse struct {
 }
 
 // SMARTBackendFileResult describes one exported FHIR file in a job summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type SMARTBackendFileResult struct {
 	Index                 int    `json:"index"`
 	ResourceType          string `json:"resource_type"`
@@ -755,6 +888,8 @@ type SMARTBackendFileResult struct {
 
 // SMARTBackendIngestionSummary is returned by
 // /fhir/smart-backend/ingestions/{job_id}/summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type SMARTBackendIngestionSummary struct {
 	JobID                        string                   `json:"job_id"`
 	Status                       string                   `json:"status"`
@@ -772,6 +907,8 @@ type SMARTBackendIngestionSummary struct {
 
 // SMARTBackendJobStatus is returned by POST /fhir/smart-backend/ingestions and
 // GET /fhir/smart-backend/ingestions/{job_id}.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type SMARTBackendJobStatus struct {
 	JobID     string                        `json:"job_id"`
 	Status    string                        `json:"status"`
@@ -783,6 +920,8 @@ type SMARTBackendJobStatus struct {
 
 // KeyedDigest is a keyed, domain-separated HMAC-SHA256 digest. Values are
 // comparable only between digests that share a KeyID.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type KeyedDigest struct {
 	Alg   string `json:"alg"`
 	KeyID string `json:"key_id"`
@@ -793,6 +932,8 @@ type KeyedDigest struct {
 // "keyed" (Alg and KeyID are set) or "omitted" (Reason is
 // "digest_key_unconfigured" or "legacy_digests_removed", and every digest in
 // the record is nil).
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobDigests struct {
 	Mode   string  `json:"mode"`
 	Alg    *string `json:"alg"`
@@ -804,6 +945,8 @@ type JobDigests struct {
 // is represented by its length and a keyed digest, which is nil when digests
 // are omitted. ID echoes the caller-supplied identifier, so callers should
 // keep document identifiers free of PHI.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobDocumentMetadata struct {
 	ID         string       `json:"id"`
 	Length     int          `json:"length"`
@@ -813,6 +956,8 @@ type JobDocumentMetadata struct {
 // JobSpan is a detected span in a job response, carrying offsets and a keyed
 // digest instead of plaintext; TextDigest is nil when digests are omitted.
 // DocumentID echoes the caller-supplied document ID.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobSpan struct {
 	DocumentID string       `json:"document_id"`
 	Start      int          `json:"start"`
@@ -824,6 +969,8 @@ type JobSpan struct {
 
 // JobWebhookMetadata reports webhook configuration on a job. The callback URL
 // is represented only by a keyed digest, nil when digests are omitted.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobWebhookMetadata struct {
 	Configured     bool         `json:"configured"`
 	URLDigest      *KeyedDigest `json:"url_digest"`
@@ -833,6 +980,8 @@ type JobWebhookMetadata struct {
 
 // JobWebhookAttemptReceipt is the value-free record of one delivery attempt.
 // KeyID is a public signing key id, never key material.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobWebhookAttemptReceipt struct {
 	Attempt    int     `json:"attempt"`
 	KeyID      *string `json:"key_id"`
@@ -844,6 +993,8 @@ type JobWebhookAttemptReceipt struct {
 // JobWebhookDelivery reports the outcome of a webhook delivery attempt.
 // Error is a value-free code; DeliveryID is the opaque id sent on every retry;
 // PayloadRef names the immutable terminal-event payload the delivery used.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobWebhookDelivery struct {
 	Success          bool                       `json:"success"`
 	Attempts         int                        `json:"attempts"`
@@ -856,6 +1007,8 @@ type JobWebhookDelivery struct {
 }
 
 // JobErrorSummary describes a job-level error with a value-free code.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobErrorSummary struct {
 	Code    string `json:"code,omitempty"`
 	Type    string `json:"type"`
@@ -863,6 +1016,8 @@ type JobErrorSummary struct {
 }
 
 // JobPayloadRef is an opaque reference to one protected job payload.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobPayloadRef struct {
 	Ref           string  `json:"ref"`
 	SchemaVersion int     `json:"schema_version"`
@@ -874,6 +1029,8 @@ type JobPayloadRef struct {
 }
 
 // JobPayloads reports the lifecycle of a job's protected payloads.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobPayloads struct {
 	SchemaVersion    int            `json:"schema_version"`
 	Mode             string         `json:"mode"`
@@ -884,6 +1041,8 @@ type JobPayloads struct {
 
 // JobResponse is returned by POST /jobs and GET /jobs/{job_id}. SchemaVersion
 // is 3 for records that carry keyed digests.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JobResponse struct {
 	SchemaVersion   int                   `json:"schema_version"`
 	ID              string                `json:"id"`
@@ -909,6 +1068,8 @@ type JobResponse struct {
 }
 
 // OMOPRejectedSpan is a PHI-free rejection detail from an /omop/load summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OMOPRejectedSpan struct {
 	Reason         string  `json:"reason"`
 	SourceNoteHash string  `json:"source_note_hash"`
@@ -918,12 +1079,16 @@ type OMOPRejectedSpan struct {
 }
 
 // OMOPConstraintViolations summarizes CDM constraint violations by reason.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OMOPConstraintViolations struct {
 	Count    int            `json:"count"`
 	ByReason map[string]int `json:"by_reason"`
 }
 
 // OMOPLoadResponse is the PHI-free summary returned by POST /omop/load.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type OMOPLoadResponse struct {
 	RowCounts            map[string]int            `json:"row_counts"`
 	RejectionCounts      map[string]int            `json:"rejection_counts"`
@@ -933,6 +1098,8 @@ type OMOPLoadResponse struct {
 }
 
 // CohortEvidencePointer identifies matched grounded evidence without raw text.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type CohortEvidencePointer struct {
 	CriterionID    string `json:"criterion_id"`
 	ConceptSetID   string `json:"concept_set_id"`
@@ -948,12 +1115,16 @@ type CohortEvidencePointer struct {
 }
 
 // CohortPatientEvidence groups matched pointers by internal patient ID.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type CohortPatientEvidence struct {
 	PatientID int64                   `json:"patient_id"`
 	Matches   []CohortEvidencePointer `json:"matches"`
 }
 
 // CohortResolveResponse is the privacy-minimized cohort result.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type CohortResolveResponse struct {
 	SchemaVersion string                  `json:"schema_version"`
 	Advisory      string                  `json:"advisory"`
@@ -963,6 +1134,8 @@ type CohortResolveResponse struct {
 }
 
 // JourneyResourceQuery selects one bounded, policy-aware resource page.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JourneyResourceQuery struct {
 	ResourceType JourneyResourceType
 	Namespace    string
@@ -973,6 +1146,8 @@ type JourneyResourceQuery struct {
 }
 
 // JourneyResource is one versioned, field-filtered read model.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JourneyResource struct {
 	ResourceType        JourneyResourceType `json:"resource_type"`
 	ResourceID          string              `json:"resource_id"`
@@ -987,6 +1162,8 @@ type JourneyResource struct {
 }
 
 // JourneyResourcePage is the cross-surface bounded list response.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type JourneyResourcePage struct {
 	State     string            `json:"state"`
 	Code      *string           `json:"code"`
@@ -1014,11 +1191,15 @@ type JourneyResourcePage struct {
 // ---------------------------------------------------------------------------
 
 // ErrorEnvelope mirrors the standardized service error body: {"error": {...}}.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ErrorEnvelope struct {
 	Error ErrorBody `json:"error"`
 }
 
 // ErrorBody is the inner error payload returned by the service.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type ErrorBody struct {
 	Code      string `json:"code"`
 	Message   string `json:"message"`
@@ -1028,6 +1209,8 @@ type ErrorBody struct {
 
 // APIError is returned for any non-2xx response. It preserves the HTTP status
 // code and the parsed service error envelope.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type APIError struct {
 	StatusCode int
 	Envelope   ErrorEnvelope
@@ -1036,17 +1219,25 @@ type APIError struct {
 // Error implements the error interface with a status-only summary. Service
 // messages and details remain available on Envelope but are omitted here so
 // routine error logging does not copy possible clinical text.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (e *APIError) Error() string {
 	return fmt.Sprintf("openmed: request failed with status %d", e.StatusCode)
 }
 
 // Code returns the service error code from the envelope.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (e *APIError) Code() string { return e.Envelope.Error.Code }
 
 // Details returns the service error details from the envelope.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (e *APIError) Details() any { return e.Envelope.Error.Details }
 
 // AsAPIError reports whether err is (or wraps) an *APIError and returns it.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func AsAPIError(err error) (*APIError, bool) {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
@@ -1061,6 +1252,8 @@ func AsAPIError(err error) (*APIError, bool) {
 
 // Client is a REST client for the OpenMed de-identification service. The zero
 // value is not ready for use; construct one with New.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type Client struct {
 	baseURL              string
 	httpClient           *http.Client
@@ -1071,6 +1264,8 @@ type Client struct {
 
 // PIIExtractStream incrementally decodes the NDJSON response from
 // /pii/extract/stream. Callers must close the stream, normally with defer.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIExtractStream struct {
 	body    io.ReadCloser
 	scanner *bufio.Scanner
@@ -1081,6 +1276,8 @@ type PIIExtractStream struct {
 
 // PIIDeidentifyStream incrementally decodes the NDJSON response from
 // /pii/deidentify/stream. Callers must close the stream, normally with defer.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type PIIDeidentifyStream struct {
 	body    io.ReadCloser
 	scanner *bufio.Scanner
@@ -1090,6 +1287,8 @@ type PIIDeidentifyStream struct {
 }
 
 // Next advances to the next event. It returns false at EOF or after an error.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIExtractStream) Next() bool {
 	if s == nil || s.closed || s.err != nil {
 		return false
@@ -1122,6 +1321,8 @@ func (s *PIIExtractStream) Next() bool {
 }
 
 // Event returns the event decoded by the most recent successful Next call.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIExtractStream) Event() PIIExtractStreamEvent {
 	if s == nil {
 		return PIIExtractStreamEvent{}
@@ -1130,6 +1331,8 @@ func (s *PIIExtractStream) Event() PIIExtractStreamEvent {
 }
 
 // Err returns the first stream scanning or JSON decoding error, if any.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIExtractStream) Err() error {
 	if s == nil {
 		return nil
@@ -1138,6 +1341,8 @@ func (s *PIIExtractStream) Err() error {
 }
 
 // Close closes the response body. It is safe to call more than once.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIExtractStream) Close() error {
 	if s == nil {
 		return nil
@@ -1155,6 +1360,8 @@ func (s *PIIExtractStream) closeBody() error {
 
 // Next advances to the next de-identification event. It returns false at EOF
 // or after an error.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIDeidentifyStream) Next() bool {
 	if s == nil || s.closed || s.err != nil {
 		return false
@@ -1187,6 +1394,8 @@ func (s *PIIDeidentifyStream) Next() bool {
 }
 
 // Event returns the event decoded by the most recent successful Next call.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIDeidentifyStream) Event() PIIDeidentifyStreamEvent {
 	if s == nil {
 		return PIIDeidentifyStreamEvent{}
@@ -1195,6 +1404,8 @@ func (s *PIIDeidentifyStream) Event() PIIDeidentifyStreamEvent {
 }
 
 // Err returns the first stream scanning or JSON decoding error, if any.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIDeidentifyStream) Err() error {
 	if s == nil {
 		return nil
@@ -1203,6 +1414,8 @@ func (s *PIIDeidentifyStream) Err() error {
 }
 
 // Close closes the response body. It is safe to call more than once.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (s *PIIDeidentifyStream) Close() error {
 	if s == nil {
 		return nil
@@ -1219,6 +1432,8 @@ func (s *PIIDeidentifyStream) closeBody() error {
 }
 
 // Option configures a Client.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type Option func(*Client)
 
 // WithHTTPClient sets a custom *http.Client (for timeouts, transports, redirect
@@ -1226,6 +1441,8 @@ type Option func(*Client)
 // copied without copying the client's internal synchronization state. When the
 // supplied client has no CheckRedirect policy, redirects remain disabled. A
 // non-nil policy is treated as an explicit override.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
 		if hc != nil {
@@ -1246,6 +1463,8 @@ func WithHTTPClient(hc *http.Client) Option {
 // WithInsecureHTTP explicitly permits cleartext HTTP for a non-loopback base
 // URL. Prefer HTTPS. This option is intended only for trusted, isolated
 // networks where transport security is provided outside the application.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func WithInsecureHTTP() Option {
 	return func(c *Client) {
 		c.allowInsecureHTTP = true
@@ -1255,6 +1474,8 @@ func WithInsecureHTTP() Option {
 // WithMaxResponseBodyBytes sets the maximum size of a buffered JSON success
 // response. Non-positive values are ignored. Streaming endpoint bodies are not
 // buffered and are governed by WithMaxStreamEventBytes instead.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func WithMaxResponseBodyBytes(limit int64) Option {
 	return func(c *Client) {
 		if limit > 0 {
@@ -1266,6 +1487,8 @@ func WithMaxResponseBodyBytes(limit int64) Option {
 // WithMaxStreamEventBytes sets the maximum size of one NDJSON event. The total
 // stream is consumed incrementally and is not capped. Non-positive values are
 // ignored.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func WithMaxStreamEventBytes(limit int) Option {
 	return func(c *Client) {
 		if limit > 0 {
@@ -1279,6 +1502,8 @@ func WithMaxStreamEventBytes(limit int) Option {
 // Cleartext HTTP is accepted for loopback hosts only unless WithInsecureHTTP is
 // passed. Redirects are disabled unless a custom client supplies an explicit
 // CheckRedirect policy.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func New(baseURL string, opts ...Option) (*Client, error) {
 	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmed == "" {
@@ -1350,9 +1575,13 @@ func isLoopbackHost(host string) bool {
 }
 
 // BaseURL returns the normalized base URL the client targets.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // Analyze calls POST /analyze.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeResponse, error) {
 	var out AnalyzeResponse
 	if err := c.post(ctx, "/analyze", req, &out); err != nil {
@@ -1362,6 +1591,8 @@ func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeRespo
 }
 
 // Brief calls POST /brief. The response contains protected summary content.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Brief(ctx context.Context, req BriefRequest) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/brief", req, &out); err != nil {
@@ -1371,6 +1602,8 @@ func (c *Client) Brief(ctx context.Context, req BriefRequest) (*JSONObject, erro
 }
 
 // Ground calls POST /ground.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse, error) {
 	var out GroundResponse
 	if err := c.post(ctx, "/ground", req, &out); err != nil {
@@ -1380,6 +1613,8 @@ func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse
 }
 
 // WorkflowPreflight reads permission/policy findings without dispatching effects.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) WorkflowPreflight(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/workflows/preflight", req, &out); err != nil {
@@ -1389,6 +1624,8 @@ func (c *Client) WorkflowPreflight(ctx context.Context, req GovernedWorkflowRefe
 }
 
 // WorkflowPreview inspects content-free effect metadata without execution.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) WorkflowPreview(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/workflows/preview", req, &out); err != nil {
@@ -1398,6 +1635,8 @@ func (c *Client) WorkflowPreview(ctx context.Context, req GovernedWorkflowRefere
 }
 
 // WorkflowStatus reads current custody metadata without retry or polling.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) WorkflowStatus(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/workflows/status", req, &out); err != nil {
@@ -1407,6 +1646,8 @@ func (c *Client) WorkflowStatus(ctx context.Context, req GovernedWorkflowReferen
 }
 
 // WorkflowSubmitReceipt submits existing metadata; it does not issue an approval.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) WorkflowSubmitReceipt(ctx context.Context, req GovernedWorkflowReview) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/workflows/review-receipts", req, &out); err != nil {
@@ -1416,6 +1657,8 @@ func (c *Client) WorkflowSubmitReceipt(ctx context.Context, req GovernedWorkflow
 }
 
 // WorkflowCancel requests cancellation intent without compensation or automatic retry.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) WorkflowCancel(ctx context.Context, req GovernedWorkflowMutation) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/workflows/cancel", req, &out); err != nil {
@@ -1425,6 +1668,8 @@ func (c *Client) WorkflowCancel(ctx context.Context, req GovernedWorkflowMutatio
 }
 
 // ExtractPII calls POST /pii/extract.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) ExtractPII(ctx context.Context, req PIIExtractRequest) (*PIIExtractResponse, error) {
 	var out PIIExtractResponse
 	if err := c.post(ctx, "/pii/extract", req, &out); err != nil {
@@ -1435,6 +1680,8 @@ func (c *Client) ExtractPII(ctx context.Context, req PIIExtractRequest) (*PIIExt
 
 // ExtractPIIStream calls POST /pii/extract/stream and returns an incremental,
 // bounded-per-event NDJSON decoder. The caller must close the returned stream.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamRequest) (*PIIExtractStream, error) {
 	resp, err := c.do(
 		ctx,
@@ -1467,6 +1714,8 @@ func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamReque
 }
 
 // Deidentify calls POST /pii/deidentify.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Deidentify(ctx context.Context, req PIIDeidentifyRequest) (*PIIDeidentifyResponse, error) {
 	var out PIIDeidentifyResponse
 	if err := c.post(ctx, "/pii/deidentify", req, &out); err != nil {
@@ -1478,6 +1727,8 @@ func (c *Client) Deidentify(ctx context.Context, req PIIDeidentifyRequest) (*PII
 // DeidentifyStream calls POST /pii/deidentify/stream and returns an
 // incremental, bounded-per-event NDJSON decoder. The caller must close the
 // returned stream.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRequest) (*PIIDeidentifyStream, error) {
 	resp, err := c.do(
 		ctx,
@@ -1510,6 +1761,8 @@ func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRe
 }
 
 // PrivacyGateway calls POST /privacy-gateway/complete.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) (*PrivacyGatewayResponse, error) {
 	var out PrivacyGatewayResponse
 	if err := c.post(ctx, "/privacy-gateway/complete", req, &out); err != nil {
@@ -1519,12 +1772,16 @@ func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) 
 }
 
 // SystemOneRequest carries protected state and named questions.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 type SystemOneRequest struct {
 	State     any        `json:"state"`
 	Questions JSONObject `json:"questions"`
 }
 
 // SystemOne calls the optional de-identifying decision route.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest) (*JSONObject, error) {
 	var out JSONObject
 	if err := c.post(ctx, "/v1/systemone", req, &out); err != nil {
@@ -1534,6 +1791,8 @@ func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest) (*JSONObje
 }
 
 // Decision calls POST /v1/decisions with an OpenMed decision request.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
 	var out FixedOptionDecisionResult
 	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
@@ -1544,6 +1803,8 @@ func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (
 
 // OpenAIDecisions calls POST /v1/decisions with an OpenAI-compatible
 // Decisions body; the service answers in the same shape.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) OpenAIDecisions(ctx context.Context, req OpenAIDecisionsRequest) (*OpenAIDecisionsResponse, error) {
 	var out OpenAIDecisionsResponse
 	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
@@ -1553,6 +1814,8 @@ func (c *Client) OpenAIDecisions(ctx context.Context, req OpenAIDecisionsRequest
 }
 
 // Health calls GET /health.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 	var out HealthResponse
 	if err := c.get(ctx, "/health", &out); err != nil {
@@ -1562,6 +1825,8 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 }
 
 // Livez calls GET /livez.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Livez(ctx context.Context) (*ProbeResponse, error) {
 	var out ProbeResponse
 	if err := c.get(ctx, "/livez", &out); err != nil {
@@ -1571,6 +1836,8 @@ func (c *Client) Livez(ctx context.Context) (*ProbeResponse, error) {
 }
 
 // Readyz calls GET /readyz.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Readyz(ctx context.Context) (*ProbeResponse, error) {
 	var out ProbeResponse
 	if err := c.get(ctx, "/readyz", &out); err != nil {
@@ -1580,6 +1847,8 @@ func (c *Client) Readyz(ctx context.Context) (*ProbeResponse, error) {
 }
 
 // LoadedModels calls GET /models/loaded.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error) {
 	body, err := c.raw(ctx, http.MethodGet, "/models/loaded", nil)
 	if err != nil {
@@ -1596,6 +1865,8 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 }
 
 // JourneyResources calls GET /v1/journey/resources.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) JourneyResources(ctx context.Context, query JourneyResourceQuery) (*JourneyResourcePage, error) {
 	parameters := url.Values{}
 	parameters.Set("resource_type", string(query.ResourceType))
@@ -1627,6 +1898,8 @@ func (c *Client) JourneyResources(ctx context.Context, query JourneyResourceQuer
 }
 
 // UnloadModels calls POST /models/unload.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*ModelUnloadResponse, error) {
 	body, err := c.raw(ctx, http.MethodPost, "/models/unload", req)
 	if err != nil {
@@ -1643,6 +1916,8 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 }
 
 // LoadOMOP calls POST /omop/load and returns a PHI-free CDM load summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
 	var out OMOPLoadResponse
 	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
@@ -1652,6 +1927,8 @@ func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadRe
 }
 
 // Profile calls POST /profile and returns the PHI-free quality report.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) Profile(ctx context.Context, req ProfileRequest) (*ProfileResponse, error) {
 	var out ProfileResponse
 	if err := c.post(ctx, "/profile", req, &out); err != nil {
@@ -1661,6 +1938,8 @@ func (c *Client) Profile(ctx context.Context, req ProfileRequest) (*ProfileRespo
 }
 
 // ResolveCohort calls POST /cohort/resolve and returns PHI-free match pointers.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) ResolveCohort(ctx context.Context, req CohortResolveRequest) (*CohortResolveResponse, error) {
 	var out CohortResolveResponse
 	if err := c.post(ctx, "/cohort/resolve", req, &out); err != nil {
@@ -1670,6 +1949,8 @@ func (c *Client) ResolveCohort(ctx context.Context, req CohortResolveRequest) (*
 }
 
 // CreateJob calls POST /jobs.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) CreateJob(ctx context.Context, req DeidentifyJobRequest) (*JobResponse, error) {
 	var out JobResponse
 	if err := c.post(ctx, "/jobs", req, &out); err != nil {
@@ -1679,6 +1960,8 @@ func (c *Client) CreateJob(ctx context.Context, req DeidentifyJobRequest) (*JobR
 }
 
 // GetJob calls GET /jobs/{job_id}.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) GetJob(ctx context.Context, jobID string) (*JobResponse, error) {
 	path, err := fillJobID(pathGetJob, jobID)
 	if err != nil {
@@ -1692,6 +1975,8 @@ func (c *Client) GetJob(ctx context.Context, jobID string) (*JobResponse, error)
 }
 
 // StartSMARTBackendIngestion calls POST /fhir/smart-backend/ingestions.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) StartSMARTBackendIngestion(ctx context.Context, req SMARTBackendIngestionRequest) (*SMARTBackendJobStatus, error) {
 	var out SMARTBackendJobStatus
 	if err := c.post(ctx, "/fhir/smart-backend/ingestions", req, &out); err != nil {
@@ -1704,6 +1989,8 @@ func (c *Client) StartSMARTBackendIngestion(ctx context.Context, req SMARTBacken
 // POST /fhir/smart-backend/ingestions with an Idempotency-Key header. Retrying
 // with the same key and request returns the original job instead of starting
 // another export; reusing the key for a different request fails with HTTP 409.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) StartSMARTBackendIngestionWithIdempotencyKey(
 	ctx context.Context,
 	req SMARTBackendIngestionRequest,
@@ -1722,6 +2009,8 @@ func (c *Client) StartSMARTBackendIngestionWithIdempotencyKey(
 }
 
 // SMARTBackendIngestionStatus calls GET /fhir/smart-backend/ingestions/{job_id}.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) (*SMARTBackendJobStatus, error) {
 	path, err := fillJobID(pathSMARTBackendIngestionStatus, jobID)
 	if err != nil {
@@ -1736,6 +2025,8 @@ func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) 
 
 // SMARTBackendIngestionSummary calls
 // GET /fhir/smart-backend/ingestions/{job_id}/summary.
+//
+// Deprecated: Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
 func (c *Client) SMARTBackendIngestionSummary(ctx context.Context, jobID string) (*SMARTBackendIngestionSummary, error) {
 	path, err := fillJobID(pathSMARTBackendIngestionSummary, jobID)
 	if err != nil {
