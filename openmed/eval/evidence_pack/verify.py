@@ -100,6 +100,14 @@ def verify_evidence_pack(
                 reasons.add("missing_required_lane")
             elif not set(metrics) <= lane["metrics"].keys():
                 reasons.add("missing_required_metric")
+        if "human_factors" in required_lanes(code, tier=tier):
+            sources = {
+                item["id"]
+                for item in data["frozen_inputs"]
+                if item["origin"] == "aggregate"
+            }
+            if not {"use_error_snapshot", "reviewer_disagreement"} <= sources:
+                reasons.add("missing_human_factors_sources")
     if pack.lane_blockers():
         reasons.add("incomplete_lane")
     return EvidenceVerification(int(bool(reasons)), tuple(sorted(reasons)))

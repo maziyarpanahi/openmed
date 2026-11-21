@@ -14,7 +14,11 @@ from pathlib import Path
 from openmed import __version__
 from openmed.core.intended_use import load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
-from openmed.eval.evidence_pack.lanes import required_lanes, site_validation_lane
+from openmed.eval.evidence_pack.lanes import (
+    human_factors_lane,
+    required_lanes,
+    site_validation_lane,
+)
 from openmed.eval.journey_release import (
     _reject_duplicate_keys,
     _reject_non_finite,
@@ -105,6 +109,7 @@ def build_evidence_pack(
         for name, metrics in profile.items()
     }
     site_inputs = []
+    human_inputs = []
     seen = set()
     try:
         if generated_at.utcoffset() is None:
@@ -116,6 +121,15 @@ def build_evidence_pack(
             name = entry["lane"]
             digest = entry["sha256"]
             kind = entry["type"]
+            human = (
+                name == "human_factors"
+                and kind == "human_factors_report"
+                and name in profile
+            )
+            if (
+                name == "human_factors" or kind == "human_factors_report"
+            ) and not human:
+                raise EvidencePackError("human_factors_sources_required")
             site = name == "site_validation" and kind == "validation_report"
             if (
                 set(entry) != {"lane", "type", "sha256"}
@@ -123,6 +137,7 @@ def build_evidence_pack(
                 or name in seen
                 or (
                     not site
+                    and not human
                     and kind
                     not in {"gate_report", "benchmark_report", "review_metrics"}
                 )
@@ -154,7 +169,12 @@ def build_evidence_pack(
                 continue
             if hashlib.sha256(raw).hexdigest() != digest:
                 raise EvidencePackError("report_digest_mismatch")
-            state, metrics = _project(_parse(raw), kind, name)
+            if human:
+                state, metrics, human_inputs = human_factors_lane(
+                    capability, _parse(raw)
+                )
+            else:
+                state, metrics = _project(_parse(raw), kind, name)
             if not isinstance(metrics, dict):
                 raise EvidencePackError("invalid_report_metrics")
             observed = {
@@ -190,7 +210,8 @@ def build_evidence_pack(
                     for lane in lanes.values()
                     if lane["report_digest"]
                 ]
-                + site_inputs,
+                + site_inputs
+                + human_inputs,
                 "limitations": ["not_clinically_validated", "not_a_medical_device"],
                 "signature": None,
             }
