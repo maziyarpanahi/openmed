@@ -174,7 +174,9 @@ def test_fixture_preservation_release_gate_uses_only_aggregate_evidence():
     assert "AB1117" not in json.dumps(gate.to_dict())
     report = {"metrics": {"fixture_preservation": counts}}
     assert all(c.gate != gate.gate for c in ReleaseGate().preview(report).gate_results)
-    assert gate in ReleaseGate(fixture_preservation_ceiling=0).preview(report).gate_results
+    assert (
+        gate in ReleaseGate(fixture_preservation_ceiling=0).preview(report).gate_results
+    )
     assert evaluate_fixture_preservation_gate(counts, ceiling=0.5).passed
     assert (
         evaluate_fixture_preservation_gate(
