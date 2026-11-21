@@ -909,3 +909,15 @@ invented or computed through an unbounded combinatorial count.
 
 For the broader legal and operational boundary, see
 [Compliance Posture](compliance.md).
+
+## Comparing non-DP count releases
+
+Call `openmed.risk.differencing.check_differencing(releases,
+dimensions=["region", "band"], threshold=5)` with comparable snapshots.
+Each row supplies an integer `count` and its dimension values. Omitting a
+dimension denotes a subtotal. The checker compares observed cells across all
+snapshots and compares published subtotals with individual subgroups and the
+sum of disjoint subgroups at the same grain. Set the threshold for your
+release and supply explicit zeros when absence conveys zero. The output
+contains only the number of distinct flagged cells and their dimension codes.
+The check assumes consistent populations, categories and counting rules.
