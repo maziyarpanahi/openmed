@@ -21,48 +21,50 @@ final class DecisionRuntimeParityTests: XCTestCase {
         return values
     }
 
-    func testSharedVectorsMatchThePythonReferenceThroughCoreML() throws {
-        let corpus = try fixture()
-        let tokenizer = try WordLevelTokenizer(corpus["tokenizer"])
-        let spec = try TinyEncoderSpec(corpus["encoder"])
-        let tolerance = try object(corpus["tolerance"])
-        let scoreTolerance = try XCTUnwrap(tolerance["scores"]?.decisionNumber)
-        let logitTolerance = try XCTUnwrap(tolerance["logits"]?.decisionNumber)
-        let backend = try object(corpus["backend"])
-        let identity = try OpenMedDecisionBackendIdentity(
-            backendID: string(backend["backend_id"]), runtime: string(backend["runtime"]),
-            modelID: string(backend["model_id"]), revision: string(backend["revision"]),
-            licenseID: string(backend["license_id"]))
-        let runtimes = try object(corpus["runtimes"])
-        let cases = try array(corpus["cases"])
-        XCTAssertGreaterThanOrEqual(cases.count, 28)
+    func testSharedVectorsMatchThePythonReferenceThroughCoreML() async throws {
+        try await withSyntheticClinicianReview {
+            let corpus = try fixture()
+            let tokenizer = try WordLevelTokenizer(corpus["tokenizer"])
+            let spec = try TinyEncoderSpec(corpus["encoder"])
+            let tolerance = try object(corpus["tolerance"])
+            let scoreTolerance = try XCTUnwrap(tolerance["scores"]?.decisionNumber)
+            let logitTolerance = try XCTUnwrap(tolerance["logits"]?.decisionNumber)
+            let backend = try object(corpus["backend"])
+            let identity = try OpenMedDecisionBackendIdentity(
+                backendID: string(backend["backend_id"]), runtime: string(backend["runtime"]),
+                modelID: string(backend["model_id"]), revision: string(backend["revision"]),
+                licenseID: string(backend["license_id"]))
+            let runtimes = try object(corpus["runtimes"])
+            let cases = try array(corpus["cases"])
+            XCTAssertGreaterThanOrEqual(cases.count, 28)
 
-        for entry in cases {
-            let row = try object(entry)
-            let id = try string(row["id"])
-            let settings = try object(runtimes[try string(row["runtime"])])
-            let model = TinyCoreMLModel(spec: spec, fault: settings["fault"].flatMap { try? string($0) })
-            let runtime = try OpenMedEncoderDecisionRuntime(
-                encoder: OpenMedCoreMLDecisionEncoder(model: model),
-                tokenizer: tokenizer,
-                identity: identity,
-                configuration: configuration(settings),
-                policy: policy(row["policy"]),
-                calibrationProfiles: profiles(row["calibration_profiles"]))
+            for entry in cases {
+                let row = try object(entry)
+                let id = try string(row["id"])
+                let settings = try object(runtimes[try string(row["runtime"])])
+                let model = TinyCoreMLModel(spec: spec, fault: settings["fault"].flatMap { try? string($0) })
+                let runtime = try OpenMedEncoderDecisionRuntime(
+                    encoder: OpenMedCoreMLDecisionEncoder(model: model),
+                    tokenizer: tokenizer,
+                    identity: identity,
+                    configuration: configuration(settings),
+                    policy: policy(row["policy"]),
+                    calibrationProfiles: profiles(row["calibration_profiles"]))
 
-            let result = try runtime.decide(json: XCTUnwrap(row["request"]).canonical())
-            let expected = try object(row["expected"])
-            assertClose(result.jsonValue, try XCTUnwrap(expected["result"]), tolerance: scoreTolerance, path: id)
-            XCTAssertFalse(result.autonomousAction, id)
-            XCTAssertTrue(result.reviewRequired, id)
+                let result = try runtime.decide(json: XCTUnwrap(row["request"]).canonical())
+                let expected = try object(row["expected"])
+                assertClose(result.jsonValue, try XCTUnwrap(expected["result"]), tolerance: scoreTolerance, path: id)
+                XCTAssertFalse(result.autonomousAction, id)
+                XCTAssertTrue(result.reviewRequired, id)
 
-            let calls = try array(expected["encoder_calls"])
-            XCTAssertEqual(model.calls.count, calls.count, id)
-            for (call, recorded) in zip(calls, model.calls) {
-                let values = try object(call)
-                XCTAssertEqual(values["input_ids"], .array(recorded.ids.map { .integer(Int64($0)) }), id)
-                if let logits = values["logits"], logits != .null, let produced = recorded.logits {
-                    assertClose(.array(produced.map(AgentJSON.number)), logits, tolerance: logitTolerance, path: id)
+                let calls = try array(expected["encoder_calls"])
+                XCTAssertEqual(model.calls.count, calls.count, id)
+                for (call, recorded) in zip(calls, model.calls) {
+                    let values = try object(call)
+                    XCTAssertEqual(values["input_ids"], .array(recorded.ids.map { .integer(Int64($0)) }), id)
+                    if let logits = values["logits"], logits != .null, let produced = recorded.logits {
+                        assertClose(.array(produced.map(AgentJSON.number)), logits, tolerance: logitTolerance, path: id)
+                    }
                 }
             }
         }
@@ -106,26 +108,28 @@ final class DecisionRuntimeParityTests: XCTestCase {
         }
     }
 
-    func testTimeoutsAreTypedFailures() throws {
-        let corpus = try fixture()
-        var now: TimeInterval = 0
-        let runtime = try OpenMedEncoderDecisionRuntime(
-            encoder: OpenMedCoreMLDecisionEncoder(model: TinyCoreMLModel(spec: TinyEncoderSpec(corpus["encoder"]), fault: nil)),
-            tokenizer: WordLevelTokenizer(corpus["tokenizer"]),
-            identity: OpenMedDecisionBackendIdentity(
-                backendID: "openmed.tests.tiny", runtime: "coreml", modelID: "openmed/tiny", revision: "1.0.0",
-                licenseID: "Apache-2.0"),
-            clock: {
-                now += 10
-                return now
-            })
-        let request = try OpenMedDecisionRequest(
-            mode: .fixedChoice, inputText: "Synthetic urgent note.", options: ["urgent", "routine"], timeoutMS: 100)
-        let result = runtime.decide(request)
-        XCTAssertEqual(result.state, .failure)
-        XCTAssertEqual(result.code, "backend_timeout")
-        XCTAssertTrue(result.optionScores.isEmpty)
-        XCTAssertNil(result.choice)
+    func testTimeoutsAreTypedFailures() async throws {
+        try await withSyntheticClinicianReview {
+            let corpus = try fixture()
+            var now: TimeInterval = 0
+            let runtime = try OpenMedEncoderDecisionRuntime(
+                encoder: OpenMedCoreMLDecisionEncoder(model: TinyCoreMLModel(spec: TinyEncoderSpec(corpus["encoder"]), fault: nil)),
+                tokenizer: WordLevelTokenizer(corpus["tokenizer"]),
+                identity: OpenMedDecisionBackendIdentity(
+                    backendID: "openmed.tests.tiny", runtime: "coreml", modelID: "openmed/tiny", revision: "1.0.0",
+                    licenseID: "Apache-2.0"),
+                clock: {
+                    now += 10
+                    return now
+                })
+            let request = try OpenMedDecisionRequest(
+                mode: .fixedChoice, inputText: "Synthetic urgent note.", options: ["urgent", "routine"], timeoutMS: 100)
+            let result = runtime.decide(request)
+            XCTAssertEqual(result.state, .failure)
+            XCTAssertEqual(result.code, "backend_timeout")
+            XCTAssertTrue(result.optionScores.isEmpty)
+            XCTAssertNil(result.choice)
+        }
     }
 
     func testCoreMLAdapterRejectsUnexpectedOutputs() throws {

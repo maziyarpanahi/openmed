@@ -173,6 +173,7 @@ public struct PhysiologicalRecordingQuality: Sendable {
     /// Assess one to 64 regular channels with at most one million total samples.
     /// All computation is local and deterministic; no providers or models are used.
     public static func evaluate(_ channels: [PhysiologicalWaveformChannel]) throws -> Self {
+        try OpenMedClinicianMode.require("waveform")
         guard (1...64).contains(channels.count) else { throw PhysiologicalWaveformError.invalidRecording }
         guard channels.reduce(0, { $0 + $1.samples.count }) <= 1_000_000 else { throw PhysiologicalWaveformError.resourceLimit }
         return Self(

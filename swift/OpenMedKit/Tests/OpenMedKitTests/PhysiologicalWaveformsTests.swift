@@ -23,24 +23,26 @@ final class PhysiologicalWaveformsTests: XCTestCase {
             sourceSHA256: try XCTUnwrap(input["source_sha256"] as? String))
     }
 
-    func testSharedPythonFixturesHaveIdenticalReports() throws {
-        for row in try fixtures() {
-            let item = try channel(row)
-            let report = try PhysiologicalRecordingQuality.evaluate([item])
-            let data = try report.reportJSON()
-            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            let channels = try XCTUnwrap(payload["channels"] as? [[String: Any]])
-            XCTAssertEqual(channels[0] as NSDictionary, try XCTUnwrap(row["expected"] as? NSDictionary))
-            XCTAssertEqual(data, try PhysiologicalRecordingQuality.evaluate([item]).reportJSON())
-            XCTAssertFalse(String(decoding: data, as: UTF8.self).contains(String(repeating: "a", count: 64)))
-            XCTAssertEqual(Set(payload.keys), ["channel_count", "codes", "channels"])
-            XCTAssertThrowsError(try report.requireReviewerConfirmation()) {
-                XCTAssertEqual($0 as? PhysiologicalWaveformError, .reviewerConfirmationRequired)
+    func testSharedPythonFixturesHaveIdenticalReports() async throws {
+        try await withSyntheticClinicianReview {
+            for row in try fixtures() {
+                let item = try channel(row)
+                let report = try PhysiologicalRecordingQuality.evaluate([item])
+                let data = try report.reportJSON()
+                let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                let channels = try XCTUnwrap(payload["channels"] as? [[String: Any]])
+                XCTAssertEqual(channels[0] as NSDictionary, try XCTUnwrap(row["expected"] as? NSDictionary))
+                XCTAssertEqual(data, try PhysiologicalRecordingQuality.evaluate([item]).reportJSON())
+                XCTAssertFalse(String(decoding: data, as: UTF8.self).contains(String(repeating: "a", count: 64)))
+                XCTAssertEqual(Set(payload.keys), ["channel_count", "codes", "channels"])
+                XCTAssertThrowsError(try report.requireReviewerConfirmation()) {
+                    XCTAssertEqual($0 as? PhysiologicalWaveformError, .reviewerConfirmationRequired)
+                }
+                try report.requireReviewerConfirmation(confirmed: true)
+                XCTAssertTrue(PhysiologicalWaveformChannel.nonDiagnosticNotice.contains("not vital-sign"))
+                XCTAssertFalse(item.description.contains(String(repeating: "a", count: 64)))
+                XCTAssertEqual(item.description, item.debugDescription)
             }
-            try report.requireReviewerConfirmation(confirmed: true)
-            XCTAssertTrue(PhysiologicalWaveformChannel.nonDiagnosticNotice.contains("not vital-sign"))
-            XCTAssertFalse(item.description.contains(String(repeating: "a", count: 64)))
-            XCTAssertEqual(item.description, item.debugDescription)
         }
     }
 
@@ -96,21 +98,23 @@ final class PhysiologicalWaveformsTests: XCTestCase {
         }
     }
 
-    func testMixedRatesRemainIndependentAndResourcesAreBounded() throws {
-        let rows = try fixtures().filter { $0["fixture"] as? String == "pass" }
-        let items = try rows.map { row in
-            let item = try channel(row)
-            let rate = item.kind.constraints.minimumRateHz
-            return try channel(row, changes: ["sample_rate_hz": rate, "offsets_seconds": (0..<40).map { 2 + Double($0) / rate }])
-        }
-        let report = try PhysiologicalRecordingQuality.evaluate(items)
-        XCTAssertEqual(report.channels.map { $0.kind }, PhysiologicalChannelKind.allCases)
-        XCTAssertTrue(report.channels.allSatisfy { $0.state == .pass })
-        XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate([]))
-        XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate(Array(repeating: items[0], count: 65)))
-        let large = try channel(rows[0], changes: ["samples": Array(repeating: 0.5, count: 20_000), "offsets_seconds": (0..<20_000).map { Double($0) / 10 }])
-        XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate(Array(repeating: large, count: 51))) {
-            XCTAssertEqual($0 as? PhysiologicalWaveformError, .resourceLimit)
+    func testMixedRatesRemainIndependentAndResourcesAreBounded() async throws {
+        try await withSyntheticClinicianReview {
+            let rows = try fixtures().filter { $0["fixture"] as? String == "pass" }
+            let items = try rows.map { row in
+                let item = try channel(row)
+                let rate = item.kind.constraints.minimumRateHz
+                return try channel(row, changes: ["sample_rate_hz": rate, "offsets_seconds": (0..<40).map { 2 + Double($0) / rate }])
+            }
+            let report = try PhysiologicalRecordingQuality.evaluate(items)
+            XCTAssertEqual(report.channels.map { $0.kind }, PhysiologicalChannelKind.allCases)
+            XCTAssertTrue(report.channels.allSatisfy { $0.state == .pass })
+            XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate([]))
+            XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate(Array(repeating: items[0], count: 65)))
+            let large = try channel(rows[0], changes: ["samples": Array(repeating: 0.5, count: 20_000), "offsets_seconds": (0..<20_000).map { Double($0) / 10 }])
+            XCTAssertThrowsError(try PhysiologicalRecordingQuality.evaluate(Array(repeating: large, count: 51))) {
+                XCTAssertEqual($0 as? PhysiologicalWaveformError, .resourceLimit)
+            }
         }
     }
 }
