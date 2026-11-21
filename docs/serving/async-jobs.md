@@ -664,3 +664,19 @@ Jobs resume across restarts only with encrypted payload retention. Metadata
 writes replace the store file atomically, so they survive a process crash. The
 store serves one service process; it does not coordinate writers across
 processes.
+
+### Subject withdrawal
+
+A caller can tag an entire job with an opaque `subject_ref_digest` (a
+`sha256:` or `hmac-sha256:` prefix and 64 lowercase hexadecimal digits).
+Use separate jobs for separate subjects. The service keeps the tag private.
+Existing and untagged jobs remain outside subject-based selection.
+
+Register `ServiceJobWithdrawalParticipant(queue)` from `openmed.service.jobs`
+under `ParticipantCode.SERVICE_JOBS` in the local `WithdrawalCoordinator`.
+Confirm its current plan to remove tagged inputs, retained callback payloads
+and stored results. During the metadata retention window, an authorized
+`GET /jobs/{id}` returns `withdrawn` and empty result fields. Stale workers
+cannot replace that state. A callback already sent cannot be recalled.
+While a worker or payload pin is active, or physical deletion is pending,
+the receipt stays partial. Run a fresh plan and verification after it settles.

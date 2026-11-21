@@ -57,6 +57,8 @@ from typing import Any, Callable, Collection, Final, NamedTuple, Optional, Seque
 
 import openmed
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.compliance.withdrawal import ParticipantPlan
+from openmed.core.audit import stable_hash
 from openmed.core.config import PROFILE_ENV_VAR
 from openmed.core.key_provider import EncryptionError, KeyProvider
 
@@ -937,9 +939,13 @@ class LocalJobStore:
         with self._lock:
             self._begin_locked()
             current = self._records.get(job_id)
-            if current is None or (
-                expected_statuses is not None
-                and current.get("status") not in expected_statuses
+            if (
+                current is None
+                or current.get("status") == "withdrawn"
+                or (
+                    expected_statuses is not None
+                    and current.get("status") not in expected_statuses
+                )
             ):
                 return None
             # Copy-on-write: the current record is the rollback snapshot and is
@@ -3547,6 +3553,11 @@ class DeidentifyJobQueue:
             "schema_version": JOB_STORE_SCHEMA_VERSION,
             "id": job_id,
             "status": "queued",
+            **(
+                {"subject_ref_digest": payload.subject_ref_digest}
+                if payload.subject_ref_digest
+                else {}
+            ),
             "state_version": 1,
             "progress_percent": 0.0,
             "document_count": len(payload.documents),
@@ -3968,6 +3979,8 @@ def _request_body(payload: DeidentifyJobRequest) -> dict[str, Any]:
         body = dump(mode="json")
     else:  # pragma: no cover - pydantic v1 fallback
         body = json.loads(payload.json())
+    if body.get("subject_ref_digest") is None:
+        body.pop("subject_ref_digest", None)
     return json.loads(json.dumps(body, allow_nan=False))
 
 
@@ -4044,6 +4057,97 @@ def webhook_payload(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class ServiceJobWithdrawalParticipant:
+    """Erase jobs selected by the caller's opaque subject reference."""
+
+    def __init__(self, queue: DeidentifyJobQueue) -> None:
+        self.queue = queue
+
+    def _selection(self, subject: str) -> tuple[ParticipantPlan, list[dict[str, Any]]]:
+        if type(subject) is not str or not re.fullmatch(
+            r"(?:hmac-)?sha256:[0-9a-f]{64}", subject
+        ):
+            raise ValueError("invalid subject reference digest")
+        records = []
+        for record in self.queue.store.records():
+            if record.get("subject_ref_digest") != subject:
+                continue
+            job_id = record["id"]
+            if (
+                record["status"] != "withdrawn"
+                or self.queue.payloads.has_job_payloads(job_id)
+                or job_id in self.queue._leases
+                or job_id in self.queue._deliveries
+            ):
+                records.append(record)
+        revisions = sorted((r["id"], r["state_version"]) for r in records)
+        return ParticipantPlan(len(records), stable_hash([subject, revisions])), records
+
+    def plan(self, subject_ref_digest: str) -> ParticipantPlan:
+        """Bind confirmation to matching jobs and their current revisions."""
+        with self.queue._lock:
+            return self._selection(subject_ref_digest)[0]
+
+    def apply(self, subject_ref_digest: str, plan: ParticipantPlan) -> int:
+        """Fence workers durably before deleting retained payloads and results."""
+        queue = self.queue
+        with queue._lock, queue.store._lock:
+            current, records = self._selection(subject_ref_digest)
+            if current != plan:
+                raise ValueError("withdrawal selection changed")
+            for record in records:
+                job_id = record["id"]
+                if record["status"] != "withdrawn":
+                    now = queue.clock()
+
+                    def erase(candidate):
+                        keep = {
+                            key: candidate[key]
+                            for key in (
+                                "id",
+                                "schema_version",
+                                "created_at",
+                                "subject_ref_digest",
+                                OWNER_DIGEST_FIELD,
+                                IDEMPOTENCY_FIELD,
+                                DIGESTS_FIELD,
+                            )
+                            if key in candidate
+                        }
+                        candidate.clear()
+                        candidate.update(keep)
+                        return []
+
+                    stored = queue.store.update_if(
+                        job_id,
+                        expected_statuses={record["status"]},
+                        mutate=erase,
+                        status="withdrawn",
+                        progress_percent=0,
+                        document_count=0,
+                        processed_count=0,
+                        failed_count=0,
+                        label_histogram={},
+                        spans=[],
+                        documents=[],
+                        error=None,
+                        webhook=None,
+                        webhook_delivery=None,
+                        started_at=None,
+                        completed_at=_isoformat(now),
+                        expires_at=queue._expiry_timestamp(now),
+                    )
+                    if stored is None:
+                        raise ValueError("withdrawal selection changed")
+                    queue._settle_local(job_id, stored)
+                queue.payloads.purge_job(job_id)
+            return len(records)
+
+    def verify(self, subject_ref_digest: str) -> bool:
+        """Independently check metadata, retained payloads and in-flight work."""
+        return self.plan(subject_ref_digest).count == 0
+
+
 def job_response_payload(
     record: dict[str, Any],
     *,
@@ -4060,6 +4164,7 @@ def job_response_payload(
     payload = _copy_record(record)
     _migrate_record(payload)
     payload.pop(OWNER_DIGEST_FIELD, None)
+    payload.pop("subject_ref_digest", None)
     # The storage schema version drives migration only; the published
     # service_job_record contract is versioned by its registered schema.
     payload.pop("schema_version", None)

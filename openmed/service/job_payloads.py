@@ -606,6 +606,21 @@ class JobPayloadStore:
                 and not self._is_expired(entry)
             )
 
+    def purge_job(self, job_id: str) -> None:
+        """Remove all input and callback payloads for a withdrawn job."""
+        with self._lock:
+            self._retry_cleanup_locked()
+            for entry in tuple(self._index.values()):
+                if entry.job_id == job_id:
+                    self.delete(entry.ref, reason="withdrawn")
+
+    def has_job_payloads(self, job_id: str) -> bool:
+        """Include pinned payloads and physical deletions still awaiting retry."""
+        with self._lock:
+            return any(entry.job_id == job_id for entry in self._index.values()) or any(
+                entry.job_id == job_id for entry, _, _ in self._cleanup_pending.values()
+            )
+
     def retained_count(self) -> int:
         """Return how many payloads the store currently retains."""
 

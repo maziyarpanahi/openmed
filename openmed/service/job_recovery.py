@@ -74,9 +74,9 @@ JOB_RECOVERY_SCHEMA_VERSION = 1
 CHECKPOINT_STEP = "deidentify_document"
 
 JOB_STATUSES = frozenset(
-    {"queued", "running", "done", "failed", "cancelled", "quarantined"}
+    {"queued", "running", "done", "failed", "cancelled", "withdrawn", "quarantined"}
 )
-TERMINAL_STATUSES = frozenset({"done", "failed", "cancelled"})
+TERMINAL_STATUSES = frozenset({"done", "failed", "cancelled", "withdrawn"})
 EXPIRING_STATUSES = TERMINAL_STATUSES | {"quarantined"}
 
 DEFAULT_LEASE_SECONDS = 60

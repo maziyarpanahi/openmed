@@ -174,7 +174,7 @@
   },
   "service_job_record": {
     "schema_version": 1,
-    "fingerprint": "sha256:1fe833bc7f8aa27826af0f8d02fcbf4f90d65e54dd9a847adbf7ca9a7ed6d282",
+    "fingerprint": "sha256:af9ea746391bc17a4b7433a3c853685a8d1de84c24a22808053adec0de34d65c",
     "required": [
       "completed_at",
       "created_at",
