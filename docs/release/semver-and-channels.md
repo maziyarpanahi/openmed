@@ -193,3 +193,9 @@ python scripts/release/orchestrate.py audit \
 
 Publication is an explicit local operation and follows the [manual Hugging Face
 publication policy](../security/hf-token-policy.md).
+
+For an X.0.0 SDK candidate, run `python scripts/release/deprecation_gate.py
+--version X.0.0 --candidate HEAD` in a full checkout with release tags.
+The gate compares the Python API with the latest stable X-1 tag and searches
+all stable X-1 releases for a deprecation whose removal date has arrived.
+It prints each breaking symbol missing that evidence and fails the candidate.
