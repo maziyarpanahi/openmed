@@ -508,3 +508,15 @@ points raise `ClinicianModeError("clinician_mode_required")`. Scope exit
 revokes the receipt's authority, including in tasks that inherited its
 context. A receipt is evidence of the scope, not a credential for re-entry.
 The clinical output-use policy continues to deny decision-triggering use.
+
+## Local use-error counts
+
+Create a `UseErrorRecorder` from `openmed.clinical.use_errors` to collect
+counts in memory. Inside `with recorder.capture():`, clinician-mode refusals
+and skipped required acknowledgements increment the corresponding count.
+Use `notice.require_acknowledgement(receipt, capability="decisions")` when a
+host enforces a displayed notice. A host can also explicitly call
+`recorder.record("export_before_review", "decisions", "restricted")` when it
+refuses that action. Each `snapshot()` contains a schema version and sorted
+counts by event code, registered capability and tier. The generic `notice`
+and `clinician_mode` codes identify checks made before choosing a capability.

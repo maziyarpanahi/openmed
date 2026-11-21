@@ -10,6 +10,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
+from openmed.core.no_phi_telemetry import record_use_error_if_enabled
 
 OPENMED_CLINICAL_DISCLAIMER = (
     "OpenMed clinical outputs are assistive software outputs, not a medical "
@@ -62,6 +63,29 @@ class OpenMedDisclaimer:
         return NoticeAcknowledgement(
             self.notice_id, self.version_digest, at.astimezone(timezone.utc).isoformat()
         )
+
+    def require_acknowledgement(
+        self, receipt: NoticeAcknowledgement | None, *, capability: str = "notice"
+    ) -> None:
+        """Reject an absent or unbound receipt when this tier requires one."""
+        if not self.requires_acknowledgement:
+            return
+        if receipt is None:
+            record_use_error_if_enabled(
+                "acknowledgement_skipped", capability, self.tier.value
+            )
+            raise ValueError("acknowledgement_required")
+        if (
+            not isinstance(receipt, NoticeAcknowledgement)
+            or receipt.notice_id != self.notice_id
+            or receipt.version_digest != self.version_digest
+        ):
+            raise ValueError("invalid_acknowledgement")
+        try:
+            if datetime.fromisoformat(receipt.acknowledged_at).utcoffset() is None:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("invalid_acknowledgement") from None
 
     @classmethod
     def for_tier(cls, tier: RegulatoryTier | str) -> OpenMedDisclaimer:
