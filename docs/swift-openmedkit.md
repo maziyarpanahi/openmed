@@ -1123,3 +1123,12 @@ trip. An unsigned `swift test` runner on macOS lacks the data-protection
 Keychain entitlement, so that test skips with `secret_missing_entitlement`
 there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
 physical device and is not covered by the package tests.
+
+### Capability intended use
+
+Use `try OpenMedIntendedUse.lookup("deidentify")` to read a declaration from the
+installed kit. Lookup returns `nil` for an unregistered capability. The
+`regulatoryTier.obligations` set exposes the safeguards required by that tier.
+Future tier values decode as `.unknown` and carry the restricted obligations.
+Refresh the Swift resource with `python3 scripts/manifest/export_intended_use.py`
+and verify it with the same command plus `--check`.
