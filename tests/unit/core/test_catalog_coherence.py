@@ -81,11 +81,11 @@ def test_cli_reports_non_object_as_normal_failure_without_traceback(tmp_path, ca
     assert "Traceback" not in output.out + output.err
 
 
-def test_empty_objects_and_blank_lines_remain_valid(tmp_path):
+def test_empty_objects_have_no_label_drift_but_lack_regulatory_fields(tmp_path):
     manifest = tmp_path / "models.jsonl"
     manifest.write_text("\n{}\n\n", encoding="utf-8")
     assert manifest_label_errors(manifest_path=manifest) == []
-    assert main(["--manifest", str(manifest)]) == 0
+    assert main(["--manifest", str(manifest)]) == 1
 
 
 def test_malformed_json_keeps_existing_diagnostic_path(tmp_path):
@@ -183,3 +183,35 @@ def _copy_catalog_inputs(destination: Path) -> None:
         ROOT / "docs" / "model-cards" / "registry",
         destination / "docs" / "model-cards" / "registry",
     )
+
+
+@pytest.mark.parametrize(
+    ("fields", "error"),
+    [
+        ({"capability": "generate_text"}, "regulatory_tier"),
+        (
+            {"capability": "private-unknown", "regulatory_tier": "assistive_review"},
+            "capability",
+        ),
+        (
+            {"capability": "generate_text", "regulatory_tier": "non_clinical"},
+            "regulatory_tier",
+        ),
+        ({"capability": "generate_text", "regulatory_tier": "assistive_review"}, None),
+    ],
+)
+def test_catalog_requires_reviewed_declaration(tmp_path, capsys, fields, error):
+    manifest = _write(
+        tmp_path / "models.jsonl",
+        {
+            "repo_id": "test/model",
+            "task": "text-generation",
+            "notes": "private-notes",
+            **fields,
+        },
+    )
+    assert main(["--manifest", str(manifest)]) == int(error is not None)
+    output = capsys.readouterr().out
+    assert "private-" not in output
+    if error:
+        assert "test/model" in output and error in output
