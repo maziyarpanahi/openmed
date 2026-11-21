@@ -14,12 +14,25 @@ import itertools
 import json
 import math
 import threading
-from collections.abc import Mapping, Sized
+from collections.abc import Callable, Mapping, Sized
+from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from numbers import Real
 from typing import Any, Final
+
+_use_error_sink: ContextVar[Callable[[str, str, str], None] | None] = ContextVar(
+    "openmed_use_error_sink", default=None
+)
+
+
+def record_use_error_if_enabled(code: str, capability: str, tier: str) -> None:
+    """Send a primitive's closed codes only to an explicitly scoped local recorder."""
+    recorder = _use_error_sink.get()
+    if recorder is not None:
+        recorder(code, capability, tier)
+
 
 SCHEMA_VERSION: Final = 1
 OTHER_DIMENSION_VALUE: Final = "other"

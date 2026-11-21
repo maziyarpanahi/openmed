@@ -50,6 +50,8 @@ from openmed.structured.decision_server import (
     DecisionServerUnsupportedError,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 MODEL = "synthetic-org/decider-4b"
 REVISION = "0123456789abcdef0123456789abcdef01234567"
 INPUT_TEXT = "Synthetic ticket ZX-4471: checkout fails for every synthetic customer."

@@ -1028,3 +1028,19 @@ def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
     assert "stable SDK version" in result.stderr
     assert not (tmp_path / "outputs").exists()
     assert not (root / "artifacts/sdk-readiness/scope.json").exists()
+
+
+def test_disclaimer_gate_follows_local_catalog_without_executing_it(tmp_path):
+    root = _make_repo_root(tmp_path)
+    clinical = root / "openmed" / "clinical" / "__init__.py"
+    clinical.write_text(
+        "from openmed.core.disclaimer import OPENMED_CLINICAL_DISCLAIMER\n__all__ = ['OPENMED_CLINICAL_DISCLAIMER']\n"
+    )
+    catalog = root / "openmed" / "core" / "disclaimer.py"
+    catalog.parent.mkdir()
+    catalog.write_text(
+        "raise RuntimeError()\nOPENMED_CLINICAL_DISCLAIMER = 'Reviewed notice.'\n"
+    )
+    assert _evaluate(root).decision == READY
+    catalog.write_text("OPENMED_CLINICAL_DISCLAIMER = ''\n")
+    assert _evaluate(root).decision == NOT_READY

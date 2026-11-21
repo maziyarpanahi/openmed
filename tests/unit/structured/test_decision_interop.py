@@ -37,6 +37,8 @@ from openmed.structured.decision_interop import (
     to_system_one_response,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 MODEL = "synthetic/decision-model"
 SYSTEM_ONE_REQUEST: dict[str, Any] = {
     "state": {

@@ -31,6 +31,8 @@ from openmed.structured.decision import (
     decision_result_schema,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 INPUT_SENTINEL = "Synthetic sentinel input about urgent cardiology review."
 INSTRUCTION_SENTINEL = "Synthetic sentinel instruction wording."
 DESCRIPTION_SENTINEL = "Synthetic sentinel option description."

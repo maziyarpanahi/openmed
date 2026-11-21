@@ -4,9 +4,12 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
-OPENMED_CLINICAL_DISCLAIMER = (
-    "OpenMed clinical outputs are assistive software outputs, not a medical "
-    "device, diagnosis, or substitute for qualified clinical judgment."
+from openmed.core.clinician_mode import (
+    restricted_entry_point as _restricted_entry_point,
+)
+from openmed.core.disclaimer import OPENMED_CLINICAL_DISCLAIMER
+from openmed.core.intended_use import (
+    load_intended_use_registry as _load_intended_use_registry,
 )
 
 from .abbreviation import (
@@ -3584,3 +3587,17 @@ __all__ = [
     "import_open_event_csv",
     "load_drug_safety_signal_schema",
 ]
+
+
+def _guard_registered_clinical_exports() -> None:
+    registry = _load_intended_use_registry()
+    for entry_point, code in registry.entry_points.items():
+        module, _, name = entry_point.rpartition(".")
+        if (
+            module == __name__
+            and registry.declarations[code].regulatory_tier == "restricted"
+        ):
+            globals()[name] = _restricted_entry_point(code)(globals()[name])
+
+
+_guard_registered_clinical_exports()

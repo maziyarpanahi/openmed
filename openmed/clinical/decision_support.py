@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Literal
 
+from openmed.core.clinician_mode import require_clinician_mode, restricted_entry_point
+
 from .uncertainty_sources import UncertaintySources, coerce_uncertainty_sources
 
 CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION = 1
@@ -259,6 +261,7 @@ class GuardedSuggestion:
         )
 
 
+@restricted_entry_point("decisions")
 def build_guarded_suggestion(
     suggestion: Any,
     source_spans: Iterable[Any] | None,
@@ -394,6 +397,7 @@ def guarded_suggestion(
     def decorate(inner: Callable[..., Any]) -> Callable[..., GuardedSuggestion]:
         @wraps(inner)
         def wrapper(*args: Any, **kwargs: Any) -> GuardedSuggestion:
+            require_clinician_mode("decisions")
             result = inner(*args, **kwargs)
             return _coerce_result(result, disclaimer=disclaimer)
 

@@ -476,3 +476,47 @@ extraction workflow. The specialty currently has no dedicated Python entry point
 The `languages` code `und` leaves language support unspecified and `zxx` denotes
 language-independent waveform input. Each declaration lists excluded uses, required
 human oversight and the obligations attached to its tier.
+
+Resolve the versioned notice with `OpenMedDisclaimer.for_capability(code)` from
+`openmed.core.disclaimer`. Display its English `text` and request explicit
+acknowledgement when `requires_acknowledgement` is true. After acknowledgement,
+pass an application-supplied timezone-aware `datetime` to `acknowledge(at=...)`.
+The resulting receipt contains the notice ID, version digest and UTC instant.
+
+## Restricted clinician review scopes
+
+Applications invoke restricted Python capabilities inside an explicit scope.
+Present the current restricted notice to the qualified reviewer and create the
+acknowledgement only after they accept it. Under that condition:
+
+```python
+from datetime import datetime, timezone
+from openmed.core.clinician_mode import clinician_mode
+from openmed.core.disclaimer import OpenMedDisclaimer
+from openmed.structured import decide
+
+notice = OpenMedDisclaimer.for_tier("restricted")
+ack = notice.acknowledge(at=datetime.now(timezone.utc))
+with clinician_mode(purpose="review", acknowledgement=ack) as receipt:
+    result = decide(request)
+```
+
+The accepted purposes are `review`, `research` and `quality_assurance`.
+The receipt carries the purpose, notice ID and version digest. Structured
+decisions return a denied result outside the scope. Other restricted entry
+points raise `ClinicianModeError("clinician_mode_required")`. Scope exit
+revokes the receipt's authority, including in tasks that inherited its
+context. A receipt is evidence of the scope, not a credential for re-entry.
+The clinical output-use policy continues to deny decision-triggering use.
+
+## Local use-error counts
+
+Create a `UseErrorRecorder` from `openmed.clinical.use_errors` to collect
+counts in memory. Inside `with recorder.capture():`, clinician-mode refusals
+and skipped required acknowledgements increment the corresponding count.
+Use `notice.require_acknowledgement(receipt, capability="decisions")` when a
+host enforces a displayed notice. A host can also explicitly call
+`recorder.record("export_before_review", "decisions", "restricted")` when it
+refuses that action. Each `snapshot()` contains a schema version and sorted
+counts by event code, registered capability and tier. The generic `notice`
+and `clinician_mode` codes identify checks made before choosing a capability.

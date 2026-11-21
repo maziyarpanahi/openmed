@@ -18,6 +18,8 @@ from openmed.multimodal.physiological_waveforms import (
     evaluate_recording,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 FIXTURES = json.loads(
     (
         Path(__file__).parents[2] / "fixtures/multimodal/physiological_waveforms.json"

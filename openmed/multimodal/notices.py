@@ -14,6 +14,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, ClassVar, cast
 
+from openmed.core.no_phi_telemetry import record_use_error_if_enabled
+
 __all__ = [
     "NOTICE_CATALOG",
     "NOTICE_RESULT_TYPES",
@@ -134,6 +136,12 @@ class NoticeBoundOutput:
         """
         self._validate_notice()
         if reviewer_confirmed is not True:
+            tier = (
+                "assistive_review"
+                if self.NOTICE_KIND is NoticeKind.DRAFT
+                else "restricted"
+            )
+            record_use_error_if_enabled("acknowledgement_skipped", "notice", tier)
             raise MultimodalNoticeError("explicit reviewer confirmation required")
 
     def to_dict(self) -> dict[str, Any]:

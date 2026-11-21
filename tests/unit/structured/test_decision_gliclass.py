@@ -45,6 +45,8 @@ from openmed.structured.decision_gliclass import (
     format_gliclass_input,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 ROOT = Path(__file__).resolve().parents[3]
 TEXT = (
     "Synthetic note: checkout errors rose after the deploy; rollback takes two minutes."
