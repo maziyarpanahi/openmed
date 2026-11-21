@@ -7,6 +7,7 @@ import com.openmed.openmedkit.EntityPrediction
 import com.openmed.openmedkit.OpenMed
 import com.openmed.openmedkit.OpenMedMLXModelCacheState
 import com.openmed.openmedkit.OpenMedModelStore
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,6 +40,27 @@ class ApiParityTest {
         assertTrue(methods.contains("cachedMLXModelDirectory"))
         assertTrue(methods.contains("isMLXModelCached"))
         assertTrue(methods.contains("mlxModelCacheState"))
+    }
+
+    @Test
+    fun mlxSymbolsCarryWarningLevelReplacementsForFiveZero() {
+        val targets = mapOf(
+            "downloadMLXModel" to "acquireArtifact",
+            "cachedMLXModelDirectory" to "cachedArtifact",
+            "isMLXModelCached" to "artifactCacheState",
+            "mlxModelCacheState" to "artifactCacheState",
+        )
+        fun check(annotation: Deprecated?, replacement: String) {
+            requireNotNull(annotation)
+            assertEquals(DeprecationLevel.WARNING, annotation.level)
+            assertTrue(annotation.message.contains("5.0"))
+            assertTrue(annotation.replaceWith.expression.contains(replacement))
+        }
+        for ((name, replacement) in targets) {
+            val method = OpenMedModelStore::class.java.declaredMethods.single { it.name == name }
+            check(method.getAnnotation(Deprecated::class.java), replacement)
+        }
+        check(OpenMedMLXModelCacheState::class.java.getAnnotation(Deprecated::class.java), "ArtifactCacheState")
     }
 
     @Test

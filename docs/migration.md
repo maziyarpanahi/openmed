@@ -193,5 +193,9 @@ Service configuration is planned to use a single validated loader.
 
 ### Android model acquisition
 
-Android apps using MLX-named cache and download methods will migrate to the
-format-aware model acquisition API.
+The Android MLX-named cache state and four model-store helpers emit compiler
+warnings in 4.x and are scheduled for removal in 5.0. Select the artifact
+format and runtime in an `ArtifactRef` and pass a cache directory explicitly.
+Use `acquireArtifact` for acquisition, `cachedArtifact` for lookup, and
+`artifactCacheState` for readiness.
+[Android method migration table](android-integration.md#migrating-from-the-mlx-named-store)
