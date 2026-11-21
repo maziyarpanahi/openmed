@@ -6,13 +6,22 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -52,7 +61,7 @@ from openmed.structured.decision_interop import (
 )
 from openmed.utils.validation import validate_model_name
 
-from .admission import HttpAdmission
+from .admission import AUTH_SCOPE_KEY, AdmissionRejected, AdmissionTicket, HttpAdmission
 from .auth import (
     DEVELOPMENT_DOCS_EXEMPT_PATHS,
     ROUTE_POLICIES,
@@ -259,6 +268,7 @@ from .streaming import (
 from .throttle import (
     ServiceBusyError,
     ServiceThrottle,
+    client_identity,
     current_request_work,
     format_retry_after,
 )
@@ -748,6 +758,7 @@ def _format_validation_details(exc: RequestValidationError) -> list[Dict[str, st
 
 def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     """Persist runtime state on the FastAPI application object."""
+    app.state.shadow_task = None
     app.state.runtime = runtime
     app.state.profile = runtime.profile
     app.state.config = runtime.config
@@ -1328,6 +1339,19 @@ def _install_drain_coordinator(
     state.drain = coordinator
     state.drain_streams = streams
     state.drain_report = None
+    if runtime.shadow_sample_rate:
+        coordinator.register(
+            CallbackDrainParticipant(
+                "shadow_evaluation",
+                priority=20,
+                finish_in_flight=lambda ctx: ctx.wait_until(
+                    lambda: state.shadow_task is None or state.shadow_task.done()
+                ),
+                outstanding=lambda: int(
+                    state.shadow_task is not None and not state.shadow_task.done()
+                ),
+            )
+        )
     for participant in (
         HTTPRequestDrainParticipant(state),
         CallbackDrainParticipant(
@@ -2523,6 +2547,7 @@ def create_app(
     async def pii_deidentify(
         payload: PIIDeidentifyRequest,
         request: Request,
+        background_tasks: BackgroundTasks,
     ) -> Dict[str, Any]:
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
@@ -2546,13 +2571,35 @@ def create_app(
             ):
                 return await _run_with_timeout(runtime, _model_operation)
 
-        return await _run_maybe_coalesced(
+        active = await _run_maybe_coalesced(
             request,
             "/pii/deidentify",
             payload,
             _operation,
             priority=priority,
         )
+        if (
+            runtime.shadow_sample_rate
+            and runtime.shadow_model != payload.model_name
+            and random.random() < runtime.shadow_sample_rate
+        ):
+            throttle = request.app.state.throttle
+            ticket = runtime.admission_controller.ticket(
+                request.scope.get(AUTH_SCOPE_KEY), transport="rest"
+            )
+            key = client_identity(
+                request, throttle.config.key_by, throttle.config.proxies
+            )
+            background_tasks.add_task(
+                _start_shadow_comparison,
+                request.app.state,
+                runtime,
+                ticket,
+                key,
+                payload,
+                active,
+            )
+        return active
 
     @app.post("/pii/deidentify/stream")
     async def pii_deidentify_stream(
@@ -3534,6 +3581,86 @@ def _pii_extract_payload(
         response = _result_to_dict(result)
         set_current_span_attributes(result_summary_attributes(response))
         return response
+
+
+async def _start_shadow_comparison(state, runtime, ticket, key, payload, active):
+    """Retain at most one background task, after the response has been sent."""
+    if (state.shadow_task and not state.shadow_task.done()) or getattr(
+        state, "shutting_down", False
+    ):
+        if runtime.metrics is not None:
+            runtime.metrics.record_shadow("busy")
+        return
+    state.shadow_task = asyncio.create_task(
+        _shadow_comparison(state, runtime, ticket, key, payload, active)
+    )
+
+
+async def _shadow_comparison(
+    state, runtime, ticket: AdmissionTicket, key, payload, active
+):
+    """After the response body, attempt one local comparison without queuing notes."""
+    from types import SimpleNamespace
+
+    from openmed.core.labels import normalize_label
+    from openmed.eval.shadow_compare import compare_shadow_spans
+
+    def record(code, count=1):
+        if runtime.metrics is not None:
+            runtime.metrics.record_shadow(code, count)
+
+    def spans(result):
+        return [
+            SimpleNamespace(
+                doc_id="current",
+                start=e["start"],
+                end=e["end"],
+                canonical_label=normalize_label(e.get("canonical_label") or e["label"]),
+            )
+            for e in result["pii_entities"]
+        ]
+
+    def compare():
+        if not runtime.get_loader().shadow_models_fit(
+            {payload.model_name, runtime.shadow_model}
+        ):
+            record("budget")
+            return
+        candidate = (
+            payload.model_copy(update={"model_name": runtime.shadow_model})
+            if hasattr(payload, "model_copy")
+            else payload.copy(update={"model_name": runtime.shadow_model})
+        )
+        result = runtime.run_model_request(
+            candidate.model_name,
+            None,
+            lambda: _pii_deidentify_payload(candidate, runtime),
+        )
+        counts = compare_shadow_spans(spans(active), spans(result))
+        record("compared")
+        record("missed_direct_identifiers", counts["missed_direct_identifiers"])
+        for group in counts["by_policy_label"].values():
+            for code, value in group.items():
+                record(code, value)
+
+    permit = slot = None
+    try:
+        permit = await runtime.admission_controller.acquire(ticket, timeout=0)
+        gate = state.throttle.concurrency_gate
+        slot = await gate.acquire(key)
+        if gate.enabled and slot is None:
+            record("busy")
+            return
+        await run_in_threadpool(compare)
+    except AdmissionRejected:
+        record("busy")
+    except Exception:
+        record("error")
+    finally:
+        if slot is not None:
+            slot.release()
+        if permit is not None:
+            permit.release()
 
 
 def _pii_deidentify_payload(

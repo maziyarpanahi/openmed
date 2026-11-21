@@ -1526,3 +1526,20 @@ Optional values such as `HF_TOKEN`, `OPENMED_PROFILE`,
 `OPENMED_SERVICE_MAX_RESIDENT_MODELS`, `OPENMED_SERVICE_CORS_ORIGINS`, and
 `OPENMED_SERVICE_TRUSTED_HOSTS` can be supplied from a local `.env` file.
 Keep `.env` ignored and never commit secrets to version control.
+
+### Local shadow evaluation
+
+On an offline service (`OPENMED_OFFLINE=1`), add the cached candidate ID to
+`OPENMED_SERVICE_SERVED_MODELS`, set `OPENMED_SERVICE_SHADOW_MODEL` to that
+ID and set `OPENMED_SERVICE_SHADOW_SAMPLE_RATE` to a fraction from 0 to 1.
+The default rate is 0. Model-count and memory limits must accommodate the
+candidate alongside the active model. Startup checks the configured warm set,
+and each sampled request checks the then-current residency.
+
+After a successful `POST /pii/deidentify` response, the service can run the
+same request settings against the candidate in memory. The caller sees only
+the active result. Each process allows one background comparison, drops extra
+samples, and applies the requesting principal's admission and concurrency limits.
+When metrics are enabled, `openmed_service_shadow_total` counts comparisons,
+exact and overlapping spans, active-only and candidate-only spans, missed
+direct identifiers, and skipped or failed comparisons. Its labels are fixed.
