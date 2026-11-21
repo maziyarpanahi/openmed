@@ -125,7 +125,11 @@ from openmed.structured.decision import (
     DecisionRequest,
     decide,
 )
-from openmed.utils.deprecation import deprecated, deprecated_parameter
+from openmed.utils.deprecation import (
+    SHIFT_DATES_NOTICE,
+    deprecated,
+    deprecated_parameter,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
@@ -786,7 +790,11 @@ def openmed_deidentify(
             model_name=payload.model_name,
             confidence_threshold=payload.confidence_threshold,
             keep_year=payload.keep_year,
-            shift_dates=payload.shift_dates,
+            **(
+                {"shift_dates": payload.shift_dates}
+                if payload.shift_dates is not None
+                else {}
+            ),
             date_shift_days=payload.date_shift_days,
             keep_mapping=payload.keep_mapping,
             config=runtime.config,
@@ -806,6 +814,11 @@ def openmed_deidentify(
         payload.keep_alive,
         operation,
     )
+    if shift_dates is not None:
+        response["metadata"] = {
+            **response.get("metadata", {}),
+            "deprecation_notice": SHIFT_DATES_NOTICE,
+        }
     return validate_registered_tool_output("openmed_deidentify", response)
 
 

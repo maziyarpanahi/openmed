@@ -121,7 +121,7 @@ accelerated attention backends.
 
 | v1 surface | Status in 1.9.1 | Replacement | v2 action |
 |---|---|---|---|
-| `deidentify(..., shift_dates=True)` | Deprecated alias, still accepted | `deidentify(..., method="shift_dates")` | Replace now; check the v2 changelog before relying on the alias. |
+| `deidentify(..., shift_dates=True)` | Deprecated alias, still accepted | `deidentify(..., method="shift_dates")` | Use the method argument before 5.0. |
 
 The following compatibility behaviors are not currently deprecated:
 
@@ -219,3 +219,15 @@ legacy module warns in 4.3 and is scheduled for removal in 5.0.
 ```python
 from openmed.interop.fhir.bulk import deidentify_ndjson
 ```
+
+
+### Date shift boolean alias
+
+| Before 4.3 | Preferred form |
+| --- | --- |
+| `deidentify(text, shift_dates=True)` | `deidentify(text, method="shift_dates")` |
+
+The boolean remains supported through 4.x. Python warns at the call site.
+REST exposes the fixed notice in the `OpenMed-Deprecation` response header
+and MCP in `metadata.deprecation_notice`. Use the existing method argument
+alone to select date shifting.

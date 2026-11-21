@@ -3664,7 +3664,11 @@ class DeidentifyJobQueue:
                 model_name=payload.model_name,
                 confidence_threshold=payload.confidence_threshold,
                 keep_year=payload.keep_year,
-                shift_dates=payload.shift_dates,
+                **(
+                    {"shift_dates": payload.shift_dates}
+                    if payload.shift_dates is not None
+                    else {}
+                ),
                 date_shift_days=payload.date_shift_days,
                 keep_mapping=payload.keep_mapping,
                 config=self.runtime.config,

@@ -576,7 +576,7 @@ def deidentify(
         model_name=model_name,
         confidence_threshold=confidence_threshold,
         keep_year=keep_year,
-        shift_dates=shift_dates,
+        **({"shift_dates": shift_dates} if shift_dates is not None else {}),
         date_shift_days=date_shift_days,
         keep_mapping=keep_mapping,
         policy=policy,

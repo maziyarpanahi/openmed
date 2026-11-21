@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import validate_pii_input
+from ..utils.deprecation import deprecated_parameter
 from .budget import BudgetClock, RequestBudget, coerce_budget
 from .capabilities import MissingOptionalDependencyError
 from .capabilities import install_hint as _optional_dependency_install_instruction
@@ -2565,6 +2566,9 @@ def _deidentify_batch(
     return results
 
 
+@deprecated_parameter(
+    "shift_dates", since="4.3", remove_in="5.0", replacement='method="shift_dates"'
+)
 def deidentify(
     text: str | bytes | bytearray | memoryview,
     method: DeidentificationMethod = "mask",

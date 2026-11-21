@@ -26,6 +26,9 @@ def _validate_versions(since: str, remove_in: str) -> None:
         raise ValueError("remove_in must not be empty")
 
 
+SHIFT_DATES_NOTICE = 'shift_dates is deprecated since OpenMed 4.3 and will be removed in 5.0. Use method="shift_dates".'
+
+
 def _message(name: str, since: str, remove_in: str, replacement: str | None) -> str:
     message = (
         f"{name} is deprecated since OpenMed {since} and is planned "

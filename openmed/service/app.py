@@ -50,6 +50,7 @@ from openmed.structured.decision_interop import (
     openai_decisions_response_schema,
     to_openai_decisions_response,
 )
+from openmed.utils.deprecation import SHIFT_DATES_NOTICE
 from openmed.utils.validation import validate_model_name
 
 from .admission import HttpAdmission
@@ -2523,7 +2524,10 @@ def create_app(
     async def pii_deidentify(
         payload: PIIDeidentifyRequest,
         request: Request,
+        response: Response,
     ) -> Dict[str, Any]:
+        if payload.shift_dates is not None:
+            response.headers["OpenMed-Deprecation"] = SHIFT_DATES_NOTICE
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
         priority = _request_priority(request)
@@ -2563,9 +2567,12 @@ def create_app(
         runtime = _get_service_runtime(request)
         events = deidentify_ndjson_stream(payload, runtime)
         controls = NDJSONStreamControls.for_request(request.scope, runtime)
-        return controls.response(
+        response = controls.response(
             _drain_aware_stream(request, events, retain=controls.retain)
         )
+        if payload.shift_dates is not None:
+            response.headers["OpenMed-Deprecation"] = SHIFT_DATES_NOTICE
+        return response
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
@@ -3010,6 +3017,8 @@ def create_app(
                 request.headers.getlist(IDEMPOTENCY_KEY_HEADER)
             ),
         )
+        if payload.shift_dates is not None:
+            response.headers["OpenMed-Deprecation"] = SHIFT_DATES_NOTICE
         record = submission.record
         if not submission.created:
             response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
@@ -3559,7 +3568,11 @@ def _pii_deidentify_payload(
             model_name=payload.model_name,
             confidence_threshold=payload.confidence_threshold,
             keep_year=payload.keep_year,
-            shift_dates=payload.shift_dates,
+            **(
+                {"shift_dates": payload.shift_dates}
+                if payload.shift_dates is not None
+                else {}
+            ),
             date_shift_days=payload.date_shift_days,
             keep_mapping=payload.keep_mapping,
             config=runtime.config,
