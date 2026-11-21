@@ -50,6 +50,7 @@ def verify_evidence_pack(
     key: bytes,
     as_of: datetime,
     max_age: timedelta,
+    profile: str = "capability",
 ) -> EvidenceVerification:
     """Verify JSON against the caller's trusted key, clock and freshness limit.
 
@@ -94,7 +95,39 @@ def verify_evidence_pack(
         if not declaration.regulatory_tier.obligations <= tier.obligations:
             reasons.add("tier_mismatch")
         actual = {lane["id"]: lane for lane in data["lanes"]}
-        for name, metrics in required_lanes(code, tier=tier).items():
+        if profile == "journey" and code == "journey" and "journey_release" in data:
+            from openmed.eval.journey_release import (
+                journey_metric_blockers,
+                journey_release_profile,
+            )
+
+            expected_lanes = journey_release_profile()
+            if set(actual) != set(expected_lanes):
+                reasons.add("journey_lane_set_mismatch")
+            detail = data["journey_release"]
+            reasons.update(detail["blocking_codes"])
+            inputs = {i["id"]: i for i in data["frozen_inputs"]}
+            if (
+                inputs.get("release_manifest", {}).get("digest")
+                != detail["manifest_digest"]
+            ):
+                reasons.add("journey_manifest_mismatch")
+            for name, metrics in expected_lanes.items():
+                lane = actual.get(name)
+                if lane is None:
+                    continue
+                if inputs.get(name, {}).get("digest") != lane["report_digest"]:
+                    reasons.add("journey_report_mismatch")
+                if set(metrics) <= lane["metrics"].keys():
+                    reasons.update(
+                        f"{name}:{reason}"
+                        for reason in journey_metric_blockers(name, lane["metrics"])
+                    )
+        else:
+            expected_lanes = required_lanes(code, tier=tier)
+            if profile != "capability" or "journey_release" in data:
+                reasons.add("evidence_profile_mismatch")
+        for name, metrics in expected_lanes.items():
             lane = actual.get(name)
             if lane is None or not lane["mandatory"]:
                 reasons.add("missing_required_lane")
@@ -155,7 +188,7 @@ def verify_evidence_pack(
                 )
             ):
                 reasons.add("invalid_membership_evidence")
-        if "human_factors" in required_lanes(code, tier=tier):
+        if "human_factors" in expected_lanes:
             sources = {
                 item["id"]
                 for item in data["frozen_inputs"]

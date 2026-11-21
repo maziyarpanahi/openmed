@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the fail-closed v3 Journey release gate from a source checkout."""
+"""Build and verify a Journey evidence pack and emit its selected wire format."""
 
 from openmed.eval.journey_release import main
 
