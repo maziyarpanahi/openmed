@@ -376,3 +376,23 @@ database and omit its WAL files; close or checkpoint it first, or use SQLite's
 backup API. For a store that fails to open or fails its integrity check, follow
 the [store corruption runbook](../operations/runbooks/store-corruption.md) from
 the [service incident runbooks](../operations/runbooks/service-runbooks.md).
+
+## Consent withdrawal
+
+Register `JourneyWithdrawalParticipant(store)` under `ParticipantCode.JOURNEY_STORE`
+and plan with `journey_subject_ref(opaque_subject_id)`. Confirm the fresh plan through
+the withdrawal coordinator. Linked evidence, artifacts, downstream derivations,
+historical versions and shared records that depend on those sources are included
+in the count. The writer transaction removes these payloads and persists a
+digest-only manifest. Direct and historical lookups then observe the removal.
+New writes with a withdrawn subject, identity, source reference or blob digest
+are rejected.
+
+Pass the full `LocalJourneyStore` to compact its local blob directory as well.
+For a standalone metadata backend, pass `blobs=local_artifact_store` if it owns
+local blobs. External object stores, backups and database storage reclamation
+have independent retention policies. Retry interrupted blob removal with
+`participant.compact(ref)` and check `participant.verify(ref)`.
+For an in-memory service projection built from this store, construct
+`JourneyResourceCatalog(records, visible_resources=participant.visible_resources)`
+so each page and cursor reflects current tombstones.

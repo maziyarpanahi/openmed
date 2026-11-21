@@ -1,6 +1,16 @@
 {
   "paths": [
     {
+      "module": "openmed.structured.store.local",
+      "function": "JourneyWithdrawalParticipant._compact_metadata",
+      "classification": "governed"
+    },
+    {
+      "module": "openmed.structured.store.local",
+      "function": "JourneyWithdrawalParticipant.apply",
+      "classification": "governed"
+    },
+    {
       "module": "openmed.agent.admission",
       "function": "SQLiteAdmissionStore._append",
       "classification": "operational"

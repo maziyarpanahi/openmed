@@ -46,6 +46,7 @@ from .local import (
     StoreMigrationError,
     _valid_timestamp,
 )
+from .migrations import WITHDRAWAL_TABLES
 from .protocols import (
     AllowAllStoragePolicy,
     CommitStatusUnknown,
@@ -489,6 +490,7 @@ POSTGRES_MIGRATIONS = (
             """,
         ),
     ),
+    PostgresMigration(4, "journey_subject_withdrawal", WITHDRAWAL_TABLES),
 )
 
 LATEST_POSTGRES_MIGRATION_VERSION = POSTGRES_MIGRATIONS[-1].version

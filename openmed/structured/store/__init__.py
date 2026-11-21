@@ -26,6 +26,8 @@ from .encryption import (
 )
 from .local import (
     IngestedGraph,
+    JourneySubjectTombstone,
+    JourneyWithdrawalParticipant,
     LocalArtifactStore,
     LocalJourneyStore,
     LocalStoreError,
@@ -33,6 +35,7 @@ from .local import (
     SQLiteJourneyTransaction,
     StoreCompatibilityError,
     StoreMigrationError,
+    journey_subject_ref,
 )
 from .migrations import LATEST_MIGRATION_VERSION, MIGRATIONS, StoreMigration
 from .objects import FsspecArtifactStore, ObjectStoreNamespace
@@ -102,6 +105,9 @@ __all__ = [
     "FactStore",
     "FsspecArtifactStore",
     "IngestedGraph",
+    "JourneySubjectTombstone",
+    "JourneyWithdrawalParticipant",
+    "journey_subject_ref",
     "JobMetadata",
     "JobMetadataStore",
     "JourneyEncryptionError",

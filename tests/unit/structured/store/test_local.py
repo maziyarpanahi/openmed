@@ -572,3 +572,82 @@ def test_invalid_stored_json_returns_typed_failure(tmp_path: Path) -> None:
     assert result.code == "stored_payload_invalid"
     assert "SYNTHETIC-PHI-CANARY" not in repr(result)
     store.close()
+
+
+@pytest.mark.parametrize("backend", ("sqlite", "postgres-adapter"))
+def test_subject_withdrawal_compacts_graph_and_preserves_audit(tmp_path, backend):
+    from openmed.service.journey_resources import (
+        JourneyResourceCatalog,
+        JourneyResourceKind,
+        JourneyResourceRecord,
+    )
+    from openmed.structured.store import (
+        JourneyWithdrawalParticipant,
+        journey_subject_ref,
+    )
+    from tests.unit.structured.store.test_store_deadlines import (
+        FakePostgresConnection,
+        _postgres,
+    )
+
+    store = (
+        SQLiteJourneyStore(tmp_path / "journey.db", encryption=PLAINTEXT_DEV)
+        if backend == "sqlite"
+        else _postgres(FakePostgresConnection())
+    )
+    blobs = LocalArtifactStore(tmp_path / "blobs", encryption=PLAINTEXT_DEV)
+    participant = JourneyWithdrawalParticipant(store, blobs=blobs)
+    ref = journey_subject_ref(_fact().subject_id)
+    with store:
+        assert blobs.put_bytes(_artifact(), CONTENT).ok
+        with store.transaction(committed_at=COMMITTED_1) as tx:
+            assert tx.put_artifact(_artifact()).ok
+            assert tx.put_evidence(_evidence()).ok
+            assert tx.put_fact(_fact()).ok
+        stale = participant.plan(ref)
+        other = replace(
+            _artifact(),
+            artifact_id="artifact_bbbbbbbbbbbbbbbb",
+            subject_id="subject_bbbbbbbbbbbbbbbb",
+            content_hash=sha256_digest(b"other"),
+            byte_size=5,
+        )
+        with store.transaction(committed_at=COMMITTED_2) as tx:
+            assert tx.put_artifact(other).ok
+            assert tx.put_fact(_second_fact()).ok
+            assert tx.put_conflict(_conflict()).ok
+            assert tx.put_resolution(_resolution()).ok
+            assert tx.put_dataset(_snapshot()).ok
+            assert tx.put_canonical(_canonical(_fact().fact_id, "active")).ok
+        with pytest.raises(ValueError, match="selection changed"):
+            participant.apply(ref, stale)
+        record = JourneyResourceRecord(
+            JourneyResourceKind.FACT,
+            _fact().fact_id,
+            "research",
+            {"subject_id": _fact().subject_id},
+        )
+        catalog = JourneyResourceCatalog(
+            [record], visible_resources=participant.visible_resources
+        )
+        old_digest = catalog.snapshot_digest
+        assert catalog.record_count == 1
+        plan = participant.plan(ref)
+        assert plan.count == 8
+        assert participant.apply(ref, plan) == plan.count
+        assert participant.verify(ref)
+        assert catalog.record_count == 0 and catalog.snapshot_digest != old_digest
+        assert participant.tombstone(ref).selection_digest == plan.selection_digest
+        assert not store.get_artifact(_artifact().artifact_id, as_of=StorePoint(1)).ok
+        assert not store.get_evidence(_evidence().locator_id).ok
+        assert not store.get_fact(_fact().fact_id).ok
+        assert not store.get_canonical(
+            _canonical(_fact().fact_id, "active").canonical_id
+        ).ok
+        assert not store.get_dataset(_snapshot().snapshot_id).ok
+        assert store.get_artifact(other.artifact_id).ok
+        assert not blobs.get_bytes(_artifact().content_hash).ok
+        assert not blobs.put_bytes(_artifact(), CONTENT).ok
+        assert not store.put_artifact(_artifact(), committed_at=COMMITTED_3).ok
+        assert participant.apply(ref, participant.plan(ref)) == 0
+        assert participant.verify(ref)

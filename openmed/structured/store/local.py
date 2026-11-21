@@ -11,7 +11,7 @@ import threading
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, TypeVar, cast
 
@@ -25,6 +25,7 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
     sha256_digest,
 )
+from openmed.compliance.withdrawal import ParticipantPlan
 from openmed.core.key_provider import EncryptionError
 
 from .deadlines import (
@@ -360,6 +361,8 @@ class LocalArtifactStore:
         except ValueError:
             return StoreResult.outcome(StoreState.FAILURE, "invalid_content_hash")
         try:
+            if target.with_suffix(".withdrawn").exists():
+                return StoreResult.outcome(StoreState.DENIED, "artifact_withdrawn")
             if target.is_symlink():
                 return StoreResult.outcome(StoreState.FAILURE, "artifact_path_unsafe")
             stored = target.read_bytes()
@@ -374,6 +377,18 @@ class LocalArtifactStore:
         if sha256_digest(content) != content_hash:
             return StoreResult.outcome(StoreState.FAILURE, "artifact_integrity_failed")
         return StoreResult.success(content)
+
+    def compact_withdrawn(self, content_hash: str) -> None:
+        """Fence reads and writes before unlinking a withdrawn local blob."""
+        if not self.policy.allows("withdraw", "artifact"):
+            raise PermissionError("withdrawal_denied")
+        target = self._blob_path(content_hash)
+        with self._lock:
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            target.with_suffix(".withdrawn").touch(mode=0o600)
+            _fsync_directory(target.parent)
+            target.unlink(missing_ok=True)
+            _fsync_directory(target.parent)
 
     def discard_if_created(self, content_hash: str) -> None:
         """Remove a newly staged blob after a metadata transaction rolls back."""
@@ -1550,6 +1565,31 @@ class SQLiteJourneyStore:
             counts[table] = len(rows)
         return StoreResult.success(counts)
 
+    def _withdrawn(self, table: str, identity: str, payload: Mapping) -> bool:
+        subjects = _subject_refs(payload)
+        if any(
+            self._connection.execute(
+                "SELECT 1 FROM journey_subject_tombstones WHERE subject_digest = ?",
+                (ref,),
+            ).fetchone()
+            for ref in subjects
+        ):
+            return True
+        keys = {(table, identity), *_record_refs(payload)}
+        return any(
+            self._connection.execute(
+                "SELECT 1 FROM journey_withdrawn_records WHERE record_digest = ?",
+                (canonical_digest([kind, key]),),
+            ).fetchone()
+            for kind, key in keys
+        ) or bool(
+            payload.get("content_hash")
+            and self._connection.execute(
+                "SELECT 1 FROM journey_withdrawn_records WHERE blob_hash = ?",
+                (payload["content_hash"],),
+            ).fetchone()
+        )
+
     def _auto_put(
         self,
         committed_at: str,
@@ -1940,6 +1980,10 @@ class SQLiteJourneyTransaction:
             return self._fail(StoreState.PARTIAL, "missing_canonical_fact")
         if fact_row["subject_id"] != record.subject_id:
             return self._fail(StoreState.CONFLICT, "canonical_subject_mismatch")
+        if self.store._withdrawn(
+            "canonical_record_versions", record.canonical_id, record.to_dict()
+        ):
+            return self._fail(StoreState.DENIED, "subject_withdrawn")
         payload_json = record.to_json()
         payload_hash = canonical_digest(record.to_dict())
         existing = self.store._connection.execute(
@@ -2003,6 +2047,8 @@ class SQLiteJourneyTransaction:
         denied = self._denied("write", "job")
         if denied is not None:
             return denied
+        if self.store._withdrawn("job_metadata_versions", job.job_id, job.to_dict()):
+            return self._fail(StoreState.DENIED, "subject_withdrawn")
         payload_json = job.to_json()
         payload_hash = canonical_digest(job.to_dict())
         existing = self.store._connection.execute(
@@ -2072,6 +2118,8 @@ class SQLiteJourneyTransaction:
         extra_columns: tuple[str, ...] = (),
         extra_values: tuple[Any, ...] = (),
     ) -> StoreResult[T]:
+        if self.store._withdrawn(table, record_id, json.loads(payload_json)):
+            return self._fail(StoreState.DENIED, "subject_withdrawn")
         existing_id = self.store._connection.execute(
             f"SELECT {id_column}, payload_json, created_revision "  # noqa: S608
             f"FROM {table} WHERE {id_column} = ?",
@@ -2528,3 +2576,297 @@ class _MarkerKeyVerifiers:
 
     def save_key_verifier(self, key_id: str, verifier: str) -> None:
         self._store._save_key_verifier(key_id, verifier)
+
+
+_REFERENCE_TABLES = {
+    "artifact_id": "artifacts",
+    "parent_artifact_ids": "artifacts",
+    "source_artifact_ids": "artifacts",
+    "evidence_ids": "evidence_locators",
+    "fact_id": "clinical_facts",
+    "fact_ids": "clinical_facts",
+    "parent_fact_ids": "clinical_facts",
+    "selected_fact_ids": "clinical_facts",
+    "rejected_fact_ids": "clinical_facts",
+    "source_fact_ids": "clinical_facts",
+    "conflict_id": "conflict_sets",
+    "supersedes_resolution_id": "resolution_events",
+    "resolution_id": "resolution_events",
+    "snapshot_id": "dataset_snapshots",
+    "parent_snapshot_ids": "dataset_snapshots",
+}
+
+
+def journey_subject_ref(opaque_subject_id: str) -> str:
+    """Derive the withdrawal reference for an existing opaque Journey subject ID."""
+    if not _valid_opaque_id(opaque_subject_id):
+        raise ValueError("invalid Journey subject ID")
+    return canonical_digest(["journey.subject", opaque_subject_id])
+
+
+def _subject_refs(payload: Mapping) -> set[str]:
+    result = set()
+    for obj in (payload, payload.get("metadata", {})):
+        if not isinstance(obj, Mapping):
+            continue
+        if _valid_opaque_id(obj.get("subject_id")):
+            result.add(journey_subject_ref(obj["subject_id"]))
+        if isinstance(obj.get("subject_ref_digest"), str):
+            result.add(obj["subject_ref_digest"])
+    return result
+
+
+def _record_refs(payload: Mapping) -> set[tuple[str, str]]:
+    refs = set()
+    for obj in (payload, payload.get("metadata", {})):
+        if not isinstance(obj, Mapping):
+            continue
+        for field_name, table in _REFERENCE_TABLES.items():
+            values = obj.get(field_name, ())
+            if isinstance(values, str):
+                values = (values,)
+            if isinstance(values, (tuple, list)):
+                refs.update(
+                    (table, value) for value in values if isinstance(value, str)
+                )
+    return refs
+
+
+@dataclass(frozen=True)
+class JourneySubjectTombstone:
+    """Digest-only audit evidence for a compacted metadata selection."""
+
+    subject_digest: str
+    record_count: int
+    selection_digest: str
+    revision: int
+
+
+@dataclass(frozen=True)
+class _WithdrawalRow:
+    table: str
+    identity: str
+    payload_hash: str
+    blob_hash: str | None
+
+    @property
+    def receipt(self) -> tuple[str, str, str | None]:
+        return (
+            canonical_digest([self.table, self.identity]),
+            self.payload_hash,
+            self.blob_hash,
+        )
+
+
+class JourneyWithdrawalParticipant:
+    """Coordinate consent withdrawal for a SQLite or PostgreSQL Journey graph."""
+
+    def __init__(
+        self,
+        store: SQLiteJourneyStore | LocalJourneyStore,
+        *,
+        blobs: LocalArtifactStore | None = None,
+    ) -> None:
+        if isinstance(store, LocalJourneyStore):
+            self.store = store.metadata
+            self.blobs = store.artifacts
+        else:
+            self.store = store
+            self.blobs = blobs
+
+    def _transaction(self, ref: str):
+        if not isinstance(ref, str) or not re.fullmatch(
+            r"(?:hmac-)?sha256:[0-9a-f]{64}", ref
+        ):
+            raise ValueError("invalid subject reference digest")
+        if not self.store.policy.allows("withdraw", "store"):
+            raise PermissionError("withdrawal_denied")
+        return self.store.transaction(
+            committed_at=datetime.now(timezone.utc).isoformat()
+        )
+
+    def _select(self, ref: str) -> list[_WithdrawalRow]:
+        from collections import defaultdict, deque
+
+        # Follow derivations downstream. For directly attributed facts also find
+        # source locators and artifacts that predate subject tagging.
+        dependents = defaultdict(set)
+        rows = defaultdict(list)
+        selected = set()
+        sources = defaultdict(set)
+        for table, (column, *_) in PAYLOAD_RECORD_KEYS.items():
+            for row in self.store._connection.execute(f"SELECT * FROM {table}"):  # noqa: S608
+                data = json.loads(self.store._decode_payload(table, row))
+                if canonical_digest(data) != row["payload_hash"]:
+                    raise LocalStoreError("stored_payload_invalid")
+                identity = (table, row[column])
+                refs = _record_refs(data) - {identity}
+                for parent in refs:
+                    dependents[parent].add(identity)
+                sources[identity].update(
+                    parent
+                    for parent in refs
+                    if parent[0] in {"evidence_locators", "artifacts"}
+                )
+                if ref in _subject_refs(data):
+                    selected.add(identity)
+                rows[identity].append(
+                    _WithdrawalRow(
+                        *identity, row["payload_hash"], data.get("content_hash")
+                    )
+                )
+        pending = deque(selected)
+        while pending:
+            for parent in sources[pending.popleft()] - selected:
+                selected.add(parent)
+                pending.append(parent)
+        pending = deque(selected)
+        while pending:
+            for child in dependents[pending.popleft()] - selected:
+                selected.add(child)
+                pending.append(child)
+        return [row for key in selected for row in rows[key]]
+
+    @staticmethod
+    def _plan(ref: str, rows: list[_WithdrawalRow]) -> ParticipantPlan:
+        return ParticipantPlan(
+            len(rows), canonical_digest([ref, sorted(r.receipt for r in rows)])
+        )
+
+    def plan(self, subject_ref_digest: str) -> ParticipantPlan:
+        """Bind the confirmed count and digest to the live graph and its versions."""
+        with self._transaction(subject_ref_digest):
+            return self._plan(subject_ref_digest, self._select(subject_ref_digest))
+
+    def tombstone(self, subject_ref_digest: str) -> JourneySubjectTombstone | None:
+        """Read the persistent, value-free tombstone independently of payloads."""
+        with self._transaction(subject_ref_digest):
+            row = self.store._connection.execute(
+                "SELECT * FROM journey_subject_tombstones WHERE subject_digest = ?",
+                (subject_ref_digest,),
+            ).fetchone()
+            return None if row is None else JourneySubjectTombstone(**dict(row))
+
+    def apply(self, subject_ref_digest: str, plan: ParticipantPlan) -> int:
+        """Compare and compact in one writer transaction, then finish local blob removal."""
+        with self._transaction(subject_ref_digest) as tx:
+            rows = self._select(subject_ref_digest)
+            if plan != self._plan(subject_ref_digest, rows):
+                raise ValueError("withdrawal selection changed")
+            db = self.store._connection
+            existing = db.execute(
+                "SELECT 1 FROM journey_subject_tombstones WHERE subject_digest = ?",
+                (subject_ref_digest,),
+            ).fetchone()
+            if existing and rows:
+                raise LocalStoreError("withdrawn records present")
+            if not existing:
+                db.execute(
+                    "INSERT INTO journey_subject_tombstones VALUES (?, ?, ?, ?)",
+                    (
+                        subject_ref_digest,
+                        plan.count,
+                        plan.selection_digest,
+                        tx.revision,
+                    ),
+                )
+                for row in rows:
+                    db.execute(
+                        "INSERT INTO journey_withdrawn_records VALUES (?, ?, ?, ?)",
+                        (subject_ref_digest, *row.receipt),
+                    )
+                self._compact_metadata(rows)
+                tx.mutated = True
+        self.compact(subject_ref_digest)
+        return len(rows)
+
+    def _compact_metadata(self, rows: list[_WithdrawalRow]) -> None:
+        db = self.store._connection
+        keys = {(r.table, r.identity) for r in rows}
+        for table, key in keys:
+            if table == "clinical_facts":
+                for statement in (
+                    "DELETE FROM fact_evidence WHERE fact_id = ?",
+                    "DELETE FROM conflict_facts WHERE fact_id = ?",
+                ):
+                    db.execute(statement, (key,))
+                db.execute(
+                    "DELETE FROM fact_parents WHERE fact_id = ? OR parent_fact_id = ?",
+                    (key, key),
+                )
+            elif table == "conflict_sets":
+                db.execute("DELETE FROM conflict_facts WHERE conflict_id = ?", (key,))
+            elif table == "resolution_events":
+                db.execute(
+                    "UPDATE resolution_events SET supersedes_resolution_id = NULL WHERE resolution_id = ?",
+                    (key,),
+                )
+        for table in reversed(PAYLOAD_RECORD_KEYS):
+            column = PAYLOAD_RECORD_KEYS[table][0]
+            for kind, key in keys:
+                if kind == table:
+                    db.execute(f"DELETE FROM {table} WHERE {column} = ?", (key,))  # noqa: S608
+
+    def compact(self, subject_ref_digest: str) -> None:
+        """Retry pending local blob removal using the committed digest manifest."""
+        with self._transaction(subject_ref_digest):
+            if self.blobs is not None:
+                for row in self._manifest(subject_ref_digest):
+                    if row["blob_hash"]:
+                        self.blobs.compact_withdrawn(row["blob_hash"])
+
+    def _manifest(self, ref: str):
+        return self.store._connection.execute(
+            "SELECT record_digest, payload_hash, blob_hash FROM journey_withdrawn_records WHERE subject_digest = ?",
+            (ref,),
+        ).fetchall()
+
+    def verify(self, subject_ref_digest: str) -> bool:
+        """Re-select, verify the digest trail and check configured local blob storage."""
+        tombstone = self.tombstone(subject_ref_digest)
+        if tombstone is None:
+            return False
+        with self._transaction(subject_ref_digest):
+            rows = self._manifest(subject_ref_digest)
+            receipts = sorted(
+                (r["record_digest"], r["payload_hash"], r["blob_hash"]) for r in rows
+            )
+            if self.blobs is not None:
+                for row in rows:
+                    if row["blob_hash"]:
+                        path = self.blobs._blob_path(row["blob_hash"])
+                        if (
+                            path.exists()
+                            or not path.with_suffix(".withdrawn").is_file()
+                        ):
+                            return False
+            return (
+                not self._select(subject_ref_digest)
+                and len(rows) == tombstone.record_count
+                and canonical_digest([subject_ref_digest, receipts])
+                == tombstone.selection_digest
+            )
+
+    def visible_resources(self, records):
+        """Filter a service projection under one database snapshot before paging."""
+        resource_tables = {
+            "artifact": "artifacts",
+            "job": "job_metadata_versions",
+            "fact": "clinical_facts",
+            "current_fact": "canonical_record_versions",
+            "conflict": "conflict_sets",
+            "dataset": "dataset_snapshots",
+            "evidence": "evidence_locators",
+        }
+        with self.store.transaction(
+            committed_at=datetime.now(timezone.utc).isoformat()
+        ):
+            return tuple(
+                record
+                for record in records
+                if not self.store._withdrawn(
+                    resource_tables.get(record.resource_type.value, ""),
+                    record.resource_id,
+                    record.data,
+                )
+            )
