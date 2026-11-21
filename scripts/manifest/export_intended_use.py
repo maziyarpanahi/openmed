@@ -17,18 +17,48 @@ SWIFT_RESOURCE = (
 def main(argv=None) -> int:
     """Write the portable declarations, or fail if an existing copy differs."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=SWIFT_RESOURCE)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--notices",
+        action="store_true",
+        help="Project runtime notices from shared safety vectors.",
+    )
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
-    registry = json.loads(SOURCE.read_bytes())
-    declarations = {code: row["declaration"] for code, row in registry.items()}
-    wire = (json.dumps(declarations, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if args.notices:
+        vectors = json.loads(
+            (ROOT / "tests/fixtures/parity/safety_primitives_v1.json").read_bytes()
+        )
+        brief = json.loads(
+            (
+                ROOT / "openmed/core/schemas/json/clinical_brief_response.schema.json"
+            ).read_bytes()
+        )
+        payload = {
+            "tiers": {row["tier"]: row["notice_id"] for row in vectors["tiers"]},
+            "notices": {
+                row["id"]: {k: v for k, v in row.items() if k != "acknowledgement"}
+                for row in vectors["notices"]
+            },
+            "capabilities": vectors["capability_notices"],
+            "overrides": vectors["entry_point_overrides"],
+            "clinical_brief_limitation": brief["$defs"]["envelope"]["properties"][
+                "disclaimer"
+            ]["const"],
+        }
+        default = SWIFT_RESOURCE.with_name("safety_notices.json")
+    else:
+        registry = json.loads(SOURCE.read_bytes())
+        payload = {code: row["declaration"] for code, row in registry.items()}
+        default = SWIFT_RESOURCE
+    output = args.output or default
+    wire = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
     if args.check:
-        if not args.output.is_file() or args.output.read_bytes() != wire:
-            print("Intended-use resource differs from the Python registry.")
+        if not output.is_file() or output.read_bytes() != wire:
+            print("Bundled safety resource differs from its source.")
             return 1
     else:
-        args.output.write_bytes(wire)
+        output.write_bytes(wire)
     return 0
 
 
