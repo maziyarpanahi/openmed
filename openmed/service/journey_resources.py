@@ -12,7 +12,7 @@ import base64
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
@@ -751,7 +751,16 @@ class JourneyResourcePage:
 class JourneyResourceCatalog:
     """Immutable in-memory projection used identically by every read surface."""
 
-    def __init__(self, records: Iterable[JourneyResourceRecord] = ()) -> None:
+    def __init__(
+        self,
+        records: Iterable[JourneyResourceRecord] = (),
+        *,
+        visible_resources: Callable[
+            [Sequence[JourneyResourceRecord]], Iterable[JourneyResourceRecord]
+        ]
+        | None = None,
+    ) -> None:
+        self._visible_resources = visible_resources
         ordered = tuple(
             sorted(
                 records,
@@ -779,13 +788,21 @@ class JourneyResourceCatalog:
     def snapshot_digest(self) -> str:
         """Return the exact immutable catalog snapshot digest."""
 
+        if self._visible_resources is not None:
+            return self._visible_catalog().snapshot_digest
         return self._snapshot_digest
 
     @property
     def record_count(self) -> int:
         """Return how many resource versions the catalog serves."""
 
+        if self._visible_resources is not None:
+            return self._visible_catalog().record_count
         return len(self._records)
+
+    def _visible_catalog(self) -> JourneyResourceCatalog:
+        assert self._visible_resources is not None
+        return JourneyResourceCatalog(self._visible_resources(self._records))
 
     def list_resources(
         self,
@@ -795,6 +812,8 @@ class JourneyResourceCatalog:
     ) -> JourneyResourcePage:
         """Execute one bounded read with cursor and policy enforcement."""
 
+        if self._visible_resources is not None:
+            return self._visible_catalog().list_resources(query, policy=policy)
         active_policy = policy or JourneyAccessPolicy()
         decision = active_policy.decide(query)
         if decision.state is JourneyResourceState.DENIED:

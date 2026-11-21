@@ -46,6 +46,7 @@ from .local import (
     StoreMigrationError,
     _valid_timestamp,
 )
+from .migrations import WITHDRAWAL_TABLES
 from .protocols import (
     AllowAllStoragePolicy,
     CommitStatusUnknown,
@@ -489,6 +490,7 @@ POSTGRES_MIGRATIONS = (
             """,
         ),
     ),
+    PostgresMigration(4, "journey_subject_withdrawal", WITHDRAWAL_TABLES),
 )
 
 LATEST_POSTGRES_MIGRATION_VERSION = POSTGRES_MIGRATIONS[-1].version
@@ -759,6 +761,7 @@ class PostgresJourneyStore(SQLiteJourneyStore):
     """
 
     # Inherited reads run in a bounded, read-only, armed unit.
+    _blob_access = _bounded_read(SQLiteJourneyStore._blob_access)
     _read_record = _bounded_read(SQLiteJourneyStore._read_record)
     get_canonical = _bounded_read(SQLiteJourneyStore.get_canonical)
     list_canonical_versions = _bounded_read(SQLiteJourneyStore.list_canonical_versions)

@@ -22,6 +22,20 @@ class StoreMigration:
         return hashlib.sha256(payload).hexdigest()
 
 
+WITHDRAWAL_TABLES = (
+    """CREATE TABLE journey_subject_tombstones (
+        subject_digest TEXT PRIMARY KEY, record_count BIGINT NOT NULL,
+        selection_digest TEXT NOT NULL, revision BIGINT NOT NULL
+        REFERENCES store_revisions(revision))""",
+    """CREATE TABLE journey_withdrawn_records (
+        subject_digest TEXT NOT NULL REFERENCES journey_subject_tombstones(subject_digest),
+        record_digest TEXT NOT NULL, payload_hash TEXT NOT NULL, blob_hash TEXT,
+        PRIMARY KEY (subject_digest, record_digest, payload_hash))""",
+    "CREATE INDEX journey_withdrawn_record_idx ON journey_withdrawn_records(record_digest)",
+    "CREATE INDEX journey_withdrawn_blob_idx ON journey_withdrawn_records(blob_hash)",
+)
+
+
 MIGRATIONS = (
     StoreMigration(
         version=1,
@@ -365,6 +379,7 @@ MIGRATIONS = (
             """,
         ),
     ),
+    StoreMigration(5, "journey_subject_withdrawal", WITHDRAWAL_TABLES),
 )
 
 LATEST_MIGRATION_VERSION = MIGRATIONS[-1].version
