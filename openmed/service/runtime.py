@@ -16,6 +16,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
+from openmed.core.offline import is_local_only
 from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
@@ -1009,6 +1010,8 @@ class ServiceRuntime:
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
     served_models: Optional[Tuple[str, ...]] = field(default=None, kw_only=True)
+    shadow_model: Optional[str] = field(default=None, kw_only=True)
+    shadow_sample_rate: float = field(default=0.0, kw_only=True)
     max_resident_models: Optional[int] = None
     model_memory_budget_bytes: Optional[int] = None
     default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
@@ -1056,6 +1059,21 @@ class ServiceRuntime:
                 "Served model configuration must contain public identifiers only"
             )
 
+        if not 0 <= self.shadow_sample_rate <= 1:
+            raise ValueError("Shadow sample rate must be between 0 and 1")
+        if self.shadow_sample_rate:
+            self.validate_served_model(self.shadow_model)
+            if not is_local_only(self.config):
+                raise ValueError("Shadow inference requires local-only model execution")
+            active_models = set(self.preload_models)
+            default_pii = self.config.pii_model or DEFAULT_SERVED_MODELS[1]
+            if default_pii in self.served_model_ids():
+                active_models.add(default_pii)
+            if not self.get_loader().shadow_models_fit(
+                active_models | {self.shadow_model}
+            ):
+                raise ValueError("Shadow model exceeds the configured warm-pool budget")
+
     @classmethod
     def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
         """Create a runtime using the current process environment."""
@@ -1085,6 +1103,10 @@ class ServiceRuntime:
             profile=profile,
             config=config,
             preload_models=preload_models,
+            shadow_model=os.getenv("OPENMED_SERVICE_SHADOW_MODEL") or None,
+            shadow_sample_rate=float(
+                os.getenv("OPENMED_SERVICE_SHADOW_SAMPLE_RATE", "0")
+            ),
             served_models=(
                 tuple(
                     item.strip()

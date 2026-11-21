@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple
 
@@ -644,6 +644,29 @@ class WarmPool:
         """Drop idle entries whose keep-alive deadlines have expired."""
         with self._lock:
             return self._drop_expired_locked(self.clock())
+
+    def shadow_models_fit(self, model_names: Collection[str]) -> bool:
+        """Check the co-resident serving set without evicting a model or loading weights."""
+        with self._lock:
+            resident = {
+                name for name, e in self._entries.items() if e.resident or e.loading
+            }
+            required = {self.resolve_model_name(name) for name in model_names}
+            missing = required - resident
+            if (
+                self.max_resident_models is not None
+                and len(resident | required) > self.max_resident_models
+            ):
+                return False
+            if self.memory_budget_bytes is None:
+                return True
+            extra = sum(
+                self._estimated_model_footprint_bytes_locked(name) for name in missing
+            )
+            return (
+                self._accounted_memory_bytes_locked() + extra
+                <= self.memory_budget_bytes
+            )
 
     def resident_model_names(self) -> Tuple[str, ...]:
         """Return currently resident model names in sorted order."""

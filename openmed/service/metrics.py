@@ -154,6 +154,7 @@ class PrometheusMetricsRegistry:
         self._duration_bucket_counts: dict[str, list[int]] = {}
         self._duration_count: dict[str, int] = {}
         self._duration_sum: dict[str, float] = {}
+        self._shadow_counts: dict[str, int] = {}
         self._inflight_requests = 0
         self._orphaned_work = 0
         self._job_queue_depth = 0
@@ -268,6 +269,25 @@ class PrometheusMetricsRegistry:
             )
             self._duration_sum[route_label] = (
                 self._duration_sum.get(route_label, 0.0) + observed_duration
+            )
+
+    def record_shadow(self, outcome: str, count: int = 1) -> None:
+        """Record only controlled aggregate outcomes of opt-in local comparisons."""
+        if outcome not in {
+            "compared",
+            "error",
+            "busy",
+            "budget",
+            "exact",
+            "overlap",
+            "active_only",
+            "candidate_only",
+            "missed_direct_identifiers",
+        }:
+            return
+        with self._lock:
+            self._shadow_counts[outcome] = self._shadow_counts.get(outcome, 0) + max(
+                0, count
             )
 
     def record_model_load(self, count: int = 1) -> None:
@@ -594,6 +614,7 @@ class PrometheusMetricsRegistry:
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
+            shadow_counts = dict(self._shadow_counts)
             request_total = dict(self._request_total)
             duration_bucket_counts = {
                 route: list(counts)
@@ -651,6 +672,16 @@ class PrometheusMetricsRegistry:
             drain_unfinished = dict(self._drain_unfinished)
 
         lines: list[str] = []
+        if shadow_counts:
+            name = "openmed_service_shadow_total"
+            _append_family_header(
+                lines,
+                name,
+                "Local shadow comparison events and span counts.",
+                "counter",
+            )
+            for outcome, count in sorted(shadow_counts.items()):
+                lines.append(f"{name}{_label_suffix({'outcome': outcome})} {count}")
         _append_family_header(
             lines,
             REQUEST_TOTAL_NAME,
