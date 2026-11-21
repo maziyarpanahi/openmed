@@ -236,3 +236,84 @@ def test_minimum_cell_size_must_protect_more_than_one_case(subtests) -> None:
                     _case(1, "accept", "accept"),
                     minimum_cell_size=minimum_cell_size,  # type: ignore[arg-type]
                 )
+
+
+def test_model_review_rates_and_value_free_grouping():
+    from openmed.eval.reviewer_disagreement import (
+        ModelReviewDecision,
+        ModelReviewOutcome,
+        ReviewedModel,
+        model_review_disagreement_report,
+    )
+
+    rows = []
+    for model, rejects in ((ReviewedModel.ACTIVE, 2), (ReviewedModel.CANDIDATE, 4)):
+        outcomes = (
+            [ModelReviewOutcome.REJECT] * rejects
+            + [ModelReviewOutcome.CORRECT] * 2
+            + [ModelReviewOutcome.ACCEPT] * (8 - rejects)
+        )
+        for index, outcome in enumerate(outcomes):
+            rows.append(
+                ModelReviewDecision(
+                    f"private-case-{index}",
+                    "private-reviewer",
+                    model,
+                    outcome,
+                    DisagreementReason.EVIDENCE_QUALITY,
+                )
+            )
+    report = model_review_disagreement_report(rows, minimum_cell_size=2)
+    assert "private" not in json.dumps(report)
+    assert report == model_review_disagreement_report(
+        reversed(rows), minimum_cell_size=2
+    )
+    active, candidate = report["models"]["active"], report["models"]["candidate"]
+    assert active["rejection"]["rate"] == 0.2 and candidate["rejection"]["rate"] == 0.4
+    assert candidate["by_reason"]["evidence_quality"]["correction"]["rate"] == 0.2
+    with pytest.raises(ValueError, match="^duplicate model review$"):
+        model_review_disagreement_report([*rows, rows[0]])
+
+
+def test_model_review_suppresses_reconstructible_small_cells():
+    from openmed.eval.reviewer_disagreement import (
+        ModelReviewDecision,
+        ModelReviewOutcome,
+        ReviewedModel,
+        model_review_disagreement_report,
+    )
+
+    rows = []
+    for index, outcome in enumerate(
+        ["accept", "correct", "correct", "reject", "reject"]
+    ):
+        rows.append(
+            ModelReviewDecision(
+                str(index),
+                "private",
+                ReviewedModel.ACTIVE,
+                ModelReviewOutcome(outcome),
+                DisagreementReason.OTHER,
+            )
+        )
+    hidden = model_review_disagreement_report(rows, minimum_cell_size=2)["models"][
+        "active"
+    ]
+    assert hidden["rejection"]["denominator"] is None
+    assert hidden["correction"]["numerator"] is None
+    rows.extend(
+        ModelReviewDecision(
+            str(index),
+            "second",
+            ReviewedModel.ACTIVE,
+            ModelReviewOutcome.ACCEPT,
+            DisagreementReason.LABEL_DEFINITION,
+        )
+        for index in range(4)
+    )
+    mixed = model_review_disagreement_report(rows, minimum_cell_size=2)["models"][
+        "active"
+    ]
+    assert mixed["rejection"]["numerator"] == 2
+    assert mixed["reason_breakdown_suppressed"]
+    assert mixed["by_reason"] == {}
