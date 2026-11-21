@@ -114,3 +114,12 @@ under the store's mutation lock before erasure. Receipts identify the stores
 by code and report counts, including unattributable holdings. A partial receipt
 identifies which stores still need verification. Training and private-round
 withdrawal use their own workflows.
+
+For the in-memory result cache, pass the same `subject_scope_fingerprint` to
+cached extraction, redaction or analysis calls. Use a caller-derived opaque
+SHA-256 or HMAC-SHA-256 digest. Register the cache instance used by those calls
+with `WithdrawalCoordinator({ParticipantCode.RESULT_CACHE: cache})`. Cache
+capacity selects the shared instance, so keep the capacity consistent for a
+participating service. Untagged entries contribute to the unattributable count.
+The confirmed operation removes only that subject's entries. Writes started
+before a withdrawal cannot reinsert an old result through the SDK.

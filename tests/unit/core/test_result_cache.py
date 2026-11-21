@@ -266,3 +266,60 @@ def test_analyze_text_misses_cache_after_model_generation_change() -> None:
     result_cache.notify_model_generation_change()
     openmed.analyze_text("History of asthma.", **kwargs)
     assert loader.create_calls == 2
+
+
+def test_scoped_cache_withdrawal_uses_confirmed_revision_and_isolates_subjects():
+    import json
+
+    from openmed.compliance.withdrawal import ParticipantCode, WithdrawalCoordinator
+
+    a, b = "hmac-sha256:" + "a" * 64, "sha256:" + "b" * 64
+    cache = result_cache.ResultCache(4)
+    cache.set("private-key", "private-untagged")
+    cache.set("private-key", "private-result-a", subject_scope_fingerprint=a)
+    cache.set("private-key", "private-result-b", subject_scope_fingerprint=b)
+    withdrawal = WithdrawalCoordinator({ParticipantCode.RESULT_CACHE: cache})
+    initial = withdrawal.plan(a)
+    cache.set("private-key", "private-new", subject_scope_fingerprint=a)
+    with pytest.raises(ValueError, match="confirmation"):
+        withdrawal.withdraw(a, confirmation=initial.confirmation_token)
+    epoch = cache.withdrawal_epoch
+    plan = withdrawal.plan(a)
+    receipt = withdrawal.withdraw(a, confirmation=plan.confirmation_token)
+    assert receipt.state == "success"
+    assert (
+        receipt.participants[0].applied == receipt.participants[0].unattributable == 1
+    )
+    assert "private" not in json.dumps(receipt.to_dict())
+    cache.set(
+        "inflight-key", "private-old", subject_scope_fingerprint=a, expected_epoch=epoch
+    )
+    assert cache.get("private-key", subject_scope_fingerprint=a) is None
+    assert cache.get("inflight-key", subject_scope_fingerprint=a) is None
+    assert cache.get("private-key", subject_scope_fingerprint=b) == "private-result-b"
+    assert cache.get("private-key") == "private-untagged"
+    cache.set("new", 1, subject_scope_fingerprint=a)
+    cache.set("next", 2)
+    cache.set("another", 3)
+    assert cache.plan(b).count == 0
+    cache.clear()
+    assert cache.plan(a).count == cache.plan(a).unattributable_count == 0
+
+
+def test_extract_pii_cache_subject_isolation(monkeypatch):
+    reset_cache()
+    monkeypatch.setattr(
+        pii,
+        "_extract_pii_batch",
+        lambda texts, **kwargs: [PredictionResult(texts[0], [], "fixture", "time")],
+    )
+    args = {"cache_results": True, "model_name": "test"}
+    scope = "sha256:" + "c" * 64
+    first = pii.extract_pii("synthetic", subject_scope_fingerprint=scope, **args)
+    assert (
+        pii.extract_pii("synthetic", subject_scope_fingerprint=scope, **args) is first
+    )
+    assert pii.extract_pii("synthetic", **args) is not first
+    assert result_cache.get_result_cache().plan(scope).count == 1
+    with pytest.raises(ValueError, match="^invalid subject scope fingerprint$"):
+        pii.extract_pii("synthetic", subject_scope_fingerprint="patient-name", **args)

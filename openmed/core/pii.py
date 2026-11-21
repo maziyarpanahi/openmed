@@ -1355,6 +1355,7 @@ def extract_pii(
     lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
     budget: Optional[RequestBudget] = None,
+    subject_scope_fingerprint: Optional[str] = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -1410,6 +1411,7 @@ def extract_pii(
             Latin-script Indian given/family-name allow/deny bridge.
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
+        subject_scope_fingerprint: Optional opaque subject digest for targeted cache withdrawal.
         max_cache_entries: Maximum number of cached results.
         budget: Optional per-request wall-time and input-character budget.
             ``None`` means unlimited. Deadline checks are cooperative, and an
@@ -1467,7 +1469,10 @@ def extract_pii(
             params["budget"] = resolved_budget
         cache_key = make_cache_key("extract_pii", params)
         cache = get_result_cache(max_entries=max_cache_entries)
-        final_result = cache.get(cache_key)
+        cache_epoch = cache.withdrawal_epoch
+        final_result = cache.get(
+            cache_key, subject_scope_fingerprint=subject_scope_fingerprint
+        )
         if final_result is not None:
             return final_result
     runtime_kwargs = {}
@@ -1497,7 +1502,12 @@ def extract_pii(
         **runtime_kwargs,
     )[0]
     if cache_results:
-        cache.set(cache_key, final_result)
+        cache.set(
+            cache_key,
+            final_result,
+            subject_scope_fingerprint=subject_scope_fingerprint,
+            expected_epoch=cache_epoch,
+        )
     return final_result
 
 
@@ -2600,6 +2610,7 @@ def deidentify(
     cache_results: bool = False,
     max_cache_entries: int = 128,
     budget: Optional[RequestBudget] = None,
+    subject_scope_fingerprint: Optional[str] = None,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -2704,6 +2715,7 @@ def deidentify(
             Fresh calls use separate private HMAC keys. For stable hashes across
             runs, use a Pipeline with an explicit private hmac_secret.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        subject_scope_fingerprint: Optional opaque subject digest for targeted cache withdrawal.
         max_cache_entries: Maximum number of cached results.
         budget: Optional per-request wall-time and input-character budget.
             ``None`` means unlimited. Deadline checks are cooperative, and an
@@ -2778,7 +2790,10 @@ def deidentify(
             params["budget"] = resolved_budget
         cache_key = make_cache_key("deidentify", params)
         cache = get_result_cache(max_entries=max_cache_entries)
-        final_result = cache.get(cache_key)
+        cache_epoch = cache.withdrawal_epoch
+        final_result = cache.get(
+            cache_key, subject_scope_fingerprint=subject_scope_fingerprint
+        )
         if final_result is not None:
             return final_result
     from .pipeline import Pipeline
@@ -2838,7 +2853,12 @@ def deidentify(
     else:
         final_result = result.deidentification_result
     if cache_results:
-        cache.set(cache_key, final_result)
+        cache.set(
+            cache_key,
+            final_result,
+            subject_scope_fingerprint=subject_scope_fingerprint,
+            expected_epoch=cache_epoch,
+        )
     return final_result
 
 
