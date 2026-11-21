@@ -28,6 +28,8 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
         },
         {
             "repo_id": "OpenMed/onnx",
+            "regulatory_tier": "assistive_review",
+            "capability": "analyze_text",
             "formats": ["pytorch", "onnx", "onnx-int8"],
             "tier": "tiny",
             "param_count": 33_000_000,
@@ -69,6 +71,8 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
     assert catalog_rows == [
         {
             "repo_id": "OpenMed/onnx",
+            "regulatory_tier": "assistive_review",
+            "capability": "analyze_text",
             "formats": ["onnx", "onnx-int8"],
             "tier": "tiny",
             "param_count": 33_000_000,
@@ -78,6 +82,8 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
         },
         {
             "repo_id": "OpenMed/tflite",
+            "regulatory_tier": None,
+            "capability": None,
             "formats": ["tflite-int8"],
             "tier": "base",
             "param_count": 125_000_000,

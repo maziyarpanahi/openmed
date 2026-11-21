@@ -607,3 +607,84 @@ def _training_provenance_fixture(reproducibility_hash: str):
         "reproducibility_hash": reproducibility_hash,
         "rng_seeds": {"numpy": 21, "python": 13, "torch": 34},
     }
+
+
+def test_regulatory_fields_round_trip_through_both_readers(tmp_path):
+    from openmed.core.intended_use import RegulatoryTier
+    from openmed.core.manifest import load_manifest_rows
+
+    for fields, expected in [
+        ({}, "unknown"),
+        (
+            {"regulatory_tier": "non_clinical", "capability": "deidentify"},
+            "non_clinical",
+        ),
+        ({"capability": "ecg"}, "unknown"),
+    ]:
+        row = _manifest_row_fixture(**fields)
+        manifest = tmp_path / "models.jsonl"
+        manifest.write_text(json.dumps(row) + "\n")
+        assert validate_manifest_row(row, 1) == []
+        assert (
+            load_manifest_rows(manifest)
+            == model_registry.load_manifest_rows(manifest)
+            == [row]
+        )
+        info = model_registry._model_info_from_row(row)
+        assert info.capability == fields.get("capability")
+        assert info.regulatory_tier == expected
+        effective = (
+            RegulatoryTier.RESTRICTED
+            if expected == "unknown"
+            else RegulatoryTier(expected)
+        )
+        assert info.regulatory_obligations == effective.obligations
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("capability", "openmed.deidentify"),
+        ("capability", []),
+        ("capability", None),
+        ("regulatory_tier", "unknown"),
+        ("regulatory_tier", {}),
+        ("regulatory_tier", None),
+    ],
+)
+def test_invalid_regulatory_metadata_is_rejected_by_both_readers(
+    tmp_path, field, value
+):
+    from openmed.core.manifest import ManifestRollbackError, load_manifest_rows
+
+    row = _manifest_row_fixture(**{field: value})
+    errors = validate_manifest_row(row, 7)
+    assert len(errors) == 1 and field in str(errors[0])
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(json.dumps(row) + "\n")
+    with pytest.raises(ManifestRollbackError, match=field):
+        load_manifest_rows(manifest)
+    with pytest.raises(ValueError, match=field):
+        model_registry.load_manifest_rows(manifest)
+
+
+def test_refresh_preserves_intended_use_only_for_same_model_and_task(tmp_path):
+    row = _manifest_row_fixture(regulatory_tier="non_clinical", capability="deidentify")
+    snapshot = tmp_path / "models.jsonl"
+    generate_manifest.write_jsonl([row], snapshot)
+    refreshed = {
+        key: val
+        for key, val in row.items()
+        if key not in {"regulatory_tier", "capability"}
+    }
+    derived = {**refreshed, "repo_id": "OpenMed/derived", "base_model": row["repo_id"]}
+    kept, changed, derivative = generate_manifest.preserve_existing_enrichment(
+        [refreshed, {**refreshed, "task": "other"}, derived], snapshot
+    )
+    assert (
+        kept["capability"] == "deidentify" and kept["regulatory_tier"] == "non_clinical"
+    )
+    assert all(
+        "capability" not in entry and "regulatory_tier" not in entry
+        for entry in (changed, derivative)
+    )

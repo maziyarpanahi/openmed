@@ -17,6 +17,7 @@ from openmed.core.baseline import (
     baseline_key,
     load_baseline_store,
 )
+from openmed.core.manifest_schema import validate_intended_use_fields
 from openmed.core.model_card import render_model_card
 from openmed.core.model_registry import MANIFEST_PATH
 
@@ -75,6 +76,9 @@ def load_manifest_rows(path: str | Path = MANIFEST_PATH) -> list[dict[str, Any]]
                 raise ManifestRollbackError(
                     f"manifest row {line_number} must be a JSON object"
                 )
+            errors = validate_intended_use_fields(row, line_number)
+            if errors:
+                raise ManifestRollbackError(str(errors[0]))
             rows.append(row)
 
     if not rows:
