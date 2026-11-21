@@ -476,3 +476,20 @@ extraction workflow. The specialty currently has no dedicated Python entry point
 The `languages` code `und` leaves language support unspecified and `zxx` denotes
 language-independent waveform input. Each declaration lists excluded uses, required
 human oversight and the obligations attached to its tier.
+
+## Displaying crisis resources
+
+Use `CrisisRouting` from `openmed.clinical.crisis_routing` with an explicit
+boolean signal supplied by the host. For example,
+`CrisisRouting().route(capability="mental_health", locale="en-AU", signal=True)`
+returns the mandatory local emergency notice and source-attributed resources.
+Render the returned text even when the list is empty. The kit performs no
+language detection, geolocation, navigation, messaging or phone calls.
+
+The local table at `openmed/clinical/data/crisis_resources.json` records a
+source URL and verification date for each resource. Pass a local file of the
+same shape via `override_file` to replace entries for specified locales.
+Lookup tries the exact tag, then language-region and language-script for a
+three-part tag, then an explicit language-only entry. Unmatched locales get
+the generic message. The router refuses suppression for required or unknown
+capabilities when a signal is present.

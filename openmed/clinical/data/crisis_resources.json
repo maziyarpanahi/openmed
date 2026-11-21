@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "en-AU": [
+      {
+        "id": "healthdirect_emergency_departments",
+        "label": "Healthdirect emergency department information",
+        "url": "https://www.healthdirect.gov.au/healthcare-and-services/emergency-and-urgent-care/hospital-emergency-departments",
+        "source_url": "https://www.healthdirect.gov.au/healthcare-and-services/emergency-and-urgent-care/hospital-emergency-departments",
+        "verified_on": "2026-11-21"
+      }
+    ],
+    "en-GB": [
+      {
+        "id": "nhs_emergency_departments",
+        "label": "NHS accident and emergency information",
+        "url": "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-go-to-ae/",
+        "source_url": "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-go-to-ae/",
+        "verified_on": "2026-11-21"
+      }
+    ]
+  }
+}
