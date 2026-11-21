@@ -1,5 +1,10 @@
 package com.openmed.openmedkit.decision
 
+import com.openmed.openmedkit.safety.ClinicianMode
+import com.openmed.openmedkit.safety.ClinicianModeRequired
+import com.openmed.openmedkit.safety.ClinicianPurpose
+import com.openmed.openmedkit.safety.OpenMedDisclaimer
+import java.time.Instant
 import com.openmed.openmedkit.onnx.TensorElementType
 import com.openmed.openmedkit.onnx.TokenClassificationSession
 import com.openmed.openmedkit.onnx.TokenInputTensor
@@ -28,6 +33,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * ONNX Runtime encoder adapter and the on-device decision runtime.
  */
 class DecisionRuntimeParityTest {
+    private val review = ClinicianMode().apply {
+        enable(ClinicianPurpose.QUALITY_ASSURANCE, OpenMedDisclaimer.forTier("restricted").acknowledge(Instant.EPOCH))
+    }
+
     private val corpus: JsonObject by lazy {
         val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream(FIXTURE)) {
             "shared $FIXTURE was not synced into Android test resources"
@@ -73,7 +82,8 @@ class DecisionRuntimeParityTest {
                 calibrationProfiles = profiles(row["calibration_profiles"]),
             )
 
-            val result = runtime.decide(row["request"]!!.toString())
+            assertFailsWith<ClinicianModeRequired> { runtime.decide(row["request"]!!.toString()) }
+            val result = runtime.decide(row["request"]!!.toString(), review)
             val expected = row.obj("expected")
             assertClose(result.toJson(), expected["result"]!!, scoreTolerance, id)
             assertFalse(result.autonomousAction, id)
@@ -150,7 +160,7 @@ class DecisionRuntimeParityTest {
             listOf("urgent", "routine"),
             timeoutMs = 100,
         )
-        val result = runtime.decide(request)
+        val result = runtime.decide(request, review)
         assertEquals(DecisionState.FAILURE, result.state)
         assertEquals("backend_timeout", result.code)
         assertTrue(result.optionScores.isEmpty())

@@ -6,6 +6,8 @@ import com.openmed.openmedkit.artifact.ArtifactAcquisitionRequest
 import com.openmed.openmedkit.artifact.ArtifactAcquisitionResult
 import com.openmed.openmedkit.artifact.ArtifactCacheState
 import com.openmed.openmedkit.artifact.ArtifactRef
+import com.openmed.openmedkit.catalog.ModelCatalogEntry
+import com.openmed.openmedkit.safety.ClinicianMode
 import com.openmed.openmedkit.cache.ModelCache
 import com.openmed.openmedkit.download.HttpHuggingFaceModelClient
 import com.openmed.openmedkit.download.HuggingFaceModelClient
@@ -68,6 +70,20 @@ class OpenMedKit(
         merger = merger,
         deidentifyEngine = deidentifyEngine,
     )
+
+    private var checkModelAccess: (() -> Unit)? = null
+
+    /** Bind a catalog-backed classifier to its declared tier and a host-owned mode. */
+    constructor(
+        classifier: OnnxTokenClassifier,
+        entry: ModelCatalogEntry,
+        clinicianMode: ClinicianMode = ClinicianMode(),
+    ) : this(classifier) {
+        checkModelAccess = {
+            clinicianMode.requireTier(entry.regulatoryTier)
+            entry.capability?.let { clinicianMode.requireCapability(it) }
+        }
+    }
 
     private val gate = LeaseGate { classifier.close() }
 
@@ -252,7 +268,10 @@ class OpenMedKit(
         onClosed = {
             throw OpenMedRuntimeException(OpenMedRuntimeFailureReason.RUNTIME_CLOSED)
         },
-        block = block,
+        block = {
+            checkModelAccess?.invoke()
+            block()
+        },
     )
 
     private suspend fun checkpoint() {
