@@ -193,3 +193,14 @@ python scripts/release/orchestrate.py audit \
 
 Publication is an explicit local operation and follows the [manual Hugging Face
 publication policy](../security/hf-token-policy.md).
+
+### Planning a 4.3 LTS backport
+
+In a full local clone with the source commits, maintenance branch and 4.3
+tags, run `python scripts/release/backport.py --target release/4.3 --pr 123`
+or pass commit IDs in pick order. The helper reads the merged PR's
+`backport-4.3` label, simulates the picks in a temporary clone, checks commit
+attribution and the Fixed/Security changelog entries, and compares the
+candidate's Python API with the latest reachable stable 4.3 tag. To apply a
+successful plan locally, check out the clean target branch and add `--apply`.
+Each commit carries its source SHA in the cherry-pick trailer.
