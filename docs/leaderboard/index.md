@@ -45,3 +45,7 @@ with the latest BenchmarkReport for each family, tier, and format.
 | OpenMed | `ZeroShot` | `XLarge` | `pytorch` | 13 | n/a | `n/a` | `n/a` | `n/a` |
 | SHIELD | `declared competitor` | `n/a` | `n/a` | n/a | n/a | n/a | n/a | `no BenchmarkReport source` |
 | Declared competitors | `declared competitor` | `n/a` | `n/a` | n/a | n/a | n/a | n/a | `no BenchmarkReport source` |
+
+## Credentialed G1a recall
+
+No verified certifications are available.
