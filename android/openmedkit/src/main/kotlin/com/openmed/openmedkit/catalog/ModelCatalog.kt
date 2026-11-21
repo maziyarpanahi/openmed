@@ -3,6 +3,7 @@ package com.openmed.openmedkit.catalog
 import android.content.Context
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -14,7 +15,7 @@ import java.io.InputStreamReader
 /**
  * Manifest-backed catalog entry for Android-runnable OpenMed models.
  */
-data class ModelCatalogEntry(
+data class ModelCatalogEntry @JvmOverloads constructor(
     val repoId: String,
     val formats: List<String>,
     val tier: String?,
@@ -22,7 +23,21 @@ data class ModelCatalogEntry(
     val languages: List<String>,
     val license: String?,
     val reproducibilityHash: String,
-)
+    val regulatoryTier: String? = null,
+    val capability: String? = null,
+) {
+    /** Safeguards required for this row, including forward-compatible tiers. */
+    val regulatoryObligations: Set<String>
+        get() = when (regulatoryTier) {
+            "non_clinical" -> emptySet()
+            "informational" -> setOf("notice_required")
+            "assistive_review" -> setOf("notice_required", "acknowledgement_required")
+            else -> setOf(
+                "notice_required", "acknowledgement_required",
+                "clinician_mode_required", "crisis_routing_required",
+            )
+        }
+}
 
 /**
  * Read-only on-device model catalog bundled with OpenMedKit.
@@ -38,12 +53,22 @@ class ModelCatalog private constructor(
         maxParamCount: Long? = null,
         language: String? = null,
         license: String? = null,
+    ): List<ModelCatalogEntry> = filter(format, tier, maxParamCount, language, license, null)
+
+    fun filter(
+        format: String? = null,
+        tier: String? = null,
+        maxParamCount: Long? = null,
+        language: String? = null,
+        license: String? = null,
+        regulatoryTier: String?,
     ): List<ModelCatalogEntry> = entries.filter { entry ->
         matchesFormat(entry, format) &&
             matchesToken(entry.tier, tier) &&
             matchesMaxParamCount(entry.paramCount, maxParamCount) &&
             matchesLanguage(entry, language) &&
-            matchesToken(entry.license, license)
+            matchesToken(entry.license, license) &&
+            matchesToken(entry.regulatoryTier, regulatoryTier)
     }
 
     fun byRepoId(repoId: String): ModelCatalogEntry? =
@@ -51,6 +76,8 @@ class ModelCatalog private constructor(
 
     companion object {
         const val ASSET_NAME = "openmed_model_catalog.jsonl"
+
+        private val regulatoryTiers = setOf("non_clinical", "informational", "assistive_review", "restricted")
 
         private val json = Json {
             ignoreUnknownKeys = true
@@ -90,6 +117,8 @@ class ModelCatalog private constructor(
                 formats = jsonObject.stringList("formats"),
                 tier = jsonObject.stringValue("tier"),
                 paramCount = jsonObject.longValue("param_count"),
+                regulatoryTier = jsonObject.optionalString("regulatory_tier")?.takeIf { it in regulatoryTiers },
+                capability = jsonObject.optionalString("capability"),
                 languages = jsonObject.stringList("languages"),
                 license = jsonObject.stringValue("license"),
                 reproducibilityHash = jsonObject.stringValue("reproducibility_hash")
@@ -101,6 +130,9 @@ class ModelCatalog private constructor(
 
         private fun JsonObject.stringValue(key: String): String? =
             this[key]?.jsonPrimitive?.contentOrNull
+
+        private fun JsonObject.optionalString(key: String): String? =
+            (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
         private fun JsonObject.longValue(key: String): Long? =
             this[key]?.jsonPrimitive?.contentOrNull?.toLongOrNull()

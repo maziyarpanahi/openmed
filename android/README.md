@@ -380,3 +380,8 @@ Repository secrets required only for Central Portal publication:
 - `ANDROID_SIGNING_KEY_PASSWORD`: passphrase for the signing key.
 - `SONATYPE_USERNAME`: Central Portal user-token username.
 - `SONATYPE_PASSWORD`: Central Portal user-token password.
+
+The offline model catalog exposes `regulatoryTier`, `capability` and
+`regulatoryObligations` on each entry. Use
+`catalog.filter(regulatoryTier = "assistive_review")` to select matching rows.
+Older entries and unknown tier codes require the full restricted safeguards.

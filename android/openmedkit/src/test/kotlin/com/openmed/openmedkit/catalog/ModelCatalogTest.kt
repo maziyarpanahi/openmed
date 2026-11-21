@@ -75,6 +75,27 @@ class ModelCatalogTest {
     }
 
     @Test
+    fun readsReviewMetadataAndAppliesStrictSafeguardsForUnknownTiers() {
+        val catalog = ModelCatalog.fromJsonLines(
+            """
+                {"repo_id":"known","reproducibility_hash":"fixture","regulatory_tier":"assistive_review","capability":"analyze_text"}
+                {"repo_id":"legacy","reproducibility_hash":"fixture"}
+                {"repo_id":"future","reproducibility_hash":"fixture","regulatory_tier":"future","capability":{"id":"future"}}
+            """.trimIndent(),
+        )
+        val known = catalog.filter(regulatoryTier = "assistive_review").single()
+        assertEquals("analyze_text", known.capability)
+        assertEquals("assistive_review", known.regulatoryTier)
+        assertEquals(setOf("notice_required", "acknowledgement_required"), known.regulatoryObligations)
+        val strict = setOf("notice_required", "acknowledgement_required", "clinician_mode_required", "crisis_routing_required")
+        assertEquals(strict, catalog.byRepoId("legacy")!!.regulatoryObligations)
+        assertEquals(strict, catalog.byRepoId("future")!!.regulatoryObligations)
+        assertEquals(null, catalog.byRepoId("legacy")!!.regulatoryTier)
+        assertEquals(null, catalog.byRepoId("future")!!.regulatoryTier)
+        assertEquals(null, catalog.byRepoId("future")!!.capability)
+    }
+
+    @Test
     fun loadsBundledCatalogAsset() {
         val catalog = ModelCatalog.load(RuntimeEnvironment.getApplication())
 

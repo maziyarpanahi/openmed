@@ -21,6 +21,8 @@ ANDROID_CATALOG_FIELDS = (
     "languages",
     "license",
     "reproducibility_hash",
+    "regulatory_tier",
+    "capability",
 )
 
 PERMISSIVE_LICENSES = {
@@ -102,6 +104,8 @@ def build_catalog_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
                 "languages": [str(language) for language in row.get("languages") or []],
                 "license": str(license_name),
                 "reproducibility_hash": row.get("reproducibility_hash"),
+                "regulatory_tier": row.get("regulatory_tier"),
+                "capability": row.get("capability"),
             }
         )
 
