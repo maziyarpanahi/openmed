@@ -76,6 +76,12 @@ docker run --rm \
   --streamable-http-path /mcp
 ```
 
+The container listener above uses the deprecated non-loopback bind even though
+Docker publishes the port on host loopback. OpenMed 4.3 emits a startup warning.
+For 5.0, use stdio or bind the PHI-capable server to loopback and run an
+authenticated reverse proxy in the same network namespace. Publish only the
+proxy listener.
+
 The equivalent Compose service includes the same loopback port binding, a
 listener health check, and a persistent model cache:
 
@@ -146,6 +152,10 @@ accept the equivalent typed block:
 Client field names vary, but the command and argument sequence is the same.
 
 ## Streamable HTTP connections
+
+OpenMed 5.0 will refuse non-loopback binds for the PHI-capable server.
+For remote clients, keep the MCP listener on loopback behind an authenticated
+reverse proxy. Use the PHI-free server when only its tools are needed.
 
 Start a loopback-only server for a local URL-based client:
 

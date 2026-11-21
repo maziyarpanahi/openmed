@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import logging
 import os
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
@@ -123,6 +125,7 @@ from openmed.structured.decision import (
     DecisionRequest,
     decide,
 )
+from openmed.utils.deprecation import deprecated
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
@@ -518,6 +521,32 @@ def _current_mcp_access_token() -> Any:
     return get_access_token()
 
 
+_BIND_MIGRATION = (
+    "a loopback bind behind an authenticated reverse proxy or the PHI-free server"
+)
+
+
+def _is_loopback_bind(host: str) -> bool:
+    if host.lower().rstrip(".") == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        return address.ipv4_mapped.is_loopback
+    return address.is_loopback
+
+
+@deprecated(since="4.3", remove_in="5.0", replacement=_BIND_MIGRATION)
+def _allow_non_loopback_bind() -> None:
+    """Announce the legacy bind behavior once per HTTP server startup."""
+    logging.getLogger(__name__).warning(
+        "mcp_bind_class=non_loopback OpenMed 5.0 will refuse this bind. Use %s.",
+        _BIND_MIGRATION,
+    )
+
+
 def _structured_fastmcp(
     base_class: Any,
     injection_guard: Optional[InjectionGuard] = None,
@@ -535,6 +564,11 @@ def _structured_fastmcp(
     )
 
     class _OpenMedFastMCP(base_class):
+        async def run_streamable_http_async(self) -> None:
+            if not _is_loopback_bind(self.settings.host):
+                _allow_non_loopback_bind()
+            await super().run_streamable_http_async()
+
         async def call_tool(
             self,
             name: str,
