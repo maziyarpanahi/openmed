@@ -1375,6 +1375,28 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     compliance_sub = compliance_parser.add_subparsers(dest="compliance_command")
 
+    ai_docs = compliance_sub.add_parser(
+        "ai-act-docs", help="Render a local technical-documentation draft for review."
+    )
+    ai_docs.add_argument("--capability", required=True)
+    ai_docs.add_argument(
+        "--model", help="Select an exact model manifest repository ID."
+    )
+    ai_docs.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    for option in (
+        "manifest",
+        "benchmark",
+        "gate",
+        "evidence-pack",
+        "capa",
+        "audit",
+        "pack-key",
+        "gate-key",
+        "audit-key",
+    ):
+        ai_docs.add_argument("--" + option, type=Path)
+    ai_docs.set_defaults(handler=_handle_ai_act_docs)
+
     capa = compliance_sub.add_parser(
         "capa", help="Manage a local corrective-action ledger."
     )
@@ -4256,6 +4278,46 @@ def _audit_summary_payload(report: Any) -> dict[str, Any]:
         "action_counts": dict(sorted(action_counts.items())),
         "residual_risk": dict(report.residual_risk) if report.residual_risk else {},
     }
+
+
+def _handle_ai_act_docs(args: argparse.Namespace) -> int:
+    from openmed.compliance.ai_act_docs import build_draft, render_markdown
+
+    try:
+        draft = build_draft(
+            args.capability,
+            model=args.model,
+            manifest=args.manifest,
+            benchmark=args.benchmark,
+            gate=args.gate,
+            evidence_pack=args.evidence_pack,
+            capa=args.capa,
+            audit=args.audit,
+            pack_key=args.pack_key,
+            gate_key=args.gate_key,
+            audit_key=args.audit_key,
+        )
+        result = (
+            json.dumps(draft, ensure_ascii=False, indent=2, allow_nan=False)
+            if args.format == "json"
+            else render_markdown(draft)
+        )
+    except (
+        ValueError,
+        KeyError,
+        OSError,
+        TypeError,
+        RuntimeError,
+        AttributeError,
+        OverflowError,
+    ):
+        raise CliError(
+            "The capability or one of its evidence sources is invalid.",
+            code="invalid_documentation_evidence",
+            exit_code=EXIT_USAGE,
+        ) from None
+    print(result.rstrip())
+    return 0
 
 
 def _handle_capa(args: argparse.Namespace) -> int:
