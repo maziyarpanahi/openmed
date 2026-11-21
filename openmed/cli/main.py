@@ -605,6 +605,14 @@ def build_parser() -> argparse.ArgumentParser:
         "evidence", help="Inspect local validation evidence."
     )
     evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    build = evidence_sub.add_parser(
+        "build", help="Build an unsigned pack from local reports."
+    )
+    build.add_argument("--capability", required=True)
+    build.add_argument("--inputs", type=Path, required=True)
+    build.add_argument("--output", type=Path, required=True)
+    build.add_argument("--overwrite", action="store_true")
+    build.set_defaults(handler=_handle_evidence_build)
     verify = evidence_sub.add_parser(
         "verify", help="Verify a signed capability pack offline."
     )
@@ -3610,6 +3618,30 @@ def _handle_redact_dataset(args: argparse.Namespace) -> int:
 
     config = _load_and_apply_config(args)
     return run_from_args(args, config=config)
+
+
+def _handle_evidence_build(args: argparse.Namespace) -> int:
+    from openmed.eval.evidence_pack import EvidencePackError
+    from openmed.eval.evidence_pack.build import (
+        build_evidence_pack,
+        write_evidence_pack,
+    )
+
+    try:
+        pack = build_evidence_pack(
+            args.capability, args.inputs, generated_at=datetime.now(timezone.utc)
+        )
+        write_evidence_pack(pack, args.output, overwrite=args.overwrite)
+    except EvidencePackError as exc:
+        raise CliError(str(exc), code=str(exc), exit_code=EXIT_USAGE) from None
+    blockers = pack.lane_blockers()
+    status = "NOT_READY" if blockers else "UNSIGNED"
+    return emit(
+        args,
+        {"status": status, "blockers": list(blockers), "digest": pack.digest()},
+        human=" ".join([status, *blockers]),
+        outcome="check_failed" if blockers else "completed",
+    )
 
 
 def _handle_evidence_verify(args: argparse.Namespace) -> int:
