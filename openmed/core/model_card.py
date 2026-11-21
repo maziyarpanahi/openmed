@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from openmed.__about__ import __version__
+from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
 from openmed.core.manifest_schema import (
     DOWNLOAD_SIZE_FORMATS,
     SCRIPT_COVERAGE_TARGETS,
@@ -158,6 +159,62 @@ _NER_CAPABILITIES = (
 )
 
 
+def model_card_intended_use(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Derive card safeguards from the local reviewed registry and tier vocabulary."""
+    registry = load_intended_use_registry()
+    code = row.get("capability")
+    declaration = registry.declarations.get(code) if isinstance(code, str) else None
+    try:
+        tier = RegulatoryTier(row.get("regulatory_tier"))
+    except (TypeError, ValueError):
+        tier = None
+    effective = tier or RegulatoryTier.RESTRICTED
+    if declaration is None:
+        effective = RegulatoryTier.RESTRICTED
+    elif declaration.regulatory_tier.obligations > effective.obligations:
+        effective = declaration.regulatory_tier
+    exclusions = (
+        declaration.excluded_uses
+        if declaration
+        else sorted(
+            {
+                use
+                for item in registry.declarations.values()
+                for use in item.excluded_uses
+            }
+        )
+    )
+    return {
+        "capability": code if declaration else None,
+        "regulatory_tier": tier.value if tier else "unknown",
+        "effective_regulatory_tier": effective.value,
+        "purpose": declaration.purpose if declaration else None,
+        "intended_users": list(declaration.intended_users) if declaration else [],
+        "human_oversight": "clinician_review"
+        if effective == RegulatoryTier.RESTRICTED
+        else declaration.human_oversight,
+        "excluded_uses": list(exclusions),
+        "obligations": sorted(effective.obligations),
+    }
+
+
+def intended_use_table_rows(row: Mapping[str, Any]) -> list[str]:
+    """Render controlled intended-use fields as Markdown table rows."""
+    use = model_card_intended_use(row)
+    obligations = ", ".join(code.replace("_", " ") for code in use["obligations"])
+    exclusions = ", ".join(code.replace("_", " ") for code in use["excluded_uses"])
+    return [
+        f"| Capability | {use['capability'] or 'Undeclared'} |",
+        f"| Regulatory tier | {use['regulatory_tier']} |",
+        f"| Effective safeguards | {use['effective_regulatory_tier']} |",
+        f"| Purpose | {use['purpose'] or 'Undeclared'} |",
+        f"| Intended users | {', '.join(use['intended_users']) or 'Undeclared'} |",
+        f"| Oversight | {use['human_oversight'].replace('_', ' ')} |",
+        f"| Excluded uses | {exclusions} |",
+        f"| Obligations | {obligations or 'No tier obligations'} |",
+    ]
+
+
 def render_model_card(row: dict[str, Any]) -> str:
     """Return a README.md model card for one manifest row."""
 
@@ -213,6 +270,12 @@ def render_model_card(row: dict[str, Any]) -> str:
             f"| arXiv | {_arxiv_link(arxiv)} |",
             f"| Reproducibility hash | `{_string(row.get('reproducibility_hash'), 'Not specified')}` |",
             f"| Released | {_string(row.get('released'), 'Not specified')} |",
+            "",
+            "## Intended Use and Limitations",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            *intended_use_table_rows(row),
             "",
             "## Benchmark",
             "",
@@ -460,6 +523,10 @@ def _render_android_onnx_model_card(
             "- **Offline and air-gapped deployment** with no telemetry by default.",
             "",
             "## Intended Use and Limitations",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            *intended_use_table_rows(row),
             "",
             f"This model is intended for {capability['description']}. It does not "
             "diagnose conditions or make clinical decisions. Evaluate recall, "

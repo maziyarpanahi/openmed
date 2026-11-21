@@ -34,6 +34,19 @@ This model card is rendered from the OpenMed model manifest. Update `models.json
 | Reproducibility hash | `sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34` |
 | Released | 2026-04-14 |
 
+## Intended Use and Limitations
+
+| Field | Value |
+|---|---|
+| Capability | extract_pii |
+| Regulatory tier | non_clinical |
+| Effective safeguards | non_clinical |
+| Purpose | privacy |
+| Intended users | operator |
+| Oversight | operator review |
+| Excluded uses | autonomous action, diagnosis, emergency detection, treatment selection, triage without review |
+| Obligations | No tier obligations |
+
 ## Benchmark
 
 | Dataset | Micro F1 | Recall |
