@@ -4,9 +4,23 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from typing import Protocol
 
 from openmed.core.labels import DIRECT_IDENTIFIER, policy_label_for
-from openmed.core.schemas.span import OpenMedSpan
+
+
+class _ComparableSpan(Protocol):
+    @property
+    def doc_id(self) -> str: ...
+
+    @property
+    def canonical_label(self) -> str: ...
+
+    @property
+    def start(self) -> int: ...
+
+    @property
+    def end(self) -> int: ...
 
 
 def _overlap_count(
@@ -25,7 +39,7 @@ def _overlap_count(
 
 
 def compare_shadow_spans(
-    active: Iterable[OpenMedSpan], candidate: Iterable[OpenMedSpan]
+    active: Iterable[_ComparableSpan], candidate: Iterable[_ComparableSpan]
 ) -> dict:
     """Compare span sets over the same document using half-open offsets.
 
