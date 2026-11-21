@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- Import FHIR Bulk helpers from `openmed.interop.fhir.bulk`. The legacy
+  `openmed.interop.fhir_bulk` module warns on import starting in 4.3 (#5268).
+
 - Pass `authorization_config=` when constructing the MCP server. The
   `auth_config=` alias warns in 4.3 and is scheduled for removal in 5.0 (#5289).
 

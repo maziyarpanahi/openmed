@@ -18,7 +18,7 @@ from typing import Any
 logging.getLogger("openmed.core.models").setLevel(logging.ERROR)
 
 from openmed.clinical.exporters.fhir import to_bundle, to_operation_outcome
-from openmed.interop.fhir_bulk import deidentify_ndjson
+from openmed.interop.fhir.bulk import deidentify_ndjson
 from openmed.interop.fhir_operations import de_identify_resource
 from openmed.interop.hl7v2 import redact_hl7v2
 from openmed.multimodal import (

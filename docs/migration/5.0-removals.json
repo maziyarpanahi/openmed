@@ -136,5 +136,21 @@
     "replacement": "create_mcp_server(authorization_config=config)",
     "status": "deprecated",
     "migration_anchor": "docs/mcp-clients.md#python-authorization-configuration"
+  },
+  {
+    "id": "fhir-bulk-module",
+    "surfaces": [
+      "python"
+    ],
+    "symbols": {
+      "openmed/interop/fhir_bulk.py": [
+        "__module__"
+      ]
+    },
+    "since": "4.3",
+    "remove_in": "5.0",
+    "replacement": "openmed.interop.fhir.bulk",
+    "status": "deprecated",
+    "migration_anchor": "docs/migration.md#fhir-bulk-import-path"
   }
 ]

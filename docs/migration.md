@@ -102,7 +102,7 @@ Profiles](profiles.md).
 
 Async APIs are additive; synchronous v1 entry points remain supported.
 
-- `openmed.interop.fhir_bulk.deidentify_ndjson_async` is available since
+- `openmed.interop.fhir.bulk.deidentify_ndjson_async` is available since
   1.8.0 for FHIR Bulk NDJSON workflows.
 - `openmed.processing.advanced_ner.stream_token_classifier` is available since
   1.8.0 for asynchronous token-classification streams.
@@ -203,3 +203,13 @@ For 5.0 bind the server to loopback behind an authenticated reverse proxy,
 use stdio, or choose the PHI-free server. Docker deployments can colocate
 the proxy and the MCP server in the same network namespace.
 [Transport and container examples](mcp-clients.md#streamable-http-connections)
+
+### FHIR Bulk import path
+
+Change the import module from `openmed.interop.fhir_bulk` to
+`openmed.interop.fhir.bulk` and keep the same exported names. Importing the
+legacy module warns in 4.3 and is scheduled for removal in 5.0.
+
+```python
+from openmed.interop.fhir.bulk import deidentify_ndjson
+```

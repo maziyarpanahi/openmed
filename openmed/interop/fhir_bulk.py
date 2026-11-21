@@ -1,8 +1,10 @@
 """Backward-compatible import path for the FHIR Bulk Data gateway.
 
 The canonical implementation lives in :mod:`openmed.interop.fhir.bulk`.
-Existing integrations can continue importing ``openmed.interop.fhir_bulk``.
+The compatibility path warns from 4.3 and is scheduled for removal in 5.0.
 """
+
+from openmed.utils import deprecation as _deprecation
 
 from .fhir.bulk import (
     BULK_DATA_VERSION,
@@ -25,6 +27,14 @@ from .fhir.bulk import (
     deidentify_ndjson_async,
     deidentify_ndjson_stream,
     iter_ndjson,
+)
+
+_deprecation.deprecated_module(
+    __name__,
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.interop.fhir.bulk",
+    warn_on_import=True,
 )
 
 __all__ = [

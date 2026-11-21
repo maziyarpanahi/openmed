@@ -22,7 +22,7 @@ from openmed.clinical.exporters.fhir import (
     to_bundle,
     to_operation_outcome,
 )
-from openmed.interop.fhir_bulk import NDJSONFileSummary, deidentify_ndjson_stream
+from openmed.interop.fhir.bulk import NDJSONFileSummary, deidentify_ndjson_stream
 from openmed.interop.fhir_operations import (
     Deidentifier,
     de_identify_resource_with_manifest,

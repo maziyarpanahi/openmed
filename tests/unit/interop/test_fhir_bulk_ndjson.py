@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from openmed.interop.fhir_bulk import (
+from openmed.interop.fhir.bulk import (
     FHIRNDJSONLineError,
     deidentify_export,
     deidentify_ndjson,
