@@ -450,3 +450,22 @@ def _strings(value: object) -> list[str]:
             rows.extend(_strings(item))
         return rows
     return []
+
+
+def test_shadow_breach_rolls_back_live_candidate_and_missing_evidence_holds():
+    from openmed.core.schemas.span import OpenMedSpan
+    from openmed.eval.rollout import ShadowThresholds
+    from openmed.eval.shadow_compare import (
+        compare_shadow_spans,
+        shadow_comparison_digest,
+    )
+
+    span = OpenMedSpan("synthetic", 0, 3, "hmac-sha256:" + "0" * 64, "PERSON", "PERSON")
+    record = compare_shadow_spans([span], [])
+    args = (_gate_report(), _baseline_store(), _machine())
+    limits = ShadowThresholds(0)
+    result = decide_rollback(*args, shadow_thresholds=limits, shadow_comparison=record)
+    assert result.rolled_back and result.target == _CHAMPION
+    assert result.reasons == ("shadow_missed_direct_identifiers",)
+    assert result.audit_record.shadow_record_digest == shadow_comparison_digest(record)
+    assert decide_rollback(*args, shadow_thresholds=limits).decision == "HOLD"

@@ -41,9 +41,11 @@ import copy
 import json
 import math
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -69,6 +71,7 @@ from openmed.eval.release_gates import (
     GateReport,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.shadow_compare import shadow_comparison_digest
 
 ROLLOUT_STATE_SCHEMA_VERSION = 1
 ROLLOUT_AUDIT_SCHEMA_VERSION = 1
@@ -141,6 +144,57 @@ class GateNotReleasableError(RolloutError):
 
 class RolloutStateError(RolloutError):
     """Raised when persisted state or a gate report is malformed."""
+
+
+class ShadowHoldReason(str, Enum):
+    """Value-free reasons a caller's shadow policy cannot authorize promotion."""
+
+    MISSING = "shadow_evidence_missing"
+    MISSED_DIRECT = "shadow_missed_direct_identifiers"
+    ACTIVE_ONLY = "shadow_active_only_exceeded"
+
+
+@dataclass(frozen=True)
+class ShadowThresholds:
+    """Host-selected upper bounds on missed direct identifiers and active-only spans."""
+
+    max_missed_direct_identifiers: int
+    max_active_only: int | None = None
+
+    def __post_init__(self):
+        if (
+            type(self.max_missed_direct_identifiers) is not int
+            or self.max_missed_direct_identifiers < 0
+        ):
+            raise ValueError("invalid_shadow_threshold")
+        if self.max_active_only is not None and (
+            type(self.max_active_only) is not int or self.max_active_only < 0
+        ):
+            raise ValueError("invalid_shadow_threshold")
+
+
+def _shadow_check(
+    thresholds: ShadowThresholds | None, comparison: dict | None
+) -> tuple[ShadowHoldReason | None, str | None]:
+    digest = None if comparison is None else shadow_comparison_digest(comparison)
+    if thresholds is None:
+        return None, digest
+    if comparison is None or not comparison["by_canonical_label"]:
+        return ShadowHoldReason.MISSING, digest
+    if (
+        comparison["missed_direct_identifiers"]
+        > thresholds.max_missed_direct_identifiers
+    ):
+        return ShadowHoldReason.MISSED_DIRECT, digest
+    active_only = sum(
+        row["active_only"] for row in comparison["by_policy_label"].values()
+    )
+    if (
+        thresholds.max_active_only is not None
+        and active_only > thresholds.max_active_only
+    ):
+        return ShadowHoldReason.ACTIVE_ONLY, digest
+    return None, digest
 
 
 Clock = Callable[[], datetime]
@@ -271,6 +325,7 @@ class RolloutAuditRecord:
     baseline_key: str | None = None
     rollback_latency_seconds: float | None = None
     schema_version: int = ROLLOUT_AUDIT_SCHEMA_VERSION
+    shadow_record_digest: str | None = None
 
     @property
     def key(self) -> str:
@@ -282,6 +337,11 @@ class RolloutAuditRecord:
         """Return a deterministic, JSON-compatible audit record."""
 
         return {
+            **(
+                {"shadow_record_digest": self.shadow_record_digest}
+                if self.shadow_record_digest is not None
+                else {}
+            ),
             "baseline_key": self.baseline_key,
             "family": self.family,
             "format": self.format,
@@ -332,7 +392,14 @@ class RolloutAuditRecord:
             raise RolloutStateError(
                 "rollout audit latency must be finite and non-negative"
             )
+        digest = data.get("shadow_record_digest")
+        if digest is not None and (
+            not isinstance(digest, str)
+            or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest)
+        ):
+            raise RolloutStateError("invalid_shadow_digest")
         record = cls(
+            shadow_record_digest=digest,
             family=str(data.get("family", "")),
             tier=str(data.get("tier", "")),
             format=str(data.get("format", "")),
@@ -647,6 +714,8 @@ class RolloutStateMachine:
         gate_report: GateReport,
         *,
         target: str | None = None,
+        shadow_comparison: dict | None = None,
+        shadow_thresholds: ShadowThresholds | None = None,
         now: datetime | None = None,
     ) -> PhaseState:
         """Promote a key to the next phase, guarded by ``gate_report``.
@@ -666,6 +735,26 @@ class RolloutStateMachine:
                 f"cannot advance {baseline_key(family, tier, format)} from "
                 f"terminal phase {from_phase!r}"
             )
+        reason, digest = _shadow_check(shadow_thresholds, shadow_comparison)
+        if reason:
+            self._require_releasable(family, tier, format, gate_report)
+            current = self.entries[baseline_key(family, tier, format)]
+            self.record_audit(
+                RolloutAuditRecord(
+                    family=family,
+                    tier=tier,
+                    format=format,
+                    from_phase=from_phase,
+                    to_phase=from_phase,
+                    recorded_at=_coerce_utc(now or self.clock()),
+                    gate_status="red",
+                    outcome=reason.value,
+                    gate_report_hash=gate_report.repro_hash,
+                    baseline_key=current.key,
+                    shadow_record_digest=digest,
+                )
+            )
+            return current
         return self.transition(
             family,
             tier,
@@ -673,6 +762,7 @@ class RolloutStateMachine:
             to_phase,
             gate_report=gate_report,
             target=target,
+            shadow_record_digest=digest,
             now=now,
         )
 
@@ -686,6 +776,7 @@ class RolloutStateMachine:
         detected_at: datetime | None = None,
         pointer_flipped_at: datetime | None = None,
         outcome: str = "rolled_back",
+        shadow_record_digest: str | None = None,
         now: datetime | None = None,
     ) -> PhaseState:
         """Roll a live ``CANARY`` or ``STABLE`` key back to its last green target.
@@ -704,6 +795,7 @@ class RolloutStateMachine:
             detected_at=detected_at,
             pointer_flipped_at=pointer_flipped_at,
             outcome=outcome,
+            shadow_record_digest=shadow_record_digest,
             now=now,
         )
 
@@ -720,6 +812,7 @@ class RolloutStateMachine:
         pointer_flipped_at: datetime | None = None,
         outcome: str | None = None,
         now: datetime | None = None,
+        shadow_record_digest: str | None = None,
     ) -> PhaseState:
         """Apply a single validated transition and return the new state.
 
@@ -729,6 +822,11 @@ class RolloutStateMachine:
         transition leaves the persisted state unchanged.
         """
 
+        if shadow_record_digest is not None and (
+            not isinstance(shadow_record_digest, str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", shadow_record_digest)
+        ):
+            raise RolloutStateError("invalid_shadow_digest")
         if to_phase not in PHASES:
             raise RolloutStateError(f"unknown target phase: {to_phase!r}")
 
@@ -787,7 +885,9 @@ class RolloutStateMachine:
             )
         gate_status = (
             "green"
-            if gate_report is not None and gate_report.decision == RELEASABLE
+            if gate_report is not None
+            and gate_report.decision == RELEASABLE
+            and outcome not in tuple(reason.value for reason in ShadowHoldReason)
             else "red"
         )
         self.audit_records.append(
@@ -807,6 +907,7 @@ class RolloutStateMachine:
                 ),
                 baseline_key=key,
                 rollback_latency_seconds=latency,
+                shadow_record_digest=shadow_record_digest,
             )
         )
         return new_state
@@ -982,6 +1083,8 @@ class RolloutCoordinator:
         gate_report: GateReport,
         *,
         now: datetime | None = None,
+        shadow_thresholds: ShadowThresholds | None = None,
+        shadow_comparison: dict | None = None,
     ) -> GateApplication:
         """Apply one phase gate, promoting or rolling back atomically."""
 
@@ -1002,28 +1105,43 @@ class RolloutCoordinator:
             now=detected_at,
         )
 
-        if state.phase == PHASE_SHADOW:
-            if gate_report.decision != RELEASABLE or expired:
-                outcome = (
+        reason, digest = _shadow_check(shadow_thresholds, shadow_comparison)
+        hold_shadow = state.phase == PHASE_SHADOW and (
+            gate_report.decision != RELEASABLE or expired or reason
+        )
+        hold_canary = (
+            state.phase == PHASE_CANARY
+            and reason == ShadowHoldReason.MISSING
+            and gate_report.decision == RELEASABLE
+            and not expired
+        )
+        if hold_shadow or hold_canary:
+            outcome = (
+                reason.value
+                if reason
+                else (
                     "shadow_dwell_expired" if expired else "shadow_gate_not_releasable"
                 )
-                record = RolloutAuditRecord(
-                    family=family,
-                    tier=tier,
-                    format=format,
-                    from_phase=PHASE_SHADOW,
-                    to_phase=PHASE_SHADOW,
-                    recorded_at=detected_at,
-                    gate_status="red",
-                    outcome=outcome,
-                    pointer_name="latest",
-                    pointer_target=state.latest_pointer,
-                    gate_report_hash=gate_report.repro_hash,
-                    baseline_key=state.key,
-                )
-                self.machine.record_audit(record)
-                return GateApplication(action="hold", state=state, audit_record=record)
+            )
+            record = RolloutAuditRecord(
+                family=family,
+                tier=tier,
+                format=format,
+                from_phase=state.phase,
+                to_phase=state.phase,
+                recorded_at=detected_at,
+                gate_status="red",
+                outcome=outcome,
+                pointer_name="latest",
+                pointer_target=state.latest_pointer,
+                gate_report_hash=gate_report.repro_hash,
+                baseline_key=state.key,
+                shadow_record_digest=digest,
+            )
+            self.machine.record_audit(record)
+            return GateApplication(action="hold", state=state, audit_record=record)
 
+        if state.phase == PHASE_SHADOW:
             self._require_rollout_targets(state)
             if self.canary_action is not None:
                 pointer_target = self.canary_action(state, gate_report)
@@ -1032,11 +1150,13 @@ class RolloutCoordinator:
                     state.target,
                     pointer_name="canary",
                 )
-            advanced = self.machine.advance(
+            advanced = self.machine.transition(
                 family,
                 tier,
                 format,
-                gate_report,
+                PHASE_CANARY,
+                gate_report=gate_report,
+                shadow_record_digest=digest,
                 now=detected_at,
             )
             return GateApplication(
@@ -1046,12 +1166,14 @@ class RolloutCoordinator:
             )
 
         if state.phase == PHASE_CANARY:
-            if gate_report.decision != RELEASABLE or expired:
+            if gate_report.decision != RELEASABLE or expired or reason:
                 return self._rollback(
                     state,
                     gate_report,
                     detected_at=detected_at,
                     expired=expired,
+                    shadow_reason=reason,
+                    shadow_digest=digest,
                 )
 
             self._require_rollout_targets(state)
@@ -1065,11 +1187,13 @@ class RolloutCoordinator:
                 state.target,
                 pointer_name="latest",
             )
-            advanced = self.machine.advance(
+            advanced = self.machine.transition(
                 family,
                 tier,
                 format,
-                gate_report,
+                PHASE_STABLE,
+                gate_report=gate_report,
+                shadow_record_digest=digest,
                 now=detected_at,
             )
             return GateApplication(
@@ -1089,6 +1213,8 @@ class RolloutCoordinator:
         *,
         detected_at: datetime,
         expired: bool,
+        shadow_reason: ShadowHoldReason | None = None,
+        shadow_digest: str | None = None,
     ) -> GateApplication:
         if self.rollback_action is None:
             raise RolloutStateError(
@@ -1110,6 +1236,8 @@ class RolloutCoordinator:
         within_window = window is None or latency <= float(window)
         if expired:
             outcome = "canary_dwell_expired_rollback"
+        elif shadow_reason is not None:
+            outcome = shadow_reason.value
         elif within_window:
             outcome = "canary_gate_regression_rollback"
         else:
@@ -1123,6 +1251,7 @@ class RolloutCoordinator:
             pointer_flipped_at=pointer_flipped_at,
             outcome=outcome,
             now=pointer_flipped_at,
+            shadow_record_digest=shadow_digest,
         )
         return GateApplication(
             action="rolled_back" if within_window else "rolled_back_late",
@@ -1265,11 +1394,17 @@ class RollbackAuditRecord:
     regressions: tuple[MetricRegression, ...] = ()
     compared_metrics: tuple[str, ...] = ()
     schema_version: int = ROLLBACK_AUDIT_SCHEMA_VERSION
+    shadow_record_digest: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-ready payload."""
 
         return {
+            **(
+                {"shadow_record_digest": self.shadow_record_digest}
+                if self.shadow_record_digest is not None
+                else {}
+            ),
             "baseline_key": self.baseline_key,
             "compared_metrics": list(self.compared_metrics),
             "decision": self.decision,
@@ -1321,6 +1456,8 @@ def decide_rollback(
     rollout_state: "RolloutStateMachine | PhaseState | None" = None,
     *,
     baseline_path: str | Path = BASELINE_PATH,
+    shadow_thresholds: ShadowThresholds | None = None,
+    shadow_comparison: dict | None = None,
 ) -> RollbackDecision:
     """Decide whether a candidate holds, advances, or rolls back.
 
@@ -1383,6 +1520,7 @@ def decide_rollback(
     regressions = _monitored_regressions(diff)
     compared = tuple(sorted(diff.metrics))
 
+    shadow_reason, shadow_digest = _shadow_check(shadow_thresholds, shadow_comparison)
     reasons: list[str] = []
     target: str | None = None
     if regressions:
@@ -1394,6 +1532,17 @@ def decide_rollback(
                 f"(baseline={row.baseline:.6g} current={row.current:.6g}) "
                 f"beyond tolerance {row.tolerance:.6g}"
             )
+    elif shadow_reason:
+        if (
+            shadow_reason != ShadowHoldReason.MISSING
+            and state
+            and state.phase in (PHASE_CANARY, PHASE_STABLE)
+        ):
+            decision = DECISION_ROLLBACK
+            target = _require_last_green(state, report_key)
+        else:
+            decision = DECISION_HOLD
+        reasons.append(shadow_reason.value)
     elif not compared:
         decision = DECISION_HOLD
         reasons.append(
@@ -1422,6 +1571,7 @@ def decide_rollback(
         target=target,
         regressions=tuple(regressions),
         compared_metrics=compared,
+        shadow_record_digest=shadow_digest,
     )
     return RollbackDecision(
         decision=decision,
@@ -1553,6 +1703,8 @@ __all__ = [
     "RolloutStateError",
     "RolloutStateMachine",
     "ShadowSuiteComparison",
+    "ShadowThresholds",
+    "ShadowHoldReason",
     "decide_rollback",
     "run_shadow_comparison",
 ]

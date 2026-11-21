@@ -193,3 +193,18 @@ python scripts/release/orchestrate.py audit \
 
 Publication is an explicit local operation and follows the [manual Hugging Face
 publication policy](../security/hf-token-policy.md).
+
+### Shadow comparisons during model rollout
+
+Use the aggregate returned by `compare_shadow_spans(active, candidate)` as the
+`shadow_comparison` artifact for G1a, G2 and G7. Pass it to `advance`,
+`RolloutCoordinator.apply_gate` or `decide_rollback` together with
+`ShadowThresholds(max_missed_direct_identifiers=limit)`. The deploying team
+chooses the limit and can also cap total active-only spans with
+`max_active_only`. An absent limit leaves the existing rollout policy in force.
+
+With a shadow policy enabled, missing evidence holds promotion. A measured
+breach holds a shadow candidate, and the rollback decision for a live canary
+or stable candidate selects its last green version. Audit records bind the
+validated comparison digest. Keep the aggregate and the chosen limits with
+the release inputs to replay the decision.

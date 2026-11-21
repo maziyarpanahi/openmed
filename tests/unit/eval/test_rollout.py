@@ -785,3 +785,77 @@ def test_state_and_audit_saves_are_atomic_on_write_failure(
         "rollout_audit.json",
         "rollout_state.json",
     ]
+
+
+def test_shadow_thresholds_hold_promote_replay_and_bundle(tmp_path):
+    import json
+
+    from openmed.core.schemas.span import OpenMedSpan
+    from openmed.eval.rollout import ShadowThresholds
+    from openmed.eval.shadow_compare import (
+        compare_shadow_spans,
+        shadow_comparison_digest,
+    )
+
+    span = OpenMedSpan(
+        "private-marker", 0, 2, "hmac-sha256:" + "a" * 64, "PERSON", "PERSON"
+    )
+    record = compare_shadow_spans([span], [])
+    limits = ShadowThresholds(max_missed_direct_identifiers=0)
+    machine = _machine()
+    key = ("pii", "tiny", "mlx-fp")
+    report = _gate_report()
+    initial = machine.seed(*key, target="v3", last_green="v2")
+    assert (
+        machine.advance(
+            *key, report, shadow_thresholds=limits, shadow_comparison=record
+        )
+        == initial
+    )
+    audit = machine.audit_records[-1]
+    assert audit.outcome == "shadow_missed_direct_identifiers"
+    assert audit.shadow_record_digest == shadow_comparison_digest(record)
+    assert "private-marker" not in json.dumps(machine.to_dict())
+    replay = RolloutStateMachine.from_dict(machine.to_dict(), clock=lambda: _EPOCH)
+    assert replay.to_dict() == machine.to_dict()
+    coordinator = RolloutCoordinator(
+        replay, canary_action=lambda *_: pytest.fail("unexpected promotion")
+    )
+    assert (
+        coordinator.apply_gate(*key, report, shadow_thresholds=limits).action == "hold"
+    )
+    assert (
+        replay.advance(
+            *key,
+            report,
+            shadow_thresholds=ShadowThresholds(1),
+            shadow_comparison=record,
+        ).phase
+        == PHASE_CANARY
+    )
+    assert replay.audit_records[-1].shadow_record_digest == audit.shadow_record_digest
+
+    coordinator.rollback_action = lambda state, _: state.last_green
+    reversed_gate = coordinator.apply_gate(
+        *key, report, shadow_thresholds=limits, shadow_comparison=record
+    )
+    assert reversed_gate.action == "rolled_back"
+    assert reversed_gate.audit_record.outcome == "shadow_missed_direct_identifiers"
+    assert reversed_gate.audit_record.gate_status == "red"
+
+    path = tmp_path / "aggregate.json"
+    path.write_text(json.dumps(record))
+    bundle = bundle_gate_evidence(
+        report, tmp_path / "out", extra_artifacts={"shadow_comparison": path}
+    )
+    artifact = next(
+        a
+        for a in bundle.manifest["artifacts"]
+        if a["artifact_id"] == "shadow_comparison"
+    )
+    assert artifact["shadow_record_digest"] == audit.shadow_record_digest
+    path.write_text(json.dumps({**record, "missed_direct_identifiers": 0}))
+    with pytest.raises(ValueError, match="invalid_shadow_comparison"):
+        bundle_gate_evidence(
+            report, tmp_path / "invalid", extra_artifacts={"shadow_comparison": path}
+        )
