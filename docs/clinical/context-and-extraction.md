@@ -476,3 +476,9 @@ extraction workflow. The specialty currently has no dedicated Python entry point
 The `languages` code `und` leaves language support unspecified and `zxx` denotes
 language-independent waveform input. Each declaration lists excluded uses, required
 human oversight and the obligations attached to its tier.
+
+Resolve the versioned notice with `OpenMedDisclaimer.for_capability(code)` from
+`openmed.core.disclaimer`. Display its English `text` and request explicit
+acknowledgement when `requires_acknowledgement` is true. After acknowledgement,
+pass an application-supplied timezone-aware `datetime` to `acknowledge(at=...)`.
+The resulting receipt contains the notice ID, version digest and UTC instant.
