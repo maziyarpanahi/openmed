@@ -164,3 +164,97 @@ def site_validation_lane(data: dict, key: bytes | None) -> tuple[dict, list[dict
         return lane, refs
     except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
         return failure("site_validation_invalid")
+
+
+def human_factors_lane(capability: str, data: dict) -> tuple[str, dict, list[dict]]:
+    """Project a scoped use-error snapshot and a suppressed disagreement report.
+
+    Args:
+        capability: Declared capability for the measurement session.
+        data: Local aggregate inputs and canonical snapshot digest.
+    """
+    import json
+    from importlib.resources import files
+
+    from jsonschema import Draft202012Validator
+
+    from openmed.clinical.use_errors import UseErrorCode
+    from openmed.core.no_phi_telemetry import MAX_COUNTER_VALUE, MAX_SNAPSHOT_SAMPLES
+    from openmed.core.schemas import schema_fingerprint
+    from openmed.eval.reviewer_disagreement import _publish_rate
+
+    if not isinstance(data, dict) or data.get("capability") != capability:
+        raise EvidencePackError("human_factors_scope_mismatch")
+    if not data.keys() <= {
+        "capability",
+        "use_error_snapshot",
+        "use_error_snapshot_digest",
+        "reviewer_disagreement",
+    }:
+        raise EvidencePackError("invalid_human_factors_input")
+    snap, review = data.get("use_error_snapshot"), data.get("reviewer_disagreement")
+    if snap is None or review is None or data.get("use_error_snapshot_digest") is None:
+        return "unknown", {}, []
+    if (
+        not isinstance(snap, dict)
+        or set(snap) != {"schema_version", "counts"}
+        or type(snap["schema_version"]) is not int
+        or snap["schema_version"] != 1
+    ):
+        raise EvidencePackError("invalid_use_error_snapshot")
+    digest = schema_fingerprint(snap)
+    if digest != data["use_error_snapshot_digest"]:
+        raise EvidencePackError("use_error_digest_mismatch")
+    total = 0
+    seen = set()
+    if (
+        not isinstance(snap["counts"], list)
+        or len(snap["counts"]) > MAX_SNAPSHOT_SAMPLES
+    ):
+        raise EvidencePackError("invalid_use_error_snapshot")
+    for row in snap["counts"]:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"code", "capability", "tier", "count"}
+            or row["capability"] not in (capability, "clinician_mode", "notice")
+            or row["code"] not in tuple(UseErrorCode)
+            or row["tier"] not in tuple(RegulatoryTier)
+        ):
+            raise EvidencePackError("invalid_use_error_snapshot")
+        dimension = (row["code"], row["capability"], row["tier"])
+        if (
+            dimension in seen
+            or type(row["count"]) is not int
+            or not 1 <= row["count"] <= MAX_COUNTER_VALUE
+        ):
+            raise EvidencePackError("invalid_use_error_snapshot")
+        total += row["count"]
+        seen.add(dimension)
+    schema = files("openmed.core.schemas.json").joinpath(
+        "reviewer_disagreement_report.schema.json"
+    )
+    if not Draft202012Validator(json.loads(schema.read_bytes())).is_valid(review):
+        raise EvidencePackError("invalid_reviewer_disagreement")
+    refs = [
+        {"id": "use_error_snapshot", "origin": "aggregate", "digest": digest},
+        {
+            "id": "reviewer_disagreement",
+            "origin": "aggregate",
+            "digest": schema_fingerprint(review),
+        },
+    ]
+    agreement = review["agreement"]
+    if agreement["suppressed"] or not agreement["denominator"]:
+        return "unknown", {}, refs
+    n, d = agreement["numerator"], agreement["denominator"]
+    if (
+        not 0 <= n <= d
+        or _publish_rate(n, d, minimum_cell_size=review["minimum_cell_size"]).to_dict()
+        != agreement
+    ):
+        raise EvidencePackError("invalid_reviewer_disagreement")
+    return (
+        "success",
+        {"use_error_count": total, "review_disagreement_rate": (d - n) / d},
+        refs,
+    )

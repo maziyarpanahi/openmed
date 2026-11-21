@@ -181,3 +181,12 @@ The builder verifies the study's reproducibility hash and HMAC before retaining
 its acceptance outcome, aggregate rates, fixture count and hashed provenance.
 A failed study carries a failure reason. The optional lane describes the named
 local study and confers no clinical validation on other sites or populations.
+
+Restricted capability packs require a `human_factors_report` for the
+`human_factors` lane. Record use errors for the declared capability's review
+session, and supply its `capability`, `use_error_snapshot`,
+`use_error_snapshot_digest` (from `schema_fingerprint(snapshot)`) and
+`reviewer_disagreement` from `reviewer_disagreement_report(...).to_dict()`.
+Only the total use-error count, reviewer disagreement rate and aggregate
+source digests enter the pack. Missing sources and withheld or empty
+agreement denominators keep the lane unknown.
