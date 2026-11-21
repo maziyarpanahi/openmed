@@ -7,25 +7,57 @@ It never writes keys or results to disk due to PII/PHI sensitivity.
 
 import hashlib
 import json
+import re
 from collections import OrderedDict
+from dataclasses import dataclass
 from threading import RLock
+from uuid import uuid4
 
 RESULT_CACHE = None
 _CACHE_LOCK = RLock()
 _MODEL_GENERATION = 0
 
 
+@dataclass(frozen=True)
+class _SubjectKey:
+    subject: str
+    key: object
+
+
+def _scoped_key(key, fingerprint):
+    if fingerprint is None:
+        return key
+    if not isinstance(fingerprint, str) or not re.fullmatch(
+        r"(?:hmac-)?sha256:[0-9a-f]{64}", fingerprint
+    ):
+        raise ValueError("invalid subject scope fingerprint")
+    return _SubjectKey(fingerprint, key)
+
+
 class ResultCache:
+    """In-memory LRU and optional participant in coordinated subject withdrawal."""
+
     def __init__(self, max_entries):
         self.max_entries = max_entries
         self.cache = OrderedDict()
         self._lock = RLock()
+        self._instance = uuid4().hex
+        self._revision = 0
+        self._revisions = {}
+        self._withdrawal_epoch = 0
 
     def __len__(self):
         with self._lock:
             return len(self.cache)
 
-    def get(self, key):
+    @property
+    def withdrawal_epoch(self):
+        """Capture the write fence before starting a cacheable inference."""
+        with self._lock:
+            return self._withdrawal_epoch
+
+    def get(self, key, *, subject_scope_fingerprint=None):
+        key = _scoped_key(key, subject_scope_fingerprint)
         with self._lock:
             if key in self.cache:
                 self.cache.move_to_end(key)
@@ -35,17 +67,65 @@ class ResultCache:
     def clear(self):
         with self._lock:
             self.cache.clear()
+            self._revisions.clear()
+            self._withdrawal_epoch += 1
 
-    def set(self, key, result):
+    def set(self, key, result, *, subject_scope_fingerprint=None, expected_epoch=None):
+        key = _scoped_key(key, subject_scope_fingerprint)
         if self.max_entries <= 0:
             return None
 
         with self._lock:
+            if expected_epoch is not None and self._withdrawal_epoch != expected_epoch:
+                return None
             if key in self.cache:
                 self.cache.move_to_end(key)
             self.cache[key] = result
+            if subject_scope_fingerprint is not None:
+                self._revision += 1
+                self._revisions[key] = self._revision
             if len(self.cache) > self.max_entries:
-                self.cache.popitem(last=False)
+                evicted, _ = self.cache.popitem(last=False)
+                self._revisions.pop(evicted, None)
+
+    def plan(self, subject_ref_digest):
+        """Bind the selected entry revisions and count unattributable entries."""
+        from openmed.compliance.withdrawal import ParticipantPlan
+        from openmed.core.audit import stable_hash
+
+        _scoped_key(None, subject_ref_digest)
+        if subject_ref_digest is None:
+            raise ValueError("missing subject scope fingerprint")
+        with self._lock:
+            revisions = sorted(
+                revision
+                for key, revision in self._revisions.items()
+                if key.subject == subject_ref_digest
+            )
+            return ParticipantPlan(
+                count=len(revisions),
+                selection_digest=stable_hash(
+                    [self._instance, subject_ref_digest, revisions]
+                ),
+                unattributable_count=len(self.cache) - len(self._revisions),
+            )
+
+    def apply(self, subject_ref_digest, plan):
+        """Remove the confirmed selection under the cache lock."""
+        with self._lock:
+            if self.plan(subject_ref_digest) != plan:
+                raise ValueError("result cache selection changed")
+            for key in [
+                key for key in self._revisions if key.subject == subject_ref_digest
+            ]:
+                del self.cache[key]
+                del self._revisions[key]
+            self._withdrawal_epoch += 1
+            return plan.count
+
+    def verify(self, subject_ref_digest):
+        """Re-select the subject independently of the applied count."""
+        return self.plan(subject_ref_digest).count == 0
 
 
 def get_result_cache(max_entries=128):
@@ -135,6 +215,7 @@ def make_cache_key(inquiry_type, params):
         "sentence_segmenter",
         "cache_results",
         "max_cache_entries",
+        "subject_scope_fingerprint",
         "selected_model",
         "validated_text",
         "validated_model",

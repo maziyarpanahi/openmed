@@ -80,6 +80,7 @@ async def aextract_pii(
     lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
     budget: Optional[RequestBudget] = None,
+    subject_scope_fingerprint: Optional[str] = None,
 ) -> PredictionResult:
     """Extract PII without blocking the current event loop."""
     return await _run_sync(
@@ -105,6 +106,7 @@ async def aextract_pii(
         lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
         budget=budget,
+        subject_scope_fingerprint=subject_scope_fingerprint,
     )
 
 
@@ -143,6 +145,7 @@ async def adeidentify(
     cache_results: bool = False,
     max_cache_entries: int = 128,
     budget: Optional[RequestBudget] = None,
+    subject_scope_fingerprint: Optional[str] = None,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text without blocking the current event loop."""
     return await _run_sync(
@@ -180,6 +183,7 @@ async def adeidentify(
         cache_results=cache_results,
         max_cache_entries=max_cache_entries,
         budget=budget,
+        subject_scope_fingerprint=subject_scope_fingerprint,
     )
 
 
@@ -209,6 +213,7 @@ async def aanalyze_text(
     assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
+    subject_scope_fingerprint: Optional[str] = None,
     **pipeline_kwargs: Any,
 ) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
     """Analyze text without blocking the current event loop."""
@@ -238,6 +243,7 @@ async def aanalyze_text(
         assert_context=assert_context,
         cache_results=cache_results,
         max_cache_entries=max_cache_entries,
+        subject_scope_fingerprint=subject_scope_fingerprint,
         **pipeline_kwargs,
     )
 

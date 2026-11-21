@@ -429,6 +429,7 @@ def analyze_text(
     assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
+    subject_scope_fingerprint: Optional[str] = None,
     **pipeline_kwargs: Any,
 ) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
     """Run token-classification or native span NER and format the predictions.
@@ -472,6 +473,7 @@ def analyze_text(
             experiencer, and temporality labels to each entity under
             ``metadata["clinical_context"]``. Disabled by default.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        subject_scope_fingerprint: Optional opaque subject digest for targeted cache withdrawal.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
@@ -534,7 +536,10 @@ def analyze_text(
         params = dict(locals())
         cache_key = make_cache_key("analyze_text", params)
         cache = get_result_cache(max_entries=max_cache_entries)
-        final_result = cache.get(cache_key)
+        cache_epoch = cache.withdrawal_epoch
+        final_result = cache.get(
+            cache_key, subject_scope_fingerprint=subject_scope_fingerprint
+        )
         if final_result is not None:
             return final_result
 
@@ -889,7 +894,12 @@ def analyze_text(
     else:
         final_result = result
     if cache_results:
-        cache.set(cache_key, final_result)
+        cache.set(
+            cache_key,
+            final_result,
+            subject_scope_fingerprint=subject_scope_fingerprint,
+            expected_epoch=cache_epoch,
+        )
     return final_result
 
 
