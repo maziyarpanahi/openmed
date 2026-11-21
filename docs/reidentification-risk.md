@@ -931,3 +931,9 @@ collections use the same generalization policy and group repeated notes by
 keyed unit. An unmatched profile gives k-map zero. A reference frequency
 below the sample frequency fails the reference consistency check. Only
 counts, threshold decisions and coverage limitations leave the scorer.
+
+Pass a measured `text_qi_risk` result as `text_qi_report` to
+`build_release_expert_review_evidence` to attach its aggregate k, target,
+unit and span counts, limitations, and source report digest for qualified
+review. The reviewer must confirm that the supplied text cohort corresponds
+to the release. Images and genomic data still require separate assessment.

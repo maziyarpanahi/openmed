@@ -19,7 +19,7 @@ from typing import Any, Final, Mapping
 from openmed.core.audit import stable_hash
 
 EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION: Final = 3
-_SUPPORTED_EVIDENCE_SCHEMA_VERSIONS: Final = frozenset({2, 3})
+_SUPPORTED_EVIDENCE_SCHEMA_VERSIONS: Final = frozenset({2, 3, 4})
 EXPERT_REVIEW_EVIDENCE_TITLE: Final = (
     "De-identification Risk Analysis Evidence Bundle — Not an Expert Determination"
 )
@@ -832,6 +832,68 @@ class CompositionEvidence:
 
 
 @dataclass(frozen=True)
+class FreeTextQIEvidence:
+    """Aggregate evidence for detected text QIs on a caller-supplied cohort."""
+
+    unit_count: int
+    k: int
+    target_k: int
+    detected_span_count: int
+    unmapped_span_count: int
+    risk_report_digest: str
+
+    def __post_init__(self) -> None:
+        for value in (self.unit_count, self.k, self.target_k):
+            if type(value) is not int or value < 1:
+                raise ValueError("invalid text-QI unit count or threshold")
+        if (
+            self.k > self.unit_count
+            or any(
+                type(v) is not int or v < 0
+                for v in (self.detected_span_count, self.unmapped_span_count)
+            )
+            or self.unmapped_span_count > self.detected_span_count
+        ):
+            raise ValueError("invalid text-QI aggregate counts")
+        _require_digest(self.risk_report_digest)
+
+    def to_dict(self) -> dict:
+        """Return the controlled assessment fields and limitations."""
+        return {
+            "unit_count": self.unit_count,
+            "k": self.k,
+            "target_k": self.target_k,
+            "meets_k": self.k >= self.target_k,
+            "detected_span_count": self.detected_span_count,
+            "unmapped_span_count": self.unmapped_span_count,
+            "risk_report_digest": self.risk_report_digest,
+            "limitations": [
+                "detected_spans_only",
+                "caller_defined_generalization",
+                "caller_supplied_cohort",
+                "qualified_expert_review_required",
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> FreeTextQIEvidence:
+        """Restore the exact evidence projection and validate its derived fields."""
+        keys = {
+            "unit_count",
+            "k",
+            "target_k",
+            "detected_span_count",
+            "unmapped_span_count",
+            "risk_report_digest",
+        }
+        item = _object(data, keys | {"meets_k", "limitations"}, "free text evidence")
+        evidence = cls(**{k: item[k] for k in keys})
+        if type(item["meets_k"]) is not bool or item != evidence.to_dict():
+            raise ValueError("invalid text-QI evidence")
+        return evidence
+
+
+@dataclass(frozen=True)
 class ExpertReviewEvidenceReport:
     """Deterministic, PHI-safe evidence awaiting qualified expert review."""
 
@@ -855,6 +917,7 @@ class ExpertReviewEvidenceReport:
     report_type: str = _REPORT_TYPE
     title: str = EXPERT_REVIEW_EVIDENCE_TITLE
     disclaimer: str = EXPERT_REVIEW_EVIDENCE_DISCLAIMER
+    free_text: FreeTextQIEvidence | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -862,6 +925,14 @@ class ExpertReviewEvidenceReport:
             or self.schema_version not in _SUPPORTED_EVIDENCE_SCHEMA_VERSIONS
         ):
             raise ValueError("unsupported expert-review evidence schema version")
+        if (self.schema_version == 4) != (self.free_text is not None):
+            raise ValueError("invalid text-QI evidence schema version")
+        if self.free_text is not None and (
+            not isinstance(self.free_text, FreeTextQIEvidence)
+            or "free_text" in self.unsupported_modalities
+            or not {"images", "genomic_data"}.issubset(self.unsupported_modalities)
+        ):
+            raise ValueError("inconsistent assessed modalities")
         if self.report_type != _REPORT_TYPE:
             raise ValueError("unsupported expert-review evidence report type")
         if self.title != EXPERT_REVIEW_EVIDENCE_TITLE:
@@ -1071,6 +1142,11 @@ class ExpertReviewEvidenceReport:
             "composition": self.composition.to_dict(),
             "limitations": sorted(self.limitations),
             "unsupported_modalities": sorted(self.unsupported_modalities),
+            **(
+                {"assessed_modalities": {"free_text": self.free_text.to_dict()}}
+                if self.free_text
+                else {}
+            ),
             "qualified_expert_review": {
                 "status": "pending_qualified_expert_review",
                 "qualified_expert_name": None,
@@ -1283,6 +1359,18 @@ class ExpertReviewEvidenceReport:
                 f"- Risk status: `{self.composition.risk_status}`",
                 f"- Evidence digest: `{self.composition.evidence_digest}`",
                 "",
+                *(
+                    [
+                        "## Assessed free-text quasi-identifiers",
+                        "",
+                        f"Observed k {self.free_text.k} across {self.free_text.unit_count} keyed units "
+                        f"(target {self.free_text.target_k}).",
+                        "Coverage is limited to detected spans, caller-defined generalizations and the caller-supplied cohort.",
+                        "",
+                    ]
+                    if self.free_text
+                    else []
+                ),
                 "## Limitations and unsupported modalities",
                 "",
                 "- Limitations: "
@@ -1390,6 +1478,7 @@ def build_expert_review_evidence(
     composition: CompositionEvidence,
     limitations: tuple[str, ...] = (),
     unsupported_modalities: tuple[str, ...] = (),
+    free_text: FreeTextQIEvidence | None = None,
 ) -> ExpertReviewEvidenceReport:
     """Build a deterministic evidence bundle from typed aggregate inputs.
 
@@ -1416,6 +1505,10 @@ def build_expert_review_evidence(
         limitations=limitations,
         unsupported_modalities=unsupported_modalities,
         integrity_hash=placeholder_hash,
+        free_text=free_text,
+        schema_version=4
+        if free_text is not None
+        else EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION,
     )
     return replace(report, integrity_hash=stable_hash(report._payload()))
 
@@ -1444,14 +1537,26 @@ def _report_from_mapping(data: Mapping[str, Any]) -> ExpertReviewEvidenceReport:
             "unsupported_modalities",
             "qualified_expert_review",
             "integrity_hash",
-        },
+        }
+        | (
+            {"assessed_modalities"}
+            if isinstance(data, Mapping) and data.get("schema_version") == 4
+            else set()
+        ),
         "report",
     )
     _validate_review_placeholders(payload["qualified_expert_review"])
     metrics = _object(
         payload["metrics"], {"pre_transform", "post_transform"}, "metrics"
     )
+    free_text = None
+    if "assessed_modalities" in payload:
+        modalities = _object(
+            payload["assessed_modalities"], {"free_text"}, "assessed modalities"
+        )
+        free_text = FreeTextQIEvidence.from_dict(modalities["free_text"])
     return ExpertReviewEvidenceReport(
+        free_text=free_text,
         schema_version=payload["schema_version"],
         report_type=payload["report_type"],
         title=payload["title"],
