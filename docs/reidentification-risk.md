@@ -923,3 +923,11 @@ names from `result.profile["columns"]`. Rows stay local. To treat multiple
 documents as one unit, pass `by_unit=True` and attach a keyed unit digest to
 each document. For `OpenMedSpan` inputs, pass `span_hmac_key` to verify each
 surface at its declared offsets against the stored text HMAC.
+
+Use `text_qi_risk(documents, policy, target_k=...)` to report sample k by
+distinct keyed privacy unit. To measure exact k-map, also pass
+`reference_population=reference_documents` and `target_k_map=...`. Both
+collections use the same generalization policy and group repeated notes by
+keyed unit. An unmatched profile gives k-map zero. A reference frequency
+below the sample frequency fails the reference consistency check. Only
+counts, threshold decisions and coverage limitations leave the scorer.

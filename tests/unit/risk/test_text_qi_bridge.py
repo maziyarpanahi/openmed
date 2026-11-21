@@ -80,3 +80,57 @@ def test_unmapped_surface_is_counted_and_dropped():
     result = bridge_text_qis([doc], POLICY)
     assert result.rows[0]["region"] is None
     assert result.profile["columns"]["region"]["unmapped_count"] == 1
+
+
+def _risk_doc(unit, age="37", zipcode="12345"):
+    return TextQIDocument(
+        f"{age} {zipcode}",
+        [
+            EntityPrediction(age, "AGE", 1.0, 0, len(age)),
+            EntityPrediction(
+                zipcode, "ZIPCODE", 1.0, len(age) + 1, len(age) + 1 + len(zipcode)
+            ),
+        ],
+        hmac_text_hash(unit, KEY),
+    )
+
+
+def test_text_risk_uses_one_row_per_unit_and_no_profile_keys():
+    from openmed.risk.text_qi_bridge import text_qi_risk
+
+    a, b = _risk_doc("unit-a"), _risk_doc("unit-b", "58", "98765")
+    reference = [a, b, _risk_doc("unit-c"), _risk_doc("unit-d", "58", "98765")]
+    result = text_qi_risk([a, a, b], POLICY, reference, 2, 2)
+    assert result["profile"]["row_count"] == 2
+    assert result["kanon"] == {
+        "k": 1,
+        "target_k": 2,
+        "class_count": 2,
+        "meets_k": False,
+    }
+    assert result["population"]["achieved_k_map"] == 2
+    assert result["population"]["meets_k_map"]
+    encoded = json.dumps(result)
+    for value in (
+        a.unit_digest,
+        "unit-a",
+        "987",
+        "50-59",
+        "members",
+        "equivalence_classes",
+    ):
+        assert value not in encoded
+    assert text_qi_risk([a], POLICY, target_k=1)["population"] is None
+    unmatched = text_qi_risk([a, b], POLICY, [a], 1, 1)["population"]
+    assert unmatched["achieved_k_map"] == 0 and not unmatched["meets_k_map"]
+
+
+def test_text_risk_requires_explicit_thresholds_and_units():
+    from openmed.risk.text_qi_bridge import text_qi_risk
+
+    doc = _risk_doc("unit-a")
+    for args in ((None, None, None), ([doc], 1, None), (None, 1, 1), ([doc], True, 1)):
+        with pytest.raises(ValueError):
+            text_qi_risk([doc], POLICY, *args)
+    with pytest.raises(ValueError, match="keyed privacy unit"):
+        text_qi_risk([TextQIDocument(doc.text, doc.spans)], POLICY, target_k=1)
