@@ -13,6 +13,18 @@ import org.robolectric.annotation.Config
 @Config(sdk = [26])
 class ModelCatalogTest {
     @Test
+    fun legacyCopyRetainsReviewRequirements() {
+        val row = ModelCatalogEntry(
+            "fixture", emptyList(), null, null, emptyList(), null, "synthetic",
+            regulatoryTier = "restricted", capability = "visual_qa",
+        )
+        val copied = row.copy(repoId = "second")
+        assertEquals("second", copied.repoId)
+        assertEquals("restricted", copied.regulatoryTier)
+        assertEquals("visual_qa", copied.capability)
+    }
+
+    @Test
     fun parsesCatalogEntries() {
         val catalog = ModelCatalog.fromJsonLines(SAMPLE_CATALOG)
 
