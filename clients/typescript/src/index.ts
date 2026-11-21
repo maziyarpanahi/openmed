@@ -634,6 +634,34 @@ export interface LoadedModelsResponse {
   [key: string]: unknown;
 }
 
+export interface CapabilityBackend {
+  name: string;
+  extra: string;
+  available: boolean;
+}
+
+export interface CapabilitySurface {
+  name: "cli" | "graphql" | "grpc" | "mcp" | "python" | "rest";
+  available: boolean;
+}
+
+export interface CapabilitySchemaVersion {
+  name: string;
+  version: number;
+}
+
+/** Value-free capability descriptor returned by GET /v1/capabilities. */
+export interface CapabilityDescriptor {
+  schema: "openmed.capabilities";
+  schema_version: 1;
+  backends: CapabilityBackend[];
+  surfaces: CapabilitySurface[];
+  served_models: string[];
+  schema_versions: CapabilitySchemaVersion[];
+  policy_profiles: string[];
+  digest: string;
+}
+
 export interface ModelUnloadResponse {
   unloaded?: boolean;
   model_name?: string;
@@ -943,6 +971,10 @@ export class OpenMedClient {
 
   async loadedModels(): Promise<LoadedModelsResponse> {
     return this.get("/models/loaded");
+  }
+
+  async capabilities(): Promise<CapabilityDescriptor> {
+    return this.get("/v1/capabilities");
   }
 
   async journeyResources(
