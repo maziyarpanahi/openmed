@@ -47,6 +47,7 @@ from enum import Enum
 from typing import Any, Final
 from urllib.parse import urljoin, urlsplit
 
+from openmed.core.clinician_mode import restricted_entry_point
 from openmed.core.offline import is_local_only
 from openmed.mcp.upstream_endpoint_policy import (
     AddressResolver,
@@ -424,6 +425,7 @@ class DecisionServerBackend:
             return frozenset({"image/png", "video/mp4"})
         return frozenset()
 
+    @restricted_entry_point("decisions")
     def score(self, request: DecisionRequest) -> DecisionBackendOutput:
         """Score one single-question request on the server.
 
@@ -448,6 +450,7 @@ class DecisionServerBackend:
         (question,) = request.as_questions()
         return self._exchange(request)[question.question_id]
 
+    @restricted_entry_point("decisions")
     def score_questions(
         self,
         request: DecisionRequest,

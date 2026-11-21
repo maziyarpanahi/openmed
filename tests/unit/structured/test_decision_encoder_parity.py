@@ -51,6 +51,8 @@ from openmed.structured.decision_gliclass import (
     GLiClassOnnxRunner,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "tests" / "fixtures" / "parity" / "decision_encoder_v1.json"
 FIXTURE_SCHEMA = "openmed.tests.decision_encoder_parity.v1"

@@ -27,6 +27,8 @@ from openmed.structured.decision import (
     decision_result_schema,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 COMPAT_FIXTURE = (
     Path(__file__).resolve().parents[3]

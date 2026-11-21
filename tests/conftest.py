@@ -324,3 +324,17 @@ def assert_private_file():
             assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
     return check
+
+
+@pytest.fixture
+def acknowledged_clinician_review():
+    """Exercise a restricted capability after an explicit synthetic acknowledgement."""
+    from datetime import datetime, timezone
+
+    from openmed.core.clinician_mode import clinician_mode
+    from openmed.core.disclaimer import OpenMedDisclaimer
+
+    notice = OpenMedDisclaimer.for_tier("restricted")
+    receipt = notice.acknowledge(at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    with clinician_mode(purpose="quality_assurance", acknowledgement=receipt):
+        yield

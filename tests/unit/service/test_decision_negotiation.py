@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Iterator
+from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, get_args, get_origin
@@ -42,6 +43,8 @@ from openmed.structured.decision_interop import (
     to_openai_decisions_response,
 )
 from openmed.structured.decision_server import DecisionServerBackend
+
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "tests" / "fixtures" / "service" / "decision-negotiation-v1.json"
@@ -393,7 +396,8 @@ class _ForwardingHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - http.server naming
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length)
-        response = self.server.client.post(  # type: ignore[attr-defined]
+        response = self.server.review_context.copy().run(  # type: ignore[attr-defined]
+            self.server.client.post,  # type: ignore[attr-defined]
             self.path,
             content=body,
             headers={"Content-Type": "application/json"},
@@ -413,6 +417,7 @@ class _ForwardingHandler(BaseHTTPRequestHandler):
 def openmed_server() -> Iterator[str]:
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ForwardingHandler)
+        server.review_context = copy_context()  # type: ignore[attr-defined]
         server.daemon_threads = True
         server.client = client  # type: ignore[attr-defined]
         thread = threading.Thread(

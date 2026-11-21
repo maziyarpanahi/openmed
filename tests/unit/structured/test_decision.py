@@ -39,6 +39,8 @@ from openmed.structured.decision import (
     migrate_decision_result,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "tests" / "fixtures" / "structured" / "decision_calibration.json"
 COMPAT_FIXTURE = (

@@ -482,3 +482,29 @@ Resolve the versioned notice with `OpenMedDisclaimer.for_capability(code)` from
 acknowledgement when `requires_acknowledgement` is true. After acknowledgement,
 pass an application-supplied timezone-aware `datetime` to `acknowledge(at=...)`.
 The resulting receipt contains the notice ID, version digest and UTC instant.
+
+## Restricted clinician review scopes
+
+Applications invoke restricted Python capabilities inside an explicit scope.
+Present the current restricted notice to the qualified reviewer and create the
+acknowledgement only after they accept it. Under that condition:
+
+```python
+from datetime import datetime, timezone
+from openmed.core.clinician_mode import clinician_mode
+from openmed.core.disclaimer import OpenMedDisclaimer
+from openmed.structured import decide
+
+notice = OpenMedDisclaimer.for_tier("restricted")
+ack = notice.acknowledge(at=datetime.now(timezone.utc))
+with clinician_mode(purpose="review", acknowledgement=ack) as receipt:
+    result = decide(request)
+```
+
+The accepted purposes are `review`, `research` and `quality_assurance`.
+The receipt carries the purpose, notice ID and version digest. Structured
+decisions return a denied result outside the scope. Other restricted entry
+points raise `ClinicianModeError("clinician_mode_required")`. Scope exit
+revokes the receipt's authority, including in tasks that inherited its
+context. A receipt is evidence of the scope, not a credential for re-entry.
+The clinical output-use policy continues to deny decision-triggering use.
