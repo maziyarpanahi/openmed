@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
+from types import MappingProxyType
 from typing import Any
 
 from openmed.core.schemas import schema_fingerprint
@@ -149,3 +150,59 @@ class IntendedUse:
     def digest(self) -> str:
         """Return the SHA-256 digest of the canonical declaration."""
         return schema_fingerprint(self.to_dict())
+
+
+@dataclass(frozen=True, slots=True)
+class IntendedUseRegistry:
+    """Reviewed capability declarations and fully qualified entry-point aliases."""
+
+    declarations: Mapping[str, IntendedUse]
+    entry_points: Mapping[str, str]
+
+    def resolve(self, name: str) -> IntendedUse:
+        """Look up a stable capability code or an exact Python entry point."""
+        try:
+            return self.declarations[self.entry_points.get(name, name)]
+        except KeyError:
+            raise IntendedUseError("unknown_capability") from None
+
+
+def _unique_fields(pairs):
+    fields = {}
+    for key, value in pairs:
+        if key in fields:
+            raise IntendedUseError("duplicate_registry_key")
+        fields[key] = value
+    return fields
+
+
+@lru_cache(maxsize=1)
+def load_intended_use_registry() -> IntendedUseRegistry:
+    """Load validated, read-only declarations from the installed package."""
+    path = files("openmed.core").joinpath("data", "intended_use.json")
+    records = json.loads(
+        path.read_text(encoding="utf-8"), object_pairs_hook=_unique_fields
+    )
+    declarations = {}
+    entry_points = {}
+    for code, record in records.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", code) or set(record) != {
+            "declaration",
+            "entry_points",
+        }:
+            raise IntendedUseError("invalid_registry_entry")
+        declarations[code] = IntendedUse.from_dict(record["declaration"])
+        names = record["entry_points"]
+        if not isinstance(names, list):
+            raise IntendedUseError("invalid_entry_points")
+        for name in names:
+            if not isinstance(name, str) or not re.fullmatch(
+                r"openmed(?:\.[A-Za-z_]\w*)+", name
+            ):
+                raise IntendedUseError("invalid_entry_point")
+            if name in entry_points:
+                raise IntendedUseError("duplicate_entry_point")
+            entry_points[name] = code
+    return IntendedUseRegistry(
+        MappingProxyType(declarations), MappingProxyType(entry_points)
+    )
