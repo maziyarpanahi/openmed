@@ -97,9 +97,9 @@ registry (`openmed.clinical.grounding.systems.system_uri`) has a URI for
 them. Of the systems in the bundled crosswalks only `HPO` has one, so it
 becomes `http://human-phenotype-ontology.org`, while `ICD-10-CN`, `CHPO`,
 and `OPENMED-INDIC-ALIAS` are exported as labels. WHO `ICD10`/`ICD-10`
-labels also stay labels: the registry has no plain ICD-10 URI and maps
-`icd10` to the ICD-10-CM URI, which would mislabel those groups. An RxNorm
-label or URI stays `http://www.nlm.nih.gov/research/umls/rxnorm`.
+labels become `http://hl7.org/fhir/sid/icd-10` rather than the ICD-10-CM
+URI the registry aliases `icd10` to, which would mislabel those groups.
+An RxNorm label or URI stays `http://www.nlm.nih.gov/research/umls/rxnorm`.
 
 Only resources declared redistributable can be exported.
 `CrosswalkLicenseError` is raised for everything else: the licensed

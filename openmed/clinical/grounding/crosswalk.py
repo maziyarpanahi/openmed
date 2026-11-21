@@ -1217,9 +1217,10 @@ class CrosswalkResource:
 
 
 # Crosswalk "ICD10"/"ICD-10" labels mean WHO ICD-10, but the system registry
-# aliases them to the ICD-10-CM URI; keep those labels verbatim instead of
-# mislabelling the group.
+# aliases them to the ICD-10-CM URI; export them with the WHO ICD-10 system
+# URI instead of mislabelling the group.
 _WHO_ICD10_LABELS = frozenset({"icd10", "icd-10"})
+_WHO_ICD10_URI = "http://hl7.org/fhir/sid/icd-10"
 
 # Canonical URIs of the restricted registry systems, casefolded like
 # valueset._RESTRICTED_URIS.
@@ -1251,7 +1252,7 @@ def _is_restricted_system(label: str) -> bool:
 
 def _conceptmap_system(label: str) -> str:
     if label.strip().casefold().replace(" ", "-") in _WHO_ICD10_LABELS:
-        return label
+        return _WHO_ICD10_URI
     return system_uri(label) or label
 
 
@@ -1265,8 +1266,8 @@ def crosswalk_resource_to_conceptmap(resource: CrosswalkResource) -> dict[str, A
     ``ICD-10-CN`` has no entry in
     :func:`openmed.clinical.grounding.systems.system_uri` and stays a label,
     while ``HPO`` becomes its registry URI.  WHO ``ICD10``/``ICD-10`` labels
-    also stay labels: the registry has no plain ICD-10 URI and maps
-    ``icd10`` to the ICD-10-CM URI, which would mislabel those groups.
+    become ``http://hl7.org/fhir/sid/icd-10`` rather than the ICD-10-CM URI
+    the registry aliases ``icd10`` to, which would mislabel those groups.
     Groups, elements, and targets are sorted, so serializing the same
     resource twice yields byte-identical JSON.
 

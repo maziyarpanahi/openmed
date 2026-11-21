@@ -18,6 +18,8 @@ from openmed.clinical.grounding.crosswalk import (
 
 _SYNTHETIC_HASH = f"sha256:{'0' * 64}"
 _RXNORM_URI = "http://www.nlm.nih.gov/research/umls/rxnorm"
+_WHO_ICD10_URI = "http://hl7.org/fhir/sid/icd-10"
+_ICD10CM_URI = "http://hl7.org/fhir/sid/icd-10-cm"
 
 
 def _entry(
@@ -86,6 +88,14 @@ def test_bundled_icd10cn_exports_one_element_per_distinct_source_code() -> None:
     assert all(target["equivalence"] == "relatedto" for target in targets)
 
 
+def test_bundled_icd10cn_group_targets_the_who_icd10_uri() -> None:
+    concept_map = crosswalk_resource_to_conceptmap(_bundled_icd10cn())
+
+    assert [(group["source"], group["target"]) for group in concept_map["group"]] == [
+        ("ICD-10-CN", _WHO_ICD10_URI),
+    ]
+
+
 def test_group_systems_use_registry_uris_and_keep_unregistered_labels() -> None:
     resource = _resource(
         (
@@ -108,8 +118,8 @@ def test_group_systems_use_registry_uris_and_keep_unregistered_labels() -> None:
         # even though that URI contains "umls".
         (_RXNORM_URI, "http://human-phenotype-ontology.org"),
         # ICD-10-CN has no registry URI and keeps its label; WHO "ICD10"
-        # is kept verbatim so it does not become the ICD-10-CM URI.
-        ("ICD-10-CN", "ICD10"),
+        # becomes the WHO ICD-10 URI, not the registry's ICD-10-CM alias.
+        ("ICD-10-CN", _WHO_ICD10_URI),
     }
 
 
@@ -119,6 +129,35 @@ def test_rxnorm_system_uri_is_exported_unchanged_and_not_refused() -> None:
     concept_map = crosswalk_resource_to_conceptmap(resource)
 
     assert [group["source"] for group in concept_map["group"]] == [_RXNORM_URI]
+
+
+def test_who_icd10_and_icd10cm_labels_export_distinct_system_uris(subtests) -> None:
+    expected_sources = {
+        "ICD10": _WHO_ICD10_URI,
+        "icd10": _WHO_ICD10_URI,
+        "ICD-10": _WHO_ICD10_URI,
+        "ICD 10": _WHO_ICD10_URI,
+        # ICD-10-CM spellings still resolve through the registry.
+        "ICD10CM": _ICD10CM_URI,
+        "ICD-10-CM": _ICD10CM_URI,
+        "icd_10_cm": _ICD10CM_URI,
+    }
+    for source_system, expected in expected_sources.items():
+        with subtests.test(source_system=source_system):
+            resource = _resource(
+                (
+                    _entry(
+                        "SYN-1",
+                        "HP:0000001",
+                        source_system=source_system,
+                        target_system="HPO",
+                    ),
+                )
+            )
+
+            concept_map = crosswalk_resource_to_conceptmap(resource)
+
+            assert [group["source"] for group in concept_map["group"]] == [expected]
 
 
 def test_groups_elements_and_targets_are_sorted_by_system_pair_and_code() -> None:
@@ -141,7 +180,7 @@ def test_groups_elements_and_targets_are_sorted_by_system_pair_and_code() -> Non
 
     assert [(group["source"], group["target"]) for group in concept_map["group"]] == [
         ("CHPO-SYN", "http://human-phenotype-ontology.org"),
-        ("ICD-10-CN", "ICD10"),
+        ("ICD-10-CN", _WHO_ICD10_URI),
     ]
     icd_group = concept_map["group"][1]
     assert [element["code"] for element in icd_group["element"]] == [
