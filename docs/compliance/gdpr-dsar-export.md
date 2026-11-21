@@ -127,3 +127,11 @@ instance. Only exact surrogate/source pairs belonging to selected vault
 holdings are removed. Mirrored copies count once with their vault holdings.
 Keep the file-backed vault under a single writer during withdrawal, as for
 other mutations of a live vault object.
+
+For live ambient capture, register an `AmbientWithdrawalParticipant` under
+`ParticipantCode.AMBIENT_SESSIONS`. Register a separate instance under
+`VOICE_EMBEDDINGS` for embedding owners. Call `participant.register(subject_digest, owner)`
+when creating each session. A confirmed withdrawal closes every matching owner,
+releases the registry's references and prevents new registrations for that
+withdrawn digest. `participant.receipts(subject_digest)` exposes controlled
+states and counts. Declared external copies keep the coordinator receipt partial.

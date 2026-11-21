@@ -175,3 +175,117 @@ class WithdrawalCoordinator:
                 )
             )
         return WithdrawalReceipt(subject_ref_digest, tuple(results))
+
+
+class AmbientWithdrawalParticipant:
+    """Registry of live session owners for one coordinated withdrawal family.
+
+    Register an instance for AMBIENT_SESSIONS and another for VOICE_EMBEDDINGS
+    as applicable. Bind hosts' subject reference digests before accepting data.
+    """
+
+    def __init__(self, code: ParticipantCode):
+        from threading import RLock
+
+        if not isinstance(code, ParticipantCode) or code not in (
+            ParticipantCode.AMBIENT_SESSIONS,
+            ParticipantCode.VOICE_EMBEDDINGS,
+        ):
+            raise ValueError("invalid_ambient_participant")
+        self.code = code
+        self._lock = RLock()
+        self._owners = {}
+        self._withdrawn = set()
+        self._receipts = {}
+
+    def register(self, subject_ref_digest: str, owner) -> None:
+        """Associate a local session owner with an opaque subject digest."""
+        from uuid import uuid4
+
+        from openmed.multimodal.streaming.session import AmbientSession
+        from openmed.multimodal.voice_embeddings import VoiceEmbeddingSession
+
+        kind = (
+            AmbientSession
+            if self.code == ParticipantCode.AMBIENT_SESSIONS
+            else VoiceEmbeddingSession
+        )
+        if (
+            type(subject_ref_digest) is not str
+            or not _DIGEST.fullmatch(subject_ref_digest)
+            or type(owner) is not kind
+        ):
+            raise ValueError("invalid_ambient_registration")
+        with self._lock:
+            if subject_ref_digest in self._withdrawn:
+                raise ValueError("subject_withdrawn")
+            owners = self._owners.setdefault(subject_ref_digest, {})
+            if owner not in owners:
+                owners[owner] = uuid4().hex
+
+    def plan(self, subject_ref_digest: str) -> ParticipantPlan:
+        """Bind confirmation to the full set of registered live owners."""
+        with self._lock:
+            ids = sorted(self._owners.get(subject_ref_digest, {}).values())
+            return ParticipantPlan(
+                len(ids), stable_hash([self.code.value, subject_ref_digest, ids])
+            )
+
+    def apply(self, subject_ref_digest: str, plan: ParticipantPlan) -> int:
+        """Close the registered owners and retain only controlled destruction counts."""
+        with self._lock:
+            if plan != self.plan(subject_ref_digest):
+                raise ValueError("ambient_selection_changed")
+            self._withdrawn.add(subject_ref_digest)
+            owners = self._owners.get(subject_ref_digest, {})
+            receipts = self._receipts.setdefault(subject_ref_digest, {})
+            applied = 0
+            for owner, ref in tuple(owners.items()):
+                try:
+                    if self.code == ParticipantCode.AMBIENT_SESSIONS:
+                        owner.withdraw()
+                        snapshot = owner.snapshot()
+                        if snapshot["unaccounted_external_copies"]:
+                            owner.delete()
+                            snapshot = owner.snapshot()
+                        receipt = {
+                            "state": snapshot["state"],
+                            "verified": snapshot["deletion_verified"],
+                            "external_copies": snapshot["unaccounted_external_copies"],
+                        }
+                    else:
+                        destroyed = owner.destroy("withdrawal")
+                        receipt = {
+                            "state": destroyed.reason_code,
+                            "destroyed_count": destroyed.destroyed_count,
+                            "verified": owner.diagnostics()["handle_count"] == 0,
+                        }
+                except Exception:
+                    # Keep this owner registered for retry and process every other owner.
+                    receipts[ref] = {"state": "deletion_incomplete", "verified": False}
+                    continue
+                receipts[ref] = receipt
+                del owners[owner]
+                applied += 1
+            if not owners:
+                self._owners.pop(subject_ref_digest, None)
+            return applied
+
+    def verify(self, subject_ref_digest: str) -> bool:
+        """Require independently observed closure and zero outstanding owners."""
+        with self._lock:
+            return (
+                subject_ref_digest in self._withdrawn
+                and not self._owners.get(subject_ref_digest)
+                and all(
+                    r["verified"]
+                    for r in self._receipts.get(subject_ref_digest, {}).values()
+                )
+            )
+
+    def receipts(self, subject_ref_digest: str) -> tuple[dict, ...]:
+        """Return value-free erasure outcomes without registration or handle IDs."""
+        with self._lock:
+            return tuple(
+                dict(r) for r in self._receipts.get(subject_ref_digest, {}).values()
+            )
