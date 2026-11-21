@@ -417,6 +417,7 @@ classification:
     - languages/morphology-projection.md
     - configuration.md
     - configuration/precedence-audit.md
+    - configuration/environment-variables.md
     - profiles.md
     - plugin-sdk.md
     - skills/bundle-integrity.md

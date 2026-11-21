@@ -186,6 +186,26 @@ To cover a new component, register an adapter in `tests/faults/scenarios.py`
 outcome), then add cases to the plan. The seams, runner and manifest are
 shared.
 
+## Declared environment settings
+
+`tests/unit/core/test_settings_declared.py` fails when code under `openmed/`
+reads an `OPENMED_*` environment variable that
+`openmed/core/settings.schema.json` does not declare. An offline AST scan
+resolves `os.environ[...]`, `os.environ.get`, `os.getenv` and the package's
+environment helper wrappers to literal names, and every other whole-string
+`OPENMED_*` identifier must be declared as well. The failure names each
+variable with its `path:line` and never prints a value.
+
+To add a setting, declare it in the schema with its type, default, bounds,
+`x-secret` flag and owning module, then regenerate the reference page with
+`python scripts/docs/render_settings_reference.py`. A constant that only looks
+like an environment variable, such as a FHIR system name or an error code,
+goes in the schema's `x-excluded-identifiers` with a reason. A key built at
+runtime (f-string, concatenation or `format`) cannot be checked and needs a
+reasoned `dynamic` entry in `tests/fixtures/settings_undeclared_allowlist.json`.
+Every section is declared now, so the allowlist is empty and
+`ALLOWLIST_CEILING` is `0`; the allowlist only shrinks.
+
 ## Docs & API checks
 
 - Add `uv run mkdocs build --strict` to your CI to fail on missing nav entries, duplicate anchors, or broken markdown.
