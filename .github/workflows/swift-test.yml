@@ -10,6 +10,8 @@ on:
       - 'scripts/check_swift_root_consumer.sh'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/manifest/export_intended_use.py'
+      - 'openmed/core/data/intended_use.json'
       - 'scripts/release/check_swift_manifest_drift.py'
       - 'scripts/release/check_swift_strict_concurrency.py'
       - 'scripts/release/check_native_api_migration.py'
@@ -44,6 +46,8 @@ on:
       - 'scripts/check_swift_root_consumer.sh'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/manifest/export_intended_use.py'
+      - 'openmed/core/data/intended_use.json'
       - 'scripts/release/check_swift_manifest_drift.py'
       - 'scripts/release/check_swift_strict_concurrency.py'
       - 'scripts/release/check_native_api_migration.py'
@@ -87,6 +91,9 @@ jobs:
 
     - name: Lint Swift formatting
       run: scripts/lint_swift.sh
+
+    - name: Check bundled intended-use declarations
+      run: python3 scripts/manifest/export_intended_use.py --check
 
     - name: Check root and nested manifest drift
       run: python3 scripts/release/check_swift_manifest_drift.py
