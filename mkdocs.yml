@@ -339,6 +339,7 @@ nav:
       - Annotation Interchange and Pipeline Migration: interop/annotation-interchange.md
       - V3 Five-source Golden Journey: interop/v3-golden-journey.md
       - V3 Journey Release Gate: release/v3.0-journey-release-gate.md
+      - Verify Capability Evidence Packs: release/validation-evidence-packs.md
       - V4.0 Service Release Gate: release/v4.0-service-release-gate.md
       - Clinical Fact Normalization: structured/clinical-fact-normalization.md
       - Fact Reconciliation and Correction History: structured/fact-reconciliation.md

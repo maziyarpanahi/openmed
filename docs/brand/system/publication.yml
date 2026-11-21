@@ -403,6 +403,7 @@ classification:
     - interop/annotation-interchange.md
     - interop/v3-golden-journey.md
     - release/v3.0-journey-release-gate.md
+    - release/validation-evidence-packs.md
     - release/v4.0-service-release-gate.md
     - structured/clinical-fact-normalization.md
     - structured/fact-reconciliation.md
