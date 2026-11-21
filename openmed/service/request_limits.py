@@ -38,6 +38,7 @@ from openmed.guard.operational_limits import (
     JsonStructureScanner,
     OperationalLimits,
 )
+from openmed.utils.deprecation import deprecated
 
 MAX_REQUEST_BYTES_ENV_VAR: Final = "OPENMED_SERVICE_MAX_REQUEST_BYTES"
 JSON_STRUCTURE_LIMIT_FIELDS: Final = frozenset(
@@ -88,6 +89,12 @@ _REJECTION_STATUS: Final = {
 _CONNECTION_LIMIT_WARNING: Final = "Exceeded concurrency limit."
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def request_limits_from_env(
     env_var: str = MAX_REQUEST_BYTES_ENV_VAR,
 ) -> OperationalLimits:
@@ -152,6 +159,12 @@ class RequestBodyReadLimits:
             raise ValueError("request-body read limit is outside the safe range")
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def request_body_read_limits_from_env(
     environ: Mapping[str, str] | None = None,
 ) -> RequestBodyReadLimits:
@@ -527,6 +540,12 @@ class ServerConnectionLimits:
         }
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def server_connection_limits_from_env(
     environ: Mapping[str, str] | None = None,
 ) -> ServerConnectionLimits:

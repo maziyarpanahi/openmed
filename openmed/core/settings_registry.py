@@ -574,3 +574,83 @@ __all__ = [
     "settings_schema_path",
     "settings_sections",
 ]
+
+
+def service_setting_findings(environ: Mapping[str, str]) -> list[dict[str, str]]:
+    """Check declared types and bounds offline, returning names and codes only."""
+    from jsonschema import Draft202012Validator
+
+    declarations = {d.name: d for d in setting_declarations("service")}
+    findings = []
+    for name in sorted(environ):
+        if not name.startswith("OPENMED_SERVICE_"):
+            continue
+        declaration = declarations.get(name)
+        if declaration is None:
+            # An environment key may contain arbitrary text. Only echo safe setting names.
+            reported = (
+                name
+                if len(name) <= 128 and _IDENTIFIER_RE.fullmatch(name)
+                else "invalid_setting_name"
+            )
+            findings.append({"name": reported, "code": "unknown_setting"})
+            continue
+        try:
+            parsed = _service_setting_value(declaration, environ[name])
+            valid = Draft202012Validator(declaration.json_schema()).is_valid(parsed)
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            valid = False
+        if not valid:
+            findings.append({"name": name, "code": "invalid_value"})
+    return findings
+
+
+def _service_setting_value(declaration: SettingDeclaration, raw: str) -> Any:
+    import math
+    from urllib.parse import urlsplit
+
+    value = raw.strip()
+    if not value and ("null" in declaration.types or declaration.has_default):
+        return _thaw(declaration.default) if declaration.has_default else None
+    if declaration.env_format == "csv":
+        return [part.strip() for part in value.split(",") if part.strip()]
+    if declaration.env_format == "json":
+        return json.loads(value)
+    if declaration.env_format == "duration":
+        from openmed.service.keep_alive import parse_keep_alive
+
+        return parse_keep_alive(value)
+    if declaration.env_format == "byte-size":
+        from openmed.service.runtime import parse_memory_budget_bytes
+
+        return parse_memory_budget_bytes(value, env_var=declaration.name)
+    if declaration.env_format == "url":
+        endpoint = urlsplit(value)
+        if endpoint.scheme not in ("http", "https") or not endpoint.hostname:
+            raise ValueError
+    if "boolean" in declaration.types:
+        choices = {
+            "true": True,
+            "1": True,
+            "yes": True,
+            "on": True,
+            "enabled": True,
+            "false": False,
+            "0": False,
+            "no": False,
+            "off": False,
+            "disabled": False,
+        }
+        if value.lower() not in choices:
+            raise ValueError
+        return choices[value.lower()]
+    if "integer" in declaration.types:
+        if not re.fullmatch(r"[+-]?[0-9]+", value):
+            raise ValueError
+        return int(value)
+    if "number" in declaration.types:
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError
+        return number
+    return value

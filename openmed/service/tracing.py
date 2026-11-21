@@ -13,6 +13,8 @@ from typing import Any, Callable, Iterator, Mapping, Optional, Sequence
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from openmed.utils.deprecation import deprecated
+
 from .egress import (
     EgressAdapter,
     EgressCredential,
@@ -211,6 +213,12 @@ class OpenTelemetryMiddleware:
                 _CURRENT_TRACING.reset(tracing_token)
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def service_trace_config_from_env() -> ServiceTraceConfig:
     """Build tracing settings from environment variables."""
     endpoint = _clean_env_value(os.getenv(OTLP_ENDPOINT_ENV_VAR))
@@ -226,6 +234,12 @@ def service_trace_config_from_env() -> ServiceTraceConfig:
     )
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def service_tracing_from_env() -> ServiceTracing:
     """Create the app-local tracing runtime from environment variables."""
     config = service_trace_config_from_env()

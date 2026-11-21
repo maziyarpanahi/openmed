@@ -195,7 +195,13 @@ The TypeScript and Go clients are planned to move to generated OpenAPI clients.
 
 ### Service settings
 
-Service configuration is planned to use a single validated loader.
+In 4.3, run `openmed config service-check` against the service environment
+before upgrading. An empty findings array exits zero. Each incompatible name or
+value produces a setting name and a reason code and exits one. Startup also
+logs these findings. The check uses the bundled schema for names, formats and
+bounds and never opens configured files. The six legacy request-limit, logging
+and tracing environment helpers are deprecated for 5.0. Read the declared
+contract with `openmed.core.settings_registry.setting_declarations("service")`.
 
 ### Android model acquisition
 

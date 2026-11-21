@@ -87,8 +87,10 @@
       ]
     },
     "replacement": "Validated service settings loader",
-    "status": "planned",
-    "migration_anchor": "docs/migration.md#service-settings"
+    "status": "deprecated",
+    "migration_anchor": "docs/migration.md#service-settings",
+    "since": "4.3",
+    "remove_in": "5.0"
   },
   {
     "id": "android-mlx",
