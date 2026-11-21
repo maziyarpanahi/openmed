@@ -195,3 +195,11 @@ Service configuration is planned to use a single validated loader.
 
 Android apps using MLX-named cache and download methods will migrate to the
 format-aware model acquisition API.
+
+### MCP non-loopback HTTP binds
+
+The PHI-capable MCP server warns on non-loopback HTTP startup in 4.3.
+For 5.0 bind the server to loopback behind an authenticated reverse proxy,
+use stdio, or choose the PHI-free server. Docker deployments can colocate
+the proxy and the MCP server in the same network namespace.
+[Transport and container examples](mcp-clients.md#streamable-http-connections)

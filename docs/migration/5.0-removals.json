@@ -105,5 +105,19 @@
     "replacement": "Format-aware Android model acquisition API",
     "status": "planned",
     "migration_anchor": "docs/migration.md#android-model-acquisition"
+  },
+  {
+    "id": "mcp-non-loopback-bind",
+    "surfaces": [
+      "mcp"
+    ],
+    "symbols": {
+      "openmed/mcp/server.py": [
+        "_allow_non_loopback_bind"
+      ]
+    },
+    "replacement": "Loopback bind behind an authenticated reverse proxy or the PHI-free server",
+    "status": "deprecated",
+    "migration_anchor": "docs/migration.md#mcp-non-loopback-http-binds"
   }
 ]
