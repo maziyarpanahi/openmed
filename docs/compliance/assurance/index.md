@@ -31,6 +31,8 @@ change and mark the item unavailable until it is present in the candidate.
 | The deployment's trust boundaries and data flows match those assessed. | Start with `docs/security/threat-model.md`. Compare the [service](../../security/service-threat-model.md), [agent](../../security/agent-threat-model.md), [Journey](../../security/journey-threat-model.md), [clinical brief](../../security/clinical-brief-threat-model.md), [MCP](../../security/mcp-threat-model.md) and [on-device kit](../../security/openmedkit-threat-model.md) models with the components the site actually enables. |
 | The technical release evidence covers each deployed surface. | Compare the [agent assurance pack](../v3.1-agent-assurance.md), [service gate](../../release/v4.0-service-release-gate.md) and [kit gate](../../release/v4.0-kit-release-gate.md) with the deployment inventory. Run `python -m pytest tests/unit/compliance/test_agent_assurance_pack.py -q` for the agent pack. |
 
+Follow the [offline build, signing and verification example](../../release/validation-evidence-packs.md) to reproduce the complete pack workflow on synthetic inputs.
+
 ## Recording the review
 
 Keep the marked checklist with the candidate's evidence digests, typed failure
