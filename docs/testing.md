@@ -227,3 +227,15 @@ corpus edition, dataset digest, model ID, SHA-256 of the resolved commit ID
 and suppressed per-label aggregate metrics. Predictions stay in memory. A
 cache miss returns exit code 2 with `model_not_cached`. Keep real results
 under the applicable data-use agreement.
+
+Sign the observed G1a recall decision with a locally held raw 32-byte Ed25519
+seed. The model identifier must match the aggregate. The command compares
+each assessed label's observed recall with the release floor and reports its
+descriptive 95% Wilson lower bound. Suppressed and absent labels appear under
+`not_assessed`. A failing label or an empty assessment returns a signed
+`NOT_CERTIFIED` decision and exit code 1. Invalid inputs return exit code 2.
+
+```sh
+openmed eval certify-g1a --aggregate /private/results/report.json --model org/model \
+  --private-key-file /private/keys/reviewer.seed > /private/results/certification.json
+```
