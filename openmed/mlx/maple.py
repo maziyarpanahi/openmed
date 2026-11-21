@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Mapping, Sequence
 
 from openmed.core.decoding import snap_span_to_grapheme_boundaries
+from openmed.core.disclaimer import MAPLE_MEDICAL_DISCLAIMER
 from openmed.mlx.lm import MAPLE_MLX_MODEL, OpenMedMLXLanguageModel
 
 _LABEL_RE = re.compile(r"^[A-Z][A-Z0-9_/-]{0,63}$")
@@ -73,11 +74,6 @@ _RELATION_LABELS = frozenset(
     }
 )
 
-MAPLE_MEDICAL_DISCLAIMER = (
-    "Maple output is assistive and may be incomplete or incorrect. It must be "
-    "reviewed by a qualified person and must not trigger a diagnosis, treatment, "
-    "disclosure, or other clinical decision automatically."
-)
 
 _SYSTEM_PROMPT = """You are the local OpenMed clinical document assistant.
 The supplied text stays on the user's device. Follow the requested JSON schema

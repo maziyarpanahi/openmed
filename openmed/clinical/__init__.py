@@ -4,10 +4,7 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
-OPENMED_CLINICAL_DISCLAIMER = (
-    "OpenMed clinical outputs are assistive software outputs, not a medical "
-    "device, diagnosis, or substitute for qualified clinical judgment."
-)
+from openmed.core.disclaimer import OPENMED_CLINICAL_DISCLAIMER
 
 from .abbreviation import (
     ABBREVIATION_DISAMBIGUATION_ADVISORY,

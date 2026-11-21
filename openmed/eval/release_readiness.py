@@ -369,6 +369,34 @@ def _check_disclaimer(repo_root: Path) -> GateCheck:
         )
 
     value = _literal_assignment(tree, _DISCLAIMER_CONSTANT)
+    # Follow the known catalog re-export in the candidate checkout without
+    # importing candidate code. Older releases define the literal in place.
+    if (
+        value is None
+        and any(
+            isinstance(node, ast.ImportFrom)
+            and node.level == 0
+            and node.module == "openmed.core.disclaimer"
+            and any(
+                alias.name == _DISCLAIMER_CONSTANT and alias.asname is None
+                for alias in node.names
+            )
+            for node in tree.body
+        )
+        and not any(
+            isinstance(node, ast.Name)
+            and node.id == _DISCLAIMER_CONSTANT
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            for node in ast.walk(tree)
+        )
+    ):
+        catalog = repo_root / "openmed" / "core" / "disclaimer.py"
+        try:
+            value = _literal_assignment(
+                ast.parse(catalog.read_text(encoding="utf-8")), _DISCLAIMER_CONSTANT
+            )
+        except (OSError, UnicodeError, SyntaxError):
+            value = None
     if not isinstance(value, str) or not value.strip():
         return GateCheck(
             "clinical_disclaimer",
