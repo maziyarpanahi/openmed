@@ -27,6 +27,7 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
     "biored",
     "cegs-ngrid",
     "i2b2",
+    "i2b2-2012",
     "n2c2",
     "n2c2-2018",
     "n2c2-2022",
@@ -40,6 +41,7 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
 )
 
 DUA_PATH_REMEDIATION: Mapping[str, str] = {
+    "i2b2-2012": "pass path=... or set OPENMED_I2B2_2012_PATH",
     "biored": "pass path=... or set OPENMED_BIORED_PATH",
     "cegs-ngrid": "pass path=... or set OPENMED_CEGS_NGRID_PATH",
     "made": "pass path=... or set OPENMED_MADE_PATH",

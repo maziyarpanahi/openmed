@@ -568,3 +568,12 @@ Cells with fewer than five gold spans contain only the suppression status.
 Set `minimum_gold_spans` to configure the floor. Reported cells include exact
 span TP, FN and FP counts, precision, recall and grapheme leakage. Each rate
 has a descriptive 95% Wilson interval. An empty denominator yields JSON null.
+
+To evaluate the local temporal and context rules, set `OPENMED_I2B2_2012_PATH`
+to an authorized i2b2 2012 XML directory outside the checkout, then run
+`openmed eval credentialed --suite i2b2-2012-temporal --output /private/results/temporal.json`.
+The destination directory must already exist. This deterministic suite needs
+no model download. It uses human-annotated spans, the admission reference time
+when present, and the three-class TLINK evaluation. Each view retains its gold
+support and suppresses cells below five. Sources, offsets and row identifiers
+stay in the evaluator process. See the [original shared-task relation mapping](https://pubmed.ncbi.nlm.nih.gov/23564629/).

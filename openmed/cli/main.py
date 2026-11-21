@@ -3343,10 +3343,14 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
         "credentialed", help="Evaluate a cached model on a local credentialed corpus."
     )
     credentialed.add_argument(
-        "--suite", required=True, choices=["i2b2", "cegs-ngrid-2016"]
+        "--suite",
+        required=True,
+        choices=["i2b2", "cegs-ngrid-2016", "i2b2-2012-temporal"],
     )
-    credentialed.add_argument("--year", type=int, choices=[2006, 2014, 2016])
-    credentialed.add_argument("--model", required=True)
+    credentialed.add_argument("--year", type=int, choices=[2006, 2012, 2014, 2016])
+    credentialed.add_argument(
+        "--model", help="Cached classifier for de-identification suites."
+    )
     credentialed.add_argument("--revision", default="main")
     credentialed.add_argument("--output", required=True)
     credentialed.set_defaults(handler=_handle_eval_credentialed)

@@ -88,7 +88,7 @@ def run_credentialed(
     *,
     suite: str,
     year: int | None,
-    model_id: str,
+    model_id: str | None,
     output: str | Path,
     revision: str = "main",
 ) -> None:
@@ -103,31 +103,48 @@ def run_credentialed(
     """
     try:
         target = _output_file(output)
-        if suite == "cegs-ngrid-2016" and year in (None, 2016):
-            corpus, dua, year = "cegs-n-grid", CEGS_NGRID_DUA, 2016
-        elif suite == "i2b2" and year in (2006, 2014):
-            corpus, dua = "i2b2", I2B2_DUA_NAME
+        if suite == "i2b2-2012-temporal":
+            from openmed.eval.datasets.i2b2_2012 import load_i2b2_2012
+            from openmed.eval.suites.i2b2_2012_temporal import score_i2b2_2012
+
+            if year not in (None, 2012) or model_id or revision != "main":
+                raise CredentialedEvalError("invalid_temporal_suite_options")
+            report = score_i2b2_2012(load_i2b2_2012())
+            report.update(dua=I2B2_DUA_NAME, metadata={"data_origin": "credentialed"})
         else:
-            raise CredentialedEvalError("unsupported_corpus")
-        digest, runner = _load_cached_model(model_id, revision)
-        try:
-            fixtures = (
-                load_cegs_ngrid()
-                if suite == "cegs-ngrid-2016"
-                else load_i2b2_deid(year=year)
+            if not model_id:
+                raise CredentialedEvalError("model_required")
+            if suite == "cegs-ngrid-2016" and year in (None, 2016):
+                corpus, dua, year = "cegs-n-grid", CEGS_NGRID_DUA, 2016
+            elif suite == "i2b2" and year in (2006, 2014):
+                corpus, dua = "i2b2", I2B2_DUA_NAME
+            else:
+                raise CredentialedEvalError("unsupported_corpus")
+            digest, runner = _load_cached_model(model_id, revision)
+            try:
+                fixtures = (
+                    load_cegs_ngrid()
+                    if suite == "cegs-ngrid-2016"
+                    else load_i2b2_deid(year=year)
+                )
+            except (OSError, ValueError, RuntimeError):
+                raise CredentialedEvalError("corpus_unavailable") from None
+            benchmark = run_benchmark(
+                fixtures,
+                suite=suite,
+                model_name=model_id,
+                runner=runner,
+                cache_dir=None,
             )
-        except (OSError, ValueError, RuntimeError):
-            raise CredentialedEvalError("corpus_unavailable") from None
-        benchmark = run_benchmark(
-            fixtures, suite=suite, model_name=model_id, runner=runner, cache_dir=None
-        )
-        report = project_aggregate_report(benchmark, fixtures, corpus=corpus, year=year)
-        report.update(
-            dua=dua,
-            model_id=model_id,
-            revision_digest=digest,
-            postprocessing_profile="transformers-simple-v1",
-        )
+            report = project_aggregate_report(
+                benchmark, fixtures, corpus=corpus, year=year
+            )
+            report.update(
+                dua=dua,
+                model_id=model_id,
+                revision_digest=digest,
+                postprocessing_profile="transformers-simple-v1",
+            )
         encoded = json.dumps(report, sort_keys=True, allow_nan=False).encode() + b"\n"
         with tempfile.NamedTemporaryFile(dir=target.parent) as temp:
             temp.write(encoded)
