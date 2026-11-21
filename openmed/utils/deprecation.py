@@ -6,6 +6,7 @@ import inspect
 import warnings
 from functools import wraps
 from importlib import import_module
+from threading import Lock
 from typing import Any, Callable, TypeVar, cast
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -44,6 +45,7 @@ def deprecated(
     since: str,
     remove_in: str,
     replacement: str | None = None,
+    once: bool = False,
 ) -> Callable[[F], F]:
     """Mark a callable as deprecated and warn when it is used.
 
@@ -55,6 +57,8 @@ def deprecated(
         since: First OpenMed version that warns about the callable.
         remove_in: Earliest release in which removal is planned.
         replacement: Optional fully qualified replacement callable.
+
+        once: Emit at most one warning for this callable in the process.
 
     Returns:
         A decorator that preserves the wrapped callable's identity and signature.
@@ -76,12 +80,24 @@ def deprecated(
             "replacement": replacement,
         }
 
+        lock = Lock()
+        emitted = False
+
+        def notify() -> None:
+            nonlocal emitted
+            if once:
+                with lock:
+                    if emitted:
+                        return
+                    emitted = True
+            warnings.warn(message, DeprecationWarning, stacklevel=3)
+
         if isinstance(target, type):
             original_init = target.__init__
 
             @wraps(original_init)
             def warned_init(self: Any, *args: Any, **kwargs: Any) -> None:
-                warnings.warn(message, DeprecationWarning, stacklevel=2)
+                notify()
                 original_init(self, *args, **kwargs)
 
             target.__init__ = warned_init  # type: ignore[method-assign]
@@ -90,7 +106,7 @@ def deprecated(
 
         @wraps(target)
         def warned(*args: Any, **kwargs: Any) -> Any:
-            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            notify()
             return target(*args, **kwargs)
 
         setattr(warned, "__openmed_deprecated__", metadata)

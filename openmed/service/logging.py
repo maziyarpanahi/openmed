@@ -14,6 +14,8 @@ from typing import Any, Mapping, Optional, Sequence
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from openmed.utils.deprecation import deprecated
+
 from .request_id import REQUEST_ID_HEADER, request_id_or_generated
 
 ACCESS_LOGGER_NAME = "openmed.service.access"
@@ -62,6 +64,12 @@ class StructuredJsonLogFormatter(logging.Formatter):
         )
 
 
+@deprecated(
+    since="4.3",
+    remove_in="5.0",
+    replacement="openmed.core.settings_registry.setting_declarations and openmed config service-check",
+    once=True,
+)
 def service_log_config_from_env() -> ServiceLogConfig:
     """Return service logging settings from environment variables."""
     return ServiceLogConfig(

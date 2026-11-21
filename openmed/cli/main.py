@@ -2704,6 +2704,12 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     config_sub = config_parser.add_subparsers(dest="config_command")
 
+    service_check = config_sub.add_parser(
+        "service-check",
+        help="Check service environment names and declared value constraints.",
+    )
+    service_check.set_defaults(handler=_handle_service_settings_check)
+
     config_show = config_sub.add_parser("show", help="Display active configuration.")
     config_show.add_argument(
         "--profile",
@@ -8034,6 +8040,14 @@ def _handle_config_provenance(args: argparse.Namespace) -> int:
         for key, entry in report["keys"].items()
     )
     return emit(args, report, human=human)
+
+
+def _handle_service_settings_check(args: argparse.Namespace) -> int:
+    from openmed.core.settings_registry import service_setting_findings
+
+    findings = service_setting_findings(os.environ)
+    print(json.dumps({"findings": findings}))
+    return int(bool(findings))
 
 
 def _handle_config_show(args: argparse.Namespace) -> int:

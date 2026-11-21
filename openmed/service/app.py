@@ -1445,6 +1445,14 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
+        import logging
+
+        from openmed.core.settings_registry import service_setting_findings
+
+        for finding in service_setting_findings(os.environ):
+            logging.getLogger(__name__).warning(
+                "Service setting %s: %s", finding["name"], finding["code"]
+            )
         validate_route_policies(fastapi_app)
         validate_egress_configuration()
         runtime = ServiceRuntime.from_env(
