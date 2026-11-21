@@ -297,7 +297,7 @@
     "schema_version": 1
   },
   "settings": {
-    "fingerprint": "sha256:37c7151f56fbd97158d2179cfd3c7b34c66486594031d0419c0f188ad995fa0f",
+    "fingerprint": "sha256:363c630e97817d6c9c4ff997fab6ed0f715bc139e6b41e81f668f294e8fd242e",
     "properties": [
       "core",
       "eval_datasets",
