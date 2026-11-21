@@ -173,7 +173,8 @@ check the entries against source.
 
 ### Typed span evidence
 
-Free-form span evidence is planned to move to typed evidence references.
+The 4.3 schema and web kit mark the free-form evidence object as deprecated.
+See the [4.3 migration entry](migration/4.2-to-4.3.md#free-form-span-evidence).
 
 ### Audit chain
 

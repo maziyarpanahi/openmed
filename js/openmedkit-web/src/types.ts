@@ -88,6 +88,7 @@ export interface OpenMedSpan {
   regulatory_tags: string[];
   score: number | null;
   detector: string | null;
+  /** @deprecated Free-form span evidence is supported through 4.x. See the 4.3 migration guide. */
   evidence: Record<string, unknown>;
   action: SpanAction;
   replacement: string | null;
