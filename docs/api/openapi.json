@@ -4411,7 +4411,23 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Deprecation": {
+                "description": "Announcement date for the legacy receipt-free representation.",
+                "example": "@1794069192",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Link": {
+                "description": "Migration guide for the receipt-free representation.",
+                "example": "<https://openmed.life/docs/migration/#policy-receipts>; rel=\"deprecation\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -5843,7 +5859,23 @@
                 }
               }
             },
-            "description": "A calibrated decision in the shape of the request: an OpenMed result for an OpenMed request, or an OpenAI-compatible Decisions response for that body."
+            "description": "A calibrated decision in the shape of the request: an OpenMed result for an OpenMed request, or an OpenAI-compatible Decisions response for that body.",
+            "headers": {
+              "Deprecation": {
+                "description": "Announcement date for the legacy receipt-free representation.",
+                "example": "@1794069192",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Link": {
+                "description": "Migration guide for the receipt-free representation.",
+                "example": "<https://openmed.life/docs/migration/#policy-receipts>; rel=\"deprecation\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {

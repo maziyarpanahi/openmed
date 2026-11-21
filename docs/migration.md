@@ -181,7 +181,14 @@ The compliance audit log is planned to converge on the core audit chain.
 
 ### Policy receipts
 
-De-identification and decision responses are planned to carry policy receipts.
+Successful `POST /pii/deidentify` and `POST /v1/decisions` responses now include
+a `Deprecation` header and a `Link` to this entry. The notice applies to the
+receipt-free response representation. Existing clients can continue parsing
+the same JSON. The date records the November 7, 2026 public migration announcement.
+
+The planned 5.0 representation adds a verified policy receipt. The canonical
+v4.0 envelope and opt-in are pending. Clients should continue to treat
+the absence of a verified receipt as absence of policy evidence.
 
 ### Generated clients
 
