@@ -1,5 +1,10 @@
 # OpenMed TypeScript REST Client
 
+The hand-written REST client is deprecated in 4.3. For the 5.0 migration,
+use a client generated from the OpenAPI contract for your service version.
+The migration guide describes which application settings to carry over.
+[Generated client migration](../../docs/migration.md#generated-clients)
+
 Dependency-light TypeScript client for the OpenMed REST service. It uses the
 global `fetch` implementation by default and also accepts an injected fetch for
 Node runtimes and tests.

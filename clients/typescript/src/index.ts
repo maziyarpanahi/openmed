@@ -21,17 +21,22 @@ export {
   type JourneyWorkflowQuery,
 } from "./journey-workflows.generated.js";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type JsonObject = Record<string, unknown>;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type FetchLike = (
   input: string,
   init?: RequestInit,
 ) => Promise<Response>;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type KeepAliveValue = number | string;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type AggregationStrategy = "simple" | "first" | "average" | "max";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type PIILanguage =
   | "am"
   | "as"
@@ -79,6 +84,7 @@ export type PIILanguage =
   | "el"
   | "vi";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type DeidentificationMethod =
   | "mask"
   | "remove"
@@ -86,11 +92,13 @@ export type DeidentificationMethod =
   | "hash"
   | "shift_dates";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OpenMedClientOptions {
   baseUrl: string;
   fetch?: FetchLike;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface AnalyzeRequest {
   text: string;
   model_name?: string;
@@ -104,6 +112,7 @@ export interface AnalyzeRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface GroundRequest {
   entities?: JsonObject[] | null;
   offline?: boolean;
@@ -113,9 +122,12 @@ export interface GroundRequest {
   top_k?: number;
 }
 
-/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+/** Opaque HTTP reference. Custody and approval authority remain server-owned.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export type JSONObject = Record<string, unknown>;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface GovernedWorkflowReference {
   schema_version: "openmed.service.workflow_request.v1";
   run_id: string;
@@ -125,12 +137,15 @@ export interface GovernedWorkflowReference {
   request_id: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
   expected_state_digest: string;
   request_id: string;
 }
 
-/** Existing consumed receipt metadata; declaring this type grants no authority. */
+/** Existing consumed receipt metadata; declaring this type grants no authority.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface GovernedWorkflowReceipt {
   schema_version: "openmed.agent.approval_receipt.v2";
   action_digest: string;
@@ -138,10 +153,12 @@ export interface GovernedWorkflowReceipt {
   code: "approved";
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
   receipt: GovernedWorkflowReceipt;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIExtractRequest {
   text: string;
   model_name?: string;
@@ -152,6 +169,7 @@ export interface PIIExtractRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIExtractStreamRequest extends PIIExtractRequest {
   chunk_size?: number;
   window_chars?: number;
@@ -160,6 +178,7 @@ export interface PIIExtractStreamRequest extends PIIExtractRequest {
   include_text?: boolean;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIDeidentifyRequest {
   text: string;
   method?: DeidentificationMethod;
@@ -177,10 +196,12 @@ export interface PIIDeidentifyRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIDeidentifyStreamRequest extends PIIDeidentifyRequest {
   chunk_size?: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PrivacyGatewayRequest {
   text: string;
   model_name?: string;
@@ -194,6 +215,7 @@ export interface PrivacyGatewayRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type DecisionMode =
   | "fixed_choice"
   | "boolean_choice"
@@ -202,6 +224,7 @@ export type DecisionMode =
   | "multi_label"
   | "question_set";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type DecisionState =
   | "success"
   | "abstained"
@@ -212,11 +235,15 @@ export type DecisionState =
   | "denied"
   | "failure";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
 
-/** Decision contract versions this client reads and writes. */
+/** Decision contract versions this client reads and writes.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export type DecisionSchemaVersion = "1.0.0" | "1.1.0" | "1.2.0";
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DecisionQuestion {
   question_id: string;
   mode: DecisionQuestionMode;
@@ -226,7 +253,9 @@ export interface DecisionQuestion {
   levels?: string[];
 }
 
-/** Protected inline media. Never log the encoded payload. */
+/** Protected inline media. Never log the encoded payload.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface DecisionMedia {
   media_type: "image/png" | "image/jpeg" | "video/mp4" | "audio/wav";
   byte_size: number;
@@ -234,11 +263,13 @@ export interface DecisionMedia {
   data: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface SystemOneRequest {
   state: string | Record<string, unknown> | unknown[];
   questions: Record<string, Record<string, unknown>>;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface FixedOptionDecisionRequest {
   mode: DecisionMode;
   input_text: string;
@@ -259,18 +290,21 @@ export interface FixedOptionDecisionRequest {
   max_input_chars?: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DecisionOptionScore {
   index: number;
   option: string;
   score: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DecisionLevelScore {
   index: number;
   level: string;
   score: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DecisionQuestionResult {
   question_id: string;
   mode: DecisionQuestionMode;
@@ -289,6 +323,7 @@ export interface DecisionQuestionResult {
   review: { required: true; reasons: string[] };
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface FixedOptionDecisionResult {
   mode: DecisionMode;
   state: DecisionState;
@@ -315,7 +350,9 @@ export interface FixedOptionDecisionResult {
   extensions: JsonObject;
 }
 
-/** One question of an OpenAI-compatible Decisions body. */
+/** One question of an OpenAI-compatible Decisions body.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export type OpenAIDecisionsQuestion =
   | { type: "predicate"; name: string; instructions?: string | null }
   | {
@@ -334,6 +371,7 @@ export type OpenAIDecisionsQuestion =
 /**
  * Text-only OpenAI-compatible Decisions body for POST /v1/decisions.
  * `model` must name the model the service decides with.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
  */
 export interface OpenAIDecisionsRequest {
   model: string;
@@ -341,12 +379,15 @@ export interface OpenAIDecisionsRequest {
   questions: OpenAIDecisionsQuestion[];
 }
 
-/** Non-success questions carry their OpenMed state and code. */
+/** Non-success questions carry their OpenMed state and code.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface OpenAIDecisionsOutcome {
   state?: Exclude<DecisionState, "success">;
   code?: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type OpenAIDecisionsAnswer =
   | ({ type: "predicate"; name: string; probability: number | null } &
       OpenAIDecisionsOutcome)
@@ -365,7 +406,9 @@ export type OpenAIDecisionsAnswer =
       probabilities?: { label: string; value: number; probability: number }[];
     } & OpenAIDecisionsOutcome);
 
-/** Review requirement, advisory and provenance of the underlying result. */
+/** Review requirement, advisory and provenance of the underlying result.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface OpenAIDecisionsReview {
   state: DecisionState;
   code: string | null;
@@ -380,17 +423,20 @@ export interface OpenAIDecisionsReview {
   compatibility_policy: "same_major";
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OpenAIDecisionsResponse {
   model: string;
   answers: OpenAIDecisionsAnswer[];
   openmed?: OpenAIDecisionsReview;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DeidentifyJobDocument {
   text: string;
   id?: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobWebhookRequest {
   url: string;
   secret: string;
@@ -398,6 +444,7 @@ export interface JobWebhookRequest {
   backoff_seconds?: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface DeidentifyJobRequest {
   documents: DeidentifyJobDocument[];
   webhook?: JobWebhookRequest | null;
@@ -418,11 +465,13 @@ export interface DeidentifyJobRequest {
   payload_retention_seconds?: number | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface ModelUnloadRequest {
   model_name?: string | null;
   all?: boolean;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface SMARTBackendIngestionRequest {
   fhir_base_url: string;
   token_url: string;
@@ -447,7 +496,9 @@ export interface SMARTBackendIngestionRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
-/** Options for job starts that deduplicate client retries. */
+/** Options for job starts that deduplicate client retries.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface StartJobOptions {
   /**
    * Sent as `Idempotency-Key`. Retrying with the same key and request returns
@@ -457,6 +508,7 @@ export interface StartJobOptions {
   idempotencyKey?: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OMOPLoadRequest {
   records_jsonl: string;
   vocabulary_version?: string | null;
@@ -465,6 +517,7 @@ export interface OMOPLoadRequest {
   required_fields?: string[];
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OMOPRejectedSpan {
   reason: string;
   source_note_hash: string;
@@ -473,11 +526,13 @@ export interface OMOPRejectedSpan {
   domain: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OMOPConstraintViolations {
   count: number;
   by_reason: Record<string, number>;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OMOPLoadResponse {
   row_counts: Record<string, number>;
   rejection_counts: Record<string, number>;
@@ -486,11 +541,13 @@ export interface OMOPLoadResponse {
   constraint_violations?: OMOPConstraintViolations;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface ConceptAncestorRequest {
   ancestor_concept_id: number;
   descendant_concept_id: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface CohortResolveRequest {
   phenotype: JsonObject;
   records_jsonl: string;
@@ -499,6 +556,7 @@ export interface CohortResolveRequest {
   required_fields?: string[];
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface ProfileRequest {
   records_jsonl: string;
   completeness_floor?: number;
@@ -506,8 +564,10 @@ export interface ProfileRequest {
   athena_index?: JsonObject | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type ProfileResponse = JsonObject;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface CohortEvidencePointer {
   criterion_id: string;
   concept_set_id: string;
@@ -522,6 +582,7 @@ export interface CohortEvidencePointer {
   end: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface CohortResolveResponse {
   schema_version: string;
   advisory: string;
@@ -533,6 +594,7 @@ export interface CohortResolveResponse {
   provenance: JsonObject;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface EntityPrediction {
   text: string;
   label: string;
@@ -542,6 +604,7 @@ export interface EntityPrediction {
   metadata: JsonObject;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PredictionResult {
   text: string;
   entities: EntityPrediction[];
@@ -551,6 +614,7 @@ export interface PredictionResult {
   metadata?: JsonObject | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIDeidentifiedEntity extends EntityPrediction {
   entity_type: string;
   redacted_text: string | null;
@@ -563,6 +627,7 @@ export interface PIIDeidentifiedEntity extends EntityPrediction {
   reversible_id?: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PIIDeidentifyResponse {
   original_text: string;
   deidentified_text: string;
@@ -575,6 +640,7 @@ export interface PIIDeidentifyResponse {
   mapping?: Record<string, string>;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface PrivacyGatewayResponse {
   request_id: string;
   redacted_prompt: string;
@@ -588,16 +654,22 @@ export interface PrivacyGatewayResponse {
   };
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type AnalyzeResponse = PredictionResult;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type GroundResponse = JsonObject;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type PIIExtractResponse = PredictionResult;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type PIIExtractStreamResponse = string;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type PIIDeidentifyStreamResponse = string;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface HealthResponse {
   status: string;
   service: string;
@@ -608,14 +680,17 @@ export interface HealthResponse {
   [key: string]: unknown;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface ProbeResponse {
   status: string;
   service: string;
   [key: string]: unknown;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type ReadyzResponse = ProbeResponse;
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface LoadedModelStats {
   models?: number;
   tokenizers?: number;
@@ -626,6 +701,7 @@ export interface LoadedModelStats {
   [key: string]: unknown;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface LoadedModelsResponse {
   default_keep_alive_seconds?: number;
   max_resident_models?: number | null;
@@ -634,6 +710,7 @@ export interface LoadedModelsResponse {
   [key: string]: unknown;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface ModelUnloadResponse {
   unloaded?: boolean;
   model_name?: string;
@@ -642,6 +719,7 @@ export interface ModelUnloadResponse {
   [key: string]: unknown;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface SMARTBackendFileResult {
   index: number;
   resource_type: string;
@@ -655,6 +733,7 @@ export interface SMARTBackendFileResult {
   resumed: boolean;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface SMARTBackendIngestionSummary {
   job_id: string;
   status: string;
@@ -670,6 +749,7 @@ export interface SMARTBackendIngestionSummary {
   files: SMARTBackendFileResult[];
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface SMARTBackendJobStatus {
   job_id: string;
   status: string;
@@ -679,16 +759,21 @@ export interface SMARTBackendJobStatus {
   error: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
-/** Keyed, domain-separated digest; values compare only within one key_id. */
+/** Keyed, domain-separated digest; values compare only within one key_id.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface KeyedDigest {
   alg: "hmac-sha256";
   key_id: string;
   value: string;
 }
 
-/** How the digests in a job record were made; omitted digests are null. */
+/** How the digests in a job record were made; omitted digests are null.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export type JobDigests =
   | { mode: "keyed"; alg: "hmac-sha256"; key_id: string; reason: null }
   | {
@@ -698,12 +783,14 @@ export type JobDigests =
       reason: "digest_key_unconfigured" | "legacy_digests_removed";
     };
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobDocumentMetadata {
   id: string;
   length: number;
   text_digest: KeyedDigest | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobSpan {
   document_id: string;
   start: number;
@@ -713,6 +800,7 @@ export interface JobSpan {
   confidence: number | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobWebhookMetadata {
   configured: boolean;
   url_digest: KeyedDigest | null;
@@ -720,6 +808,7 @@ export interface JobWebhookMetadata {
   backoff_seconds: number;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobWebhookAttemptReceipt {
   attempt: number;
   /** Public signing key id; never key material. */
@@ -729,6 +818,7 @@ export interface JobWebhookAttemptReceipt {
   error: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobWebhookDelivery {
   success: boolean;
   attempts: number;
@@ -744,12 +834,14 @@ export interface JobWebhookDelivery {
   payload_ref?: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobErrorSummary {
   code?: string;
   type: string;
   message: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobPayloadRef {
   ref: string;
   schema_version: number;
@@ -760,6 +852,7 @@ export interface JobPayloadRef {
   reason: string | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobPayloads {
   schema_version: number;
   mode: "memory" | "encrypted";
@@ -768,6 +861,7 @@ export interface JobPayloads {
   terminal_event: JobPayloadRef | null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface JobResponse {
   /** 3 for records that carry keyed digests. */
   schema_version: number;
@@ -793,12 +887,14 @@ export interface JobResponse {
   status_url?: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OpenMedValidationDetail {
   field: string;
   message: string;
   type: string;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface OpenMedErrorEnvelope {
   error: {
     code: string;
@@ -807,6 +903,7 @@ export interface OpenMedErrorEnvelope {
   };
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export class OpenMedApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -826,6 +923,7 @@ export class OpenMedApiError extends Error {
   }
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
@@ -848,103 +946,126 @@ export class OpenMedClient {
     this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     return this.post("/analyze", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async ground(request: GroundRequest): Promise<GroundResponse> {
     return this.post("/ground", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
     return this.workflows.read("/v1/workflows/preflight", request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
     return this.workflows.read("/v1/workflows/preview", request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
     return this.workflows.read("/v1/workflows/status", request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
     return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
     return this.workflows.mutate("/v1/workflows/cancel", request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
     return this.workflows.poll(request, options);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async brief(request: BriefRequest): Promise<BriefResponse> {
     return this.post("/brief", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
     return this.post("/pii/extract", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async extractPiiStream(
     request: PIIExtractStreamRequest,
   ): Promise<PIIExtractStreamResponse> {
     return this.postNDJSON("/pii/extract/stream", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async deidentify(
     request: PIIDeidentifyRequest,
   ): Promise<PIIDeidentifyResponse> {
     return this.post("/pii/deidentify", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async deidentifyStream(
     request: PIIDeidentifyStreamRequest,
   ): Promise<PIIDeidentifyStreamResponse> {
     return this.postNDJSON("/pii/deidentify/stream", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async privacyGateway(
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async systemOne(request: SystemOneRequest): Promise<{decision_id: string; model: string; answers: Record<string, unknown>}> {
     return this.post("/v1/systemone", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async decision(
     request: FixedOptionDecisionRequest,
   ): Promise<FixedOptionDecisionResult> {
     return this.post("/v1/decisions", request);
   }
 
-  /** Send an OpenAI-compatible Decisions body; the answer has the same shape. */
+  /** Send an OpenAI-compatible Decisions body; the answer has the same shape.
+   * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+   */
   async openaiDecisions(
     request: OpenAIDecisionsRequest,
   ): Promise<OpenAIDecisionsResponse> {
     return this.post("/v1/decisions", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async health(): Promise<HealthResponse> {
     return this.get("/health");
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async livez(): Promise<ProbeResponse> {
     return this.get("/livez");
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async readyz(): Promise<ReadyzResponse> {
     return this.get("/readyz");
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async loadedModels(): Promise<LoadedModelsResponse> {
     return this.get("/models/loaded");
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async journeyResources(
     query: JourneyResourceQuery,
   ): Promise<JourneyResourcePage> {
@@ -970,6 +1091,7 @@ export class OpenMedClient {
     return this.get(`${path}?${parameters.toString()}`);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async journeyWorkflow(
     workflow: JourneyWorkflowName,
     query: JourneyWorkflowQuery = {},
@@ -980,52 +1102,63 @@ export class OpenMedClient {
     });
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async journey(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("journey", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async cohort(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("cohort", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async dataset(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("dataset", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async registry(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("registry", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async measure(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("measure", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async trialReview(
     query: JourneyWorkflowQuery = {},
   ): Promise<JourneyResourcePage> {
     return this.journeyWorkflow("trial_review", query);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async unloadModels(
     request: ModelUnloadRequest,
   ): Promise<ModelUnloadResponse> {
     return this.post("/models/unload", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async profile(request: ProfileRequest): Promise<ProfileResponse> {
     return this.post("/profile", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async resolveCohort(
     request: CohortResolveRequest,
   ): Promise<CohortResolveResponse> {
     return this.post("/cohort/resolve", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async startSmartBackendIngestion(
     request: SMARTBackendIngestionRequest,
     options: StartJobOptions = {},
@@ -1037,6 +1170,7 @@ export class OpenMedClient {
     );
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async smartBackendIngestionStatus(
     jobId: string,
   ): Promise<SMARTBackendJobStatus> {
@@ -1045,6 +1179,7 @@ export class OpenMedClient {
     );
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async smartBackendIngestionSummary(
     jobId: string,
   ): Promise<SMARTBackendIngestionSummary> {
@@ -1056,10 +1191,12 @@ export class OpenMedClient {
     );
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async createJob(request: DeidentifyJobRequest): Promise<JobResponse> {
     return this.post("/jobs", request);
   }
 
+  /** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
   async getJob(jobId: string): Promise<JobResponse> {
     const pathTemplate = "/jobs/{job_id}";
     return this.get(pathTemplate.replace("{job_id}", encodeURIComponent(jobId)));
@@ -1218,6 +1355,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/** @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0. */
 export interface BriefRequest {
   text: string;
   model?: "mlx" | "extractive" | "maple" | "maple-preview";
@@ -1225,7 +1363,9 @@ export interface BriefRequest {
   review_id?: string | null;
 }
 
-/** Protected application response; do not log summary text. */
+/** Protected application response; do not log summary text.
+ * @deprecated Since 4.3. Migrate to the OpenAPI-generated client for 5.0.
+ */
 export interface BriefResponse {
   schema_version: 1;
   status: "needs_review" | "refused";

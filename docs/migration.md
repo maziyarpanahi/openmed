@@ -185,7 +185,13 @@ De-identification and decision responses are planned to carry policy receipts.
 
 ### Generated clients
 
-The TypeScript and Go clients are planned to move to generated OpenAPI clients.
+The hand-written TypeScript and Go REST clients are deprecated in 4.3 and
+scheduled for replacement in 5.0. Existing 4.x calls keep their signatures.
+Use the OpenAPI document for the service version you deploy when generating
+client types and operations. Map each call by HTTP method and path. Preserve
+your base URL, authentication, timeout and retry settings, and check streaming
+and error handling against your service before switching traffic.
+[OpenAPI contract](api/openapi.json)
 
 ### Service settings
 
