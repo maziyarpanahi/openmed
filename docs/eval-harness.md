@@ -602,3 +602,13 @@ no model download. It uses human-annotated spans, the admission reference time
 when present, and the three-class TLINK evaluation. Each view retains its gold
 support and suppresses cells below five. Sources, offsets and row identifiers
 stay in the evaluator process. See the [original shared-task relation mapping](https://pubmed.ncbi.nlm.nih.gov/23564629/).
+
+For i2b2 2010 assertion scoring, point `OPENMED_I2B2_2010_PATH` at the authorized
+local corpus and run `openmed eval credentialed --suite i2b2-2010-assertion --output /private/results/assertion.json`.
+The rules use English cues and the corpus line boundaries. Mapping v1 gives
+family/other experiencer precedence, followed by hypothetical temporality,
+negation and uncertainty. Other spans, including affirmed historical problems,
+map to present. The report flags conditional as a class these rules cannot emit.
+Macro F1 averages the six classes with zero for an undefined class F1. Confusion
+cells and class rows below their declared support are suppressed. The report
+includes the OpenMed version, cue lexicon digest and mapping version.

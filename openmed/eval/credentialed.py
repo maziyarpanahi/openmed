@@ -103,7 +103,15 @@ def run_credentialed(
     """
     try:
         target = _output_file(output)
-        if suite == "i2b2-2012-temporal":
+        if suite == "i2b2-2010-assertion":
+            from openmed.eval.datasets.i2b2_2010 import I2B2_2010_DUA, load_i2b2_2010
+            from openmed.eval.suites.i2b2_2010_assertion import score_i2b2_2010
+
+            if year not in (None, 2010) or model_id or revision != "main":
+                raise CredentialedEvalError("invalid_assertion_suite_options")
+            report = score_i2b2_2010(load_i2b2_2010())
+            report.update(dua=I2B2_2010_DUA, metadata={"data_origin": "credentialed"})
+        elif suite == "i2b2-2012-temporal":
             from openmed.eval.datasets.i2b2_2012 import load_i2b2_2012
             from openmed.eval.suites.i2b2_2012_temporal import score_i2b2_2012
 
