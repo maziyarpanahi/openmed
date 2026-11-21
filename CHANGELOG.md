@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected without parsing the message. Messages and parsing behaviour are
   unchanged, and unknown codes fall back to `invalid_response` (#5086).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Download Core ML token-classification snapshots through `OpenMedModelStore.downloadCoreMLModel`: the store reads `openmed-coreml.json` and the package's provenance inventory, confines every declared path, compiles the `.mlpackage` into the cache only after every file has downloaded (keeping the source package), and reports `missing`, `partial` or `ready` until the label map and tokenizer are present (#5401).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
 - Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).

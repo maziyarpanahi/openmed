@@ -20,6 +20,7 @@ so API drift is caught in tests instead of downstream apps.
 | `OpenMedModelStore.cachedMLXModelDirectory(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory` | Present; MLX-named member deprecated |
 | `OpenMedModelStore.isMLXModelCached(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
 | `OpenMedModelStore.mlxModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
+| `OpenMedModelStore.downloadCoreMLModel(repoID:revision:cacheDirectory:)` and `coreMLModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` | Swift-only format: Android acquires ONNX or TFLite; both report `missing`, `partial` and `ready` |
 | `OpenMedMLXModelCacheState.missing` | `ArtifactCacheState.MISSING` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.partial` | `ArtifactCacheState.PARTIAL` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.ready` | `ArtifactCacheState.READY` | Present; MLX-named enum deprecated |
