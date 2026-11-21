@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .intended_use import RegulatoryTier, load_intended_use_registry
+
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
 
 REQUIRED_FIELDS = frozenset(
@@ -38,6 +40,8 @@ OPTIONAL_ENRICHMENT_FIELDS = frozenset(
         "latency_ms",
         "peak_ram_mb",
         "recommended_tier",
+        "regulatory_tier",
+        "capability",
         "script_coverage",
         "script_eval",
         "training_data_licenses",
@@ -225,6 +229,32 @@ def validate_manifest_file(
     )
 
 
+def validate_intended_use_fields(
+    row: Mapping[str, Any], line_number: int
+) -> list[ManifestViolation]:
+    """Check optional wire codes without supplying defaults for absent fields."""
+    violations = []
+    if "regulatory_tier" in row:
+        try:
+            RegulatoryTier(row["regulatory_tier"])
+        except (TypeError, ValueError):
+            violations.append(
+                ManifestViolation(line_number, "regulatory_tier must be a known tier")
+            )
+    if "capability" in row:
+        code = row["capability"]
+        if (
+            not isinstance(code, str)
+            or code not in load_intended_use_registry().declarations
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number, "capability must be a known capability code"
+                )
+            )
+    return violations
+
+
 def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]:
     """Return schema violations for one decoded manifest row."""
     violations: list[ManifestViolation] = []
@@ -236,6 +266,7 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
             )
         ]
 
+    violations.extend(validate_intended_use_fields(row, line_number))
     fields = set(row)
     for field in sorted(REQUIRED_FIELDS - fields):
         violations.append(
