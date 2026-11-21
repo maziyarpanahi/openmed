@@ -65,3 +65,47 @@ configuration error. Callers remain responsible for UMLS and SNOMED CT
 licensing and for validating the returned mappings. Crosswalk results are
 assistive interoperability candidates, not autonomous diagnosis, treatment,
 billing, or clinical coding decisions.
+
+## Exporting redistributable crosswalks as FHIR ConceptMaps
+
+The bundled redistributable crosswalks (ICD-10-CN, CHPO, and Indic HPO
+aliases) and caller-supplied `CrosswalkResource` tables can be handed to a
+FHIR server or terminology tool as R4 `ConceptMap` JSON:
+
+```python
+import json
+
+from openmed.clinical.grounding.crosswalk import (
+    crosswalk_resource_to_conceptmap,
+    load_default_crosswalks,
+)
+
+resource = load_default_crosswalks()[0]  # the ICD-10-CN starter table
+concept_map = crosswalk_resource_to_conceptmap(resource)
+print(json.dumps(concept_map, ensure_ascii=False, indent=2))
+```
+
+The ConceptMap carries one `group` per source/target system pair, one
+`element` per distinct source code, and one `target` per mapped code with
+`relatedto` equivalence. The resource's `name` and `version` are copied, its
+`license_id` becomes `copyright`, and its `content_hash` becomes the
+`identifier` value. Groups, elements, and targets are sorted, so exporting
+the same resource twice yields byte-identical JSON.
+
+Group `source` and `target` keep the resource's system labels unless the
+registry (`openmed.clinical.grounding.systems.system_uri`) has a URI for
+them. Of the systems in the bundled crosswalks only `HPO` has one, so it
+becomes `http://human-phenotype-ontology.org`, while `ICD-10-CN`, `CHPO`,
+and `OPENMED-INDIC-ALIAS` are exported as labels. WHO `ICD10`/`ICD-10`
+labels become `http://hl7.org/fhir/sid/icd-10` rather than the ICD-10-CM
+URI the registry aliases `icd10` to, which would mislabel those groups.
+An RxNorm label or URI stays `http://www.nlm.nih.gov/research/umls/rxnorm`.
+
+Only resources declared redistributable can be exported.
+`CrosswalkLicenseError` is raised for everything else: the licensed
+`UMLSCrosswalk` engine, a resource not declared redistributable, and any
+resource that maps UMLS, SNOMED CT, or CPT spelled as a registry label
+(`UMLS`, `SNOMED CT`, `cpt4`), a known system URI (`http://snomed.info/sct`,
+a SNOMED edition URI such as `http://snomed.info/sct/900000000000207008`, or
+the AMA CPT URI `http://www.ama-assn.org/go/cpt`), or a UMLS-style source
+abbreviation (`SNOMEDCT_US`, `SNOMEDCT_UK`, `SNOMEDCT_VET`).

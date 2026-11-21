@@ -14,7 +14,10 @@ OpenMed needs without handing the full UMLS release to this package.
 Separately, permissively licensed multilingual crosswalks are ordinary JSON
 files loaded from local storage.  Bundled starter mappings explicitly declare
 their redistributable license, and caller-supplied resources use the same
-validated schema.  Neither path performs network access.
+validated schema.  Neither path performs network access.  Resources declared
+redistributable can be exported as deterministic FHIR R4 ``ConceptMap`` JSON
+via :func:`crosswalk_resource_to_conceptmap`; UMLS-backed crosswalks never
+can.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .vocab import RestrictedVocabularyError, normalize_alias, normalize_language
 
 __all__ = [
@@ -1048,6 +1052,7 @@ __all__ += [
     "CrosswalkLicenseError",
     "CrosswalkResource",
     "DEFAULT_CROSSWALK_RESOURCES",
+    "crosswalk_resource_to_conceptmap",
     "load_crosswalk",
     "load_default_crosswalks",
 ]
@@ -1209,6 +1214,145 @@ class CrosswalkResource:
             if normalize_alias(entry.target_code) == normalized_code
             and (normalized_system is None or entry.target_system == normalized_system)
         )
+
+
+# Crosswalk "ICD10"/"ICD-10" labels mean WHO ICD-10, but the system registry
+# aliases them to the ICD-10-CM URI; export them with the WHO ICD-10 system
+# URI instead of mislabelling the group.
+_WHO_ICD10_LABELS = frozenset({"icd10", "icd-10"})
+_WHO_ICD10_URI = "http://hl7.org/fhir/sid/icd-10"
+
+# Canonical URIs of the restricted registry systems, casefolded like
+# valueset._RESTRICTED_URIS.
+_RESTRICTED_URIS = frozenset(
+    SYSTEM_URIS[name].casefold() for name in RESTRICTED_SYSTEMS
+)
+_SNOMED_URI_PREFIX = f"{SYSTEM_URIS['snomed'].casefold()}/"
+
+
+def _is_restricted_system(label: str) -> bool:
+    # Mirrors valueset._is_restricted: a restricted registry URI, or any
+    # label or URI containing "cpt" (this is what refuses the AMA CPT URI).
+    normalized = label.rstrip("/").casefold()
+    if normalized in _RESTRICTED_URIS or "cpt" in normalized:
+        return True
+    # SNOMED edition URIs such as http://snomed.info/sct/<module>.
+    if normalized.startswith(_SNOMED_URI_PREFIX):
+        return True
+    # UMLS-style source abbreviations: _canonical_system folds SNOMEDCT_US
+    # and the bare URI into SNOMED CT; the prefix check adds editions it
+    # does not list, such as SNOMEDCT_UK and SNOMEDCT_VET.
+    if _canonical_system(label) == SNOMEDCT:
+        return True
+    if re.sub(r"[^a-z0-9]+", "", normalized).startswith("snomedct"):
+        return True
+    # Restricted registry labels such as "UMLS".
+    return canonical_system(label) in RESTRICTED_SYSTEMS
+
+
+def _conceptmap_system(label: str) -> str:
+    if label.strip().casefold().replace(" ", "-") in _WHO_ICD10_LABELS:
+        return _WHO_ICD10_URI
+    return system_uri(label) or label
+
+
+def crosswalk_resource_to_conceptmap(resource: CrosswalkResource) -> dict[str, Any]:
+    """Export a redistributable crosswalk as a FHIR R4 ConceptMap dict.
+
+    The ConceptMap carries one ``group`` per source/target system pair, one
+    ``element`` per distinct source code, and one ``target`` per mapped code
+    with ``relatedto`` equivalence.  Group ``source`` and ``target`` keep the
+    resource's system labels unless the registry has a URI for them:
+    ``ICD-10-CN`` has no entry in
+    :func:`openmed.clinical.grounding.systems.system_uri` and stays a label,
+    while ``HPO`` becomes its registry URI.  WHO ``ICD10``/``ICD-10`` labels
+    become ``http://hl7.org/fhir/sid/icd-10`` rather than the ICD-10-CM URI
+    the registry aliases ``icd10`` to, which would mislabel those groups.
+    Groups, elements, and targets are sorted, so serializing the same
+    resource twice yields byte-identical JSON.
+
+    Args:
+        resource: The validated redistributable mapping table to export.
+
+    Returns:
+        A FHIR R4 ``ConceptMap`` dict copying ``name`` and ``version`` from
+        the resource, with its ``license_id`` as ``copyright`` and its
+        ``content_hash`` as the ``identifier`` value.
+
+    Raises:
+        CrosswalkLicenseError: If ``resource`` is not a
+            :class:`CrosswalkResource` (UMLS-backed crosswalk engines are
+            licensed and are never exported), is not declared
+            redistributable, or maps UMLS, SNOMED CT, or CPT spelled as a
+            registry label (``UMLS``, ``SNOMED CT``, ``cpt4``), a known
+            system URI (``http://snomed.info/sct``, a SNOMED edition URI
+            such as ``http://snomed.info/sct/900000000000207008``, or the
+            AMA CPT URI), or a UMLS-style source abbreviation
+            (``SNOMEDCT_US``, ``SNOMEDCT_UK``, ``SNOMEDCT_VET``).
+    """
+
+    if not isinstance(resource, CrosswalkResource):
+        raise CrosswalkLicenseError(
+            "only redistributable CrosswalkResource tables can be exported; "
+            "UMLS-backed crosswalks are licensed and are never exported"
+        )
+    if not resource.redistributable:
+        raise CrosswalkLicenseError(
+            f"crosswalk {resource.name!r} is not declared redistributable"
+        )
+    restricted = sorted(
+        {
+            system
+            for entry in resource.entries
+            for system in (entry.source_system, entry.target_system)
+            if _is_restricted_system(system)
+        }
+    )
+    if restricted:
+        raise CrosswalkLicenseError(
+            f"crosswalk {resource.name!r} maps restricted terminology systems "
+            f"{restricted} and is never exported"
+        )
+
+    mappings: dict[tuple[str, str], dict[str, set[tuple[str, str]]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
+    for entry in resource.entries:
+        pair = (
+            _conceptmap_system(entry.source_system),
+            _conceptmap_system(entry.target_system),
+        )
+        mappings[pair][entry.source_code].add((entry.target_code, entry.target_display))
+    groups = [
+        {
+            "source": source_system,
+            "target": target_system,
+            "element": [
+                {
+                    "code": source_code,
+                    "target": [
+                        {
+                            "code": target_code,
+                            "display": target_display,
+                            "equivalence": "relatedto",
+                        }
+                        for target_code, target_display in sorted(targets)
+                    ],
+                }
+                for source_code, targets in sorted(elements.items())
+            ],
+        }
+        for (source_system, target_system), elements in sorted(mappings.items())
+    ]
+    return {
+        "resourceType": "ConceptMap",
+        "identifier": {"value": resource.content_hash},
+        "version": resource.version,
+        "name": resource.name,
+        "status": "active",
+        "copyright": resource.license_id,
+        "group": groups,
+    }
 
 
 def load_crosswalk(path: str | Path) -> CrosswalkResource:
