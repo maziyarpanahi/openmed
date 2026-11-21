@@ -1132,3 +1132,20 @@ installed kit. Lookup returns `nil` for an unregistered capability. The
 Future tier values decode as `.unknown` and carry the restricted obligations.
 Refresh the Swift resource with `python3 scripts/manifest/export_intended_use.py`
 and verify it with the same command plus `--check`.
+
+### Display an offline crisis notice
+
+Pass an explicit signal and the configured locale to the local router. Present
+the returned banner before showing results. A signal in a restricted flow
+requires a notice even when the locale has no bundled resource.
+
+```swift
+let router = try OpenMedCrisisRouting()
+if let notice = try router.route(capability: "mental_health", locale: locale, signal: crisisSignal) {
+    OpenMedCrisisBanner(notice: notice)
+}
+```
+
+Supply local resource-table JSON as `overrideData` to replace specific locales.
+Each entry carries a source URL and verification date. Displaying the banner
+performs no network request. Tapping a resource link opens its HTTPS page.
