@@ -455,3 +455,24 @@ Medication sig, problem status, family-history, and relation outputs should feed
 the same record shape: normalized text or coding, assertion axes, section or
 experiencer metadata, offsets, and provenance. Keep raw clinical text out of
 audit artifacts unless the caller explicitly owns that PHI boundary.
+
+## Looking up intended use
+
+Use the packaged registry to look up an operation before enabling it. The same
+declaration is available under its stable capability code and its reviewed Python
+entry points. Loading the registry reads local package data.
+
+```python
+from openmed.core.intended_use import load_intended_use_registry
+
+registry = load_intended_use_registry()
+declaration = registry.resolve("openmed.analyze_text")
+assert declaration == registry.resolve("analyze_text")
+assert declaration.regulatory_tier.value == "assistive_review"
+```
+
+Use the more specific `mental_health` declaration when configuring a mental-health
+extraction workflow. The specialty currently has no dedicated Python entry point.
+The `languages` code `und` leaves language support unspecified and `zxx` denotes
+language-independent waveform input. Each declaration lists excluded uses, required
+human oversight and the obligations attached to its tier.

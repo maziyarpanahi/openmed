@@ -1,0 +1,1055 @@
+{
+  "analyze_text": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.aanalyze_text",
+      "openmed.abatch",
+      "openmed.analyze_text",
+      "openmed.clinical.abbreviation_expansion",
+      "openmed.clinical.abbreviation_surfaces",
+      "openmed.clinical.abnormal_flag_alias",
+      "openmed.clinical.aggregate_document_relations",
+      "openmed.clinical.analyze_clinical_context",
+      "openmed.clinical.annotate_analysis_result",
+      "openmed.clinical.apply_context_rules",
+      "openmed.clinical.apply_section_context",
+      "openmed.clinical.assemble_biomarker_results",
+      "openmed.clinical.assert_context",
+      "openmed.clinical.assert_context_axes",
+      "openmed.clinical.assign_review_priority",
+      "openmed.clinical.attach_coreference_representatives",
+      "openmed.clinical.attach_negated_need_assertions",
+      "openmed.clinical.attach_routing_provenance",
+      "openmed.clinical.attach_sdoh_assertions",
+      "openmed.clinical.attach_sdoh_experiencer",
+      "openmed.clinical.available_clinical_norm_languages",
+      "openmed.clinical.available_multilingual_relation_languages",
+      "openmed.clinical.bcubed_precision_recall_f1",
+      "openmed.clinical.bind_relation_evidence",
+      "openmed.clinical.bind_relation_records",
+      "openmed.clinical.build_discharge_profile",
+      "openmed.clinical.build_extraction_plan",
+      "openmed.clinical.build_relation_candidates",
+      "openmed.clinical.canonical_section_label",
+      "openmed.clinical.canonical_section_name",
+      "openmed.clinical.canonical_unit_alias",
+      "openmed.clinical.canonicalize_mentions",
+      "openmed.clinical.canonicalize_text",
+      "openmed.clinical.check_quantitative_relation",
+      "openmed.clinical.check_quantitative_relations",
+      "openmed.clinical.check_relation_unit_compatibility",
+      "openmed.clinical.check_unit_compatibility",
+      "openmed.clinical.classify_and_select_profile",
+      "openmed.clinical.classify_sdoh_evidence",
+      "openmed.clinical.classify_sdoh_experiencer",
+      "openmed.clinical.classify_sdoh_experiencers",
+      "openmed.clinical.clinical_context_lexicon_stats",
+      "openmed.clinical.clinical_norm_lexicon_stats",
+      "openmed.clinical.clinical_status_from_assertion",
+      "openmed.clinical.coerce_medication_candidate",
+      "openmed.clinical.collapse_duplicate_relation_candidates",
+      "openmed.clinical.collapse_duplicate_relations",
+      "openmed.clinical.collapse_relation_duplicates",
+      "openmed.clinical.compare_event_intervals",
+      "openmed.clinical.decode_joint_span_pairs",
+      "openmed.clinical.decode_tlink_candidates",
+      "openmed.clinical.deduplicate_problem_list",
+      "openmed.clinical.deduplicate_relations",
+      "openmed.clinical.detect_boilerplate",
+      "openmed.clinical.detect_copy_forward",
+      "openmed.clinical.detect_event_contradictions",
+      "openmed.clinical.detect_negation_scopes",
+      "openmed.clinical.disambiguate_abbreviation",
+      "openmed.clinical.discharge_summary_field_f1",
+      "openmed.clinical.discharge_summary_field_metrics",
+      "openmed.clinical.enumerate_joint_span_candidates",
+      "openmed.clinical.enumerate_span_pair_candidates",
+      "openmed.clinical.event_coreference_mentions",
+      "openmed.clinical.expand_abbreviations",
+      "openmed.clinical.export_discharge_summary_fhir",
+      "openmed.clinical.extract_ade_relations",
+      "openmed.clinical.extract_discharge_profile",
+      "openmed.clinical.extract_discharge_summary",
+      "openmed.clinical.extract_discharge_summary_profile",
+      "openmed.clinical.extract_document_relations",
+      "openmed.clinical.extract_family_history",
+      "openmed.clinical.extract_family_history_relations",
+      "openmed.clinical.extract_lab_results",
+      "openmed.clinical.extract_lab_trend_events",
+      "openmed.clinical.extract_medication_change_events",
+      "openmed.clinical.extract_medication_relations",
+      "openmed.clinical.extract_note",
+      "openmed.clinical.extract_note_sections",
+      "openmed.clinical.extract_pathology_profile",
+      "openmed.clinical.extract_pathology_result",
+      "openmed.clinical.extract_problem_relations",
+      "openmed.clinical.extract_radiology_finding_profile",
+      "openmed.clinical.extract_radiology_findings",
+      "openmed.clinical.extract_radiology_profile",
+      "openmed.clinical.extract_relations",
+      "openmed.clinical.extract_scoped_medication_candidates",
+      "openmed.clinical.extract_scoped_problem_mentions",
+      "openmed.clinical.extract_severity_laterality",
+      "openmed.clinical.extract_tlink_candidates",
+      "openmed.clinical.filter_medication_candidates",
+      "openmed.clinical.filter_patient_record",
+      "openmed.clinical.filter_patient_sdoh",
+      "openmed.clinical.filter_sdoh_evidence",
+      "openmed.clinical.filter_sdoh_experiencers",
+      "openmed.clinical.filter_sdoh_findings",
+      "openmed.clinical.generate_diagnosis_treatment_candidates",
+      "openmed.clinical.generate_lab_result_candidates",
+      "openmed.clinical.generate_medication_change_candidates",
+      "openmed.clinical.generate_procedure_indication_candidates",
+      "openmed.clinical.generate_relation_candidates",
+      "openmed.clinical.get_clinical_norm_lexicon",
+      "openmed.clinical.get_relation_direction_rule",
+      "openmed.clinical.hash_document_id",
+      "openmed.clinical.link_documents",
+      "openmed.clinical.link_medication_attributes",
+      "openmed.clinical.link_mentions",
+      "openmed.clinical.link_scoped_lab_value_attributes",
+      "openmed.clinical.load_abbreviation_inventory",
+      "openmed.clinical.load_boilerplate_template_corpus",
+      "openmed.clinical.load_context_rules",
+      "openmed.clinical.load_sense_inventory",
+      "openmed.clinical.load_status_vocab",
+      "openmed.clinical.localized_duration_text",
+      "openmed.clinical.localized_frequency_text",
+      "openmed.clinical.map_relation_type",
+      "openmed.clinical.multilingual_relation_rules",
+      "openmed.clinical.negated_spans",
+      "openmed.clinical.normalize_biomarker_method",
+      "openmed.clinical.normalize_conservative_temporal_interval",
+      "openmed.clinical.normalize_dose",
+      "openmed.clinical.normalize_duration",
+      "openmed.clinical.normalize_employment_status",
+      "openmed.clinical.normalize_frequency",
+      "openmed.clinical.normalize_interval",
+      "openmed.clinical.normalize_language",
+      "openmed.clinical.normalize_living_status",
+      "openmed.clinical.normalize_medication_attribute",
+      "openmed.clinical.normalize_medication_dose",
+      "openmed.clinical.normalize_medication_route",
+      "openmed.clinical.normalize_medication_status",
+      "openmed.clinical.normalize_medication_timestamp",
+      "openmed.clinical.normalize_result_polarity",
+      "openmed.clinical.normalize_substance_status",
+      "openmed.clinical.normalize_surface",
+      "openmed.clinical.normalize_temporal",
+      "openmed.clinical.normalize_temporal_intervals",
+      "openmed.clinical.normalize_unit_surface",
+      "openmed.clinical.parse_hgvs",
+      "openmed.clinical.parse_locale_number",
+      "openmed.clinical.parse_radiology_finding_profile",
+      "openmed.clinical.parse_radiology_report",
+      "openmed.clinical.parse_sig",
+      "openmed.clinical.parse_sigs",
+      "openmed.clinical.parse_temporal_interval",
+      "openmed.clinical.parse_temporal_value",
+      "openmed.clinical.parse_tnm",
+      "openmed.clinical.problem_mentions_from_grounded_terms",
+      "openmed.clinical.reconcile_assertions",
+      "openmed.clinical.reconcile_medication_candidates",
+      "openmed.clinical.reconcile_medication_mentions",
+      "openmed.clinical.reconcile_medications",
+      "openmed.clinical.reconcile_temporality_with_interval",
+      "openmed.clinical.reconstruct_medication_ade_records",
+      "openmed.clinical.reconstruct_medication_statements",
+      "openmed.clinical.refine_experiencer",
+      "openmed.clinical.register_clinical_norm_lexicon",
+      "openmed.clinical.relation_direction_rules",
+      "openmed.clinical.relation_type_mapping",
+      "openmed.clinical.report_event_contradictions",
+      "openmed.clinical.require_guarded_relations",
+      "openmed.clinical.resolve_coreference",
+      "openmed.clinical.resolve_event_coreference",
+      "openmed.clinical.resolve_experiencer",
+      "openmed.clinical.resolve_medication_candidate_preset",
+      "openmed.clinical.resolve_negation",
+      "openmed.clinical.resolve_note_type_profile",
+      "openmed.clinical.resolve_profile",
+      "openmed.clinical.resolve_profile_sections",
+      "openmed.clinical.resolve_sdoh_evidence",
+      "openmed.clinical.resolve_sdoh_negated_need",
+      "openmed.clinical.resolve_sdoh_negated_needs",
+      "openmed.clinical.resolve_sdoh_negation",
+      "openmed.clinical.resolve_span_context",
+      "openmed.clinical.resolve_temporality",
+      "openmed.clinical.resolve_uncertainty",
+      "openmed.clinical.route_analysis",
+      "openmed.clinical.route_note",
+      "openmed.clinical.route_note_sections",
+      "openmed.clinical.routing_provenance",
+      "openmed.clinical.sample_negative_span_pairs",
+      "openmed.clinical.scan_context_cues",
+      "openmed.clinical.scope_entities",
+      "openmed.clinical.score_event_frame_corpus",
+      "openmed.clinical.score_medication_candidates",
+      "openmed.clinical.score_medication_match",
+      "openmed.clinical.score_mention_pair",
+      "openmed.clinical.select_profile",
+      "openmed.clinical.split_measurement_text",
+      "openmed.clinical.split_sentence_offsets",
+      "openmed.clinical.validate_guarded_relation",
+      "openmed.clinical.validate_guarded_relation_direction",
+      "openmed.clinical.validate_guarded_relation_evidence",
+      "openmed.clinical.validate_guarded_relations",
+      "openmed.clinical.validate_quantitative_relation",
+      "openmed.clinical.validate_quantitative_relations",
+      "openmed.clinical.validate_relation_candidate_units",
+      "openmed.clinical.validate_relation_direction",
+      "openmed.clinical.validate_relation_evidence",
+      "openmed.clinical.validate_relation_units",
+      "openmed.clinical.validated_clinical_entities",
+      "openmed.create_advanced_processor",
+      "openmed.extract_clinical_entities",
+      "openmed.format_predictions",
+      "openmed.postprocess_text",
+      "openmed.preprocess_text",
+      "openmed.process_batch",
+      "openmed.replay_token_classifier",
+      "openmed.resolve_sections",
+      "openmed.stream_token_classifier"
+    ]
+  },
+  "brief": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text",
+        "structured"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "summarization",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.brief.build_clinical_brief",
+      "openmed.clinical.brief_policy_fingerprint",
+      "openmed.clinical.build_clinical_brief",
+      "openmed.clinical.plan_brief_context"
+    ]
+  },
+  "clinical_measurements": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "text",
+        "structured"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "measurement",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.build_measurement_trends",
+      "openmed.clinical.build_reference_range",
+      "openmed.clinical.compare_measure_runs",
+      "openmed.clinical.compare_reference_ranges",
+      "openmed.clinical.derive_abnormal_flag",
+      "openmed.clinical.empty_vital_sign_result",
+      "openmed.clinical.evaluate_native_measure",
+      "openmed.clinical.extract_measurement_trends",
+      "openmed.clinical.fingerprint_lab_reference_source",
+      "openmed.clinical.lab_value_event_mentions",
+      "openmed.clinical.link_lab_value_attributes",
+      "openmed.clinical.load_measure_schema",
+      "openmed.clinical.normalize_lab_measurement",
+      "openmed.clinical.normalize_lab_measurements",
+      "openmed.clinical.normalize_to",
+      "openmed.clinical.normalize_vital_measurement",
+      "openmed.clinical.parse_measurement",
+      "openmed.clinical.parse_reference_range",
+      "openmed.clinical.parse_unit",
+      "openmed.clinical.resolve_reference_range",
+      "openmed.clinical.serialize_measurement_trends",
+      "openmed.clinical.structure_vital_sign",
+      "openmed.clinical.unit_provenance"
+    ]
+  },
+  "decisions": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "text",
+        "structured"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "decision_support",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.begin_care_gap_review",
+      "openmed.clinical.build_guarded_suggestion",
+      "openmed.clinical.check_dose_ranges",
+      "openmed.clinical.complete_care_gap_review",
+      "openmed.clinical.compute_descriptive_signal",
+      "openmed.clinical.evaluate_care_gap",
+      "openmed.clinical.evaluate_trial_eligibility",
+      "openmed.clinical.find_interactions",
+      "openmed.clinical.guarded_suggestion",
+      "openmed.clinical.import_open_event_csv",
+      "openmed.clinical.load_care_gap_schema",
+      "openmed.clinical.load_drug_safety_signal_schema",
+      "openmed.clinical.load_trial_eligibility_schema",
+      "openmed.clinical.load_trial_study_schema",
+      "openmed.clinical.match_trial_candidates",
+      "openmed.clinical.matcher_provenance",
+      "openmed.clinical.parse_trial_criteria",
+      "openmed.clinical.parse_trial_source_page",
+      "openmed.clinical.retrieve_trial_candidates",
+      "openmed.clinical.validate_guarded_suggestion",
+      "openmed.structured.decide",
+      "openmed.structured.decide_batch",
+      "openmed.structured.decision.decide",
+      "openmed.structured.decision.decide_batch",
+      "openmed.structured.decision_server.DecisionServerBackend.score",
+      "openmed.structured.decision_server.DecisionServerBackend.score_questions"
+    ]
+  },
+  "deidentify": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "operator_review",
+      "input_modalities": [
+        "text",
+        "document",
+        "structured"
+      ],
+      "intended_users": [
+        "operator"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "privacy",
+      "regulatory_tier": "non_clinical",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.adeidentify",
+      "openmed.deidentify",
+      "openmed.deidentify_document_stream",
+      "openmed.deidentify_stream",
+      "openmed.multimodal.redact_xlsx",
+      "openmed.multimodal.render_redacted_pdf",
+      "openmed.multimodal.render_redacted_raster_pages",
+      "openmed.multimodal.write_redacted_pdf",
+      "openmed.redact_dataset",
+      "openmed.redact_detail",
+      "openmed.redact_maple_spans",
+      "openmed.redaction_preview",
+      "openmed.reidentify",
+      "openmed.render_redaction_preview",
+      "openmed.structured.redact_resource",
+      "openmed.structured.stream_deidentify_table"
+    ]
+  },
+  "ecg": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "waveform"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "zxx"
+      ],
+      "purpose": "measurement",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.multimodal.ecg.interval_candidates.extract_interval_candidates"
+    ]
+  },
+  "extract_pii": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "operator_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "operator"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "privacy",
+      "regulatory_tier": "non_clinical",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.aextract_pii",
+      "openmed.calculate_dominant_label",
+      "openmed.canonical_indic_name_key",
+      "openmed.critical_labels",
+      "openmed.detect_name_script",
+      "openmed.extract_pii",
+      "openmed.find_semantic_units",
+      "openmed.get_patterns_for_language",
+      "openmed.indic_names_match",
+      "openmed.merge_entities_with_semantic_units",
+      "openmed.merge_india_code_mixed_spans"
+    ]
+  },
+  "generate_text": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "generation",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.MapleClinicalAssistant.chat",
+      "openmed.MapleClinicalAssistant.complete_task",
+      "openmed.build_maple_task_messages",
+      "openmed.generate_text",
+      "openmed.mlx.maple.MapleClinicalAssistant.chat",
+      "openmed.mlx.maple.MapleClinicalAssistant.complete_task",
+      "openmed.parse_maple_task_response"
+    ]
+  },
+  "ground": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "grounding",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.grounding.ground",
+      "openmed.clinical.load_chinese_terminology_dictionary",
+      "openmed.clinical.load_oncotree",
+      "openmed.clinical.map_tumor_type",
+      "openmed.clinical.normalize_chinese_clinical_surface",
+      "openmed.ground"
+    ]
+  },
+  "journey": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "structured"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.anchor_events",
+      "openmed.clinical.assemble_timeline",
+      "openmed.clinical.build_evidence_linked_timeline",
+      "openmed.clinical.build_linked_document_timeline",
+      "openmed.clinical.build_timeline",
+      "openmed.clinical.build_timeline_graph",
+      "openmed.clinical.build_timeline_provenance_export",
+      "openmed.clinical.build_value_free_timeline_provenance",
+      "openmed.clinical.create_timeline_graph",
+      "openmed.clinical.detect_timexes",
+      "openmed.clinical.evaluate_timeline_gold",
+      "openmed.clinical.export_clinical_timeline_provenance",
+      "openmed.clinical.export_timeline_provenance",
+      "openmed.clinical.extract_timex",
+      "openmed.clinical.journey.query_journey",
+      "openmed.clinical.order_events",
+      "openmed.clinical.resolve_timeline"
+    ]
+  },
+  "mental_health": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": []
+  },
+  "nli": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "verification",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.build_assertion_aware_nli_pair",
+      "openmed.clinical.build_assertion_aware_pair",
+      "openmed.clinical.build_assertion_aware_pairs",
+      "openmed.clinical.build_experiencer_aware_nli_pair",
+      "openmed.clinical.build_experiencer_aware_nli_pairs",
+      "openmed.clinical.build_experiencer_aware_pair",
+      "openmed.clinical.build_experiencer_aware_pairs",
+      "openmed.clinical.build_experiencer_nli_pair",
+      "openmed.clinical.build_experiencer_nli_pairs",
+      "openmed.clinical.build_nli_experiencer_pair",
+      "openmed.clinical.build_nli_experiencer_pairs",
+      "openmed.clinical.build_nli_pair",
+      "openmed.clinical.build_nli_pairs",
+      "openmed.clinical.build_nli_result",
+      "openmed.clinical.build_nli_temporal_pair",
+      "openmed.clinical.build_nli_temporal_pairs",
+      "openmed.clinical.build_temporal_aware_nli_pair",
+      "openmed.clinical.build_temporal_aware_nli_pairs",
+      "openmed.clinical.build_temporal_aware_pair",
+      "openmed.clinical.build_temporal_aware_pairs",
+      "openmed.clinical.build_temporal_nli_pair",
+      "openmed.clinical.build_temporal_nli_pairs",
+      "openmed.clinical.build_temporal_pair",
+      "openmed.clinical.build_temporal_pairs",
+      "openmed.clinical.build_temporality_aware_nli_pair",
+      "openmed.clinical.build_temporality_aware_nli_pairs",
+      "openmed.clinical.classify_experiencer_compatibility",
+      "openmed.clinical.classify_temporal_compatibility",
+      "openmed.clinical.classify_temporal_intervals",
+      "openmed.clinical.compare_experiencer_classes",
+      "openmed.clinical.compare_experiencers",
+      "openmed.clinical.compare_temporal_intervals",
+      "openmed.clinical.compare_temporal_metadata",
+      "openmed.clinical.construct_assertion_aware_pair",
+      "openmed.clinical.construct_assertion_aware_pairs",
+      "openmed.clinical.construct_experiencer_aware_pair",
+      "openmed.clinical.construct_experiencer_aware_pairs",
+      "openmed.clinical.construct_experiencer_nli_pair",
+      "openmed.clinical.construct_experiencer_nli_pairs",
+      "openmed.clinical.construct_temporal_aware_pair",
+      "openmed.clinical.construct_temporal_aware_pairs",
+      "openmed.clinical.construct_temporal_nli_pair",
+      "openmed.clinical.construct_temporal_nli_pairs",
+      "openmed.clinical.get_default_backend",
+      "openmed.clinical.map_backend_label",
+      "openmed.clinical.nli",
+      "openmed.clinical.nli.nli",
+      "openmed.clinical.nli.verify",
+      "openmed.clinical.normalize_event_interval",
+      "openmed.clinical.normalize_event_time_interval",
+      "openmed.clinical.normalize_nli_label",
+      "openmed.clinical.normalize_temporal_interval",
+      "openmed.clinical.resolve_nli_backend",
+      "openmed.clinical.set_default_backend",
+      "openmed.clinical.temporal_intervals_compatible",
+      "openmed.clinical.validate_assertion_metadata",
+      "openmed.clinical.validate_backend_label_mapping",
+      "openmed.clinical.validate_experiencer_metadata",
+      "openmed.clinical.validate_experiencer_nli_pair",
+      "openmed.clinical.validate_nli_experiencer_pair",
+      "openmed.clinical.validate_nli_pair",
+      "openmed.clinical.validate_nli_result",
+      "openmed.clinical.validate_nli_temporal_pair",
+      "openmed.clinical.validate_temporal_nli_pair",
+      "openmed.clinical.validate_temporal_pair",
+      "openmed.clinical.verify"
+    ]
+  },
+  "review_evidence": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "structured",
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "verification",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.append_feedback",
+      "openmed.build_review_queue",
+      "openmed.clinical.admit_reviewed_local_evidence",
+      "openmed.clinical.aggregate_refusals",
+      "openmed.clinical.audit_evidence_span_overlaps",
+      "openmed.clinical.audit_evidence_spans",
+      "openmed.clinical.audit_uncertainty_disclosure",
+      "openmed.clinical.audit_uncertainty_disclosures",
+      "openmed.clinical.build_citation_minimality_report",
+      "openmed.clinical.build_claim_packet_digest",
+      "openmed.clinical.build_claim_packet_integrity_report",
+      "openmed.clinical.build_deidentification_offset_map",
+      "openmed.clinical.build_evidence_coverage",
+      "openmed.clinical.build_evidence_coverage_matrix",
+      "openmed.clinical.build_evidence_packet",
+      "openmed.clinical.build_guarded_provenance",
+      "openmed.clinical.build_guarded_provenance_manifest",
+      "openmed.clinical.build_guarded_provenance_record",
+      "openmed.clinical.build_offset_map",
+      "openmed.clinical.build_provenance_manifest",
+      "openmed.clinical.build_provenance_record",
+      "openmed.clinical.build_refusal",
+      "openmed.clinical.build_review_packet",
+      "openmed.clinical.build_review_sla_report",
+      "openmed.clinical.build_sla_report",
+      "openmed.clinical.build_uncertainty_sources",
+      "openmed.clinical.calculate_claim_packet_digest",
+      "openmed.clinical.canonicalize_claim_packet",
+      "openmed.clinical.check_citation_minimality",
+      "openmed.clinical.check_claim_packet_integrity",
+      "openmed.clinical.check_guarded_provenance",
+      "openmed.clinical.claim_packet_digest",
+      "openmed.clinical.classify_refusal",
+      "openmed.clinical.clinical_record_schema_filename",
+      "openmed.clinical.clinical_record_schema_fingerprint",
+      "openmed.clinical.clinical_record_schema_fingerprints",
+      "openmed.clinical.clinical_record_schema_id",
+      "openmed.clinical.clinical_record_schema_json",
+      "openmed.clinical.clinical_record_schema_snapshot",
+      "openmed.clinical.coerce_uncertainty_sources",
+      "openmed.clinical.compare_all_clinical_record_drift",
+      "openmed.clinical.compare_clinical_record_drift",
+      "openmed.clinical.compose_uncertainty_sources",
+      "openmed.clinical.compute_claim_packet_digest",
+      "openmed.clinical.compute_claim_packet_integrity",
+      "openmed.clinical.compute_claim_packet_integrity_digest",
+      "openmed.clinical.compute_policy_fingerprint",
+      "openmed.clinical.compute_provenance_fingerprint",
+      "openmed.clinical.compute_review_sla",
+      "openmed.clinical.conflict_source",
+      "openmed.clinical.conflict_uncertainty",
+      "openmed.clinical.create_evidence_packet",
+      "openmed.clinical.detect_claim_conflicts",
+      "openmed.clinical.disclose_uncertainty_sources",
+      "openmed.clinical.evidence_source",
+      "openmed.clinical.evidence_uncertainty",
+      "openmed.clinical.export_citation_minimality",
+      "openmed.clinical.export_guarded_provenance",
+      "openmed.clinical.fingerprint_cache_key",
+      "openmed.clinical.fingerprint_consent_revision",
+      "openmed.clinical.fingerprint_consent_scope",
+      "openmed.clinical.fingerprint_evidence_review",
+      "openmed.clinical.fingerprint_input",
+      "openmed.clinical.fingerprint_policy",
+      "openmed.clinical.fingerprint_provenance_policy",
+      "openmed.clinical.fingerprint_source",
+      "openmed.clinical.is_claim_packet_integrity_valid",
+      "openmed.clinical.load_all_clinical_record_schemas",
+      "openmed.clinical.load_clinical_record_schema",
+      "openmed.clinical.load_clinical_record_schema_bundle",
+      "openmed.clinical.load_clinical_record_snapshot",
+      "openmed.clinical.load_guarded_provenance_manifest",
+      "openmed.clinical.make_event_id",
+      "openmed.clinical.make_opaque_event_id",
+      "openmed.clinical.model_source",
+      "openmed.clinical.model_uncertainty",
+      "openmed.clinical.opaque_case_key",
+      "openmed.clinical.opaque_event_id",
+      "openmed.clinical.package_evidence",
+      "openmed.clinical.policy_source",
+      "openmed.clinical.policy_uncertainty",
+      "openmed.clinical.provenance_fingerprint",
+      "openmed.clinical.remediation_hint_for",
+      "openmed.clinical.render_evidence_coverage",
+      "openmed.clinical.render_evidence_coverage_matrix",
+      "openmed.clinical.render_review_packet",
+      "openmed.clinical.render_review_packet_json",
+      "openmed.clinical.render_review_packet_markdown",
+      "openmed.clinical.render_review_sla_report",
+      "openmed.clinical.render_sla_report",
+      "openmed.clinical.review_claim_conflicts",
+      "openmed.clinical.review_claims",
+      "openmed.clinical.review_evidence_claims",
+      "openmed.clinical.reviewed_source_digest",
+      "openmed.clinical.serialize_refusal",
+      "openmed.clinical.serialize_refusal_report",
+      "openmed.clinical.serialize_refusals",
+      "openmed.clinical.temporal_source",
+      "openmed.clinical.temporal_uncertainty",
+      "openmed.clinical.validate_citation_boundaries",
+      "openmed.clinical.validate_citations",
+      "openmed.clinical.validate_claim_packet_integrity",
+      "openmed.clinical.validate_clinical_record",
+      "openmed.clinical.validate_evidence_packet",
+      "openmed.clinical.validate_guarded_provenance",
+      "openmed.clinical.validate_review_history",
+      "openmed.clinical.validate_review_transition",
+      "openmed.clinical.validate_transition",
+      "openmed.clinical.verify_claim_packet_digest",
+      "openmed.clinical.verify_claim_packet_integrity",
+      "openmed.clinical.verify_guarded_provenance",
+      "openmed.clinical.write_clinical_record_snapshot",
+      "openmed.clinical.write_guarded_provenance_manifest",
+      "openmed.explain",
+      "openmed.generate_attestation",
+      "openmed.record_review_decision"
+    ]
+  },
+  "structured_extraction": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "document",
+        "structured"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.structured.extract_to_schema",
+      "openmed.structured.structure_discharge_summary",
+      "openmed.structured.structure_flowsheet",
+      "openmed.structured.structure_form",
+      "openmed.structured.structure_form_fields",
+      "openmed.structured.structure_lab_panels",
+      "openmed.structured.structure_table"
+    ]
+  },
+  "summarize": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "summarization",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.allocate_summary_length_budget",
+      "openmed.clinical.assert_summary_citation_gate",
+      "openmed.clinical.available_summary_profile_versions",
+      "openmed.clinical.available_summary_profiles",
+      "openmed.clinical.build_section_preserving_summary_plan",
+      "openmed.clinical.build_summary_card",
+      "openmed.clinical.build_summary_citation_report",
+      "openmed.clinical.build_summary_empty_evidence_refusal",
+      "openmed.clinical.build_summary_envelope",
+      "openmed.clinical.build_summary_input",
+      "openmed.clinical.build_summary_length_budget",
+      "openmed.clinical.build_summary_section_plan",
+      "openmed.clinical.check_summary_citation_consistency",
+      "openmed.clinical.check_summary_citations",
+      "openmed.clinical.compute_citation_consistency",
+      "openmed.clinical.compute_summary_citation_metrics",
+      "openmed.clinical.default_summary_profile",
+      "openmed.clinical.get_summary_profile",
+      "openmed.clinical.get_summary_template_profile",
+      "openmed.clinical.guard_summary_generation",
+      "openmed.clinical.guard_summary_input",
+      "openmed.clinical.load_summary_profile",
+      "openmed.clinical.load_summary_template_profile",
+      "openmed.clinical.normalize_summary_output",
+      "openmed.clinical.normalize_summary_text",
+      "openmed.clinical.plan_summary_length_budget",
+      "openmed.clinical.plan_summary_sections",
+      "openmed.clinical.require_summary_evidence",
+      "openmed.clinical.require_summary_section_plan",
+      "openmed.clinical.resolve_summarizer_backend",
+      "openmed.clinical.run_summary_citation_check",
+      "openmed.clinical.run_summary_stage",
+      "openmed.clinical.short_circuit_summary_generation",
+      "openmed.clinical.summarize",
+      "openmed.clinical.summarize.summarize",
+      "openmed.clinical.summarize.summarize_deidentified",
+      "openmed.clinical.summarize_deidentified",
+      "openmed.clinical.summary_citation_consistency",
+      "openmed.clinical.summary_citation_metadata",
+      "openmed.clinical.summary_profile_digest",
+      "openmed.clinical.validate_summary",
+      "openmed.clinical.validate_summary_citation_consistency",
+      "openmed.clinical.validate_summary_citations",
+      "openmed.clinical.validate_summary_envelope",
+      "openmed.clinical.validate_summary_input",
+      "openmed.clinical.validate_summary_inputs",
+      "openmed.clinical.validate_summary_output",
+      "openmed.clinical.verify_deidentified_artifact"
+    ]
+  },
+  "transcribe": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "audio"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "transcription",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.onnx.streaming_asr.OnnxSpeechModel.open_stream"
+    ]
+  },
+  "visual_qa": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "image",
+        "text"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "visual_qa",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.multimodal.vision.providers.smolvlm.SmolVLMProvider.infer"
+    ]
+  },
+  "waveform": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "clinician_review",
+      "input_modalities": [
+        "waveform"
+      ],
+      "intended_users": [
+        "clinician"
+      ],
+      "languages": [
+        "zxx"
+      ],
+      "purpose": "measurement",
+      "regulatory_tier": "restricted",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.multimodal.physiological_waveforms.evaluate_recording"
+    ]
+  }
+}
