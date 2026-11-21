@@ -19,7 +19,26 @@ _GENERATION = {
     "citation_support": ("citation_precision", "support_recall"),
 }
 _MEASUREMENTS = {"measurement_candidates": ("abstention_rate", "reviewed_count")}
+CLINICAL_SYNTHETIC = {
+    "clinical.assertion": {
+        "context_multilingual": ("minimum_axis_f1",),
+        "temporal_consistency": ("consistency_score",),
+    },
+    "clinical.temporal_relations": {
+        "temporal_tlinks": ("awareness_f1", "closure_violations")
+    },
+    "clinical.medication_relations": {"relations": ("strict_f1",)},
+    "clinical.sdoh": {"sdoh_extraction": ("precision", "recall")},
+}
+CLINICAL_CREDENTIALED = {
+    "clinical.assertion": ("i2b2_2010_assertion", ("macro_f1",)),
+    "clinical.temporal_relations": ("i2b2_2012_temporal", ("awareness_f1",)),
+    "clinical.medication_relations": ("n2c2_2018_track2_g9", ("strict_f1",)),
+    "clinical.sdoh": ("shac_sdoh", ("precision", "recall")),
+}
+
 _CAPABILITIES = {
+    **CLINICAL_SYNTHETIC,
     "analyze_text": _EXTRACTION,
     "brief": _GENERATION,
     "clinical_measurements": _MEASUREMENTS,
@@ -329,3 +348,76 @@ def membership_lane(report: dict) -> tuple[str, dict]:
         key: report[key]
         for key in _CAPABILITIES["structured_release"]["membership_inference"]
     }
+
+
+def clinical_lane(
+    name: str, report: dict, *, credentialed: bool
+) -> tuple[str, dict, str | None]:
+    """Project only measured aggregate fields from a named clinical suite."""
+    from openmed.eval.metrics import TEMPORAL_AWARENESS_F1_FLOOR
+    from openmed.eval.suites.sdoh_extraction import SDOHUnavailableReason
+
+    suites = {
+        "shac_sdoh": "shac-sdoh-extraction",
+        "sdoh_extraction": "sdoh-extraction",
+        "n2c2_2018_track2_g9": "n2c2-2018-track2",
+        "i2b2_2010_assertion": "i2b2-2010-assertion",
+        "i2b2_2012_temporal": "i2b2-2012-temporal",
+    }
+    suite = suites.get(name, name)
+    if (
+        name != "temporal_tlinks"
+        and name != "relations"
+        and report.get("suite") != suite
+    ):
+        raise EvidencePackError("clinical_suite_mismatch")
+    if name == "shac_sdoh" and report.get("availability") == "unavailable":
+        if report.get("reason") not in tuple(SDOHUnavailableReason):
+            raise EvidencePackError("invalid_clinical_report")
+        return "unknown", {}, report["reason"]
+    metadata = report.get("metadata", {})
+    if credentialed and (
+        metadata.get("data_origin") != "credentialed" or metadata.get("synthetic")
+    ):
+        raise EvidencePackError("credentialed_provenance_required")
+    if type(report.get("fixture_count")) is not int or report["fixture_count"] < 1:
+        raise EvidencePackError("empty_clinical_report")
+    metrics = report.get("metrics", {})
+    passed = True
+    if name == "context_multilingual":
+        minimum = min(
+            v[axis]
+            for v in metrics["context_macro_f1"].values()
+            for axis in ("negation", "temporality", "uncertainty")
+        )
+        values = {"minimum_axis_f1": minimum}
+        passed = metrics["context_gate_passed"] is True
+    elif name == "temporal_consistency":
+        values = {"consistency_score": metrics["consistency_score"]}
+    elif name == "temporal_tlinks":
+        gate = report["gate"]
+        f1 = gate["awareness"]["f1"]
+        violations = sum(len(v) for v in gate["consistency"]["violations"].values())
+        values = {"awareness_f1": f1, "closure_violations": violations}
+        passed = (
+            report["passed"] is True
+            and f1 >= TEMPORAL_AWARENESS_F1_FLOOR
+            and violations == 0
+        )
+    elif name in ("relations", "n2c2_2018_track2_g9"):
+        values = {"strict_f1": metrics["strict_relation_f1"]["f1"]}
+        if credentialed:
+            passed = metrics["g9_dua_promotion"]["passed"] is True
+    elif name in ("sdoh_extraction", "shac_sdoh"):
+        values = {k: metrics["overall"][k] for k in ("precision", "recall")}
+    else:
+        key = "macro_f1" if name == "i2b2_2010_assertion" else "awareness_f1"
+        values = {key: metrics[key]}
+    if any(v is None for v in values.values()):
+        return "unknown", {}, None
+    if any(
+        type(v) not in (int, float) or v < 0 or (k != "closure_violations" and v > 1)
+        for k, v in values.items()
+    ):
+        raise EvidencePackError("invalid_clinical_metric")
+    return ("success" if passed else "failure"), values, None

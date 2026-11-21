@@ -13,7 +13,7 @@ from openmed.compliance.evidence_freshness import (
 )
 from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
-from openmed.eval.evidence_pack.lanes import required_lanes
+from openmed.eval.evidence_pack.lanes import CLINICAL_CREDENTIALED, required_lanes
 from openmed.eval.journey_release import _release_hmac
 
 
@@ -100,6 +100,39 @@ def verify_evidence_pack(
                 reasons.add("missing_required_lane")
             elif not set(metrics) <= lane["metrics"].keys():
                 reasons.add("missing_required_metric")
+        if "credentialed_corpus_measured" in data["claims"]:
+            expected_lane, expected_metrics = CLINICAL_CREDENTIALED.get(
+                code, (None, ())
+            )
+            measured = actual.get(expected_lane)
+            if not (
+                measured
+                and measured["state"] == "success"
+                and measured["report_digest"]
+                and "credentialed_corpus_measured" in measured["claims"]
+                and all(
+                    0 <= measured["metrics"].get(m, -1) <= 1 for m in expected_metrics
+                )
+                and any(
+                    ref["id"] == expected_lane
+                    and ref["origin"] == "credentialed"
+                    and ref["digest"] == measured["report_digest"]
+                    for ref in data["frozen_inputs"]
+                )
+            ):
+                reasons.add("credentialed_lane_required")
+        if code == "clinical.temporal_relations" and (
+            temporal := actual.get("temporal_tlinks")
+        ):
+            from openmed.eval.metrics import TEMPORAL_AWARENESS_F1_FLOOR
+
+            if not (
+                TEMPORAL_AWARENESS_F1_FLOOR
+                <= temporal["metrics"].get("awareness_f1", -1)
+                <= 1
+                and temporal["metrics"].get("closure_violations") == 0
+            ):
+                reasons.add("temporal_readiness_floor")
         if code == "structured_release" and (
             lane := actual.get("membership_inference")
         ):

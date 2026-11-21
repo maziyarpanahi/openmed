@@ -182,3 +182,87 @@ def test_structured_membership_lane_uses_bounded_report(tmp_path):
     (tmp_path / "reports.json").write_text(json.dumps(index))
     with pytest.raises(EvidencePackError, match="membership_self_test_required"):
         build()
+
+
+def test_clinical_lane_native_reports_and_provenance(tmp_path):
+    from datetime import timedelta
+
+    from openmed.eval.evidence_pack.lanes import clinical_lane
+    from openmed.eval.evidence_pack.verify import (
+        sign_evidence_pack,
+        verify_evidence_pack,
+    )
+    from openmed.eval.harness import run_context_multilingual_eval
+    from openmed.eval.suites.sdoh_extraction import (
+        SDOHBenchmarkUnavailable,
+        SDOHUnavailableReason,
+    )
+    from openmed.eval.suites.temporal_consistency import run_temporal_consistency_suite
+    from openmed.eval.suites.temporal_tlinks import evaluate_temporal_tlink_fixtures
+
+    index = []
+
+    def add(lane, kind, report):
+        raw = json.dumps(report).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        (tmp_path / (digest + ".json")).write_bytes(raw)
+        index.append({"lane": lane, "type": kind, "sha256": digest})
+
+    add(
+        "context_multilingual",
+        "clinical_report",
+        run_context_multilingual_eval().to_dict(),
+    )
+    add(
+        "temporal_consistency",
+        "clinical_report",
+        run_temporal_consistency_suite().to_dict(),
+    )
+    for lane, names in required_lanes("clinical.assertion").items():
+        if lane not in ("context_multilingual", "temporal_consistency"):
+            add(
+                lane,
+                "review_metrics",
+                {"lane": lane, "state": "success", "metrics": dict.fromkeys(names, 1)},
+            )
+    (tmp_path / "reports.json").write_text(json.dumps(index))
+    now = datetime.now(timezone.utc)
+    pack = build_evidence_pack("clinical.assertion", tmp_path, generated_at=now)
+
+    def verify(pack):
+        key = b"synthetic-clinical-verification-key"
+        signed = sign_evidence_pack(pack, key_id="site", key=key)
+        return verify_evidence_pack(
+            signed.to_json(),
+            key_id="site",
+            key=key,
+            as_of=now,
+            max_age=timedelta(days=1),
+        )
+
+    assert not pack.to_dict()["claims"] and verify(pack).exit_code == 0
+    forged = pack.to_dict()
+    forged["claims"] = forged["lanes"][0]["claims"] = ["credentialed_corpus_measured"]
+    assert (
+        "credentialed_lane_required" in verify(ValidationEvidencePack(forged)).reasons
+    )
+    with pytest.raises(EvidencePackError, match="credentialed_provenance_required"):
+        clinical_lane(
+            "i2b2_2010_assertion",
+            {"suite": "i2b2-2010-assertion", "metadata": {"data_origin": "synthetic"}},
+            credentialed=True,
+        )
+    absent = SDOHBenchmarkUnavailable(SDOHUnavailableReason.NOT_CONFIGURED).to_dict()
+    assert clinical_lane("shac_sdoh", absent, credentialed=True) == (
+        "unknown",
+        {},
+        "shac_not_configured",
+    )
+    temporal = evaluate_temporal_tlink_fixtures().to_dict()
+    assert (
+        clinical_lane("temporal_tlinks", temporal, credentialed=False)[0] == "success"
+    )
+    temporal["gate"]["awareness"]["f1"] = 0.74
+    assert (
+        clinical_lane("temporal_tlinks", temporal, credentialed=False)[0] == "failure"
+    )
