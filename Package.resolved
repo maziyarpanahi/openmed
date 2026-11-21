@@ -1,5 +1,5 @@
 {
-  "originHash" : "9b69bade6397b8fa97d22f556e3749a3b7d5822b41fb51bd1ea6327ad52ee343",
+  "originHash" : "bd08608d24525827bc9f751a98f3191a02368824b0034c2076c81731ff121d77",
   "pins" : [
     {
       "identity" : "argmax-oss-swift",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "1bbc57cb7fe6410248a685b1c5a3c6d56adc2ed4",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "eventsource",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/EventSource.git",
+      "state" : {
+        "revision" : "bb4b61273b5a976bb571859c17f903ebc3439df1",
+        "version" : "1.6.0"
       }
     },
     {
@@ -38,12 +47,39 @@
       }
     },
     {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
         "revision" : "6675bc0ff86e61436e615df6fc5174e043e57924",
         "version" : "1.4.1"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
+        "version" : "4.5.2"
+      }
+    },
+    {
+      "identity" : "swift-huggingface",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/huggingface/swift-huggingface.git",
+      "state" : {
+        "revision" : "c30143a4616f3fa994ee3ab3e3464f752845c07c",
+        "version" : "1.0.0"
       }
     },
     {
@@ -78,8 +114,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/huggingface/swift-transformers.git",
       "state" : {
-        "revision" : "a2e184dddb4757bc943e77fbe99ac6786c53f0b2",
-        "version" : "1.0.0"
+        "revision" : "402a8a1105f52038b0949d9596981fc9e32bed17",
+        "version" : "1.4.0"
+      }
+    },
+    {
+      "identity" : "yyjson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ibireme/yyjson.git",
+      "state" : {
+        "revision" : "6447536015f3d600f3d65323b10976103b337ca7",
+        "version" : "0.13.0"
       }
     },
     {
