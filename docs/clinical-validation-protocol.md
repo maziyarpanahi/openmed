@@ -190,3 +190,10 @@ session, and supply its `capability`, `use_error_snapshot`,
 Only the total use-error count, reviewer disagreement rate and aggregate
 source digests enter the pack. Missing sources and withheld or empty
 agreement denominators keep the lane unknown.
+
+For a `structured_release` evidence pack, index the existing bounded
+`MembershipSelfTestResult.to_dict()` as type `membership_self_test` and lane
+`membership_inference`. Supply the threshold when running the local self-test.
+Missing measurements or an unset threshold leave the pack incomplete. A
+measured rate above the declared threshold fails the lane. The standalone
+structured lab retains its optional membership policy.
