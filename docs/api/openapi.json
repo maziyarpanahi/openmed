@@ -4696,6 +4696,68 @@
                       "maxItems": 64,
                       "type": "array"
                     },
+                    "capabilities": {
+                      "description": "Enabled clinical capabilities and declarations from the bundled intended-use registry.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "pattern": "^[a-z][a-z0-9_.]{0,63}$",
+                            "type": "string"
+                          },
+                          "excluded_uses": {
+                            "items": {
+                              "enum": [
+                                "diagnosis",
+                                "treatment_selection",
+                                "triage_without_review",
+                                "autonomous_action",
+                                "emergency_detection"
+                              ],
+                              "type": "string"
+                            },
+                            "minItems": 1,
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          "intended_use_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "obligations": {
+                            "items": {
+                              "enum": [
+                                "notice_required",
+                                "acknowledgement_required",
+                                "clinician_mode_required",
+                                "crisis_routing_required"
+                              ]
+                            },
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          "regulatory_tier": {
+                            "enum": [
+                              "non_clinical",
+                              "informational",
+                              "assistive_review",
+                              "restricted"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "intended_use_digest",
+                          "regulatory_tier",
+                          "obligations",
+                          "excluded_uses"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array",
+                      "uniqueItems": true
+                    },
                     "digest": {
                       "description": "sha256 of the canonical JSON form (sorted keys, compact separators, ASCII escapes) of every other field.",
                       "pattern": "^sha256:[0-9a-f]{64}$",

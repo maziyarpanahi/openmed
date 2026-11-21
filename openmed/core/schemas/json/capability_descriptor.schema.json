@@ -145,6 +145,68 @@
       "description": "sha256 of the canonical JSON form (sorted keys, compact separators, ASCII escapes) of every other field.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "capabilities": {
+      "description": "Enabled clinical capabilities and declarations from the bundled intended-use registry.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "intended_use_digest",
+          "regulatory_tier",
+          "obligations",
+          "excluded_uses"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.]{0,63}$"
+          },
+          "intended_use_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "regulatory_tier": {
+            "type": "string",
+            "enum": [
+              "non_clinical",
+              "informational",
+              "assistive_review",
+              "restricted"
+            ]
+          },
+          "obligations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "notice_required",
+                "acknowledgement_required",
+                "clinician_mode_required",
+                "crisis_routing_required"
+              ]
+            }
+          },
+          "excluded_uses": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "diagnosis",
+                "treatment_selection",
+                "triage_without_review",
+                "autonomous_action",
+                "emergency_detection"
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }

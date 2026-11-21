@@ -537,7 +537,11 @@ _PUBLIC_MODEL_ID_RE: Final = re.compile(
 )
 
 
-def capability_descriptor(*, served_models: Iterable[str] = ()) -> dict[str, Any]:
+def capability_descriptor(
+    *,
+    served_models: Iterable[str] = (),
+    enabled_capabilities: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Return the canonical, value-free capability descriptor of this runtime.
 
     The descriptor lists the optional backends and transport surfaces that are
@@ -553,6 +557,8 @@ def capability_descriptor(*, served_models: Iterable[str] = ()) -> dict[str, Any
     public model ids, such as local checkpoint paths, are omitted.
 
     Args:
+        enabled_capabilities: Capability codes exposed by this transport. When supplied,
+            include the corresponding bundled intended-use declarations.
         served_models: Public model ids the reporting runtime serves. The
             service surfaces pass their runtime's served ids; the plain Python
             API and the CLI serve no models and report none.
@@ -593,6 +599,25 @@ def capability_descriptor(*, served_models: Iterable[str] = ()) -> dict[str, Any
         ],
         "policy_profiles": list(_policy_profile_names()),
     }
+    if enabled_capabilities is not None:
+        from .intended_use import load_intended_use_registry
+
+        declarations = load_intended_use_registry().declarations
+        entries = []
+        for code in sorted(set(enabled_capabilities)):
+            if code not in declarations:
+                raise ValueError("unknown_enabled_capability")
+            declaration = declarations[code]
+            entries.append(
+                {
+                    "code": code,
+                    "intended_use_digest": declaration.digest(),
+                    "regulatory_tier": declaration.regulatory_tier.value,
+                    "obligations": sorted(declaration.regulatory_tier.obligations),
+                    "excluded_uses": list(declaration.excluded_uses),
+                }
+            )
+        descriptor["capabilities"] = entries
     descriptor["digest"] = capability_descriptor_digest(descriptor)
     return descriptor
 

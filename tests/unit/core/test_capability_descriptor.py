@@ -44,7 +44,8 @@ def test_schema_is_draft_2020_12_and_closes_the_vocabulary() -> None:
     assert tuple(backend_names) == registered_backends()
     assert tuple(surface_names) == CAPABILITY_SURFACES
     assert schema["additionalProperties"] is False
-    assert sorted(schema["required"]) == sorted(properties)
+    assert set(properties) - set(schema["required"]) == {"capabilities"}
+    assert set(schema["required"]) <= set(properties)
 
 
 def test_descriptor_validates_and_lists_every_registered_capability() -> None:
