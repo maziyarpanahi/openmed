@@ -14,7 +14,7 @@ from pathlib import Path
 from openmed import __version__
 from openmed.core.intended_use import load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
-from openmed.eval.evidence_pack.lanes import required_lanes
+from openmed.eval.evidence_pack.lanes import required_lanes, site_validation_lane
 from openmed.eval.journey_release import (
     _reject_duplicate_keys,
     _reject_non_finite,
@@ -87,6 +87,7 @@ def build_evidence_pack(
     *,
     generated_at: datetime,
     version: str = __version__,
+    site_validation_key: bytes | None = None,
 ) -> ValidationEvidencePack:
     """Assemble only indexed report files, retaining numeric metrics and digests."""
     profile = required_lanes(capability)
@@ -103,6 +104,7 @@ def build_evidence_pack(
         }
         for name, metrics in profile.items()
     }
+    site_inputs = []
     seen = set()
     try:
         if generated_at.utcoffset() is None:
@@ -114,11 +116,16 @@ def build_evidence_pack(
             name = entry["lane"]
             digest = entry["sha256"]
             kind = entry["type"]
+            site = name == "site_validation" and kind == "validation_report"
             if (
                 set(entry) != {"lane", "type", "sha256"}
-                or name not in lanes
+                or (not site and name not in profile)
                 or name in seen
-                or kind not in {"gate_report", "benchmark_report", "review_metrics"}
+                or (
+                    not site
+                    and kind
+                    not in {"gate_report", "benchmark_report", "review_metrics"}
+                )
                 or not re.fullmatch("[0-9a-f]{64}", digest)
             ):
                 raise EvidencePackError("invalid_report_index")
@@ -126,6 +133,24 @@ def build_evidence_pack(
             try:
                 raw = _read_report_file(inputs / (digest + ".json"))
             except FileNotFoundError:
+                if site:
+                    lanes[name], _ = site_validation_lane({}, site_validation_key)
+                    lanes[name].update(
+                        state="unknown", reason_code="site_validation_missing"
+                    )
+                continue
+            if site:
+                if hashlib.sha256(raw).hexdigest() != digest:
+                    lanes[name], _ = site_validation_lane({}, site_validation_key)
+                    lanes[name]["reason_code"] = "site_validation_unverified"
+                else:
+                    try:
+                        study = _parse(raw)
+                    except (ValueError, UnicodeError):
+                        study = {}
+                    lanes[name], site_inputs = site_validation_lane(
+                        study, site_validation_key
+                    )
                 continue
             if hashlib.sha256(raw).hexdigest() != digest:
                 raise EvidencePackError("report_digest_mismatch")
@@ -164,7 +189,8 @@ def build_evidence_pack(
                     }
                     for lane in lanes.values()
                     if lane["report_digest"]
-                ],
+                ]
+                + site_inputs,
                 "limitations": ["not_clinically_validated", "not_a_medical_device"],
                 "signature": None,
             }

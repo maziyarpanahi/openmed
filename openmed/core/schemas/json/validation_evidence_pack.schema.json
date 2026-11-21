@@ -218,6 +218,15 @@
           "items": {
             "$ref": "#/$defs/claim"
           }
+        },
+        "reason_code": {
+          "enum": [
+            "site_validation_key_required",
+            "site_validation_invalid",
+            "site_validation_unverified",
+            "site_validation_not_accepted",
+            "site_validation_missing"
+          ]
         }
       }
     },
