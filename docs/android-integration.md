@@ -731,3 +731,12 @@ KVM-accelerated `ubuntu-latest` runners:
 - [Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md)
   lists the runtime libraries the AAR brings into an app, their licenses, and
   the ML Kit posture.
+
+### Display crisis guidance offline
+
+Pass the configured locale and an explicit host signal to
+`CrisisRouting().route(locale, signal)`. When it returns a notice, show
+`text` before results and render the resource labels as optional links.
+An unknown locale still returns emergency guidance. The library returns data
+without starting an Android intent. To replace entries for selected locales,
+pass a local JSON string in the Python resource-table format as `overrideJson`.
