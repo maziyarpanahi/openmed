@@ -590,6 +590,9 @@ if PYDANTIC_V2:
         """Request schema for POST /jobs."""
 
         documents: list[DeidentifyJobDocument]
+        subject_ref_digest: Optional[StrictStr] = Field(
+            default=None, pattern=r"^(?:hmac-)?sha256:[0-9a-f]{64}$"
+        )
         webhook: Optional[JobWebhookRequest] = None
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
         model_name: str = _DEFAULT_PII_MODEL
@@ -961,6 +964,9 @@ else:
         """Request schema for POST /jobs."""
 
         documents: list[DeidentifyJobDocument]
+        subject_ref_digest: Optional[StrictStr] = Field(
+            default=None, regex=r"^(?:hmac-)?sha256:[0-9a-f]{64}$"
+        )
         webhook: Optional[JobWebhookRequest] = None
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
         model_name: str = _DEFAULT_PII_MODEL

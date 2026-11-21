@@ -1,6 +1,11 @@
 {
   "paths": [
     {
+      "module": "openmed.service.job_payloads",
+      "function": "JobPayloadStore.purge_job",
+      "classification": "governed"
+    },
+    {
       "module": "openmed.compliance.withdrawal",
       "function": "AmbientWithdrawalParticipant.apply",
       "classification": "governed"

@@ -632,6 +632,7 @@
         "done",
         "failed",
         "cancelled",
+        "withdrawn",
         "quarantined"
       ],
       "type": "string"
