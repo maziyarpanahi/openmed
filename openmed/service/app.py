@@ -347,6 +347,31 @@ _IDEMPOTENT_JOB_RESPONSES: Dict[int | str, Dict[str, Any]] = {
     },
 }
 _DECISION_PATH = "/v1/decisions"
+# Timestamp of the public P5 migration announcement in issue 5263.
+_RECEIPT_DEPRECATION = "@1794069192"
+_RECEIPT_MIGRATION_LINK = (
+    '<https://openmed.life/docs/migration/#policy-receipts>; rel="deprecation"'
+)
+_RECEIPT_NOTICE_HEADERS = {
+    "Deprecation": {
+        "description": "Announcement date for the legacy receipt-free representation.",
+        "schema": {"type": "string"},
+        "example": _RECEIPT_DEPRECATION,
+    },
+    "Link": {
+        "description": "Migration guide for the receipt-free representation.",
+        "schema": {"type": "string"},
+        "example": _RECEIPT_MIGRATION_LINK,
+    },
+}
+
+
+def _receipt_migration_notice(response: Response) -> None:
+    """Announce the legacy representation on successful responses."""
+    response.headers["Deprecation"] = _RECEIPT_DEPRECATION
+    response.headers.append("Link", _RECEIPT_MIGRATION_LINK)
+
+
 _MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
 _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
 _MANIFEST_HEADER = "X-OpenMed-Manifest"
@@ -2166,7 +2191,10 @@ def create_app(
         _DECISION_PATH,
         response_model=None,
         tags=["decision"],
-        dependencies=[Depends(_negotiate_decision_body)],
+        dependencies=[
+            Depends(_negotiate_decision_body),
+            Depends(_receipt_migration_notice),
+        ],
         responses={
             200: {
                 "description": (
@@ -2174,6 +2202,7 @@ def create_app(
                     "OpenMed result for an OpenMed request, or an "
                     "OpenAI-compatible Decisions response for that body."
                 ),
+                "headers": _RECEIPT_NOTICE_HEADERS,
                 "content": {
                     "application/json": {
                         "schema": {
@@ -2519,7 +2548,11 @@ def create_app(
             )
         )
 
-    @app.post("/pii/deidentify")
+    @app.post(
+        "/pii/deidentify",
+        dependencies=[Depends(_receipt_migration_notice)],
+        responses={200: {"headers": _RECEIPT_NOTICE_HEADERS}},
+    )
     async def pii_deidentify(
         payload: PIIDeidentifyRequest,
         request: Request,

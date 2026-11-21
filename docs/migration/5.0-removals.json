@@ -44,7 +44,7 @@
       ]
     },
     "replacement": "Policy receipts attached to de-identification and decision responses",
-    "status": "planned",
+    "status": "deprecated",
     "migration_anchor": "docs/migration.md#policy-receipts"
   },
   {
