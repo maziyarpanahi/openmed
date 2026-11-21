@@ -937,3 +937,12 @@ Pass a measured `text_qi_risk` result as `text_qi_report` to
 unit and span counts, limitations, and source report digest for qualified
 review. The reviewer must confirm that the supplied text cohort corresponds
 to the release. Images and genomic data still require separate assessment.
+
+To include rare attributes in the joint QI profile, supply both
+`TextQIPolicy.concept_frequencies` (a local map from canonical label and
+surface pairs to population proportions) and `rare_frequency_threshold`.
+Use proportions from the population relevant to the release. The extra
+`rare_attribute` column is 1 when any verified span for that unit has a
+known frequency strictly below the threshold, and 0 otherwise. The coverage
+profile counts unmatched surfaces of declared label types. A zero can
+therefore include unrecognized concepts. Only the indicator enters scoring.

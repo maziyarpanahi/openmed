@@ -134,3 +134,45 @@ def test_text_risk_requires_explicit_thresholds_and_units():
             text_qi_risk([doc], POLICY, *args)
     with pytest.raises(ValueError, match="keyed privacy unit"):
         text_qi_risk([TextQIDocument(doc.text, doc.spans)], POLICY, target_k=1)
+
+
+def test_local_concept_rates_lower_k_without_disclosing_concepts():
+    from openmed.risk.text_qi_bridge import text_qi_risk
+
+    def doc(unit, concept):
+        return TextQIDocument(
+            concept,
+            [EntityPrediction(concept, "CONDITION", 1, 0, len(concept))],
+            hmac_text_hash(unit, KEY),
+        )
+
+    rare, common = "Toy Condition A", "Toy Condition B"
+    docs = [doc("a", rare), doc("a", common), doc("b", common)]
+    table = {("CONDITION", rare): 0.01, ("CONDITION", common): 0.10}
+    policy = TextQIPolicy(10, concept_frequencies=table, rare_frequency_threshold=0.10)
+    assert text_qi_risk(docs, POLICY, target_k=2)["kanon"]["k"] == 2
+    assert "rare_attribute" not in bridge_text_qis(docs, POLICY).rows[0]
+    result = bridge_text_qis(docs, policy, by_unit=True)
+    assert [r["rare_attribute"] for r in result.rows] == ["1", "0"]
+    risk = text_qi_risk(docs, policy, target_k=2)
+    assert risk["kanon"]["k"] == 1
+    for raw in (rare, common):
+        assert raw not in json.dumps([result.rows, result.profile, risk])
+        assert raw not in repr(policy)
+    unknown = bridge_text_qis([doc("c", "Unlisted")], policy)
+    assert unknown.profile["columns"]["rare_attribute"]["unmapped_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "table,threshold",
+    [
+        (None, 0.1),
+        ({}, None),
+        ({("CONDITION", "secret"): float("nan")}, 0.1),
+        ({"secret": 0.1}, 0.3),
+    ],
+)
+def test_invalid_concept_rates_are_value_free(table, threshold):
+    with pytest.raises(ValueError) as error:
+        TextQIPolicy(10, concept_frequencies=table, rare_frequency_threshold=threshold)
+    assert "secret" not in str(error.value)

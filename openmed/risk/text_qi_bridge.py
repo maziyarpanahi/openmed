@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from types import MappingProxyType
 
-from openmed.core.labels import normalize_label
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 from openmed.processing.outputs import EntityPrediction
 
@@ -33,6 +33,11 @@ class TextQIPolicy:
     regions: Mapping[str, str] = field(default_factory=dict, repr=False)
     occupation_groups: Mapping[str, str] = field(default_factory=dict, repr=False)
 
+    concept_frequencies: Mapping[tuple[str, str], float] | None = field(
+        default=None, repr=False
+    )
+    rare_frequency_threshold: float | None = None
+
     def __post_init__(self):
         if type(self.age_band_width) is not int or not 2 <= self.age_band_width <= 100:
             raise ValueError("invalid age band width")
@@ -52,6 +57,40 @@ class TextQIPolicy:
                     raise ValueError("ambiguous generalization mapping")
                 mapping[key] = code
             object.__setattr__(self, name, MappingProxyType(mapping))
+
+        table = self.concept_frequencies
+        threshold = self.rare_frequency_threshold
+        if table is None and threshold is None:
+            return
+        if (
+            not isinstance(table, Mapping)
+            or type(threshold) not in (int, float)
+            or not 0 < threshold <= 1
+        ):
+            raise ValueError(
+                "frequency table requires an explicit proportion threshold"
+            )
+        frequencies = {}
+        for key, frequency in table.items():
+            if not isinstance(key, tuple) or len(key) != 2:
+                raise ValueError("invalid clinical concept key")
+            label, surface = key
+            if (
+                not isinstance(label, str)
+                or label not in CANONICAL_LABELS
+                or not isinstance(surface, str)
+                or not surface.strip()
+            ):
+                raise ValueError("invalid clinical concept key")
+            normalized = (label, surface.strip().casefold())
+            if (
+                type(frequency) not in (int, float)
+                or not 0 <= frequency <= 1
+                or normalized in frequencies
+            ):
+                raise ValueError("invalid or duplicate concept frequency")
+            frequencies[normalized] = frequency
+        object.__setattr__(self, "concept_frequencies", MappingProxyType(frequencies))
 
 
 @dataclass(frozen=True)
@@ -120,6 +159,11 @@ def bridge_text_qis(
     Supply the original HMAC key for OpenMedSpan inputs. Runtime entities bind
     offsets via their detected surface. Unknown generalizations are counted.
     """
+    frequencies = policy.concept_frequencies
+    columns = _COLS if frequencies is None else (*_COLS, "rare_attribute")
+    concept_labels = (
+        {label for label, _ in frequencies} if frequencies is not None else set()
+    )
     groups = {}
     counts = Counter()
     unmapped = Counter()
@@ -160,6 +204,13 @@ def bridge_text_qis(
             if start < previous_end:
                 raise ValueError("overlapping text spans")
             previous_end = end
+            if label in concept_labels:
+                counts["rare_attribute"] += 1
+                key = (label, doc.text[start:end].strip().casefold())
+                if key not in frequencies:
+                    unmapped["rare_attribute"] += 1
+                elif frequencies[key] < policy.rare_frequency_threshold:
+                    group["rare_attribute"].add("1")
             column = _COLUMNS.get(label)
             if column:
                 counts[column] += 1
@@ -168,8 +219,12 @@ def bridge_text_qis(
                     unmapped[column] += 1
                 else:
                     group[column].add(value)
+    if frequencies is not None:
+        for group in groups.values():
+            if not group["rare_attribute"]:
+                group["rare_attribute"].add("0")
     rows = tuple(
-        {column: "|".join(sorted(group[column])) or None for column in _COLS}
+        {column: "|".join(sorted(group[column])) or None for column in columns}
         for group in groups.values()
     )
     return TextQIResult(
@@ -178,7 +233,7 @@ def bridge_text_qis(
             "row_count": len(rows),
             "columns": {
                 col: {"span_count": counts[col], "unmapped_count": unmapped[col]}
-                for col in _COLS
+                for col in columns
             },
         },
     )
