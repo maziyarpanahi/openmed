@@ -170,3 +170,14 @@ single reviewable page and always carries the medical-device disclaimer.
   Only fully synthetic samples may be committed.
 - Reports are PHI-free by construction; still store and share them under the
   same controls as any de-identification audit artifact.
+
+### Attach a signed local study to a capability evidence pack
+
+Sign the study with a site-controlled key. In the evidence input directory,
+index the serialized report by its file SHA-256 in `reports.json` using lane
+`site_validation` and type `validation_report`. Pass
+`--site-validation-key-file /private/keys/site-study` to `openmed evidence build`.
+The builder verifies the study's reproducibility hash and HMAC before retaining
+its acceptance outcome, aggregate rates, fixture count and hashed provenance.
+A failed study carries a failure reason. The optional lane describes the named
+local study and confers no clinical validation on other sites or populations.

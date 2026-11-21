@@ -77,3 +77,90 @@ def required_lanes(
         if obligation in obligations:
             lanes.update(extra)
     return dict(sorted(lanes.items()))
+
+
+def site_validation_lane(data: dict, key: bytes | None) -> tuple[dict, list[dict]]:
+    """Verify a signed local validation study and project aggregate evidence.
+
+    Args:
+        data: Serialized ValidationReport from the site's validation runner.
+        key: Independently supplied site-specific HMAC key.
+    """
+    from openmed.clinical.validation.study import (
+        _DEFAULT_SIGNING_KEY,
+        VALIDATION_REPORT_SCHEMA_VERSION,
+        AcceptanceResult,
+        ValidationReport,
+    )
+    from openmed.core.audit import AuditSignature, stable_hash
+
+    lane = {
+        "id": "site_validation",
+        "mandatory": False,
+        "state": "failure",
+        "report_digest": None,
+        "required_metrics": [
+            "fixture_count",
+            "precision",
+            "recall",
+            "f1",
+            "leakage_rate",
+        ],
+        "metrics": {},
+        "claims": [],
+    }
+
+    def failure(code):
+        return {**lane, "reason_code": code}, []
+
+    if not key or key == _DEFAULT_SIGNING_KEY.encode():
+        return failure("site_validation_key_required")
+    try:
+        signed = dict(data)
+        accepted = signed.pop("accepted")
+        signature = signed.pop("signature")
+        if not signature or not signed.get("repro_hash"):
+            return failure("site_validation_unverified")
+        signed["acceptance"] = [AcceptanceResult(**row) for row in signed["acceptance"]]
+        study = ValidationReport(**signed, signature=AuditSignature(**signature))
+        if (
+            study.schema_version != VALIDATION_REPORT_SCHEMA_VERSION
+            or study.to_dict() != data
+            or not study.verify(key)
+        ):
+            return failure("site_validation_unverified")
+        metrics = {
+            m: study.metrics["overall"][m]
+            for m in ("precision", "recall", "f1", "leakage_rate")
+        }
+        if (
+            type(study.fixture_count) is not int
+            or study.fixture_count < 1
+            or any(
+                type(v) not in (int, float) or not 0 <= v <= 1 for v in metrics.values()
+            )
+        ):
+            return failure("site_validation_invalid")
+        refs = []
+        for name in ("dataset_id", "data_revision"):
+            value = study.provenance[name]
+            if not isinstance(value, str) or not value.strip():
+                return failure("site_validation_invalid")
+            refs.append(
+                {
+                    "id": "site_validation_" + name,
+                    "origin": "aggregate",
+                    "digest": stable_hash(value),
+                }
+            )
+        lane.update(
+            report_digest=study.repro_hash,
+            metrics={**metrics, "fixture_count": study.fixture_count},
+        )
+        if accepted is not True or not any(c.primary is True for c in study.acceptance):
+            lane["reason_code"] = "site_validation_not_accepted"
+        else:
+            lane["state"] = "success"
+        return lane, refs
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        return failure("site_validation_invalid")

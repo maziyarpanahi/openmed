@@ -612,6 +612,11 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--inputs", type=Path, required=True)
     build.add_argument("--output", type=Path, required=True)
     build.add_argument("--overwrite", action="store_true")
+    build.add_argument(
+        "--site-validation-key-file",
+        type=Path,
+        help="Trusted local site study HMAC key.",
+    )
     build.set_defaults(handler=_handle_evidence_build)
     verify = evidence_sub.add_parser(
         "verify", help="Verify a signed capability pack offline."
@@ -3628,8 +3633,19 @@ def _handle_evidence_build(args: argparse.Namespace) -> int:
     )
 
     try:
+        try:
+            site_key = (
+                args.site_validation_key_file.read_bytes()
+                if args.site_validation_key_file
+                else None
+            )
+        except OSError:
+            raise EvidencePackError("site_validation_key_required") from None
         pack = build_evidence_pack(
-            args.capability, args.inputs, generated_at=datetime.now(timezone.utc)
+            args.capability,
+            args.inputs,
+            generated_at=datetime.now(timezone.utc),
+            site_validation_key=site_key,
         )
         write_evidence_pack(pack, args.output, overwrite=args.overwrite)
     except EvidencePackError as exc:
