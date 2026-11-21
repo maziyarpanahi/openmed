@@ -601,6 +601,22 @@ def build_parser() -> argparse.ArgumentParser:
     add_redact_files_command(subparsers)
     _add_pii_command(subparsers)
     _add_tui_command(subparsers)
+    evidence = subparsers.add_parser(
+        "evidence", help="Inspect local validation evidence."
+    )
+    evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    verify = evidence_sub.add_parser(
+        "verify", help="Verify a signed capability pack offline."
+    )
+    verify.add_argument("pack", type=Path)
+    verify.add_argument("--key-file", type=Path, required=True)
+    verify.add_argument("--key-id", required=True)
+    verify.add_argument(
+        "--as-of", required=True, help="Timezone-aware evaluation timestamp."
+    )
+    verify.add_argument("--max-age-days", type=int, required=True)
+    add_json_flag(verify)
+    verify.set_defaults(handler=_handle_evidence_verify)
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
@@ -3594,6 +3610,35 @@ def _handle_redact_dataset(args: argparse.Namespace) -> int:
 
     config = _load_and_apply_config(args)
     return run_from_args(args, config=config)
+
+
+def _handle_evidence_verify(args: argparse.Namespace) -> int:
+    from datetime import timedelta
+
+    from openmed.eval.evidence_pack.verify import verify_evidence_pack
+
+    try:
+        raw = args.pack.read_bytes()
+        key = args.key_file.read_bytes()
+        as_of = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
+        max_age = timedelta(days=args.max_age_days)
+    except (OSError, ValueError, OverflowError):
+        raise CliError(
+            "Invalid verification input.", code="invalid_input", exit_code=EXIT_USAGE
+        ) from None
+    result = verify_evidence_pack(
+        raw, key_id=args.key_id, key=key, as_of=as_of, max_age=max_age
+    )
+    payload = {"ready": result.exit_code == 0, "reasons": list(result.reasons)}
+    if result.exit_code == EXIT_USAGE:
+        reason = result.reasons[0]
+        raise CliError(reason, code=reason, exit_code=EXIT_USAGE)
+    return emit(
+        args,
+        payload,
+        human=" ".join(result.reasons) or "ready",
+        outcome="check_failed" if result.reasons else "completed",
+    )
 
 
 def _handle_audit_verify(args: argparse.Namespace) -> int:
