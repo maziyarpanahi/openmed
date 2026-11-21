@@ -215,6 +215,8 @@ public final class com/openmed/openmedkit/OpenMedKit : java/io/Closeable {
 	public static final field VERSION Ljava/lang/String;
 	public fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Lcom/openmed/openmedkit/safety/ClinicianMode;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Lcom/openmed/openmedkit/safety/ClinicianMode;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
@@ -2053,7 +2055,11 @@ public final class com/openmed/openmedkit/decision/EncoderDecisionRuntime {
 	public fun <init> (Lcom/openmed/openmedkit/decision/DecisionEncoder;Lcom/openmed/openmedkit/decision/DecisionTokenizer;Lcom/openmed/openmedkit/decision/DecisionBackendIdentity;Lcom/openmed/openmedkit/decision/GLiClassDecisionConfiguration;Lcom/openmed/openmedkit/decision/DecisionAccessPolicy;Ljava/util/List;Lkotlin/jvm/functions/Function0;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/decision/DecisionEncoder;Lcom/openmed/openmedkit/decision/DecisionTokenizer;Lcom/openmed/openmedkit/decision/DecisionBackendIdentity;Lcom/openmed/openmedkit/decision/GLiClassDecisionConfiguration;Lcom/openmed/openmedkit/decision/DecisionAccessPolicy;Ljava/util/List;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun decide (Lcom/openmed/openmedkit/decision/DecisionRequest;)Lcom/openmed/openmedkit/decision/DecisionResult;
+	public final fun decide (Lcom/openmed/openmedkit/decision/DecisionRequest;Lcom/openmed/openmedkit/safety/ClinicianMode;)Lcom/openmed/openmedkit/decision/DecisionResult;
 	public final fun decide (Ljava/lang/String;)Lcom/openmed/openmedkit/decision/DecisionResult;
+	public final fun decide (Ljava/lang/String;Lcom/openmed/openmedkit/safety/ClinicianMode;)Lcom/openmed/openmedkit/decision/DecisionResult;
+	public static synthetic fun decide$default (Lcom/openmed/openmedkit/decision/EncoderDecisionRuntime;Lcom/openmed/openmedkit/decision/DecisionRequest;Lcom/openmed/openmedkit/safety/ClinicianMode;ILjava/lang/Object;)Lcom/openmed/openmedkit/decision/DecisionResult;
+	public static synthetic fun decide$default (Lcom/openmed/openmedkit/decision/EncoderDecisionRuntime;Ljava/lang/String;Lcom/openmed/openmedkit/safety/ClinicianMode;ILjava/lang/Object;)Lcom/openmed/openmedkit/decision/DecisionResult;
 	public final fun getConfiguration ()Lcom/openmed/openmedkit/decision/GLiClassDecisionConfiguration;
 	public final fun getIdentity ()Lcom/openmed/openmedkit/decision/DecisionBackendIdentity;
 	public final fun getPolicy ()Lcom/openmed/openmedkit/decision/DecisionAccessPolicy;
@@ -4498,6 +4504,51 @@ public final class com/openmed/openmedkit/policy/PolicyThreshold {
 	public final fun getKeepFloorPpm ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/safety/ClinicianMode {
+	public fun <init> ()V
+	public final fun disable ()V
+	public final fun enable (Lcom/openmed/openmedkit/safety/ClinicianPurpose;Lcom/openmed/openmedkit/safety/OpenMedNoticeAcknowledgement;)Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;
+	public final fun requireCapability (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;
+	public final fun requireTier (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;
+}
+
+public final class com/openmed/openmedkit/safety/ClinicianModeReceipt {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/safety/ClinicianModeReceipt;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNoticeDigest ()Ljava/lang/String;
+	public final fun getNoticeId ()Ljava/lang/String;
+	public final fun getPurpose ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/safety/ClinicianModeRequired : java/lang/IllegalStateException {
+	public fun <init> ()V
+}
+
+public final class com/openmed/openmedkit/safety/ClinicianPurpose : java/lang/Enum {
+	public static final field QUALITY_ASSURANCE Lcom/openmed/openmedkit/safety/ClinicianPurpose;
+	public static final field RESEARCH Lcom/openmed/openmedkit/safety/ClinicianPurpose;
+	public static final field REVIEW Lcom/openmed/openmedkit/safety/ClinicianPurpose;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/safety/ClinicianPurpose;
+	public static fun values ()[Lcom/openmed/openmedkit/safety/ClinicianPurpose;
+}
+
+public final class com/openmed/openmedkit/safety/InvalidNoticeAcknowledgement : java/lang/IllegalArgumentException {
+	public fun <init> ()V
+}
+
+public final class com/openmed/openmedkit/safety/NoticeAcknowledgementRequired : java/lang/IllegalArgumentException {
+	public fun <init> ()V
 }
 
 public final class com/openmed/openmedkit/safety/OpenMedDisclaimer {

@@ -1,5 +1,7 @@
 package com.openmed.openmedkit.decision
 
+import com.openmed.openmedkit.safety.ClinicianMode
+
 import java.security.MessageDigest
 import kotlin.math.exp
 
@@ -171,13 +173,19 @@ public class EncoderDecisionRuntime(
      * @throws DecisionRuntimeError for requests that violate the contract.
      *   Backend refusals and failures are result states instead.
      */
-    public fun decide(requestJson: String): DecisionResult = decide(DecisionRequest.parse(requestJson))
+    @JvmOverloads
+    public fun decide(requestJson: String, clinicianMode: ClinicianMode = ClinicianMode()): DecisionResult {
+        clinicianMode.requireCapability("decisions")
+        return decide(DecisionRequest.parse(requestJson), clinicianMode)
+    }
 
     /**
      * Decides a validated request. Abstentions, denials, refusals and failures
      * are typed result states, never fabricated selections.
      */
-    public fun decide(request: DecisionRequest): DecisionResult {
+    @JvmOverloads
+    public fun decide(request: DecisionRequest, clinicianMode: ClinicianMode = ClinicianMode()): DecisionResult {
+        clinicianMode.requireCapability("decisions")
         val access = policy.decision(request.namespace, request.purpose, identity.kind)
         val profile = profiles[request.calibrationId]
             ?: return terminal(

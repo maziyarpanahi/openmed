@@ -392,3 +392,11 @@ The kit loads reviewed notices from the local catalog. Use
 `OpenMedDisclaimer.forTier(tier)` or `forCapability(code)` and call
 `acknowledge(instant)` after acceptance. The receipt contains a notice ID,
 version digest and UTC instant. The demo keeps it only in memory.
+
+Create a host-owned `ClinicianMode` for restricted Android requests. After
+the reviewer accepts the restricted notice, call
+`mode.enable(ClinicianPurpose.REVIEW, acknowledgement)` and pass the mode to
+`EncoderDecisionRuntime.decide(request, mode)`. For a catalog-backed
+classifier, construct `OpenMedKit(classifier, entry, mode)` to check both
+the model tier and the capability before inference. Call `mode.disable()`
+when the review ends. Each new instance starts disabled.
