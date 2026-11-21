@@ -325,6 +325,31 @@ counts, offsets, hashes, and its patterns version. Raw identifiers, source
 records, restricted dataset payloads, and signing secrets are never copied into
 the release package.
 
+## i2b2/VA 2010 concepts, assertions and relations
+
+`load_i2b2_2010(path=None)` reads a user-supplied, credentialed copy of the
+2010 i2b2/VA corpus. Pass the directory, or set `OPENMED_I2B2_2010_PATH`; the
+path must be outside the repository. The loader fetches nothing and writes no
+cache, and a path does not establish authorization: the caller must already
+hold DBMI access.
+
+Each `<stem>.txt` is paired by stem, anywhere below the root, with
+`<stem>.con` and, when present, `<stem>.ast` and `<stem>.rel`. The loader
+converts `line:token` offsets (1-based line, 0-based whitespace token) to
+character spans and returns one `RelationTaskFixture` per note:
+
+| Source | Fixture field |
+| --- | --- |
+| `problem`, `test` and `treatment` concepts | entities labelled `PROBLEM`, `LAB_TEST` and `OTHER`, with `metadata["source_label"]` |
+| `.ast` classes: present, absent, possible, conditional, hypothetical, associated_with_someone_else | `metadata["assertion"]` on problem concepts |
+| `.rel` types: TrIP, TrWP, TrCP, TrAP, TrNAP, TeRP, TeCP, PIP | `gold_relations`, upper-cased like the relation scorer (`TRAP`), with the file's spelling in `metadata["source_relation_type"]` |
+| line bounds | `metadata["sentence_offsets"]` |
+
+A malformed line, a `c="..."` value that does not match its tokens, or an
+assertion on a non-problem concept raises `I2B22010FormatError`. The error
+carries the annotation file's path hash and line number but no note text.
+Scoring assertions and relations is outside the loader.
+
 ## Metric Bundle
 
 | Metric | Path | Gating? | Description |

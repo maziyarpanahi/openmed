@@ -28,6 +28,7 @@ DUA_GATED_CORPORA: tuple[str, ...] = (
     "cegs-ngrid",
     "i2b2",
     "i2b2-2012",
+    "i2b2-2010",
     "n2c2",
     "n2c2-2018",
     "n2c2-2022",
@@ -44,6 +45,7 @@ DUA_PATH_REMEDIATION: Mapping[str, str] = {
     "i2b2-2012": "pass path=... or set OPENMED_I2B2_2012_PATH",
     "biored": "pass path=... or set OPENMED_BIORED_PATH",
     "cegs-ngrid": "pass path=... or set OPENMED_CEGS_NGRID_PATH",
+    "i2b2-2010": "pass path=... or set OPENMED_I2B2_2010_PATH",
     "made": "pass path=... or set OPENMED_MADE_PATH",
     "n2c2-2018": "pass path=... or set OPENMED_N2C2_2018_PATH",
     "n2c2-2022": "pass path=... or set OPENMED_N2C2_2022_PATH",
@@ -237,7 +239,8 @@ def require_credentialed_path(
     if _is_relative_to(candidate, repository_root):
         raise DUACredentialRequired(
             f"{authority} data for {dataset} must stay outside the repository "
-            "tree; no corpus rows were loaded."
+            f"tree; pass path=... or set {env_var} to a copy outside it. "
+            "No corpus rows were loaded."
         )
     if not candidate.exists():
         raise DUACredentialRequired(

@@ -69,6 +69,16 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         redistribution="local-dua-required; never redistributed",
         notes="User-supplied, credentialed temporal evaluation only.",
     ),
+    "i2b2-2010": DatasetLicense(
+        dataset="i2b2-2010",
+        license_id="i2b2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "i2b2/VA 2010 concept, assertion and relation annotations require "
+            "approved DBMI access. OpenMed reads only a user-supplied local copy."
+        ),
+    ),
     "n2c2": DatasetLicense(
         dataset="n2c2",
         license_id="n2c2-DBMI-DUA",
