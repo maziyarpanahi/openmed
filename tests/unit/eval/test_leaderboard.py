@@ -418,6 +418,8 @@ def test_credentialed_table_verifies_before_writing(tmp_path, monkeypatch):
             "PERSON": {
                 "status": "reported",
                 "tp": 999,
+                "fp": 0,
+                "precision": {"rate": 1},
                 "fn": 1,
                 "recall": {"rate": 0.999},
             },

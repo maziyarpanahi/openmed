@@ -108,7 +108,12 @@ def run_credentialed(
             fixtures, suite=suite, model_name=model_id, runner=runner, cache_dir=None
         )
         report = project_aggregate_report(benchmark, fixtures, corpus=suite, year=year)
-        report.update(dua=I2B2_DUA_NAME, model_id=model_id, revision_digest=digest)
+        report.update(
+            dua=I2B2_DUA_NAME,
+            model_id=model_id,
+            revision_digest=digest,
+            postprocessing_profile="transformers-simple-v1",
+        )
         encoded = json.dumps(report, sort_keys=True, allow_nan=False).encode() + b"\n"
         with tempfile.NamedTemporaryFile(dir=target.parent) as temp:
             temp.write(encoded)
