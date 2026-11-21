@@ -36,8 +36,6 @@
       "openmed.clinical.apply_context_rules",
       "openmed.clinical.apply_section_context",
       "openmed.clinical.assemble_biomarker_results",
-      "openmed.clinical.assert_context",
-      "openmed.clinical.assert_context_axes",
       "openmed.clinical.assign_review_priority",
       "openmed.clinical.attach_coreference_representatives",
       "openmed.clinical.attach_negated_need_assertions",
@@ -89,7 +87,6 @@
       "openmed.clinical.event_coreference_mentions",
       "openmed.clinical.expand_abbreviations",
       "openmed.clinical.export_discharge_summary_fhir",
-      "openmed.clinical.extract_ade_relations",
       "openmed.clinical.extract_discharge_profile",
       "openmed.clinical.extract_discharge_summary",
       "openmed.clinical.extract_discharge_summary_profile",
@@ -99,7 +96,6 @@
       "openmed.clinical.extract_lab_results",
       "openmed.clinical.extract_lab_trend_events",
       "openmed.clinical.extract_medication_change_events",
-      "openmed.clinical.extract_medication_relations",
       "openmed.clinical.extract_note",
       "openmed.clinical.extract_note_sections",
       "openmed.clinical.extract_pathology_profile",
@@ -112,7 +108,6 @@
       "openmed.clinical.extract_scoped_medication_candidates",
       "openmed.clinical.extract_scoped_problem_mentions",
       "openmed.clinical.extract_severity_laterality",
-      "openmed.clinical.extract_tlink_candidates",
       "openmed.clinical.filter_medication_candidates",
       "openmed.clinical.filter_patient_record",
       "openmed.clinical.filter_patient_sdoh",
@@ -128,7 +123,6 @@
       "openmed.clinical.get_relation_direction_rule",
       "openmed.clinical.hash_document_id",
       "openmed.clinical.link_documents",
-      "openmed.clinical.link_medication_attributes",
       "openmed.clinical.link_mentions",
       "openmed.clinical.link_scoped_lab_value_attributes",
       "openmed.clinical.load_abbreviation_inventory",
@@ -265,6 +259,122 @@
       "openmed.clinical.brief_policy_fingerprint",
       "openmed.clinical.build_clinical_brief",
       "openmed.clinical.plan_brief_context"
+    ]
+  },
+  "clinical.assertion": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.assert_context",
+      "openmed.clinical.assert_context_axes"
+    ]
+  },
+  "clinical.medication_relations": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.extract_ade_relations",
+      "openmed.clinical.extract_medication_relations",
+      "openmed.clinical.link_medication_attributes"
+    ]
+  },
+  "clinical.sdoh": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.sdoh.extract_sdoh",
+      "openmed.clinical.sdoh.extract_sdoh_with_language"
+    ]
+  },
+  "clinical.temporal_relations": {
+    "declaration": {
+      "autonomous_clinical_action": false,
+      "excluded_uses": [
+        "autonomous_action",
+        "diagnosis",
+        "emergency_detection",
+        "treatment_selection",
+        "triage_without_review"
+      ],
+      "human_oversight": "human_review",
+      "input_modalities": [
+        "text"
+      ],
+      "intended_users": [
+        "reviewer"
+      ],
+      "languages": [
+        "und"
+      ],
+      "purpose": "extraction",
+      "regulatory_tier": "assistive_review",
+      "schema_version": "1.0.0"
+    },
+    "entry_points": [
+      "openmed.clinical.extract_tlink_candidates"
     ]
   },
   "clinical_measurements": {

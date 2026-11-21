@@ -24,7 +24,19 @@
       "const": "1.0.0"
     },
     "capability": {
-      "$ref": "#/$defs/code"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/code"
+        },
+        {
+          "enum": [
+            "clinical.assertion",
+            "clinical.temporal_relations",
+            "clinical.medication_relations",
+            "clinical.sdoh"
+          ]
+        }
+      ]
     },
     "version": {
       "type": "string",
@@ -149,7 +161,8 @@
         "offline_after_assets_downloaded",
         "synthetic_release_evidence",
         "typed_failure_states",
-        "measured_on_declared_inputs"
+        "measured_on_declared_inputs",
+        "credentialed_corpus_measured"
       ]
     },
     "limitation": {
@@ -225,7 +238,11 @@
             "site_validation_invalid",
             "site_validation_unverified",
             "site_validation_not_accepted",
-            "site_validation_missing"
+            "site_validation_missing",
+            "shac_not_configured",
+            "shac_path_unavailable",
+            "shac_gold_invalid",
+            "shac_gold_unsupported"
           ]
         }
       }
@@ -247,7 +264,8 @@
             "aggregate",
             "configuration",
             "software",
-            "synthetic"
+            "synthetic",
+            "credentialed"
           ]
         },
         "digest": {

@@ -97,7 +97,9 @@ G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 G9_DUA_PROMOTION_CADENCE = "human-run"
 G9_DUA_PROMOTION_TIER = "promotion"
-_DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
+_DUA_RELATION_PROMOTION_CORPORA = frozenset(
+    {"biored", "n2c2-2018", "n2c2-2018-track2", "n2c2-2022"}
+)
 RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
 RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900

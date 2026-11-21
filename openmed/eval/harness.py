@@ -67,7 +67,9 @@ _FEDERATED_EVAL_KEY_ENV = "OPENMED_FEDERATED_EVAL_KEY"
 _RELATION_SCORECARD_KEY_ENV = "OPENMED_RELATION_SCORECARD_KEY"
 RELATION_SCORECARD_ARTIFACT = "openmed.eval.relation_scorecard"
 RELATION_SCORECARD_SCHEMA_VERSION = 1
-DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
+DUA_RELATION_PROMOTION_CORPORA = frozenset(
+    {"biored", "n2c2-2018", "n2c2-2018-track2", "n2c2-2022"}
+)
 DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent
     / "golden"
@@ -1954,6 +1956,19 @@ def run_dua_relation_promotion_benchmark(
         "cache_corpus_rows": False,
         "task": "relation",
     }
+    if resolved_suite == "n2c2-2018-track2":
+        report_metadata["data_origin"] = (
+            "credentialed"
+            if report_metadata.get("data_origin") == "credentialed"
+            and fixtures
+            and all(
+                fixture.metadata.get("eval_only") is True
+                and fixture.metadata.get("source_path_hash")
+                and not fixture.metadata.get("synthetic")
+                for fixture in fixtures
+            )
+            else "synthetic"
+        )
     report = run_relation_benchmark(
         fixtures,
         suite=resolved_suite,

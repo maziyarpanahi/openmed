@@ -15,6 +15,9 @@ from openmed import __version__
 from openmed.core.intended_use import load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
 from openmed.eval.evidence_pack.lanes import (
+    CLINICAL_CREDENTIALED,
+    CLINICAL_SYNTHETIC,
+    clinical_lane,
     human_factors_lane,
     membership_lane,
     required_lanes,
@@ -96,11 +99,14 @@ def build_evidence_pack(
 ) -> ValidationEvidencePack:
     """Assemble only indexed report files, retaining numeric metrics and digests."""
     profile = required_lanes(capability)
+    optional, optional_metrics = CLINICAL_CREDENTIALED.get(capability, (None, ()))
+    if optional:
+        profile[optional] = optional_metrics
     declaration = load_intended_use_registry().declarations[capability]
     lanes = {
         name: {
             "id": name,
-            "mandatory": True,
+            "mandatory": name != optional,
             "state": "unknown",
             "report_digest": None,
             "required_metrics": list(metrics),
@@ -122,6 +128,11 @@ def build_evidence_pack(
             name = entry["lane"]
             digest = entry["sha256"]
             kind = entry["type"]
+            clinical = name in CLINICAL_SYNTHETIC.get(capability, {}) or (
+                optional and name == optional
+            )
+            if clinical and kind != "clinical_report":
+                raise EvidencePackError("clinical_report_required")
             human = (
                 name == "human_factors"
                 and kind == "human_factors_report"
@@ -145,6 +156,7 @@ def build_evidence_pack(
                 or name in seen
                 or (
                     not site
+                    and not clinical
                     and not membership
                     and not human
                     and kind
@@ -178,7 +190,15 @@ def build_evidence_pack(
                 continue
             if hashlib.sha256(raw).hexdigest() != digest:
                 raise EvidencePackError("report_digest_mismatch")
-            if membership:
+            if clinical:
+                state, metrics, reason = clinical_lane(
+                    name, _parse(raw), credentialed=name == optional
+                )
+                if reason:
+                    lanes[name]["reason_code"] = reason
+                if state == "success" and name == optional:
+                    lanes[name]["claims"] = ["credentialed_corpus_measured"]
+            elif membership:
                 state, metrics = membership_lane(_parse(raw))
             elif human:
                 state, metrics, human_inputs = human_factors_lane(
@@ -209,13 +229,17 @@ def build_evidence_pack(
                     "%Y-%m-%dT%H:%M:%SZ"
                 ),
                 "lanes": list(lanes.values()),
-                "claims": [],
+                "claims": sorted(
+                    {claim for lane in lanes.values() for claim in lane["claims"]}
+                ),
                 "exceptions": [],
                 "licenses": [],
                 "frozen_inputs": [
                     {
                         "id": lane["id"],
-                        "origin": "aggregate",
+                        "origin": "credentialed"
+                        if lane["id"] == optional and lane["claims"]
+                        else "aggregate",
                         "digest": lane["report_digest"],
                     }
                     for lane in lanes.values()

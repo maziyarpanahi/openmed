@@ -306,7 +306,7 @@ def test_each_dua_relation_loader_scores_through_promotion_g9(
     subtests, tmp_path
 ) -> None:
     case_root = tmp_path
-    for corpus in (BIORED, N2C2_2018, N2C2_2022):
+    for corpus in (BIORED, N2C2_2018, N2C2_2022, "n2c2-2018-track2"):
         with subtests.test(corpus=corpus):
             tmp_path = case_root / str(len(list(case_root.iterdir())))
             tmp_path.mkdir()
@@ -314,6 +314,7 @@ def test_each_dua_relation_loader_scores_through_promotion_g9(
                 BIORED: _write_and_load_biored,
                 N2C2_2018: _write_and_load_n2c2_2018,
                 N2C2_2022: _write_and_load_n2c2_2022,
+                "n2c2-2018-track2": _write_and_load_track2,
             }
             fixtures = fixture_loaders[corpus](tmp_path)
 
@@ -498,3 +499,12 @@ def _write_i2b2_xml(
     path = source / filename
     path.write_text(ET.tostring(document, encoding="unicode"), encoding="utf-8")
     return path, expected
+
+
+def _write_and_load_track2(path):
+    from openmed.eval.datasets.n2c2_2018_track2 import (
+        load_n2c2_2018_track2_relation_fixtures,
+    )
+
+    _write_and_load_n2c2_2018(path)
+    return load_n2c2_2018_track2_relation_fixtures(path / "credentialed")

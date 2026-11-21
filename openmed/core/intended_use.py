@@ -186,7 +186,9 @@ def load_intended_use_registry() -> IntendedUseRegistry:
     declarations = {}
     entry_points = {}
     for code, record in records.items():
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", code) or set(record) != {
+        if not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?", code) or set(
+            record
+        ) != {
             "declaration",
             "entry_points",
         }:

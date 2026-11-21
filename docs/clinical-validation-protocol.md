@@ -197,3 +197,16 @@ For a `structured_release` evidence pack, index the existing bounded
 Missing measurements or an unset threshold leave the pack incomplete. A
 measured rate above the declared threshold fails the lane. The standalone
 structured lab retains its optional membership policy.
+
+Use `clinical_report` as the index type for native clinical suite output.
+The assertion profile requires multilingual context and temporal consistency.
+Temporal relations require awareness F1 of at least 0.75 and zero closure
+violations. Medication relations use strict relation F1. SDOH uses overall
+precision and recall. Each profile also applies its intended-use obligations.
+
+Credentialed measurements are optional for readiness. A successful matching
+i2b2, Track 2 G9 or SHAC report binds the `credentialed_corpus_measured` claim
+to its digest. For Track 2 G9, explicitly declare `data_origin="credentialed"`
+in the run metadata when using authorized corpus inputs. A synthetic run tagged
+with the same suite cannot support the claim. Missing SHAC inputs retain the
+runner's availability reason.

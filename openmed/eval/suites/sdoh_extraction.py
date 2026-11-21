@@ -458,6 +458,9 @@ def _score(
         },
         metadata={
             "schema_version": 1,
+            **(
+                {"data_origin": "credentialed"} if suite == SHAC_SDOH_EXTRACTION else {}
+            ),
             "fixture_digest": _digest(sorted(fixture_digests)),
             "prediction_digest": _digest(sorted(prediction_digests)),
         },
