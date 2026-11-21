@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fail `helm template` and `helm install` of the service chart when
+  `terminationGracePeriodSeconds` is not greater than
+  `config.shutdownDrainSeconds` plus 5 seconds, so a longer drain timeout can
+  no longer be cut off by Kubernetes mid-drain (#4556).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer
