@@ -28,6 +28,8 @@ from openmed.structured.decision import (
     decide,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures" / "structured" / "decision_qualification"
 DEVELOPMENT = FIXTURES / "development.jsonl"

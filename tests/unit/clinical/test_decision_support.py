@@ -24,6 +24,8 @@ from openmed.clinical import (
     validate_guarded_suggestion,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 
 @dataclass(frozen=True)
 class _SpanLike:

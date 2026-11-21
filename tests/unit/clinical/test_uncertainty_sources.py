@@ -33,6 +33,8 @@ from openmed.clinical.uncertainty_sources import (
     TemporalUncertaintySource,
 )
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 
 def test_typed_reason_aliases_do_not_conflict_with_implicit_defaults(subtests) -> None:
     for constructor, default in [

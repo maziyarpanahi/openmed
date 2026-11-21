@@ -29,6 +29,8 @@ from openmed.multimodal.vision.providers.local_assets import LocalVLMAssets
 from openmed.multimodal.vision.providers.smolvlm import SmolVLMProvider, _versions
 from openmed.multimodal.vision.safety.quality_gate import QualityPolicy
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 
 @pytest.fixture
 def assets(tmp_path):

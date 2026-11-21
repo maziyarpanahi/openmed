@@ -10,6 +10,7 @@ from importlib.metadata import PackageNotFoundError, version
 from io import BytesIO
 from typing import TYPE_CHECKING
 
+from openmed.core.clinician_mode import restricted_entry_point
 from openmed.multimodal.abstention import (
     AbstentionReason,
     AbstentionRecord,
@@ -131,6 +132,7 @@ class SmolVLMProvider:
         )
         return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
+    @restricted_entry_point("visual_qa")
     def infer(
         self,
         request: VLMRequest,

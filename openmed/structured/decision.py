@@ -34,6 +34,8 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Any, Final, Protocol, runtime_checkable
 
+from openmed.core.clinician_mode import ClinicianModeError, require_clinician_mode
+
 from .decision_media import (
     MAX_MEDIA_BYTES,
     MAX_MEDIA_ITEMS,
@@ -1553,6 +1555,11 @@ def decide(
         raise TypeError("backend must implement the DecisionBackend protocol")
     active_policy = policy or DecisionAccessPolicy()
     access = active_policy.decision(normalized, selected_backend.identity)
+    if access["allowed"]:
+        try:
+            require_clinician_mode("decisions")
+        except ClinicianModeError as exc:
+            access.update(allowed=False, code=str(exc))
     try:
         profile = _calibration_profile(normalized, calibration_profiles)
     except DecisionUnsupportedError:

@@ -32,6 +32,8 @@ from openmed.multimodal.ecg.signal_quality import (
 )
 from openmed.multimodal.ecg.waveform import EcgLead, EcgProvenance, EcgWaveform
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 
 def triangle(values, start, peak, end, amplitude):
     for index in range(start, end + 1):

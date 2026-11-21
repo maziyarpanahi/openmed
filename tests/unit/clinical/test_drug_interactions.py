@@ -19,6 +19,8 @@ from openmed.clinical.drug_interactions import (
 )
 from openmed.clinical.grounding import Candidate, GroundedSpan
 
+pytestmark = pytest.mark.usefixtures("acknowledged_clinician_review")
+
 FIXTURE = (
     Path(__file__).resolve().parents[2]
     / "fixtures"

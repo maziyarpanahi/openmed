@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
 
+from openmed.core.clinician_mode import restricted_entry_point
+
 __all__ = [
     "NON_DIAGNOSTIC_NOTICE",
     "ChannelKind",
@@ -331,6 +333,7 @@ def _quality(channel: WaveformChannel) -> ChannelQuality:
     )
 
 
+@restricted_entry_point("waveform")
 def evaluate_recording(channels: tuple[WaveformChannel, ...]) -> RecordingQuality:
     """Validate and assess mixed kinds without resampling or clinical inference.
 

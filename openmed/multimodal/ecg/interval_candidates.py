@@ -10,6 +10,7 @@ from enum import Enum
 from statistics import median
 from typing import ClassVar
 
+from openmed.core.clinician_mode import restricted_entry_point
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from .signal_quality import (
@@ -582,6 +583,7 @@ def _candidate(
     )
 
 
+@restricted_entry_point("ecg")
 def extract_interval_candidates(
     waveform: EcgWaveform,
     quality_policy: SignalQualityPolicy,
