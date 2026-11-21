@@ -3295,6 +3295,14 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     eval_parser = subparsers.add_parser("eval", help="Run evaluation tools.")
     eval_sub = eval_parser.add_subparsers(dest="eval_command")
 
+    certify = eval_sub.add_parser(
+        "certify-g1a", help="Sign a G1a recall floor decision."
+    )
+    certify.add_argument("--aggregate", required=True, type=Path)
+    certify.add_argument("--model", required=True)
+    certify.add_argument("--private-key-file", required=True, type=Path)
+    certify.set_defaults(handler=_handle_eval_certify_g1a)
+
     credentialed = eval_sub.add_parser(
         "credentialed", help="Evaluate a cached model on a local credentialed corpus."
     )
@@ -6304,6 +6312,25 @@ def _handle_policy_diff(args: argparse.Namespace) -> int:
     else:
         human = render(diff, fmt="text")
     return emit(args, payload, human=human)
+
+
+def _handle_eval_certify_g1a(args: argparse.Namespace) -> int:
+    from openmed.eval.g1a_certification import certify_g1a
+
+    try:
+        report = certify_g1a(
+            json.loads(args.aggregate.read_bytes()),
+            model_id=args.model,
+            private_key=args.private_key_file.read_bytes(),
+        )
+    except (AttributeError, ValueError, OSError, TypeError, ImportError):
+        raise CliError(
+            "Invalid certification input or signing key.",
+            code="certification_failed",
+            exit_code=2,
+        ) from None
+    print(json.dumps(report, sort_keys=True, allow_nan=False))
+    return 0 if report["certification"]["state"] == "CERTIFIED" else 1
 
 
 def _handle_eval_credentialed(args: argparse.Namespace) -> int:
