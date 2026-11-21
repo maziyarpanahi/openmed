@@ -1,5 +1,6 @@
 """Check release history without importing candidate code or contacting GitHub."""
 
+import json
 import subprocess
 
 import pytest
@@ -19,6 +20,10 @@ def repo(tmp_path, monkeypatch):
     git(tmp_path, "config", "user.name", "Test Maintainer")
     git(tmp_path, "config", "user.email", "test@example.test")
     (tmp_path / "openmed").mkdir()
+    api_dir = tmp_path / "docs/api"
+    api_dir.mkdir(parents=True)
+    (api_dir / "openapi.json").write_text('{"openapi":"3.1.0","paths":{}}')
+    git(tmp_path, "add", "docs/api/openapi.json")
     return tmp_path
 
 
@@ -63,3 +68,55 @@ def test_minor_patch_skip_and_major_requires_release(repo):
     assert run_gate(repo, "4.3.1", "missing") == []
     with pytest.raises(ValueError, match="previous_major_tags_missing"):
         run_gate(repo, "5.0.0", "HEAD")
+
+
+def test_released_openapi_notices_bind_operation_and_property(repo):
+    def spec(tag, paths, fields):
+        payload = {
+            "paths": paths,
+            "components": {
+                "schemas": {"Result": {"type": "object", "properties": fields}}
+            },
+        }
+        (repo / "docs/api/openapi.json").write_text(json.dumps(payload))
+        git(repo, "add", "docs/api/openapi.json")
+        commit(repo, "", tag)
+
+    earlier = {
+        "/warned": {"delete": {"deprecated": True}},
+        "/unchanged": {"get": {}},
+        "/silent": {"post": {}},
+    }
+    spec("v4.2.0", earlier, {"old": {"deprecated": True}, "required_review": {}})
+    earlier["/warned"]["delete"] = {}
+    spec("v4.10.0", earlier, {"old": {}, "required_review": {}})
+    spec(None, {"/unchanged": {"get": {}}}, {})
+    assert set(run_gate(repo, "5.0.0", "HEAD")) == {
+        "REST operation POST /silent",
+        "REST schema Result required_review",
+    }
+    assert run_gate(repo, "5.1.0", "HEAD") == []
+
+
+def test_inline_response_properties_and_removed_operation_scope(repo):
+    def save(paths, tag):
+        (repo / "docs/api/openapi.json").write_text(json.dumps({"paths": paths}))
+        git(repo, "add", "docs/api/openapi.json")
+        commit(repo, "", tag)
+
+    response = {
+        "200": {
+            "content": {"application/json": {"schema": {"properties": {"unused": {}}}}}
+        }
+    }
+    save(
+        {
+            "/retire": {"get": {"deprecated": True, "responses": response}},
+            "/stay": {"post": {"responses": response}},
+        },
+        "v4.3.0",
+    )
+    save({"/stay": {"post": {}}}, None)
+    assert run_gate(repo, "5.0.0", "HEAD") == [
+        "REST operation POST /stay response 200 application/json unused"
+    ]

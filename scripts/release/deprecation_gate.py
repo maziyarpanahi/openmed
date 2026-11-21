@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -66,6 +67,115 @@ def python_violations(
     return sorted(pending)
 
 
+def _openapi_surface(repo: Path, ref: str) -> dict[tuple[str, ...], bool]:
+    raw = subprocess.check_output(
+        ["git", "-C", str(repo), "show", f"{ref}:docs/api/openapi.json"]
+    )
+    document = json.loads(raw)
+    if not isinstance(document.get("paths"), dict):
+        raise ValueError("invalid OpenAPI paths")
+    surface = {}
+
+    def resolve(node, seen):
+        if not isinstance(node, dict):
+            raise ValueError("invalid OpenAPI object")
+        while "$ref" in node:
+            pointer = node["$ref"]
+            if not isinstance(pointer, str) or not pointer.startswith("#/"):
+                raise ValueError("local OpenAPI references required")
+            if pointer in seen:
+                return {}, seen
+            seen = seen | {pointer}
+            obj = document
+            for segment in pointer[2:].split("/"):
+                obj = obj[segment.replace("~1", "/").replace("~0", "~")]
+            node = {**obj, **{k: v for k, v in node.items() if k != "$ref"}}
+        return node, seen
+
+    def properties(schema, prefix, seen=frozenset()):
+        if isinstance(schema, bool):
+            return
+        schema, seen = resolve(schema, seen)
+        for name, field in schema.get("properties", {}).items():
+            key = (*prefix, name)
+            obj, _ = resolve(field, seen) if not isinstance(field, bool) else ({}, seen)
+            surface[key] = surface.get(key, True) and obj.get("deprecated") is True
+            properties(field, key, seen)
+        if "items" in schema:
+            properties(schema["items"], (*prefix, "[]"), seen)
+        for kind in ("allOf", "anyOf", "oneOf"):
+            for part in schema.get(kind, []):
+                properties(part, prefix, seen)
+
+    for name, schema in document.get("components", {}).get("schemas", {}).items():
+        properties(schema, ("schema", name))
+    for path, raw_item in document["paths"].items():
+        item, _ = resolve(raw_item, frozenset())
+        for method in (
+            "get",
+            "put",
+            "post",
+            "delete",
+            "patch",
+            "options",
+            "head",
+            "trace",
+        ):
+            if method not in item:
+                continue
+            operation = item[method]
+            key = ("operation", method.upper(), path)
+            surface[key] = operation.get("deprecated") is True
+            bodies = [
+                ("response " + code, response)
+                for code, response in operation.get("responses", {}).items()
+            ]
+            if "requestBody" in operation:
+                bodies.append(("request", operation["requestBody"]))
+            for side, body in bodies:
+                obj, _ = resolve(body, frozenset())
+                for media, content in obj.get("content", {}).items():
+                    properties(content.get("schema", {}), (*key, side, media))
+    return surface
+
+
+def openapi_violations(repo: Path, candidate: str, tags: list[str]) -> list[str]:
+    """Find removed operations and properties lacking a released warning."""
+    baseline = _openapi_surface(repo, tags[0])
+    current = _openapi_surface(repo, candidate)
+    missing = baseline.keys() - current.keys()
+    # Removing an operation or parent property removes its subtree. Require
+    # the notice on the outermost removed contract.
+    pending = {
+        key
+        for key in missing
+        if not any(key[:i] in missing for i in range(1, len(key)))
+    }
+    for tag in tags:
+        if not pending:
+            break
+        if tag == tags[0]:
+            old = baseline
+        else:
+            files = subprocess.check_output(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "ls-tree",
+                    "--name-only",
+                    tag,
+                    "--",
+                    "docs/api/openapi.json",
+                ]
+            )
+            if not files:
+                continue
+            old = _openapi_surface(repo, tag)
+        pending.difference_update(key for key in tuple(pending) if old.get(key) is True)
+    return ["REST " + " ".join(key) for key in sorted(pending)]
+
+
 def run_gate(repo: Path, version: str, candidate: str) -> list[str]:
     """Return breaking symbols lacking a timely deprecation in a released tag."""
     target = _version(version)
@@ -84,7 +194,9 @@ def run_gate(repo: Path, version: str, candidate: str) -> list[str]:
         ],
         text=True,
     ).strip()
-    return python_violations(repo, sha, target, tags)
+    return python_violations(repo, sha, target, tags) + openapi_violations(
+        repo, sha, tags
+    )
 
 
 def main(argv=None):
