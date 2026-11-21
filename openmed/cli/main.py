@@ -609,7 +609,11 @@ def build_parser() -> argparse.ArgumentParser:
         "verify", help="Verify a signed capability pack offline."
     )
     verify.add_argument("pack", type=Path)
-    verify.add_argument("--key-file", type=Path, required=True)
+    verification_key = verify.add_mutually_exclusive_group(required=True)
+    verification_key.add_argument("--key-file", type=Path, help="Trusted HMAC secret.")
+    verification_key.add_argument(
+        "--public-key-file", type=Path, help="Trusted raw Ed25519 public key."
+    )
     verify.add_argument("--key-id", required=True)
     verify.add_argument(
         "--as-of", required=True, help="Timezone-aware evaluation timestamp."
@@ -622,6 +626,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_json_flag(verify)
     verify.set_defaults(handler=_handle_evidence_verify)
+    sign = evidence_sub.add_parser(
+        "sign", help="Sign a capability pack with a caller-supplied Ed25519 seed."
+    )
+    sign.add_argument("pack", type=Path)
+    sign.add_argument("--key-id", required=True)
+    source = sign.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--private-key-file",
+        type=Path,
+        help="Local file containing the raw 32-byte seed.",
+    )
+    source.add_argument(
+        "--private-key-env",
+        help="Name of an environment variable containing the hex seed.",
+    )
+    sign.set_defaults(handler=_handle_evidence_sign)
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
@@ -3617,6 +3637,32 @@ def _handle_redact_dataset(args: argparse.Namespace) -> int:
     return run_from_args(args, config=config)
 
 
+def _handle_evidence_sign(args: argparse.Namespace) -> int:
+    from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
+    from openmed.eval.evidence_pack.verify import sign_evidence_pack
+
+    try:
+        seed = (
+            args.private_key_file.read_bytes()
+            if args.private_key_file is not None
+            else bytes.fromhex(os.environ[args.private_key_env])
+        )
+        signed = sign_evidence_pack(
+            ValidationEvidencePack.from_json(args.pack.read_bytes()),
+            key_id=args.key_id,
+            key=seed,
+            algorithm="Ed25519",
+        )
+    except EvidencePackError as exc:
+        raise CliError(str(exc), code=str(exc), exit_code=EXIT_USAGE) from None
+    except (KeyError, ValueError, OSError):
+        raise CliError(
+            "Invalid signing input.", code="invalid_input", exit_code=EXIT_USAGE
+        ) from None
+    sys.stdout.write(signed.to_json())
+    return 0
+
+
 def _handle_evidence_verify(args: argparse.Namespace) -> int:
     from datetime import timedelta
 
@@ -3629,7 +3675,10 @@ def _handle_evidence_verify(args: argparse.Namespace) -> int:
             if args.corrective_action_ledger is not None
             else None
         )
-        key = args.key_file.read_bytes()
+        key = None if args.key_file is None else args.key_file.read_bytes()
+        public_key = (
+            None if args.public_key_file is None else args.public_key_file.read_bytes()
+        )
         as_of = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
         max_age = timedelta(days=args.max_age_days)
     except (OSError, ValueError, OverflowError):
@@ -3640,6 +3689,7 @@ def _handle_evidence_verify(args: argparse.Namespace) -> int:
         raw,
         key_id=args.key_id,
         key=key,
+        public_key=public_key,
         as_of=as_of,
         max_age=max_age,
         corrective_action_ledger=ledger,

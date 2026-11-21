@@ -16,7 +16,11 @@ from openmed.compliance.evidence_freshness import (
 from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
 from openmed.eval.evidence_pack import EvidencePackError, ValidationEvidencePack
 from openmed.eval.evidence_pack.lanes import required_lanes
-from openmed.eval.journey_release import _reject_duplicate_keys, _release_hmac
+from openmed.eval.journey_release import (
+    _canonical_json,
+    _reject_duplicate_keys,
+    _release_hmac,
+)
 
 
 @dataclass(frozen=True)
@@ -28,21 +32,39 @@ class EvidenceVerification:
     corrective_action_ids: tuple[str, ...] = ()
 
 
-def _signature(pack: ValidationEvidencePack, key_id: str, key: bytes) -> dict:
-    envelope = {
-        "algorithm": "HMAC-SHA256",
-        "key_id": key_id,
-        "payload_digest": pack.digest(),
-    }
-    return {**envelope, "value": _release_hmac(key, envelope)}
+def _envelope(pack: ValidationEvidencePack, key_id: str, algorithm: str) -> dict:
+    return {"algorithm": algorithm, "key_id": key_id, "payload_digest": pack.digest()}
 
 
 def sign_evidence_pack(
-    pack: ValidationEvidencePack, *, key_id: str, key: bytes
+    pack: ValidationEvidencePack,
+    *,
+    key_id: str,
+    key: bytes,
+    algorithm: str = "HMAC-SHA256",
 ) -> ValidationEvidencePack:
-    """Authenticate a pack's digest and key identifier with a local HMAC key."""
+    """Sign the canonical digest envelope with a caller-provided HMAC key or Ed25519 seed."""
+    envelope = _envelope(pack, key_id, algorithm)
+    if algorithm == "HMAC-SHA256":
+        value = _release_hmac(key, envelope)
+    elif algorithm == "Ed25519":
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+                Ed25519PrivateKey,
+            )
+        except ImportError:
+            raise EvidencePackError("ed25519_unavailable") from None
+        if not isinstance(key, bytes) or len(key) != 32:
+            raise EvidencePackError("invalid_key_configuration")
+        value = (
+            Ed25519PrivateKey.from_private_bytes(key)
+            .sign(_canonical_json(envelope).encode("utf-8"))
+            .hex()
+        )
+    else:
+        raise EvidencePackError("unsupported_signature_algorithm")
     return ValidationEvidencePack(
-        {**pack.signing_payload(), "signature": _signature(pack, key_id, key)}
+        {**pack.signing_payload(), "signature": {**envelope, "value": value}}
     )
 
 
@@ -50,7 +72,8 @@ def verify_evidence_pack(
     raw: str | bytes,
     *,
     key_id: str,
-    key: bytes,
+    key: bytes | None = None,
+    public_key: bytes | None = None,
     as_of: datetime,
     max_age: timedelta,
     corrective_action_ledger: str | bytes | None = None,
@@ -64,7 +87,10 @@ def verify_evidence_pack(
     except EvidencePackError as exc:
         return EvidenceVerification(2, (str(exc),))
 
-    if not isinstance(key, bytes) or len(key) < 32 or not key_id:
+    if not key_id or not (
+        (public_key is None and isinstance(key, bytes) and len(key) >= 32)
+        or (key is None and isinstance(public_key, bytes) and len(public_key) == 32)
+    ):
         return EvidenceVerification(2, ("invalid_key_configuration",))
     data = pack.to_dict()
     try:
@@ -79,12 +105,32 @@ def verify_evidence_pack(
     if signature is None:
         reasons.add("unsigned_pack")
     else:
-        expected = _signature(pack, key_id, key)
+        algorithm = "Ed25519" if public_key is not None else "HMAC-SHA256"
+        expected = _envelope(pack, key_id, algorithm)
         if signature["payload_digest"] != expected["payload_digest"]:
             reasons.add("digest_mismatch")
-        if signature["key_id"] != key_id or not hmac.compare_digest(
-            signature["value"], expected["value"]
-        ):
+        if signature["algorithm"] != algorithm or signature["key_id"] != key_id:
+            reasons.add("signature_mismatch")
+        elif public_key is not None:
+            from openmed.core.portable_bundle import (
+                PortableBundleError,
+                _ed25519_verify,
+            )
+
+            try:
+                valid = _ed25519_verify(
+                    public_key,
+                    bytes.fromhex(signature["value"]),
+                    _canonical_json(expected).encode("utf-8"),
+                )
+            except PortableBundleError:
+                return EvidenceVerification(2, ("ed25519_unavailable",))
+            if not valid:
+                reasons.add("signature_mismatch")
+            wire = raw if isinstance(raw, bytes) else raw.encode("utf-8")
+            if wire != pack.to_json().encode("utf-8"):
+                reasons.add("noncanonical_signed_pack")
+        elif not hmac.compare_digest(signature["value"], _release_hmac(key, expected)):
             reasons.add("signature_mismatch")
 
     code = data["capability"]

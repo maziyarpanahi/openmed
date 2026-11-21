@@ -343,17 +343,40 @@
       ],
       "properties": {
         "algorithm": {
-          "const": "HMAC-SHA256"
+          "enum": [
+            "HMAC-SHA256",
+            "Ed25519"
+          ]
         },
         "key_id": {
           "$ref": "#/$defs/code"
         },
         "value": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          "type": "string"
         },
         "payload_digest": {
           "$ref": "#/$defs/digest"
+        }
+      },
+      "if": {
+        "properties": {
+          "algorithm": {
+            "const": "Ed25519"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "pattern": "^[0-9a-f]{128}(?![\\s\\S])"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "value": {
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          }
         }
       }
     }
