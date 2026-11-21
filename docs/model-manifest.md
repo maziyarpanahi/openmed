@@ -160,12 +160,12 @@ and appear in `openmed models info` output. For older rows, the SDK reports
 `regulatory_tier="unknown"` and applies the full restricted obligation set.
 The existing `tier` field continues to describe the model's size tier.
 
+Three individually reviewed `General/unknown` models use the `visual_qa`
+capability and its `restricted` tier. These decisions are keyed by repository ID.
+Other models with an unknown family/task pair still require individual review.
+
 To preview the reviewed family/task rules against the current manifest, run
 `python -m scripts.manifest.backfill_regulatory_tier --dry-run`. The report shows
 the rule version, counts per tier and the IDs requiring individual review. Omit
 `--dry-run` to fill missing declarations and then run
 `python -m scripts.manifest.regenerate_surfaces` to refresh the derived catalog.
-
-Three individually reviewed `General/unknown` models use the `visual_qa`
-capability and its `restricted` tier. These decisions are keyed by repository ID.
-Other models with an unknown family/task pair still require individual review.
