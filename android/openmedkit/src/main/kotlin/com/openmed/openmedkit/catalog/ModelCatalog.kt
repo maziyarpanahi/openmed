@@ -26,6 +26,20 @@ data class ModelCatalogEntry @JvmOverloads constructor(
     val regulatoryTier: String? = null,
     val capability: String? = null,
 ) {
+    /** Preserve the JVM copy and default-argument signatures used by 4.x consumers. */
+    fun copy(
+        repoId: String = this.repoId,
+        formats: List<String> = this.formats,
+        tier: String? = this.tier,
+        paramCount: Long? = this.paramCount,
+        languages: List<String> = this.languages,
+        license: String? = this.license,
+        reproducibilityHash: String = this.reproducibilityHash,
+    ): ModelCatalogEntry = ModelCatalogEntry(
+        repoId, formats, tier, paramCount, languages, license, reproducibilityHash,
+        regulatoryTier, capability,
+    )
+
     /** Safeguards required for this row, including forward-compatible tiers. */
     val regulatoryObligations: Set<String>
         get() = when (regulatoryTier) {
