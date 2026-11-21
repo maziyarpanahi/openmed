@@ -154,5 +154,23 @@
     "replacement": "openmed.interop.fhir.bulk",
     "status": "deprecated",
     "migration_anchor": "docs/migration.md#fhir-bulk-import-path"
+  },
+  {
+    "id": "shift-dates-alias",
+    "surfaces": [
+      "python",
+      "rest",
+      "mcp"
+    ],
+    "symbols": {
+      "openmed/core/pii.py": [
+        "deidentify.shift_dates"
+      ]
+    },
+    "since": "4.3",
+    "remove_in": "5.0",
+    "replacement": "deidentify(method=\"shift_dates\")",
+    "status": "deprecated",
+    "migration_anchor": "docs/migration.md#date-shift-boolean-alias"
   }
 ]

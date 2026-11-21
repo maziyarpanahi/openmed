@@ -8430,7 +8430,7 @@ def _handle_pii_deidentify(args: argparse.Namespace) -> int:
         model_name=args.model,
         confidence_threshold=args.confidence_threshold,
         keep_year=args.keep_year,
-        shift_dates=args.shift_dates,
+        **({"shift_dates": args.shift_dates} if args.shift_dates else {}),
         keep_mapping=args.keep_mapping,
         config=config,
     )

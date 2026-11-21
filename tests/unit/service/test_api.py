@@ -558,6 +558,7 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
     )
 
     assert response.status_code == 200
+    assert "OpenMed-Deprecation" not in response.headers
     payload = response.json()
     assert payload["deidentified_text"] == "Paciente: [NAME]"
     assert payload["method"] == "mask"
@@ -622,6 +623,9 @@ def test_pii_deidentify_shift_dates_alias_promotes_method(client, monkeypatch):
     )
 
     assert response.status_code == 200
+    from openmed.utils.deprecation import SHIFT_DATES_NOTICE
+
+    assert response.headers["OpenMed-Deprecation"] == SHIFT_DATES_NOTICE
     assert response.json()["method"] == "shift_dates"
 
 
