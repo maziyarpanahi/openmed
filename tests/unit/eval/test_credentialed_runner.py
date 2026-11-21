@@ -101,3 +101,64 @@ def test_inference_error_contains_no_source(tmp_path, monkeypatch, capsys):
     assert "credentialed_evaluation_failed" in diagnostic
     assert "private" not in diagnostic
     assert not (tmp_path / "out").exists()
+
+
+def test_cegs_ngrid_cli_edition_privacy_and_path_refusal(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    from openmed.eval.datasets.cegs_ngrid import CEGS_NGRID_DUA
+
+    source = tmp_path / "synthetic.jsonl"
+    source.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "id": f"private-record-{i}",
+                    "text": "Private Example",
+                    "entities": [{"start": 0, "end": 15, "label": "PATIENT"}],
+                }
+            )
+            for i in range(5)
+        )
+    )
+    monkeypatch.setenv("OPENMED_CEGS_NGRID_PATH", str(source))
+    seen = []
+
+    def runner(fixture, *args):
+        seen.append(True)
+        return [{"start": 0, "end": 15, "label": "PERSON"}]
+
+    monkeypatch.setattr(
+        credentialed, "_load_cached_model", lambda *args: ("e" * 64, runner)
+    )
+    out = tmp_path / "out"
+    args = [
+        "eval",
+        "credentialed",
+        "--suite",
+        "cegs-ngrid-2016",
+        "--model",
+        "example/test",
+        "--output",
+        str(out),
+    ]
+    assert main([*args, "--year", "2014"]) == 2
+    assert not seen
+    assert main(args) == 0
+    assert len(seen) == 5
+    raw = out.read_text()
+    report = json.loads(raw)
+    assert (report["corpus"], report["year"], report["dua"]) == (
+        "cegs-n-grid",
+        2016,
+        CEGS_NGRID_DUA,
+    )
+    assert report["by_label"]["PERSON"]["tp"] == 5
+    assert not any(
+        x in raw for x in ("Private Example", "private-record-", str(source))
+    )
+    monkeypatch.setenv("OPENMED_CEGS_NGRID_PATH", str(Path.cwd()))
+    assert main([*args[:-1], str(tmp_path / "refused")]) == 2
+    assert len(seen) == 5
+    assert not (tmp_path / "refused").exists()
+    assert str(Path.cwd()) not in capsys.readouterr().err
