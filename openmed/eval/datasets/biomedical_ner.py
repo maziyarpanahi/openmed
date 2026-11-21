@@ -38,6 +38,7 @@ NCBI_DISEASE = "ncbi_disease"
 JNLPBA = "jnlpba"
 SPECIES_800 = "species_800"
 BC2GM = "bc2gm"
+LINNAEUS = "linnaeus"
 DEFAULT_SPLIT = "test"
 
 BIOMEDICAL_NER_CORPORA: tuple[str, ...] = (
@@ -46,6 +47,7 @@ BIOMEDICAL_NER_CORPORA: tuple[str, ...] = (
     JNLPBA,
     SPECIES_800,
     BC2GM,
+    LINNAEUS,
 )
 
 RowsLoader = Callable[
@@ -176,8 +178,19 @@ class BiomedicalNerCorpus:
 _JNLPBA_PARQUET_REVISION = "c4d4db8684c996b6257b5f10f8a8f5c6e47b4cb4"
 _SPECIES_800_PARQUET_REVISION = "095d7c7223e891ad110a14c4a538faa3f4f5d903"
 _BLURB_PARQUET_REVISION = "2588833475f354bc8a5bfaa93e6688671cdd68a8"
+_LINNAEUS_PARQUET_REVISION = "6e684a3864e90f00a56c2f7650d73cec85c964db"
 
 BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
+    LINNAEUS: BiomedicalNerSource(
+        corpus=LINNAEUS,
+        display_name="LINNAEUS",
+        repository="cambridgeltl/linnaeus",
+        config="linnaeus",
+        label_mapping={"species": MICROORGANISM},
+        loader_kind="token_tags",
+        token_label="Species",
+        revision=_LINNAEUS_PARQUET_REVISION,
+    ),
     BC5CDR: BiomedicalNerSource(
         corpus=BC5CDR,
         display_name="BC5CDR",
@@ -875,6 +888,8 @@ def _tag_parts(
     normalized = value.strip()
     if not normalized or normalized.upper() == "O":
         return "O", ""
+    if normalized.upper() in {"B", "I", "E", "S"}:
+        return normalized.upper(), default_label
     prefix, separator, label = normalized.partition("-")
     if separator and prefix.upper() in {"B", "I", "E", "S"}:
         return prefix.upper(), label
@@ -1005,6 +1020,7 @@ __all__ = [
     "BIOMEDICAL_NER_SOURCES",
     "DEFAULT_SPLIT",
     "JNLPBA",
+    "LINNAEUS",
     "NCBI_DISEASE",
     "SPECIES_800",
     "BiomedicalNerCorpus",

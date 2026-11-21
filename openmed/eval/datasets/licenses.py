@@ -301,6 +301,17 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "reference and stores no corpus rows in the repository."
         ),
     ),
+    "linnaeus": DatasetLicense(
+        dataset="linnaeus",
+        license_id="CC-BY-4.0",
+        source_url="https://huggingface.co/datasets/cambridgeltl/linnaeus",
+        redistribution="not redistributed by OpenMed",
+        notes=(
+            "The dataset card licenses this converted token-tag version under "
+            "CC-BY-4.0. Rows are loaded by reference and cached locally on "
+            "demand; OpenMed bundles no corpus rows."
+        ),
+    ),
     "species_800": DatasetLicense(
         dataset="species_800",
         license_id="Medline-restrictions",
