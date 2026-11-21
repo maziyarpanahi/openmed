@@ -8,7 +8,7 @@ prevents a small cell from being reconstructed from a published total.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
@@ -317,6 +317,105 @@ def reviewer_disagreement_report(
     )
 
 
+class ReviewedModel(str, Enum):
+    """Model role shown in a shadow evaluation."""
+
+    ACTIVE = "active"
+    CANDIDATE = "candidate"
+
+
+class ModelReviewOutcome(str, Enum):
+    """Final disposition of one model output."""
+
+    ACCEPT = "accept"
+    CORRECT = "correct"
+    REJECT = "reject"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class ModelReviewDecision:
+    """One pseudonymous review of an active or candidate model output."""
+
+    case_id: str
+    reviewer_id: str
+    model: ReviewedModel
+    outcome: ModelReviewOutcome
+    reason: DisagreementReason | None = None
+
+    def __post_init__(self) -> None:
+        _require_nonempty_string(self.case_id, "case identifier")
+        _require_nonempty_string(self.reviewer_id, "reviewer identifier")
+        if not isinstance(self.model, ReviewedModel) or not isinstance(
+            self.outcome, ModelReviewOutcome
+        ):
+            raise TypeError("expected a reviewed model role and a typed review outcome")
+        if self.reason is not None and not isinstance(self.reason, DisagreementReason):
+            raise TypeError("reason must be a DisagreementReason or None")
+
+
+def _model_rates(counts: Counter, minimum: int) -> dict:
+    denominator = counts.total()
+    rates = {
+        outcome: _publish_rate(counts[outcome], denominator, minimum_cell_size=minimum)
+        for outcome in ModelReviewOutcome
+    }
+    # Both published rates share a denominator. Reporting them together would
+    # reveal the remainder (accepted) even when each individual rate is safe.
+    if any(rate.suppressed for rate in rates.values()):
+        hidden = PublishedRate(
+            rate=None, numerator=None, denominator=None, suppressed=True
+        )
+        return {"rejection": hidden.to_dict(), "correction": hidden.to_dict()}
+    return {
+        "rejection": rates[ModelReviewOutcome.REJECT].to_dict(),
+        "correction": rates[ModelReviewOutcome.CORRECT].to_dict(),
+    }
+
+
+def model_review_disagreement_report(
+    decisions: Iterable[ModelReviewDecision],
+    *,
+    minimum_cell_size: int = DEFAULT_MINIMUM_CELL_SIZE,
+) -> dict[str, Any]:
+    """Report rejection and correction rates per model and optional reason."""
+    minimum = _validate_minimum_cell_size(minimum_cell_size)
+    groups = defaultdict(lambda: defaultdict(Counter))
+    seen = set()
+    for item in decisions:
+        if not isinstance(item, ModelReviewDecision):
+            raise TypeError("expected a ModelReviewDecision")
+        key = (item.model, item.case_id, item.reviewer_id)
+        if key in seen:
+            raise ValueError("duplicate model review")
+        seen.add(key)
+        reason = item.reason.value if item.reason else "unspecified"
+        groups[item.model][reason][item.outcome] += 1
+    models = {}
+    for model in ReviewedModel:
+        counts = groups[model]
+        total = Counter()
+        for group in counts.values():
+            total.update(group)
+        overall = _model_rates(total, minimum)
+        by_reason = {
+            reason: _model_rates(group, minimum)
+            for reason, group in sorted(counts.items())
+        }
+        # Subtracting other reasons from the model totals could disclose an
+        # omitted reason, including a rare accepted outcome. Withhold the partition.
+        suppressed = any(row["rejection"]["suppressed"] for row in by_reason.values())
+        models[model.value] = {
+            **overall,
+            "by_reason": {} if suppressed else by_reason,
+            "reason_breakdown_suppressed": suppressed,
+        }
+    return {
+        "schema_version": "openmed.model_review_disagreement.v1",
+        "minimum_cell_size": minimum,
+        "models": models,
+    }
+
+
 __all__ = [
     "DEFAULT_MINIMUM_CELL_SIZE",
     "REVIEWER_DISAGREEMENT_SCHEMA_VERSION",
@@ -325,5 +424,9 @@ __all__ = [
     "ReasonAdjudicationRate",
     "ReviewerDecision",
     "ReviewerDisagreementReport",
+    "ReviewedModel",
+    "ModelReviewOutcome",
+    "ModelReviewDecision",
+    "model_review_disagreement_report",
     "reviewer_disagreement_report",
 ]
