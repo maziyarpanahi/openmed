@@ -62,3 +62,32 @@ waiver or policy identifiers.
 
 This helper does not decide whether a waiver should be approved, whether a
 policy exception is lawful, or whether a deployment is clinically safe.
+
+## Corrective actions
+
+Track a release finding with
+`openmed.compliance.corrective_action.CorrectiveActionLedger`. Open a
+`CorrectiveAction` with a CAPA identifier, source, severity, affected
+capabilities and versions. Advance through investigating, action planned,
+implemented, verified and closed. Verification requires an after-evidence
+digest. Corrections, preventive actions and root causes use the codes in
+`corrective_action.schema.json`.
+
+Use `ledger.to_dict()` to export the events and their core audit chain. Loading
+the snapshot with `CorrectiveActionLedger.from_dict()` verifies the chain and
+replays the transitions. A local note is omitted from both records and chain
+material.
+
+Run the following commands against a local ledger directory. Each subcommand
+accepts `--json` for the shared CLI result envelope.
+
+```sh
+openmed compliance capa new --directory /var/lib/openmed/capa --id CAPA-2026-0001 --source incident --severity high --capability deidentify --version 4.3.0
+openmed compliance capa transition --directory /var/lib/openmed/capa --id CAPA-2026-0001 --state investigating
+openmed compliance capa list --directory /var/lib/openmed/capa
+openmed compliance capa verify --directory /var/lib/openmed/capa
+```
+
+A rejected transition exits with status 2. A ledger that fails verification
+exits with status 1. Use `--allow-repo` for synthetic fixtures stored inside a
+checkout.
