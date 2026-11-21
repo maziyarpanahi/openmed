@@ -158,6 +158,7 @@ class LocalArtifactStore:
         self.root = Path(root)
         self.policy = policy or AllowAllStoragePolicy()
         self._lock = threading.RLock()
+        self._withdrawal_store: SQLiteJourneyStore | None = None
         self._codec: PlaintextJourneyCodec | EncryptedJourneyCodec = (
             PLAINTEXT_JOURNEY_CODEC
         )
@@ -234,6 +235,14 @@ class LocalArtifactStore:
         if sha256_digest(content) != artifact.content_hash:
             return StoreResult.outcome(StoreState.CONFLICT, "artifact_hash_mismatch")
 
+        if self._withdrawal_store is not None:
+            allowed = self._withdrawal_store._blob_access(
+                artifact.content_hash, artifact
+            )
+            if not allowed.ok:
+                return StoreResult.outcome(
+                    allowed.state, allowed.code or "withdrawal_check_failed"
+                )
         target = self._blob_path(artifact.content_hash)
         with self._lock:
             existing = self._read_verified(artifact.content_hash)
@@ -293,6 +302,12 @@ class LocalArtifactStore:
 
         if not self.policy.allows("read", "artifact"):
             return StoreResult.outcome(StoreState.DENIED, "policy_denied")
+        if self._withdrawal_store is not None:
+            allowed = self._withdrawal_store._blob_access(content_hash)
+            if not allowed.ok:
+                return StoreResult.outcome(
+                    allowed.state, allowed.code or "withdrawal_check_failed"
+                )
         return self._read_verified(content_hash)
 
     def reencrypt(
@@ -1565,6 +1580,33 @@ class SQLiteJourneyStore:
             counts[table] = len(rows)
         return StoreResult.success(counts)
 
+    def _blob_access(
+        self, content_hash: str, artifact: ClinicalArtifact | None = None
+    ) -> StoreResult[bool]:
+        """Read the committed tombstone even while local blob cleanup is pending."""
+        try:
+            with self._lock:
+                self._require_open()
+                if artifact is None:
+                    blocked = (
+                        self._connection.execute(
+                            "SELECT 1 FROM journey_withdrawn_records WHERE blob_hash = ?",
+                            (content_hash,),
+                        ).fetchone()
+                        is not None
+                    )
+                else:
+                    blocked = self._withdrawn(
+                        "artifacts", artifact.artifact_id, artifact.to_dict()
+                    )
+        except StoreWaitError as exc:
+            return exc.outcome()
+        except (LocalStoreError, sqlite3.Error):
+            return StoreResult.outcome(StoreState.FAILURE, "withdrawal_check_failed")
+        if blocked:
+            return StoreResult.outcome(StoreState.DENIED, "artifact_withdrawn")
+        return StoreResult.success(True)
+
     def _withdrawn(self, table: str, identity: str, payload: Mapping) -> bool:
         subjects = _subject_refs(payload)
         if any(
@@ -2244,6 +2286,7 @@ class LocalJourneyStore:
             encryption=encryption,
             timeouts=timeouts,
         )
+        self.artifacts._withdrawal_store = self.metadata
 
     @classmethod
     def migrate_to_encrypted(
@@ -2673,6 +2716,13 @@ class JourneyWithdrawalParticipant:
         else:
             self.store = store
             self.blobs = blobs
+        if self.blobs is not None:
+            if (
+                self.blobs._withdrawal_store is not None
+                and self.blobs._withdrawal_store is not self.store
+            ):
+                raise ValueError("blob store already has a metadata owner")
+            self.blobs._withdrawal_store = self.store
 
     def _transaction(self, ref: str):
         if not isinstance(ref, str) or not re.fullmatch(

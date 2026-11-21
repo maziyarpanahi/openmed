@@ -390,7 +390,9 @@ are rejected.
 
 Pass the full `LocalJourneyStore` to compact its local blob directory as well.
 For a standalone metadata backend, pass `blobs=local_artifact_store` if it owns
-local blobs. External object stores, backups and database storage reclamation
+local blobs. The attached blob store checks committed metadata tombstones on
+reads and writes, including while an interrupted physical unlink awaits retry.
+External object stores, backups and database storage reclamation
 have independent retention policies. Retry interrupted blob removal with
 `participant.compact(ref)` and check `participant.verify(ref)`.
 For an in-memory service projection built from this store, construct

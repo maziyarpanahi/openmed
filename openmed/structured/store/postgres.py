@@ -761,6 +761,7 @@ class PostgresJourneyStore(SQLiteJourneyStore):
     """
 
     # Inherited reads run in a bounded, read-only, armed unit.
+    _blob_access = _bounded_read(SQLiteJourneyStore._blob_access)
     _read_record = _bounded_read(SQLiteJourneyStore._read_record)
     get_canonical = _bounded_read(SQLiteJourneyStore.get_canonical)
     list_canonical_versions = _bounded_read(SQLiteJourneyStore.list_canonical_versions)

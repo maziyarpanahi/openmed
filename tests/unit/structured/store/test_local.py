@@ -651,3 +651,40 @@ def test_subject_withdrawal_compacts_graph_and_preserves_audit(tmp_path, backend
         assert not store.put_artifact(_artifact(), committed_at=COMMITTED_3).ok
         assert participant.apply(ref, participant.plan(ref)) == 0
         assert participant.verify(ref)
+
+
+def test_blob_reads_observe_committed_withdrawal_before_compaction(
+    tmp_path, monkeypatch
+):
+    from openmed.structured.store import (
+        JourneyWithdrawalParticipant,
+        journey_subject_ref,
+    )
+
+    ref = journey_subject_ref(_artifact().subject_id)
+
+    def interrupted(_digest):
+        raise OSError("synthetic interruption")
+
+    with LocalJourneyStore(tmp_path, encryption=PLAINTEXT_DEV) as store:
+        assert store.ingest_graph(_artifact(), CONTENT, committed_at=COMMITTED_1).ok
+        participant = JourneyWithdrawalParticipant(store)
+        monkeypatch.setattr(store.artifacts, "compact_withdrawn", interrupted)
+        with pytest.raises(OSError, match="synthetic interruption"):
+            participant.apply(ref, participant.plan(ref))
+        assert store.artifacts._blob_path(_artifact().content_hash).exists()
+        assert (
+            store.artifacts.get_bytes(_artifact().content_hash).state
+            is StoreState.DENIED
+        )
+        assert not participant.verify(ref)
+    with LocalJourneyStore(tmp_path, encryption=PLAINTEXT_DEV) as reopened:
+        assert (
+            reopened.artifacts.get_bytes(_artifact().content_hash).state
+            is StoreState.DENIED
+        )
+        other = replace(_artifact(), content_hash=sha256_digest(b"new"), byte_size=3)
+        assert reopened.artifacts.put_bytes(other, b"new").state is StoreState.DENIED
+        participant = JourneyWithdrawalParticipant(reopened)
+        participant.compact(ref)
+        assert participant.verify(ref)
