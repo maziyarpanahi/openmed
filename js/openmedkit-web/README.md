@@ -411,3 +411,12 @@ Regenerate the web copy from the repository root with
 `python3 scripts/manifest/export_intended_use.py --output js/openmedkit-web/src/intended-use.json`.
 Add `--check` to detect drift. The Node test suite also checks every declaration
 against the Python source.
+
+Display `disclaimerForCapability("decisions").text` before requesting
+acknowledgement. After a reviewer explicitly accepts, call
+`acknowledgeNotice(notice, new Date())` and pass the receipt together with
+`clinicianMode: true` as the second argument to `runtime.decide(request, review)`.
+The kit rejects missing or stale acknowledgements before inference. The host
+controls the review lifetime. The kit keeps notices and receipts in memory.
+De-identification results include their notice. A deployment can strengthen
+the local PII gate with `options.review.regulatoryTier`.

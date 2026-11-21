@@ -11,6 +11,7 @@
  * prompt or examples. Results are assistive review artifacts and never
  * authorize an autonomous clinical action.
  */
+import { requireCapabilityAccess, type ReviewOptions } from "./disclaimer";
 import type {
   OrtInferenceSession,
   OrtTensorConstructor,
@@ -503,7 +504,8 @@ export class EncoderDecisionRuntime {
    * with a {@link DecisionRuntimeError}; abstentions, denials, refusals and
    * failures are typed result states, never fabricated selections.
    */
-  async decide(request: unknown): Promise<DecisionResult> {
+  async decide(request: unknown, review?: ReviewOptions): Promise<DecisionResult> {
+    requireCapabilityAccess("decisions", review);
     const parsed = request instanceof DecisionRequest ? request : parseDecisionRequest(request);
     const access = decideAccess(this.#policy, parsed, this.identity.kind);
     const profile = this.#profiles.get(parsed.calibrationId);
