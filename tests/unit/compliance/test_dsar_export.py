@@ -196,3 +196,16 @@ def test_erasure_preview_is_audit_logged_non_destructively():
 
     assert log.records[0].event_type == "dsar.erasure_preview"
     assert log.records[0].payload.get("destructive") is False
+
+
+def test_dsar_export_and_erasure_emit_core_receipts():
+    from openmed.compliance import CoreAuditSink
+    from openmed.core.audit_chain import AuditChain
+
+    chain = AuditChain()
+    sink = CoreAuditSink(chain)
+    vault = _subject_vault()
+    package = assemble_dsar_package(_subject_ids(), vault, audit_sink=sink)
+    plan_erasure(package, vault, audit_sink=sink)
+    assert len(chain.entries) == 2 and sink.verify()
+    assert "John Smith" not in chain.to_json()

@@ -81,3 +81,27 @@ def test_to_payload_round_trips_the_chain():
     assert (
         payload["records"][1]["previous_hash"] == payload["records"][0]["record_hash"]
     )
+
+
+def test_core_sink_and_legacy_log_commit_same_events():
+    import pytest
+
+    from openmed.compliance import CoreAuditSink
+    from openmed.core.audit_chain import AuditChain
+
+    with pytest.warns(DeprecationWarning, match="CoreAuditSink") as warnings:
+        legacy = HashChainAuditLog()
+    assert len(warnings) == 1
+    chain = AuditChain()
+    core = CoreAuditSink(chain)
+    for event in ("first", "second"):
+        payload = {"meta": "synthetic-private-canary"}
+        assert legacy.append(event, payload) == core.append(event, payload)
+    assert legacy.verify() and core.verify()
+    assert AuditChain.from_json(chain.to_json()).verify()
+    assert "synthetic-private-canary" not in chain.to_json()
+    assert [entry.input_hash for entry in chain.entries] == [
+        r.record_hash for r in legacy.records
+    ]
+    core.records[0].payload = {"changed": True}
+    assert not core.verify()

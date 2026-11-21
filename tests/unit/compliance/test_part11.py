@@ -183,3 +183,15 @@ def test_cli_supports_nested_part11_export_alias(tmp_path: Path) -> None:
 
     assert result == 0
     assert Part11AuditEmitter.load(output_path).verify() is True
+
+
+def test_part11_core_sink_verifies_and_keeps_legacy_export():
+    from openmed.compliance import CoreAuditSink
+    from openmed.core.audit_chain import AuditChain
+
+    core = AuditChain()
+    trail = Part11AuditEmitter(audit_sink=CoreAuditSink(core))
+    trail.emit(**_event())
+    assert trail.verify() and core.verify()
+    restored = Part11AuditEmitter.from_json(trail.to_json())
+    assert restored.verify() and restored.to_dict() == trail.to_dict()

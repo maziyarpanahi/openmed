@@ -29,8 +29,10 @@
       ]
     },
     "replacement": "openmed.core.audit_chain.AuditChain",
-    "status": "planned",
-    "migration_anchor": "docs/migration.md#audit-chain"
+    "status": "deprecated",
+    "migration_anchor": "docs/migration.md#audit-chain",
+    "since": "4.3",
+    "remove_in": "5.0"
   },
   {
     "id": "P5",

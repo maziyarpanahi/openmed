@@ -26,7 +26,7 @@ from typing import Any, Final
 
 from openmed.core.audit import stable_hash
 
-from .audit_chain import AuditRecord, HashChainAuditLog
+from .audit_chain import AuditRecord, CoreAuditSink, _ComplianceRecordLog
 
 PART11_FORMAT: Final = "openmed.part11-audit-trail"
 PART11_SCHEMA_VERSION: Final = 1
@@ -543,13 +543,13 @@ class Part11AuditEmitter:
 
     def __init__(
         self,
-        chain: HashChainAuditLog | None = None,
+        chain: _ComplianceRecordLog | None = None,
         *,
-        audit_sink: HashChainAuditLog | None = None,
+        audit_sink: _ComplianceRecordLog | None = None,
     ) -> None:
         if chain is not None and audit_sink is not None:
             raise ValueError("chain and audit_sink cannot both be supplied")
-        self._chain = chain or audit_sink or HashChainAuditLog()
+        self._chain = chain or audit_sink or CoreAuditSink()
         self._records: list[Part11AuditRecord] = []
         self._declared_record_count: int | None = None
         self._declared_head_hash: str | None = None
@@ -557,13 +557,13 @@ class Part11AuditEmitter:
         self._declared_checklist: list[dict[str, Any]] | None = None
 
     @property
-    def chain(self) -> HashChainAuditLog:
+    def chain(self) -> _ComplianceRecordLog:
         """Return the append-only chain carrying the emitted records."""
 
         return self._chain
 
     @property
-    def audit_chain(self) -> HashChainAuditLog:
+    def audit_chain(self) -> _ComplianceRecordLog:
         """Compatibility alias for :attr:`chain`."""
 
         return self._chain
@@ -909,15 +909,15 @@ def _validate_chain_payload(payload: Mapping[str, Any]) -> None:
     _metadata_text(payload.get("reason_code"), "reason_code")
 
 
-def _chain_from_payload(data: Mapping[str, Any]) -> HashChainAuditLog:
+def _chain_from_payload(data: Mapping[str, Any]) -> _ComplianceRecordLog:
     _reject_unknown_fields(data, _CHAIN_PAYLOAD_FIELDS, "audit trail chain")
-    if data.get("genesis_hash") != HashChainAuditLog.GENESIS_HASH:
+    if data.get("genesis_hash") != _ComplianceRecordLog.GENESIS_HASH:
         raise ValueError("audit trail chain genesis_hash does not match this format")
     raw_records = data.get("records")
     if not isinstance(raw_records, Sequence) or isinstance(raw_records, (str, bytes)):
         raise TypeError("audit trail chain records must be a list")
 
-    chain = HashChainAuditLog()
+    chain = _ComplianceRecordLog()
     loaded: list[AuditRecord] = []
     for item in raw_records:
         if not isinstance(item, Mapping):
@@ -943,7 +943,7 @@ def _chain_from_payload(data: Mapping[str, Any]) -> HashChainAuditLog:
 def build_part11_audit_trail(
     events: Iterable[Mapping[str, Any]],
     *,
-    chain: HashChainAuditLog | None = None,
+    chain: _ComplianceRecordLog | None = None,
 ) -> Part11AuditEmitter:
     """Build a trail from safe event mappings, preserving only safe fields."""
 
