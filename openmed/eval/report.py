@@ -513,6 +513,8 @@ def render_leaderboard(
     reports: Iterable[BenchmarkReport] = (),
     baseline_store: Mapping[str, Any] | None = None,
     competitors: Sequence[str] = DEFAULT_COMPETITORS,
+    credentialed_public_key: bytes | None = None,
+    credentialed_dir: Path | None = None,
 ) -> str:
     """Render a manifest/report-sourced benchmark leaderboard."""
 
@@ -561,6 +563,16 @@ def render_leaderboard(
             "n/a | n/a | n/a | n/a | `no BenchmarkReport source` |"
         )
 
+    from openmed.eval.leaderboard import render_credentialed_recall
+
+    lines.extend(
+        [
+            "",
+            render_credentialed_recall(
+                credentialed_dir, public_key=credentialed_public_key
+            ),
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -571,6 +583,7 @@ def write_leaderboard(
     reports: Iterable[BenchmarkReport] = (),
     baseline_store: Mapping[str, Any] | None = None,
     competitors: Sequence[str] = DEFAULT_COMPETITORS,
+    credentialed_public_key: bytes | None = None,
 ) -> Path:
     """Write ``docs/leaderboard/index.md``."""
 
@@ -582,6 +595,8 @@ def write_leaderboard(
             reports=reports,
             baseline_store=baseline_store,
             competitors=competitors,
+            credentialed_dir=output_path.parent / "credentialed",
+            credentialed_public_key=credentialed_public_key,
         ),
         encoding="utf-8",
     )

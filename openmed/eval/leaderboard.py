@@ -771,6 +771,51 @@ def _clear_generated_reports(reports_dir: Path) -> None:
             path.rmdir()
 
 
+def render_credentialed_recall(
+    directory: Path | None, *, public_key: bytes | None = None
+) -> str:
+    """Render a Markdown section from independently verified G1a envelopes.
+
+    Args:
+        directory: Directory containing one signed certification per JSON file.
+        public_key: Trusted raw Ed25519 reviewer key. Build jobs can provide
+            its path in OPENMED_G1A_PUBLIC_KEY_FILE instead.
+    """
+    import os
+
+    section = ["## Credentialed G1a recall", ""]
+    paths = sorted(directory.glob("*.json")) if directory else []
+    if not paths:
+        return "\n".join([*section, "No verified certifications are available."])
+    from openmed.eval.g1a_certification import verify_g1a
+
+    rendered = []
+    try:
+        if public_key is None:
+            public_key = Path(os.environ["OPENMED_G1A_PUBLIC_KEY_FILE"]).read_bytes()
+        for path in paths:
+            payload = verify_g1a(json.loads(path.read_bytes()), public_key=public_key)
+            recalls = [cell["recall"] for cell in payload["by_label"].values()]
+            minimum = format(min(recalls), ".6%") if recalls else "n/a"
+            missing = ", ".join(payload["not_assessed"]) or "None"
+            rendered.append(
+                f"| `{payload['model_id']}` | {payload['corpus']} | {payload['year']} | "
+                f"{minimum} | {payload['state']} | {payload['date']} | {missing} |"
+            )
+    except (ValueError, OSError, KeyError, TypeError, OverflowError, ImportError):
+        raise LeaderboardError(
+            "Credentialed certification verification failed."
+        ) from None
+    return "\n".join(
+        [
+            *section,
+            "| Model | Corpus | Year | Minimum assessed recall | Decision | Date | Not assessed |",
+            "|---|---|---:|---:|---|---|---|",
+            *sorted(rendered),
+        ]
+    )
+
+
 __all__ = [
     "DEFAULT_OUTPUT_DIR",
     "DEFAULT_REPORTS_DIR",
@@ -779,6 +824,7 @@ __all__ = [
     "LeaderboardError",
     "LeaderboardRow",
     "load_leaderboard_rows",
+    "render_credentialed_recall",
     "render_leaderboard_html",
     "render_leaderboard_json",
     "write_leaderboard",

@@ -394,3 +394,48 @@ def test_pages_workflow_builds_prs_and_deploys_only_master() -> None:
     assert deploy["if"] == "github.event_name != 'pull_request'"
     assert "scripts/docs/stage_pages.py" in stage_step["run"]
     assert '--release-tag "$GITHUB_REF_NAME"' in stage_step["run"]
+
+
+def test_credentialed_table_verifies_before_writing(tmp_path, monkeypatch):
+    from openmed.core.portable_bundle import ed25519_public_key
+    from openmed.eval.g1a_certification import certify_g1a
+    from openmed.eval.report import write_leaderboard as write_markdown
+
+    directory = tmp_path / "credentialed"
+    directory.mkdir()
+    key = bytes(range(32))
+    trusted = tmp_path / "key"
+    trusted.write_bytes(ed25519_public_key(key))
+    monkeypatch.setenv("OPENMED_G1A_PUBLIC_KEY_FILE", str(trusted))
+    aggregate = {
+        "model_id": "example/test",
+        "year": 2014,
+        "corpus": "synthetic",
+        "revision_digest": "1" * 64,
+        "dataset_digest": "2" * 64,
+        "minimum_gold_spans": 5,
+        "by_label": {
+            "PERSON": {
+                "status": "reported",
+                "tp": 999,
+                "fp": 0,
+                "precision": {"rate": 1},
+                "fn": 1,
+                "recall": {"rate": 0.999},
+            },
+            "SSN": {"status": "suppressed"},
+        },
+    }
+    report = certify_g1a(aggregate, model_id="example/test", private_key=key)
+    source = directory / "review.json"
+    source.write_text(json.dumps(report))
+    output = write_markdown(tmp_path, manifest_rows=[])
+    original = output.read_text()
+    assert "`example/test` | synthetic | 2014 | 99.900000% | CERTIFIED" in original
+    assert "Not assessed" in original and "SSN" in original
+    assert write_markdown(tmp_path, manifest_rows=[]).read_text() == original
+    for invalid in (report["certification"], {**report, "signature": "0" * 128}):
+        source.write_text(json.dumps(invalid))
+        with pytest.raises(LeaderboardError):
+            write_markdown(tmp_path, manifest_rows=[])
+        assert output.read_text() == original

@@ -25,6 +25,15 @@ def on_config(config: Dict[str, Any], **_: Any) -> Dict[str, Any]:
 
 def on_page_markdown(markdown: str, page: Any, **_: Any) -> str:
     """Give every indexable page a useful, deterministic metadata summary."""
+    source = getattr(getattr(page, "file", None), "abs_src_path", None)
+    if source and Path(source).parts[-2:] == ("leaderboard", "index.md"):
+        from openmed.eval.leaderboard import render_credentialed_recall
+
+        expected = render_credentialed_recall(Path(source).parent / "credentialed")
+        if not markdown.rstrip().endswith("\n" + expected):
+            raise ValueError(
+                "Regenerate the credentialed recall leaderboard before building."
+            )
     heading_match = re.search(r"^#\s+(.+?)\s*$", markdown, flags=re.MULTILINE)
     heading = _plain_text(heading_match.group(1)) if heading_match else ""
     title = str(page.meta.get("title") or heading or page.title or "OpenMed")
