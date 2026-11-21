@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "G1a recall certification",
+  "type": "object",
+  "required": [
+    "certification",
+    "digest",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "certification": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "scope",
+        "openmed_version",
+        "date",
+        "model_id",
+        "revision_digest",
+        "dataset_digest",
+        "corpus",
+        "year",
+        "state",
+        "floor",
+        "by_label",
+        "failing_labels",
+        "not_assessed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "scope": {
+          "const": "Observed G1a recall on the named corpus edition and assessed labels only. Clinical validation is outside this scope."
+        },
+        "openmed_version": {
+          "type": "string",
+          "pattern": "^[0-9][a-zA-Z0-9.+-]*$"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)?$"
+        },
+        "revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "dataset_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "corpus": {
+          "enum": [
+            "i2b2",
+            "n2c2",
+            "cegs-n-grid",
+            "synthetic"
+          ]
+        },
+        "year": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 9999
+        },
+        "state": {
+          "enum": [
+            "CERTIFIED",
+            "NOT_CERTIFIED"
+          ]
+        },
+        "floor": {
+          "const": 0.995
+        },
+        "by_label": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/label"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/cell"
+          }
+        },
+        "failing_labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/label"
+          },
+          "uniqueItems": true
+        },
+        "not_assessed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/label"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{128}$"
+    }
+  },
+  "$defs": {
+    "label": {
+      "enum": [
+        "AGE",
+        "BUILDING_NUMBER",
+        "DATE",
+        "DATE_OF_BIRTH",
+        "EMAIL",
+        "FIRST_NAME",
+        "GPS_COORDINATES",
+        "ID_NUM",
+        "LAST_NAME",
+        "LOCATION",
+        "MIDDLE_NAME",
+        "PERSON",
+        "PHONE",
+        "SSN",
+        "STREET_ADDRESS",
+        "TIME",
+        "URL",
+        "USERNAME",
+        "ZIPCODE"
+      ]
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "cell": {
+      "type": "object",
+      "required": [
+        "tp",
+        "fn",
+        "recall",
+        "wilson_lower_95",
+        "floor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wilson_lower_95": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "floor": {
+          "const": 0.995
+        }
+      }
+    }
+  }
+}

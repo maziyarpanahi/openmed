@@ -3295,6 +3295,13 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     eval_parser = subparsers.add_parser("eval", help="Run evaluation tools.")
     eval_sub = eval_parser.add_subparsers(dest="eval_command")
 
+    verify = eval_sub.add_parser(
+        "verify-g1a", help="Verify a signed G1a decision offline."
+    )
+    verify.add_argument("report", type=Path)
+    verify.add_argument("--public-key-file", required=True, type=Path)
+    verify.set_defaults(handler=_handle_eval_verify_g1a)
+
     certify = eval_sub.add_parser(
         "certify-g1a", help="Sign a G1a recall floor decision."
     )
@@ -6312,6 +6319,22 @@ def _handle_policy_diff(args: argparse.Namespace) -> int:
     else:
         human = render(diff, fmt="text")
     return emit(args, payload, human=human)
+
+
+def _handle_eval_verify_g1a(args: argparse.Namespace) -> int:
+    from openmed.eval.g1a_certification import verify_g1a
+
+    try:
+        payload = verify_g1a(
+            json.loads(args.report.read_bytes()),
+            public_key=args.public_key_file.read_bytes(),
+        )
+    except (ValueError, OSError, TypeError, OverflowError, ImportError):
+        raise CliError(
+            "G1a verification failed.", code="invalid_certification", exit_code=2
+        ) from None
+    print(json.dumps({"verified": True, "state": payload["state"]}))
+    return 0
 
 
 def _handle_eval_certify_g1a(args: argparse.Namespace) -> int:

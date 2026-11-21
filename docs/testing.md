@@ -239,3 +239,10 @@ descriptive 95% Wilson lower bound. Suppressed and absent labels appear under
 openmed eval certify-g1a --aggregate /private/results/report.json --model org/model \
   --private-key-file /private/keys/reviewer.seed > /private/results/certification.json
 ```
+
+To check a received certification offline, obtain the trusted signer's raw
+32-byte public key separately. Run `openmed eval verify-g1a certification.json
+--public-key-file reviewer.pub`. The verifier checks the bundled JSON schema,
+SHA-256 digest, Ed25519 signature, per-label arithmetic and overall decision.
+A verified `NOT_CERTIFIED` result is a valid signed failure. The verifier
+returns exit code 0 for either valid decision and 2 on invalid input.
