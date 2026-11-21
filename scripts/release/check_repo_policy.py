@@ -143,11 +143,11 @@ def commit_metadata_errors(raw: bytes) -> list[str]:
     return errors
 
 
-def check_commit_range(base: str, head: str) -> int:
+def check_commit_range(base: str, head: str, *, repo_root: Path | None = None) -> int:
     """Reject forbidden attribution anywhere in a complete incoming commit DAG."""
 
     def git(*args: str) -> bytes:
-        return subprocess.check_output(["git", *args], cwd=ROOT)
+        return subprocess.check_output(["git", *args], cwd=repo_root or ROOT)
 
     try:
         if git("rev-parse", "--is-shallow-repository").strip() != b"false":
