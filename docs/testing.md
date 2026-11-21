@@ -208,3 +208,22 @@ When adding new features, consider tests for:
 - Zero-shot adapters (BIO/BILOU conversions).
 
 Following this checklist keeps the docs accurate and the automation pipelines green.
+
+### Offline credentialed de-identification evaluation
+
+Point `OPENMED_I2B2_PATH` at your authorized local i2b2 de-identification XML
+directory (2006 or 2014). Pre-cache the fast tokenizer, configuration and
+safetensors weights for the token classifier before entering the offline
+environment. Run the command with a new filename outside Git worktrees.
+
+```sh
+openmed eval credentialed --suite i2b2 --year 2014 --model org/model \
+  --revision main --output /private/results/report.json
+```
+
+The command resolves the revision from the local model cache and scores long
+records in overlapping windows on CPU. The output includes the DUA name,
+corpus edition, dataset digest, model ID, SHA-256 of the resolved commit ID
+and suppressed per-label aggregate metrics. Predictions stay in memory. A
+cache miss returns exit code 2 with `model_not_cached`. Keep real results
+under the applicable data-use agreement.
