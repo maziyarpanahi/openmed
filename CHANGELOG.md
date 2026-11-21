@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- Pass `authorization_config=` when constructing the MCP server. The
+  `auth_config=` alias warns in 4.3 and is scheduled for removal in 5.0 (#5289).
+
 - The PHI-capable MCP server warns when Streamable HTTP starts on a
   non-loopback listener. OpenMed 5.0 will refuse that bind. For remote access,
   place the loopback listener behind an authenticated reverse proxy (#5269).

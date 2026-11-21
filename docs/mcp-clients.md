@@ -435,3 +435,10 @@ unless an authenticated network boundary is already in place.
 - **Remote client cannot connect:** loopback is intentionally local-only. Use a
   private route or authenticated HTTPS gateway rather than changing the bind
   address without access controls.
+
+## Python authorization configuration
+
+Pass an existing `MCPAuthorizationConfig` as
+`create_mcp_server(authorization_config=config)`. The `auth_config` alias
+emits a deprecation warning in 4.3 and is scheduled for removal in 5.0.
+Supplying both configuration names raises a configuration error.

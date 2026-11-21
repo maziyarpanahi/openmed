@@ -125,7 +125,7 @@ from openmed.structured.decision import (
     DecisionRequest,
     decide,
 )
-from openmed.utils.deprecation import deprecated
+from openmed.utils.deprecation import deprecated, deprecated_parameter
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
@@ -2250,6 +2250,9 @@ def _register_prompts(server: Any) -> None:
         )
 
 
+@deprecated_parameter(
+    "auth_config", since="4.3", remove_in="5.0", replacement="authorization_config"
+)
 def create_mcp_server(
     *,
     runtime_provider: Optional[RuntimeProvider] = None,

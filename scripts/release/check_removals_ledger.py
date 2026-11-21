@@ -21,13 +21,23 @@ def _python_markers(path: Path) -> set[str]:
                 if not isinstance(decorator, ast.Call):
                     continue
                 name = ast.unparse(decorator.func).rsplit(".", 1)[-1]
-                if name == "deprecated" and any(
+                if name not in {"deprecated", "deprecated_parameter"} or not any(
                     keyword.arg == "remove_in"
                     and isinstance(keyword.value, ast.Constant)
                     and keyword.value.value == "5.0"
                     for keyword in decorator.keywords
                 ):
-                    markers.add(".".join(parents))
+                    continue
+                symbol = parents
+                if name == "deprecated_parameter":
+                    if (
+                        not decorator.args
+                        or not isinstance(decorator.args[0], ast.Constant)
+                        or not isinstance(decorator.args[0].value, str)
+                    ):
+                        continue
+                    symbol = (*parents, decorator.args[0].value)
+                markers.add(".".join(symbol))
         for child in ast.iter_child_nodes(node):
             visit(child, parents)
 
