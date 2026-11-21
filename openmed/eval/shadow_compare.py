@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Iterable
+from functools import lru_cache
+from importlib.resources import files
 
+from jsonschema import Draft202012Validator
+
+from openmed.core.audit import stable_hash
 from openmed.core.labels import DIRECT_IDENTIFIER, policy_label_for
 from openmed.core.schemas.span import OpenMedSpan
 
@@ -80,3 +86,37 @@ def compare_shadow_spans(
         "by_policy_label": policies,
         "missed_direct_identifiers": missed,
     }
+
+
+@lru_cache(maxsize=1)
+def _aggregate_validator():
+    source = files("openmed.core.schemas.json").joinpath(
+        "shadow_comparison.schema.json"
+    )
+    return Draft202012Validator(json.loads(source.read_bytes()))
+
+
+def shadow_comparison_digest(record: dict) -> str:
+    """Validate the comparator wire record and bind its consistent totals."""
+    if not _aggregate_validator().is_valid(record):
+        raise ValueError("invalid_shadow_comparison")
+    policies = {}
+    for label, counts in record["by_canonical_label"].items():
+        totals = policies.setdefault(policy_label_for(label), dict.fromkeys(counts, 0))
+        for metric, count in counts.items():
+            if type(count) is not int:
+                raise ValueError("invalid_shadow_comparison")
+            totals[metric] += count
+    missed = policies.get(DIRECT_IDENTIFIER, {}).get("active_only", 0)
+    if (
+        policies != record["by_policy_label"]
+        or type(record["missed_direct_identifiers"]) is not int
+        or any(
+            type(n) is not int
+            for counts in record["by_policy_label"].values()
+            for n in counts.values()
+        )
+        or missed != record["missed_direct_identifiers"]
+    ):
+        raise ValueError("invalid_shadow_comparison")
+    return stable_hash(record)

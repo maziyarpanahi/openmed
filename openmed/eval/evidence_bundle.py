@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 from openmed.core import baseline as baseline_store
 from openmed.core.audit import manifest_hash, stable_hash
 from openmed.eval.quant_delta import is_quantized_format
+from openmed.eval.shadow_compare import shadow_comparison_digest
 
 SCHEMA_VERSION = "openmed.gate_evidence_bundle.v1"
 MANIFEST_FILENAME = "manifest.json"
@@ -464,17 +465,28 @@ def _materialise_artifacts(
         if source_path is None or not source_path.is_file():
             entry.update({"status": "missing", "bundle_path": None, "sha256": None})
         else:
+            validated_bytes = None
+            if "shadow_comparison" in item["artifact_ids"]:
+                try:
+                    record = json.loads(source_path.read_bytes())
+                    entry["shadow_record_digest"] = shadow_comparison_digest(record)
+                    validated_bytes = json.dumps(
+                        record, sort_keys=True, separators=(",", ":")
+                    ).encode("utf-8")
+                except (ValueError, TypeError, RecursionError):
+                    raise ValueError("invalid_shadow_comparison") from None
             bundle_path = _copy_artifact(
                 source_path,
                 output_dir,
                 artifact_id,
                 used_bundle_paths,
+                validated_bytes,
             )
             entry.update(
                 {
                     "status": "present",
                     "bundle_path": bundle_path,
-                    "sha256": manifest_hash(source_path),
+                    "sha256": manifest_hash(output_dir / bundle_path),
                 }
             )
         entries.append(entry)
@@ -545,6 +557,7 @@ def _copy_artifact(
     output_dir: Path,
     artifact_id: str,
     used_bundle_paths: set[str],
+    validated_bytes: bytes | None = None,
 ) -> str:
     artifact_dir = output_dir / "artifacts" / _safe_path_part(artifact_id)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -555,7 +568,10 @@ def _copy_artifact(
         suffix = _path_suffix(source_path)
         target = artifact_dir / f"{target.stem}-{suffix}{target.suffix}"
         relative = target.relative_to(output_dir).as_posix()
-    shutil.copy2(source_path, target)
+    if validated_bytes is None:
+        shutil.copy2(source_path, target)
+    else:
+        target.write_bytes(validated_bytes)
     used_bundle_paths.add(relative)
     return relative
 
