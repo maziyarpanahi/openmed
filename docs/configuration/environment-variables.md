@@ -276,7 +276,7 @@ Journey store deployment, PostgreSQL connection and store deadline settings.
 
 Local paths to user-supplied evaluation data. Every path is supplied by the user and has no default; OpenMed never downloads, bundles or commits these corpora, and restricted datasets such as i2b2, n2c2 and MIMIC are evaluation-only.
 
-20 settings.
+21 settings.
 
 | Variable | Description | Type | Default | Bounds | Secret | Module |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -285,6 +285,7 @@ Local paths to user-supplied evaluation data. Every path is supplied by the user
 | `OPENMED_CEGS_NGRID_PATH` | Directory of CEGS N-GRID de-identification data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cegs_ngrid` |
 | `OPENMED_CHIP_CDN_PATH` | Directory of user-supplied CHIP-CDN data from CBLUE. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cblue` |
 | `OPENMED_CMEEE_PATH` | Directory of user-supplied CMeEE data from CBLUE. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cmeee` |
+| `OPENMED_I2B2_2010_PATH` | Directory of i2b2 2010 assertion data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2_2010` |
 | `OPENMED_I2B2_2012_PATH` | Directory of i2b2 2012 temporal data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2_2012` |
 | `OPENMED_I2B2_PATH` | Directory of i2b2 2006 or 2014 de-identification data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2` |
 | `OPENMED_I2B2_YEAR` | i2b2 de-identification release the loader reads. | integer | `2014` | one of `2006`, `2014` | no | `openmed.eval.datasets.i2b2` |

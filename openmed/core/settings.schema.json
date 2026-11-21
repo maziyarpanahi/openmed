@@ -1698,6 +1698,14 @@
           "x-secret": false,
           "x-module": "openmed.eval.datasets.cmeee"
         },
+        "OPENMED_I2B2_2010_PATH": {
+          "description": "Directory of i2b2 2010 assertion data (credentialed corpus under data-use terms).",
+          "type": "string",
+          "x-env-format": "path",
+          "x-user-supplied": true,
+          "x-secret": false,
+          "x-module": "openmed.eval.datasets.i2b2_2010"
+        },
         "OPENMED_I2B2_2012_PATH": {
           "description": "Directory of i2b2 2012 temporal data (credentialed corpus under data-use terms).",
           "type": "string",

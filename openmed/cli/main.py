@@ -3345,9 +3345,16 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     credentialed.add_argument(
         "--suite",
         required=True,
-        choices=["i2b2", "cegs-ngrid-2016", "i2b2-2012-temporal"],
+        choices=[
+            "i2b2",
+            "cegs-ngrid-2016",
+            "i2b2-2012-temporal",
+            "i2b2-2010-assertion",
+        ],
     )
-    credentialed.add_argument("--year", type=int, choices=[2006, 2012, 2014, 2016])
+    credentialed.add_argument(
+        "--year", type=int, choices=[2006, 2010, 2012, 2014, 2016]
+    )
     credentialed.add_argument(
         "--model", help="Cached classifier for de-identification suites."
     )
