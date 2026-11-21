@@ -46,3 +46,15 @@ retained.
 
 The implementation uses the local Python runtime and stable hashing only. It
 performs no network calls and has no telemetry or remote service dependency.
+
+### Paired-fixture preservation check
+
+Use `assess_fixture_preservation` in `openmed.eval.attacks.reid` on aligned,
+known original and transformed fixture values. For surrogate pairs, declare
+the prefix length and use an identifier format with a terminal check digit.
+Pass its aggregate counters in `metrics.fixture_preservation` and set
+`ReleaseGate(fixture_preservation_ceiling=0.0)` to quarantine on any unchanged
+date, preserved prefix or preserved check digit. Each rate uses its own
+assessed denominator. A zero denominator yields no rate for that metric.
+A requested check with no assessed pairs or invalid evidence blocks the release.
+These rates measure directly observed preservation in the supplied fixture.
