@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from openmed.core.intended_use import RegulatoryTier, load_intended_use_registry
 from openmed.core.labels import is_recognized_label
 
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
@@ -56,6 +57,10 @@ def manifest_label_errors(*, manifest_path: str | Path = MANIFEST_PATH) -> list[
     except (OSError, ValueError) as exc:
         return [str(exc)]
 
+    return _label_errors(rows)
+
+
+def _label_errors(rows: list[dict[str, Any]]) -> list[str]:
     offenders: dict[str, set[str]] = {}
     for line_number, row in enumerate(rows, start=1):
         repo_id = str(row.get("repo_id") or f"<row {line_number}>")
@@ -79,11 +84,31 @@ def manifest_label_errors(*, manifest_path: str | Path = MANIFEST_PATH) -> list[
     return errors
 
 
+def _tier_errors(rows: list[dict[str, Any]]) -> list[str]:
+    declarations = load_intended_use_registry().declarations
+    tiers = tuple(RegulatoryTier)
+    errors = []
+    for number, row in enumerate(rows, start=1):
+        repo = row.get("repo_id")
+        if not isinstance(repo, str) or not repo:
+            repo = f"<row {number}>"
+        code = row.get("capability")
+        declaration = declarations.get(code) if isinstance(code, str) else None
+        if declaration is None:
+            errors.append(f"{repo}: missing or unregistered capability")
+        tier = row.get("regulatory_tier")
+        if tier not in tiers:
+            errors.append(f"{repo}: missing or invalid regulatory_tier")
+        elif declaration is not None and tier != declaration.regulatory_tier:
+            errors.append(f"{repo}: regulatory_tier disagrees with capability")
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Command-line gate: exit non-zero when any ``canonical_labels`` value drifts."""
+    """Command-line gate: exit non-zero on label or intended-use declaration drift."""
 
     parser = argparse.ArgumentParser(
-        description="Check manifest canonical_labels against the label taxonomy.",
+        description="Check catalog labels, capability codes and regulatory tiers.",
     )
     parser.add_argument(
         "--manifest",
@@ -93,13 +118,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    errors = manifest_label_errors(manifest_path=args.manifest)
+    try:
+        rows = _load_manifest_rows(args.manifest)
+    except (OSError, ValueError) as exc:
+        errors = [str(exc)]
+    else:
+        errors = _label_errors(rows) + _tier_errors(rows)
     if errors:
         print("Catalog coherence check failed:")
         for line in errors:
             print(f"  - {line}")
         return 1
-    print("Catalog canonical_labels are coherent with CANONICAL_LABELS.")
+    print("Catalog labels and regulatory declarations are coherent.")
     return 0
 
 
