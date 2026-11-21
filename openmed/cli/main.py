@@ -632,6 +632,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
+    from .intended_use import add_intended_use_command
+
+    add_intended_use_command(subparsers)
     _add_models_command(subparsers)
     add_registry_command(subparsers)
     _add_release_command(subparsers)

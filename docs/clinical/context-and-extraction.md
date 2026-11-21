@@ -476,3 +476,11 @@ extraction workflow. The specialty currently has no dedicated Python entry point
 The `languages` code `und` leaves language support unspecified and `zxx` denotes
 language-independent waveform input. Each declaration lists excluded uses, required
 human oversight and the obligations attached to its tier.
+
+From the command line, list capabilities by tier or inspect the full declaration
+for a single capability. Both commands accept `--json` for machine-readable output.
+
+```console
+openmed intended-use list --tier restricted
+openmed intended-use show deidentify --json
+```
