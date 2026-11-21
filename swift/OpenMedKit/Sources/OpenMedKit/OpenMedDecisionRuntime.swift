@@ -210,13 +210,21 @@ public final class OpenMedEncoderDecisionRuntime {
     /// - Throws: ``OpenMedDecisionError`` for requests that violate the
     ///   contract. Backend refusals and failures are result states instead.
     public func decide(json: Data) throws -> OpenMedDecisionResult {
-        decide(try OpenMedDecisionRequest(json: json))
+        try OpenMedClinicianMode.require("decisions")
+        return decide(try OpenMedDecisionRequest(json: json))
     }
 
     /// Decides a validated request. Abstentions, denials, refusals and
     /// failures are typed result states, never fabricated selections.
     public func decide(_ request: OpenMedDecisionRequest) -> OpenMedDecisionResult {
         let access = policy.decision(namespace: request.namespace, purpose: request.purpose, kind: identity.kind)
+        do {
+            try OpenMedClinicianMode.require("decisions")
+        } catch {
+            let code = OpenMedClinicianModeError.clinicianModeRequired.rawValue
+            let refused = OpenMedDecisionAccess(allowed: false, code: code, namespace: access.namespace, purpose: access.purpose, policyVersion: access.policyVersion)
+            return terminal(request, .denied, code, profiles[request.calibrationID] ?? .standard, refused)
+        }
         guard let profile = profiles[request.calibrationID] else {
             return terminal(request, .unsupported, "calibration_unavailable", .standard, access)
         }

@@ -1140,3 +1140,17 @@ The view constructs result content after acknowledgement for assistive and
 restricted tiers. The callback receives only the notice ID, version digest
 and UTC timestamp. A changed notice version requires a fresh acknowledgement.
 Headless hosts can apply the same rule with `permitsResults(with:)`.
+
+Create an `OpenMedClinicianMode` actor for an explicit review session.
+After the reviewer acknowledges the current restricted notice, call
+`try await mode.enable(purpose: .review, acknowledgement: acknowledgement)`
+and obtain `let scope = try await mode.reviewScope()`. Run synchronous work
+with `try scope.perform { ... }` and asynchronous work with
+`try await scope.performAsync { ... }`. After `await mode.disable()`, existing
+scopes refuse further restricted calls. A new actor starts disabled. A host
+that elects to retain a purpose and acknowledgement must explicitly enable its
+next session, which checks the current notice version again.
+
+The throwing decision JSON, waveform evaluation and image-conditioned Compass
+entry points enforce this scope. The existing nonthrowing typed decision API
+expresses refusal as a denied result with code `clinician_mode_required`.

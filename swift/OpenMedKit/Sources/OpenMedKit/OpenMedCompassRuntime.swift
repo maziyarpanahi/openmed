@@ -162,6 +162,7 @@
             assetDigest: String? = nil,
             identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
+            if !images.isEmpty { try OpenMedClinicianMode.require("visual_qa") }
             guard maxTokens > 0 else {
                 throw OpenMedCompassError.invalidGenerationLimit(maxTokens)
             }
