@@ -165,3 +165,7 @@ To preview the reviewed family/task rules against the current manifest, run
 the rule version, counts per tier and the IDs requiring individual review. Omit
 `--dry-run` to fill missing declarations and then run
 `python -m scripts.manifest.regenerate_surfaces` to refresh the derived catalog.
+
+Three individually reviewed `General/unknown` models use the `visual_qa`
+capability and its `restricted` tier. These decisions are keyed by repository ID.
+Other models with an unknown family/task pair still require individual review.

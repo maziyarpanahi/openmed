@@ -11,7 +11,7 @@ from pathlib import Path
 from openmed.core.intended_use import load_intended_use_registry
 from openmed.core.manifest import load_manifest_rows, write_manifest_rows
 
-RULE_VERSION = 1
+RULE_VERSION = 2
 # Regulatory tiers are read from the corresponding reviewed declarations.
 CAPABILITIES = {
     ("PII", "token-classification"): "extract_pii",
@@ -19,6 +19,11 @@ CAPABILITIES = {
     ("ZeroShot", "token-classification"): "analyze_text",
     ("General", "text-generation"): "generate_text",
     ("Vision", "visual-question-answering"): "visual_qa",
+}
+REVIEWED_VISUAL_QA_MODELS = {
+    "OpenMed/Ministral-3B-Medical-v1",
+    "OpenMed/Qwen2.5-VL-3B-Medical-v1",
+    "OpenMed/Qwen3.5-2B-Medical-v1",
 }
 
 
@@ -32,6 +37,11 @@ def backfill(path: Path, *, dry_run: bool) -> dict:
     for row in rows:
         pair = (row.get("family"), row.get("task"))
         code = CAPABILITIES.get(pair)
+        if (
+            pair == ("General", "unknown")
+            and row["repo_id"] in REVIEWED_VISUAL_QA_MODELS
+        ):
+            code = "visual_qa"
         if code is None:
             review.append({"repo_id": row["repo_id"], "reason": "unknown_family_task"})
             continue
