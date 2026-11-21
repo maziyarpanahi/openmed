@@ -56,6 +56,12 @@ def _decision(counts: dict[str, tuple[int, int]]) -> dict:
     }
 
 
+def _precision(tp: int, fp: int) -> float | None:
+    if type(fp) is not int or fp < 0:
+        raise ValueError("invalid_false_positive_count")
+    return tp / (tp + fp) if tp + fp else None
+
+
 def certify_g1a(aggregate: dict, *, model_id: str, private_key: bytes) -> dict:
     """Sign the per-label recall decision with a caller-supplied Ed25519 seed.
 
@@ -85,6 +91,10 @@ def certify_g1a(aggregate: dict, *, model_id: str, private_key: bytes) -> dict:
     cells = aggregate.get("by_label")
     if type(threshold) is not int or threshold < 1 or not isinstance(cells, dict):
         raise ValueError("invalid_aggregate")
+    profile = aggregate.get("postprocessing_profile", "unspecified")
+    if profile not in {"transformers-simple-v1", "unspecified"}:
+        raise ValueError("unknown_postprocessing_profile")
+    precision_cells = {}
     counts = {}
     for label in sorted(_G1A_LABELS.intersection(cells)):
         cell = cells[label]
@@ -97,9 +107,21 @@ def certify_g1a(aggregate: dict, *, model_id: str, private_key: bytes) -> dict:
             raise ValueError("invalid_label_counts")
         if cell.get("recall", {}).get("rate") != tp / (tp + fn):
             raise ValueError("inconsistent_aggregate_recall")
+        fp = cell.get("fp")
+        precision = _precision(tp, fp)
+        observed = cell.get("precision")
+        if (
+            not isinstance(observed, dict)
+            or "rate" not in observed
+            or observed["rate"] != precision
+        ):
+            raise ValueError("inconsistent_aggregate_precision")
+        precision_cells[label] = {"fp": fp, "precision": precision}
         counts[label] = (tp, fn)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "postprocessing_profile": profile,
+        "precision_by_label": precision_cells,
         "scope": SCOPE,
         "openmed_version": __version__,
         "date": datetime.now(timezone.utc).date().isoformat(),
@@ -158,4 +180,13 @@ def verify_g1a(report: dict, *, public_key: bytes) -> dict:
     )
     if any(payload[field] != value for field, value in decision.items()):
         raise ValueError("inconsistent_certification_decision")
+    if payload["schema_version"] == 2:
+        precision_cells = payload["precision_by_label"]
+        if precision_cells.keys() != payload["by_label"].keys():
+            raise ValueError("inconsistent_precision_coverage")
+        for label, cell in precision_cells.items():
+            if cell["precision"] != _precision(
+                payload["by_label"][label]["tp"], cell["fp"]
+            ):
+                raise ValueError("inconsistent_certification_precision")
     return payload

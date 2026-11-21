@@ -21,7 +21,14 @@ def aggregate():
         "corpus": "synthetic",
         "minimum_gold_spans": 5,
         "by_label": {
-            label: {"status": "reported", "tp": 996, "fn": 4, "recall": {"rate": 0.996}}
+            label: {
+                "status": "reported",
+                "tp": 996,
+                "fn": 4,
+                "fp": 0,
+                "precision": {"rate": 1},
+                "recall": {"rate": 0.996},
+            }
             for label in _G1A_LABELS
         },
         "private_record": "PRIVATE-RECORD-ID",
@@ -139,3 +146,39 @@ def test_digest_signature_schema_and_decision():
     ):
         with pytest.raises(ValueError):
             verify_g1a({**report, **changes}, public_key=_public_key())
+
+
+def test_precision_is_descriptive_and_respects_suppression():
+    from openmed.eval.g1a_certification import verify_g1a
+
+    data = aggregate()
+    data["postprocessing_profile"] = "transformers-simple-v1"
+    data["by_label"]["PERSON"].update(fp=996, precision={"rate": 0.5})
+    data["by_label"]["SSN"] = {"status": "suppressed"}
+    payload = verify_g1a(sign(data), public_key=_public_key())
+    assert payload["state"] == "CERTIFIED"
+    assert payload["postprocessing_profile"] == "transformers-simple-v1"
+    cells = payload["precision_by_label"]
+    assert cells["PERSON"] == {"fp": 996, "precision": 0.5}
+    assert "SSN" not in cells
+    data["by_label"]["PERSON"].update(
+        tp=0, fn=1000, fp=0, recall={"rate": 0}, precision={"rate": None}
+    )
+    payload = verify_g1a(sign(data), public_key=_public_key())
+    assert payload["precision_by_label"]["PERSON"] == {"fp": 0, "precision": None}
+    assert payload["state"] == "NOT_CERTIFIED"
+
+
+def test_v1_recall_only_remains_verifiable():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from openmed.eval.g1a_certification import verify_g1a
+
+    report = sign(aggregate())
+    payload = report["certification"]
+    payload["schema_version"] = 1
+    del payload["precision_by_label"], payload["postprocessing_profile"]
+    encoded = _canonical(payload)
+    report["digest"] = hashlib.sha256(encoded).hexdigest()
+    report["signature"] = Ed25519PrivateKey.from_private_bytes(SEED).sign(encoded).hex()
+    assert verify_g1a(report, public_key=_public_key()) == payload

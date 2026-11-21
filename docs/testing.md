@@ -252,3 +252,10 @@ The status generator reads signed certification JSON files from
 separately trusted raw reviewer public key before regeneration and docs builds.
 Only place results there when authorized to publish them. Every row reports
 the minimum observed recall across assessed labels and lists unassessed labels.
+
+Version 2 certifications include false-positive counts and precision for each
+assessed G1a label. Precision is null when the model returned zero predictions
+for that label. The recall floor alone determines the certification decision.
+The offline runner records `transformers-simple-v1` for its token aggregation
+profile. Older aggregates without profile metadata use `unspecified`. Signed
+version 1 recall-only reports remain verifiable.

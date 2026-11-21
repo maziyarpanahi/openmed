@@ -30,7 +30,10 @@
       "additionalProperties": false,
       "properties": {
         "schema_version": {
-          "const": 1
+          "enum": [
+            1,
+            2
+          ]
         },
         "scope": {
           "const": "Observed G1a recall on the named corpus edition and assessed labels only. Clinical validation is outside this scope."
@@ -97,6 +100,69 @@
             "$ref": "#/$defs/label"
           },
           "uniqueItems": true
+        },
+        "postprocessing_profile": {
+          "enum": [
+            "unspecified",
+            "transformers-simple-v1"
+          ]
+        },
+        "precision_by_label": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/label"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "fp",
+              "precision"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "fp": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "precision": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "precision_by_label",
+          "postprocessing_profile"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "precision_by_label"
+              ]
+            },
+            {
+              "required": [
+                "postprocessing_profile"
+              ]
+            }
+          ]
         }
       }
     },
