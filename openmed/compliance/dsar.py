@@ -23,11 +23,18 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from openmed.core.audit import stable_hash
-from openmed.core.surrogate_vault import SurrogateVault
+from openmed.core.surrogate_vault import (
+    JsonFileSurrogateStore,
+    SurrogateKey,
+    SurrogateVault,
+)
+from openmed.core.surrogate_vault_crypto import SurrogateVaultCrypto
 
 from .audit_chain import AuditRecord, AuditSink
+from .withdrawal import ParticipantPlan
 
 DSAR_ADVISORY = (
     "This subject-access export is assembled from caller-provided identifiers "
@@ -90,14 +97,20 @@ def _subject_ref(text_hashes: Iterable[str]) -> str:
     return stable_hash(sorted(set(text_hashes)))
 
 
+def _identifier_keys(
+    identifiers: Iterable[SubjectIdentifier], vault: SurrogateVault
+) -> dict[SubjectIdentifier, SurrogateKey]:
+    return {
+        ident: vault.key_for(ident.surface, label=ident.label, lang=ident.lang)
+        for ident in identifiers
+    }
+
+
 def _matching_entries(
     identifiers: Sequence[SubjectIdentifier],
     vault: SurrogateVault,
 ) -> tuple[tuple[DsarEntry, ...], frozenset[str]]:
-    subject_keys = {
-        vault.key_for(ident.surface, label=ident.label, lang=ident.lang)
-        for ident in identifiers
-    }
+    subject_keys = set(_identifier_keys(identifiers, vault).values())
     subject_hashes = {key.text_hash for key in subject_keys}
     entries = tuple(
         DsarEntry(
@@ -224,4 +237,92 @@ __all__ = [
     "assemble_dsar_package",
     "render_dsar_summary",
     "plan_erasure",
+    "VaultWithdrawalParticipant",
 ]
+
+
+class VaultWithdrawalParticipant:
+    """Erase DSAR-selected holdings from the live vault and an optional AES-SIV mirror."""
+
+    def __init__(
+        self,
+        vault: SurrogateVault,
+        identifiers: Iterable[SubjectIdentifier],
+        *,
+        encrypted_mapping: tuple[Path, SurrogateVaultCrypto] | None = None,
+    ):
+        self._vault = vault
+        self._identifiers = tuple(identifiers)
+        if not self._identifiers:
+            raise ValueError("at least one known identifier is required")
+        self._encrypted = encrypted_mapping
+        self._verify_pairs: set[tuple[str, str]] = set()
+
+    def _select(self, subject_ref_digest):
+        keys = _identifier_keys(self._identifiers, self._vault)
+        if _subject_ref(key.text_hash for key in keys.values()) != subject_ref_digest:
+            raise ValueError("vault withdrawal subject mismatch")
+        wanted = frozenset(keys.values())
+        entries = tuple(entry for entry in self._vault.entries() if entry.key in wanted)
+        candidates = set()
+        pairs = {}
+        if self._encrypted is not None:
+            path, crypto = self._encrypted
+            mapping = crypto.read(path)
+            candidates = {
+                (entry.surrogate, ident.surface)
+                for entry in entries
+                for ident, key in keys.items()
+                if key == entry.key
+            }
+            pairs = {
+                key: value for key, value in candidates if mapping.get(key) == value
+            }
+        plan = ParticipantPlan(
+            len(entries),
+            stable_hash(
+                {
+                    "subject": subject_ref_digest,
+                    "entries": [entry.to_dict() for entry in entries],
+                    "mirrored": sorted(pairs.items()),
+                }
+            ),
+        )
+        return plan, wanted, entries, pairs, candidates
+
+    def plan(self, subject_ref_digest: str) -> ParticipantPlan:
+        """Preview the same holdings as DSAR export and bind any mirrored copies."""
+        return self._select(subject_ref_digest)[0]
+
+    def apply(self, subject_ref_digest: str, plan: ParticipantPlan) -> int:
+        """Remove confirmed mirrored copies before removing their vault index entries."""
+        with self._vault.store.locked():
+            return self._apply_locked(subject_ref_digest, plan)
+
+    def _apply_locked(self, subject_ref_digest, plan):
+        current, keys, entries, pairs, candidates = self._select(subject_ref_digest)
+        if current != plan:
+            raise ValueError("vault withdrawal selection changed")
+        if self._encrypted is not None:
+            path, crypto = self._encrypted
+            self._verify_pairs.update(candidates)
+            crypto.erase_selected(path, candidates=candidates, expected=pairs)
+        return self._vault.store.erase_selected(keys, entries)
+
+    def verify(self, subject_ref_digest: str) -> bool:
+        """Re-select current vault entries and re-open the authenticated mirror."""
+        current, keys, _, _, _ = self._select(subject_ref_digest)
+        if current.count:
+            return False
+        store = self._vault.store
+        if isinstance(store, JsonFileSurrogateStore) and store.path.exists():
+            disk = JsonFileSurrogateStore.load(
+                store.path, create=False, hmac_secret=self._vault.hmac_secret
+            )
+            if any(entry.key in keys for entry in disk.entries()):
+                return False
+        if self._encrypted is not None:
+            path, crypto = self._encrypted
+            mapping = crypto.read(path)
+            return all(mapping.get(key) != value for key, value in self._verify_pairs)
+        return True
