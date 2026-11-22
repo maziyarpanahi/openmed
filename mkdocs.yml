@@ -383,6 +383,7 @@ nav:
       - Federated Update Metadata: training/federated-update-metadata.md
       - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
+      - Private-Learning Stability: training/private-learning-stability.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - Synthetic Data:
           - Overview: training/synthetic/index.md

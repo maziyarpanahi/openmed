@@ -447,6 +447,7 @@ classification:
     - training/federated-update-metadata.md
     - languages/parallel-corpus-governance.md
     - training/private-training-schemas.md
+    - training/private-learning-stability.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/index.md
     - training/synthetic/locale-phi.md
