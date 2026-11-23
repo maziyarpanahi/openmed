@@ -82,10 +82,10 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             (ExtensionRedactionError.inputBytesTooLarge(actual: 2, limit: 1), .errorInputTooLarge),
             (ExtensionRedactionError.tooManyInputItems(actual: 2, limit: 1), .errorInputTooLarge),
             (ExtensionRedactionError.aggregateInputTooLarge(actual: 2, limit: 1), .errorInputTooLarge),
-            (ExtensionRedactionError.missingAsset(privateText), .errorMissingModel),
-            (ExtensionRedactionError.invalidAsset(privateText), .errorInvalidModel),
-            (ExtensionRedactionError.unsupportedModelFormat(privateText), .errorInvalidModel),
-            (ExtensionRedactionError.nonLocalAsset(URL(string: "https://example.invalid/\(privateText)")!), .errorInvalidModel),
+            (ExtensionRedactionError.missingAsset(.model), .errorMissingModel),
+            (ExtensionRedactionError.invalidAsset(.model), .errorInvalidModel),
+            (ExtensionRedactionError.unsupportedModelFormat, .errorInvalidModel),
+            (ExtensionRedactionError.nonLocalAsset(.model), .errorInvalidModel),
             (ExtensionRedactionError.tooManyAssetFiles(limit: 1), .errorModelTooLarge),
             (ExtensionRedactionError.modelAssetsTooLarge(actual: 2, limit: 1), .errorModelTooLarge),
             (ExtensionRedactionError.invalidRedactionOutput, .errorInvalidOutput),
@@ -336,7 +336,9 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             for view in views {
                 XCTAssertFalse(view.accessibilityHint?.contains(privateText) ?? false)
             }
-            let label = try XCTUnwrap(controller.pickerView(UIPickerView(), viewForRow: 0, forComponent: 0, reusing: nil) as? UILabel)
+            // Bundled profiles are listed by name, so the default is not necessarily row 0.
+            let defaultRow = try XCTUnwrap(Policy.bundledProfileNames.firstIndex(of: Policy.defaultName))
+            let label = try XCTUnwrap(controller.pickerView(UIPickerView(), viewForRow: defaultRow, forComponent: 0, reusing: nil) as? UILabel)
             XCTAssertTrue(label.adjustsFontForContentSizeCategory)
             XCTAssertEqual(label.accessibilityLabel, ShareExtensionStrings.policyDisplayName(Policy.defaultName))
         }

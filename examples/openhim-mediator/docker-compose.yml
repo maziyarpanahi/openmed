@@ -6,13 +6,29 @@ services:
     environment:
       OPENMED_OPENHIM_CORE_URL: ${OPENMED_OPENHIM_CORE_URL:?Set OPENMED_OPENHIM_CORE_URL}
       OPENMED_OPENHIM_USERNAME: ${OPENMED_OPENHIM_USERNAME:?Set OPENMED_OPENHIM_USERNAME}
-      OPENMED_OPENHIM_PASSWORD: ${OPENMED_OPENHIM_PASSWORD:?Set OPENMED_OPENHIM_PASSWORD}
+      OPENMED_OPENHIM_PASSWORD_FILE: /run/secrets/openmed_openhim_password
       OPENMED_OPENHIM_AUTH_MODE: ${OPENMED_OPENHIM_AUTH_MODE:-basic}
       OPENMED_OPENHIM_POLICY: ${OPENMED_OPENHIM_POLICY:-hipaa_safe_harbor}
       OPENMED_OPENHIM_METHOD: ${OPENMED_OPENHIM_METHOD:-replace}
       OPENMED_OPENHIM_VERIFY_TLS: ${OPENMED_OPENHIM_VERIFY_TLS:-true}
       OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: ${OPENMED_OPENHIM_ALLOW_INSECURE_HTTP:-false}
       OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS: ${OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS:-10}
+      OPENMED_EGRESS_RULES: ${OPENMED_EGRESS_RULES:?Set OPENMED_EGRESS_RULES to allow the OpenHIM core origin}
+      # The image runs the prod security profile, which stays unready (and
+      # never registers with OpenHIM) until authentication is configured.
+      OPENMED_SERVICE_AUTH_ENABLED: "true"
+      OPENMED_SERVICE_AUTH_API_KEYS_FILE: /run/secrets/openmed_service_api_keys
+      OPENMED_SERVICE_DIGEST_KEY_FILE: /run/secrets/openmed_service_digest_key
+    # Compose copies the host OPENMED_OPENHIM_PASSWORD, OPENMED_SERVICE_AUTH_API_KEYS
+    # and OPENMED_SERVICE_DIGEST_KEY into owner-only files; the container
+    # environment never carries them.
+    secrets:
+      - source: openmed_openhim_password
+        mode: 0400
+      - source: openmed_service_api_keys
+        mode: 0400
+      - source: openmed_service_digest_key
+        mode: 0400
     ports:
       - "127.0.0.1:${OPENMED_OPENHIM_HOST_PORT:-8080}:8080"
     volumes:
@@ -42,3 +58,11 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+
+secrets:
+  openmed_openhim_password:
+    environment: OPENMED_OPENHIM_PASSWORD
+  openmed_service_api_keys:
+    environment: OPENMED_SERVICE_AUTH_API_KEYS
+  openmed_service_digest_key:
+    environment: OPENMED_SERVICE_DIGEST_KEY

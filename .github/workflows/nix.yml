@@ -45,5 +45,17 @@ jobs:
 
       - name: Run the test suite in the dev shell
         # The full tier runs in ci.yml; here the shell only has to carry the
-        # fast tier.
-        run: nix develop --command python -m pytest tests/ -q -m "not slow and not fuzz"
+        # fast tier. Nix's pyarrow links a shared libprotobuf whose symbols
+        # clash with the protobuf grpcio-tools embeds, so loading protoc
+        # in-process after pyarrow crashes the interpreter. The API schema
+        # tests compile the gRPC contract in-process and never use pyarrow, so
+        # they run in a process of their own.
+        run: >-
+          nix develop --command python -m pytest tests/ -q -m "not slow and not fuzz"
+          --ignore=tests/unit/service/test_api_schema_compatibility.py
+
+      - name: Run the in-process protobuf contract tests in their own process
+        run: >-
+          nix develop --command python -m pytest
+          tests/unit/service/test_api_schema_compatibility.py -q
+          -m "not slow and not fuzz"

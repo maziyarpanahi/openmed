@@ -3,12 +3,12 @@
   "items": {
     "mask_name_email": {
       "analyze_text": "sha256:4d13d6680834594544499698a6f6b9514ff7812e3e6990a5f1b6a20a4a983d40",
-      "deidentify": "sha256:976ceb9206409792dbaa2f8b0b417cba8b3a6a6f3766428e7f9d1bee4ab71e8c",
+      "deidentify": "sha256:c96cf6b53f26eefb0bd773233cfdce3e37cddebba43b474c97145eab8f3169b6",
       "extract_pii": "sha256:da702b99c2ddb8bcad66a8db194a73459b432ef8d80b6811f4796e5337c2de34"
     },
     "mask_repeated_name": {
       "analyze_text": "sha256:70eb43c136046b655f7b493a3d21e433dd0bb4eaf8a5842ca27a91ed62278266",
-      "deidentify": "sha256:ced13d9c86b38a3e26b8e780ae704e2bcf7b13840b47676e970d01a881a8d122",
+      "deidentify": "sha256:28374b6d83355cd5e6352fdd3bc25c85d2cb6e29ad6e41a5e74488519844f764",
       "extract_pii": "sha256:edbb40841705cf22b322d28e56c37498427476b902879946719f1b8fdadba4e7"
     },
     "replace_seeded_name": {

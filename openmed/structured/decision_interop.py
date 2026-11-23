@@ -32,6 +32,15 @@ Non-success questions carry their OpenMed ``state`` and ``code``; choice and
 expected-level selections are ``null``, while available probabilities remain
 available for review.
 
+OpenMed's own ``POST /v1/decisions`` accepts both the OpenMed request and the
+OpenAI-compatible body. :func:`decision_request_shape` tells them apart by
+their disjoint required keys (``mode`` and ``input_text`` against ``model`` and
+``input``; both shapes may carry ``questions``) and refuses a body that mixes
+the two, carries neither, or sends media in the text-only OpenAI-compatible
+shape. :func:`openai_decisions_request_schema` and
+:func:`openai_decisions_response_schema` are the canonical JSON Schemas of that
+shape as OpenMed accepts and answers it.
+
 Nothing here performs network I/O, and error messages never echo the input,
 instructions, option values or descriptions.
 """
@@ -41,11 +50,15 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping, Sequence
+from enum import Enum
 from typing import Any, Final
 
 from .decision import (
     DECISION_SCHEMA_VERSION,
     DEFAULT_CALIBRATION_ID,
+    MAX_INPUT_CHARS,
+    MAX_OPTIONS,
+    MAX_QUESTIONS,
     DecisionBackendOutput,
     DecisionConflictError,
     DecisionError,
@@ -57,16 +70,92 @@ from .decision import (
     DecisionResult,
     DecisionState,
     DecisionUnsupportedError,
+    decision_request_schema,
+    decision_result_schema,
 )
 
 BOOLEAN_OPTIONS: Final = ("true", "false")
 SYSTEM_ONE_QUESTION_TYPES: Final = ("choice", "noul", "score")
 OPENAI_DECISIONS_QUESTION_TYPES: Final = ("predicate", "choice", "score")
+OPENMED_REQUEST_KEYS: Final = frozenset({"mode", "input_text"})
+OPENAI_DECISIONS_REQUEST_KEYS: Final = frozenset({"model", "input"})
+MAX_MODEL_ID_CHARS: Final = 256
+OPENAI_DECISIONS_REVIEW_FIELDS: Final = (
+    "state",
+    "code",
+    "warnings",
+    "review",
+    "advisory",
+    "autonomous_action",
+    "calibration",
+    "backend",
+    "access",
+    "schema_version",
+    "compatibility_policy",
+)
 
 _CHOICE: Final = "choice"
 _BOOLEAN: Final = "boolean"
 _SCORE: Final = "score"
 _SYSTEM_ONE_TYPE: Final = {_CHOICE: "choice", _BOOLEAN: "noul", _SCORE: "score"}
+_SHAPE_REASONS: Final = frozenset({"both_shapes", "no_shape", "media_unsupported"})
+
+
+class DecisionRequestShape(str, Enum):
+    """Request body shape accepted by OpenMed's ``POST /v1/decisions``."""
+
+    OPENMED = "openmed"
+    OPENAI_DECISIONS = "openai_decisions"
+
+
+class DecisionRequestShapeError(DecisionError):
+    """Raised when a decision body has no single recognised shape.
+
+    ``reason_code`` is ``both_shapes`` (keys of both shapes), ``no_shape``
+    (keys of neither) or ``media_unsupported`` (media in the text-only
+    OpenAI-compatible shape). The message never echoes the body.
+    """
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code if reason_code in _SHAPE_REASONS else "no_shape"
+        super().__init__(f"decision request shape refused: {self.reason_code}")
+
+
+def decision_request_shape(body: Mapping[str, Any]) -> DecisionRequestShape:
+    """Return which request shape a ``POST /v1/decisions`` body uses.
+
+    The shapes are told apart by keys only one of them defines: ``mode`` and
+    ``input_text`` mark an OpenMed request, ``model`` and ``input`` an
+    OpenAI-compatible body. ``questions`` exists in both and decides nothing.
+    A body is classified by any one of its shape's keys, so a body missing a
+    required key still reaches that shape's validation and its precise error.
+
+    Args:
+        body: A decoded JSON object.
+
+    Returns:
+        The single shape the body uses.
+
+    Raises:
+        TypeError: If ``body`` is not a mapping.
+        DecisionRequestShapeError: If the body mixes both shapes, uses neither,
+            or sends ``media`` in the text-only OpenAI-compatible shape.
+    """
+
+    if not isinstance(body, Mapping):
+        raise TypeError("decision request body must be a mapping")
+    keys = set(body)
+    openmed = bool(keys & OPENMED_REQUEST_KEYS)
+    openai = bool(keys & OPENAI_DECISIONS_REQUEST_KEYS)
+    if openmed and openai:
+        raise DecisionRequestShapeError("both_shapes")
+    if openai:
+        if "media" in keys:
+            raise DecisionRequestShapeError("media_unsupported")
+        return DecisionRequestShape.OPENAI_DECISIONS
+    if openmed:
+        return DecisionRequestShape.OPENMED
+    raise DecisionRequestShapeError("no_shape")
 
 
 def from_system_one_request(
@@ -425,6 +514,7 @@ def to_openai_decisions_response(
     result: DecisionResult,
     *,
     model: str | None = None,
+    include_openmed: bool = False,
 ) -> dict[str, Any]:
     """Render an OpenMed result as an OpenAI-compatible Decisions response.
 
@@ -432,6 +522,10 @@ def to_openai_decisions_response(
         request: The request that produced *result*.
         result: Its decision result.
         model: Model identifier to report; the backend ``model_id`` by default.
+        include_openmed: Add an ``openmed`` object with the result's state,
+            warnings, review requirement, advisory, calibration, backend
+            provenance, access decision and schema version. Clients that only
+            read ``model`` and ``answers`` ignore it.
 
     Returns:
         ``{"model": ..., "answers": [answer]}`` in question order. Questions
@@ -467,9 +561,243 @@ def to_openai_decisions_response(
                 ]
         _mark_non_success(answer, outcome)
         answers.append(answer)
-    return {
+    response: dict[str, Any] = {
         "model": _model_id(model if model is not None else result.backend["model_id"]),
         "answers": answers,
+    }
+    if include_openmed:
+        rendered = result.to_dict()
+        response["openmed"] = {
+            name: rendered[name] for name in OPENAI_DECISIONS_REVIEW_FIELDS
+        }
+    return response
+
+
+def openai_decisions_request_schema() -> dict[str, Any]:
+    """Return the JSON Schema of the OpenAI-compatible Decisions body.
+
+    This is the text-only shape OpenMed's ``POST /v1/decisions`` accepts beside
+    the OpenMed request. It carries no OpenMed policy fields; the service
+    applies the default namespace, purpose, calibration and timeout, and keeps
+    the default 8,192-character input bound.
+
+    Returns:
+        A Draft 2020-12 JSON Schema.
+    """
+
+    canonical = decision_request_schema()["properties"]
+    name = {"type": "string", "pattern": canonical["question_id"]["pattern"]}
+    common = {
+        "name": name,
+        "instructions": canonical["instructions"],
+    }
+    description = canonical["option_descriptions"]["items"]
+    choice = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["value"],
+        "properties": {
+            "value": canonical["options"]["items"],
+            "description": description,
+        },
+    }
+    level = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["label"],
+        "properties": {"label": canonical["levels"]["items"]},
+    }
+    question = {
+        "type": "object",
+        "oneOf": [
+            {
+                "additionalProperties": False,
+                "required": ["type", "name"],
+                "properties": {"type": {"const": "predicate"}, **common},
+            },
+            {
+                "additionalProperties": False,
+                "required": ["type", "name", "choices"],
+                "properties": {
+                    "type": {"const": "choice"},
+                    **common,
+                    "choices": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": MAX_OPTIONS,
+                        "items": choice,
+                    },
+                },
+            },
+            {
+                "additionalProperties": False,
+                "required": ["type", "name", "levels"],
+                "properties": {
+                    "type": {"const": "score"},
+                    **common,
+                    "levels": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": MAX_OPTIONS,
+                        "items": level,
+                    },
+                },
+            },
+        ],
+    }
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": (
+            "https://openmed.dev/schemas/decision-openai-request/"
+            f"{DECISION_SCHEMA_VERSION}"
+        ),
+        "title": "OpenAI-compatible Decisions Request",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["model", "input", "questions"],
+        "properties": {
+            "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": MAX_MODEL_ID_CHARS,
+                "description": "Must name the model the service decides with.",
+            },
+            "input": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": MAX_INPUT_CHARS,
+                "description": "Text input; messages and media are refused.",
+            },
+            "questions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": MAX_QUESTIONS,
+                "items": question,
+            },
+        },
+    }
+
+
+def openai_decisions_response_schema() -> dict[str, Any]:
+    """Return the JSON Schema of OpenMed's OpenAI-compatible Decisions response.
+
+    Answers follow the request's question order. A question that did not
+    succeed carries ``null`` selections plus its OpenMed ``state`` and
+    ``code``. The ``openmed`` object repeats the result's review requirement,
+    advisory, calibration and backend provenance.
+
+    Returns:
+        A Draft 2020-12 JSON Schema.
+    """
+
+    result = decision_result_schema()
+    probability = {"type": "number", "minimum": 0, "maximum": 1}
+    nullable_probability = {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+    state = {
+        "type": "string",
+        "enum": [
+            item.value for item in DecisionState if item is not DecisionState.SUCCESS
+        ],
+    }
+    code = result["properties"]["code"]
+    outcome = {"state": state, "code": code}
+    name = {"type": "string"}
+    answer = {
+        "type": "object",
+        "oneOf": [
+            {
+                "additionalProperties": False,
+                "required": ["type", "name", "probability"],
+                "properties": {
+                    "type": {"const": "predicate"},
+                    "name": name,
+                    "probability": nullable_probability,
+                    **outcome,
+                },
+            },
+            {
+                "additionalProperties": False,
+                "required": ["type", "name", "choice", "confidence"],
+                "properties": {
+                    "type": {"const": "choice"},
+                    "name": name,
+                    "choice": {"type": ["string", "null"]},
+                    "confidence": nullable_probability,
+                    "probabilities": {
+                        "type": "array",
+                        "maxItems": MAX_OPTIONS,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["value", "probability"],
+                            "properties": {
+                                "value": {"type": "string"},
+                                "probability": probability,
+                            },
+                        },
+                    },
+                    **outcome,
+                },
+            },
+            {
+                "additionalProperties": False,
+                "required": ["type", "name", "score", "confidence"],
+                "properties": {
+                    "type": {"const": "score"},
+                    "name": name,
+                    "score": {"type": ["number", "null"], "minimum": 0},
+                    "confidence": nullable_probability,
+                    "probabilities": {
+                        "type": "array",
+                        "maxItems": MAX_OPTIONS,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["label", "value", "probability"],
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "integer", "minimum": 0},
+                                "probability": probability,
+                            },
+                        },
+                    },
+                    **outcome,
+                },
+            },
+        ],
+    }
+    review_envelope = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": list(OPENAI_DECISIONS_REVIEW_FIELDS),
+        "properties": {
+            field_name: result["properties"][field_name]
+            for field_name in OPENAI_DECISIONS_REVIEW_FIELDS
+        },
+    }
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": (
+            "https://openmed.dev/schemas/decision-openai-response/"
+            f"{DECISION_SCHEMA_VERSION}"
+        ),
+        "title": "OpenAI-compatible Decisions Response",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["model", "answers"],
+        "properties": {
+            "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": MAX_MODEL_ID_CHARS,
+            },
+            "answers": {
+                "type": "array",
+                "maxItems": MAX_QUESTIONS,
+                "items": answer,
+            },
+            "openmed": review_envelope,
+        },
     }
 
 
@@ -863,7 +1191,7 @@ def _model_id(value: Any) -> str:
     if (
         not isinstance(value, str)
         or not value.strip()
-        or len(value) > 256
+        or len(value) > MAX_MODEL_ID_CHARS
         or any(ord(char) < 32 or ord(char) == 127 for char in value)
     ):
         raise DecisionError("model must be a bounded identifier")
@@ -902,12 +1230,21 @@ def _only(payload: Mapping[str, Any], allowed: set[str], name: str) -> None:
 
 __all__ = [
     "BOOLEAN_OPTIONS",
+    "MAX_MODEL_ID_CHARS",
     "OPENAI_DECISIONS_QUESTION_TYPES",
+    "OPENAI_DECISIONS_REQUEST_KEYS",
+    "OPENAI_DECISIONS_REVIEW_FIELDS",
+    "OPENMED_REQUEST_KEYS",
     "SYSTEM_ONE_QUESTION_TYPES",
+    "DecisionRequestShape",
+    "DecisionRequestShapeError",
+    "decision_request_shape",
     "from_openai_decisions_request",
     "from_openai_decisions_response",
     "from_system_one_request",
     "from_system_one_response",
+    "openai_decisions_request_schema",
+    "openai_decisions_response_schema",
     "to_openai_decisions_request",
     "to_openai_decisions_response",
     "to_system_one_request",

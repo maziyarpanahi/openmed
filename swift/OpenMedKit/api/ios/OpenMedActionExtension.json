@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedActionExtension",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {
+    "OpenMedActionExtension.RedactionActionRequestHandler": [
+      "class OpenMedActionExtension.RedactionActionRequestHandler",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: CVarArg",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: CustomDebugStringConvertible",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: CustomStringConvertible",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: Equatable",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: Hashable",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: NSExtensionRequestHandling",
+      "conformance OpenMedActionExtension.RedactionActionRequestHandler: NSObjectProtocol"
+    ],
+    "OpenMedActionExtension.RedactionActionRequestHandler.beginRequest": [
+      "func OpenMedActionExtension.RedactionActionRequestHandler.beginRequest(with: Foundation.NSExtensionContext) -> ()"
+    ],
+    "OpenMedActionExtension.RedactionActionRequestHandler.policyProfileUserInfoKey": [
+      "static var OpenMedActionExtension.RedactionActionRequestHandler.policyProfileUserInfoKey: Swift.String { get }"
+    ]
+  }
+}

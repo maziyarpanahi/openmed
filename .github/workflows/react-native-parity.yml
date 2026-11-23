@@ -1,0 +1,270 @@
+name: React Native bridge parity
+
+# `harness` runs on every relevant pull request: the OpenMedKitRN JavaScript
+# tests, the parity harness tests, and the React Native-free type check of the
+# example app's parity core.
+#
+# `ios-simulator` and `android-emulator` build the example app in release mode
+# and compare the real OpenMedKitRN bridge with direct OpenMedKit calls on the
+# shared parity corpora. They need the bridge's autolinking packaging from
+# #4478 (podspec, RCT_EXTERN_MODULE export, Gradle module, ReactPackage and
+# react-native.config.js). Until #4478 is merged they run only on manual
+# dispatch, and the `packaging` job fails with a clear error while that
+# packaging is missing. Once #4478 lands, add the native jobs to pull_request.
+# The iOS job also needs a maintainer-published Core ML export pinned in
+# example/parity/model-sources.json: this workflow downloads pinned artifacts
+# but never converts or publishes models.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/react-native-parity.yml'
+      - 'js/openmedkit-react-native/**'
+      - 'tests/mobile/test_rn_*'
+      - 'tests/mobile/__snapshots__/openmedkit-react-native-public-api.json'
+      - 'tests/fixtures/parity/**'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/react-native-parity.yml'
+      - 'js/openmedkit-react-native/**'
+      - 'tests/mobile/test_rn_*'
+      - 'tests/mobile/__snapshots__/openmedkit-react-native-public-api.json'
+      - 'tests/fixtures/parity/**'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Native parity platform to run
+        type: choice
+        options:
+          - both
+          - ios
+          - android
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  harness:
+    name: Bridge and parity harness tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: js/openmedkit-react-native/package-lock.json
+
+      - name: Install bridge test tooling
+        working-directory: js/openmedkit-react-native
+        run: npm ci
+
+      - name: Run bridge and parity harness tests
+        working-directory: js/openmedkit-react-native
+        run: npm test
+
+  packaging:
+    name: Require OpenMedKitRN packaging (#4478)
+    if: github.event_name == 'workflow_dispatch'
+    needs: harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check that the bridge can be autolinked
+        run: bash js/openmedkit-react-native/example/scripts/check-packaging.sh
+
+  ios-simulator:
+    name: iOS Simulator parity (Core ML)
+    if: github.event_name == 'workflow_dispatch' && inputs.platform != 'android'
+    needs: packaging
+    runs-on: macos-15
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: js/openmedkit-react-native/example
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            js/openmedkit-react-native/package-lock.json
+            js/openmedkit-react-native/example/package-lock.json
+
+      - name: Install JavaScript dependencies
+        run: |
+          npm ci --prefix ..
+          npm ci
+
+      - name: Type-check the example app
+        run: npm run typecheck
+
+      # Actions never converts models (docs/security/hf-token-policy.md). This
+      # step downloads a maintainer-published Core ML export pinned in
+      # parity/model-sources.json and fails closed while none is pinned.
+      - name: Download, stage and verify the local model fixture
+        run: |
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts download \
+            --platform ios --cache "$RUNNER_TEMP/model-source"
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts assemble \
+            --platform ios \
+            --source "$RUNNER_TEMP/model-source" \
+            --out "$RUNNER_TEMP/openmed-parity-fixture"
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts verify \
+            --fixture "$RUNNER_TEMP/openmed-parity-fixture"
+
+      - name: Generate the iOS host project
+        run: scripts/prepare-native-app.sh ios
+
+      - name: Install pods
+        working-directory: js/openmedkit-react-native/example/ios
+        env:
+          USE_FRAMEWORKS: dynamic
+        run: pod install
+
+      - name: Boot an iPhone simulator
+        run: |
+          udid="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime in sorted(devices, reverse=True):
+              if "iOS" in runtime:
+                  for device in devices[runtime]:
+                      if device["name"].startswith("iPhone"):
+                          print(device["udid"])
+                          raise SystemExit
+          raise SystemExit("no iPhone simulator available")
+          ')"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Build the release app for the simulator
+        working-directory: js/openmedkit-react-native/example/ios
+        run: |
+          xcodebuild build \
+            -workspace OpenMedKitParity.xcworkspace \
+            -scheme OpenMedKitParity \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "id=$SIMULATOR_UDID" \
+            -derivedDataPath build
+
+      - name: Run parity offline on the simulator
+        run: >-
+          scripts/run-on-device.sh ios
+          ios/build/Build/Products/Release-iphonesimulator/OpenMedKitParity.app
+          "$RUNNER_TEMP/openmed-parity-fixture"
+          "$RUNNER_TEMP/rn-parity-ios.json"
+
+      - name: Check the parity evidence
+        run: >-
+          ../node_modules/.bin/tsx scripts/check-report.ts
+          --report "$RUNNER_TEMP/rn-parity-ios.json"
+          --platform ios
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the value-free parity report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rn-parity-ios
+          path: ${{ runner.temp }}/rn-parity-ios.json
+          if-no-files-found: ignore
+
+  android-emulator:
+    name: Android emulator parity (ONNX)
+    if: github.event_name == 'workflow_dispatch' && inputs.platform != 'ios'
+    needs: packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: js/openmedkit-react-native/example
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Enable KVM for the emulator
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            js/openmedkit-react-native/package-lock.json
+            js/openmedkit-react-native/example/package-lock.json
+
+      - name: Install JavaScript dependencies
+        run: |
+          npm ci --prefix ..
+          npm ci
+
+      - name: Type-check the example app
+        run: npm run typecheck
+
+      - name: Download, stage and verify the local model fixture
+        run: |
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts download \
+            --platform android --cache "$RUNNER_TEMP/model-source"
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts assemble \
+            --platform android \
+            --source "$RUNNER_TEMP/model-source" \
+            --out "$RUNNER_TEMP/openmed-parity-fixture"
+          ../node_modules/.bin/tsx scripts/stage-model-fixture.ts verify \
+            --fixture "$RUNNER_TEMP/openmed-parity-fixture"
+
+      - name: Generate the Android host project
+        run: scripts/prepare-native-app.sh android
+
+      - name: Build the release APK
+        working-directory: js/openmedkit-react-native/example/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --stacktrace
+
+      - name: Run parity offline on the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim
+          working-directory: js/openmedkit-react-native/example
+          script: scripts/run-on-device.sh android android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/openmed-parity-fixture" "$RUNNER_TEMP/rn-parity-android.json"
+
+      - name: Check the parity evidence
+        run: >-
+          ../node_modules/.bin/tsx scripts/check-report.ts
+          --report "$RUNNER_TEMP/rn-parity-android.json"
+          --platform android
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the value-free parity report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rn-parity-android
+          path: ${{ runner.temp }}/rn-parity-android.json
+          if-no-files-found: ignore

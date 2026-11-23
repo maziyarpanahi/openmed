@@ -1098,9 +1098,9 @@
         func prepare(
             _ input: LMInput,
             cache: [KVCache],
-            windowSize: Int?
+            state _: LMOutput.State?,
+            prefill _: PrefillParameters
         ) throws -> PrepareResult {
-            _ = windowSize
             let frames = input.image?.frames ?? []
             let (positionIDs, ropeDelta) = ropePositions(
                 inputIDs: input.text.tokens,

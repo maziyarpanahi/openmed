@@ -33,6 +33,7 @@ from openmed.clinical.journey_contracts import (
 )
 from openmed.clinical.units import parse_measurement
 from openmed.core.date_shift import stable_offset_for
+from openmed.core.key_provider import InMemoryKeyProvider
 from openmed.core.surrogate_vault import SurrogateVault
 from openmed.interop.identity import (
     CompositeIdentityResolver,
@@ -96,7 +97,12 @@ from openmed.structured.datasets import (
     build_dataset_snapshot,
 )
 from openmed.structured.facts import MappingFactAdapter
-from openmed.structured.store import StoreResult, StoreState
+from openmed.structured.store import (
+    JOURNEY_KEY_PURPOSE,
+    JourneyStoreEncryption,
+    StoreResult,
+    StoreState,
+)
 
 GOLDEN_JOURNEY_SCHEMA_VERSION: Final = "1.0.0"
 GOLDEN_JOURNEY_COMPATIBILITY_POLICY: Final = "same_major"
@@ -740,7 +746,14 @@ def run_golden_journey(
     root.mkdir(parents=True, exist_ok=True)
     journey_path = _fresh_database_path(root, "journey.sqlite3")
     identity_path = _fresh_database_path(root, "identity.sqlite3")
-    store = SQLiteIngestionStore(journey_path)
+    # The synthetic run seals Journey payloads with a throw-away key that
+    # never leaves this process, so the scenario works under any profile.
+    store = SQLiteIngestionStore(
+        journey_path,
+        encryption=JourneyStoreEncryption.encrypted(
+            InMemoryKeyProvider.generate(JOURNEY_KEY_PURPOSE)
+        ),
+    )
     identity_store = IdentityResolutionStore(identity_path)
     try:
         components = cast(Sequence[PipelineComponent], _pipeline_components(scenario))

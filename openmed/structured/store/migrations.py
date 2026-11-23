@@ -344,6 +344,27 @@ MIGRATIONS = (
             """,
         ),
     ),
+    StoreMigration(
+        version=4,
+        name="store_encryption_state",
+        statements=(
+            """
+            CREATE TABLE store_encryption (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                state TEXT NOT NULL
+                    CHECK (state IN ('plaintext', 'migrating', 'encrypted')),
+                key_purpose TEXT,
+                envelope_version INTEGER
+            )
+            """,
+            """
+            CREATE TABLE store_encryption_keys (
+                key_id TEXT PRIMARY KEY,
+                verifier TEXT NOT NULL
+            )
+            """,
+        ),
+    ),
 )
 
 LATEST_MIGRATION_VERSION = MIGRATIONS[-1].version

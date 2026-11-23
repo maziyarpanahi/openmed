@@ -7,9 +7,11 @@ counts only; input values and archive member names are never returned.
 
 from __future__ import annotations
 
+import codecs
 import io
 import json
 import math
+import re
 import stat
 import zipfile
 from dataclasses import dataclass
@@ -57,6 +59,36 @@ class OperationalLimitError(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+JSON_STRUCTURE_EXCEEDED: Final = "json_structure_exceeded"
+
+
+class JsonStructureCategory(str, Enum):
+    """Structural JSON budget that a scanned document exceeded."""
+
+    DEPTH = "depth"
+    NODES = "nodes"
+    STRING_BYTES = "string_bytes"
+
+
+class JsonStructureLimitError(OperationalLimitError):
+    """Content-free structural violation carrying only category and ceiling.
+
+    Attributes:
+        category: The exceeded budget.
+        ceiling: The configured maximum for that budget.
+    """
+
+    def __init__(self, category: JsonStructureCategory | str, ceiling: int) -> None:
+        self.category = JsonStructureCategory(category)
+        self.ceiling = int(ceiling)
+        super().__init__(JSON_STRUCTURE_EXCEEDED)
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the limit category and ceiling, never document content."""
+
+        return {"category": self.category.value, "ceiling": self.ceiling}
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,46 +306,381 @@ def _utf8_length(value: str) -> int:
         raise OperationalLimitError("json_invalid") from None
 
 
+_PREFLIGHT_CODES: Final = {
+    JsonStructureCategory.DEPTH: "json_depth_limit_exceeded",
+    JsonStructureCategory.NODES: "json_node_limit_exceeded",
+    JsonStructureCategory.STRING_BYTES: "json_string_limit_exceeded",
+}
+
+
 def _preflight_json(payload: bytes, limits: OperationalLimits) -> None:
     """Bound JSON structure lexically before invoking the decoder."""
 
-    depth = 0
-    structural_units = 1
-    string_bytes = 0
-    in_string = False
-    escaped = False
-    for byte in payload:
-        if in_string:
-            if escaped:
-                escaped = False
-                string_bytes += 1
-            elif byte == 0x5C:  # backslash
-                escaped = True
-                string_bytes += 1
-            elif byte == 0x22:  # double quote
-                in_string = False
-            else:
-                string_bytes += 1
-            if string_bytes > limits.max_json_string_bytes:
-                raise OperationalLimitError("json_string_limit_exceeded")
-            continue
-        if byte == 0x22:
-            in_string = True
-        elif byte in {0x5B, 0x7B}:  # [ {
-            depth += 1
-            structural_units += 1
-            if depth > limits.max_json_depth:
-                raise OperationalLimitError("json_depth_limit_exceeded")
-        elif byte in {0x5D, 0x7D}:  # ] }
-            depth -= 1
-            if depth < 0:
-                raise OperationalLimitError("json_invalid")
-        elif byte == 0x2C:  # comma
-            structural_units += 1
-        if structural_units > limits.max_json_nodes:
-            raise OperationalLimitError("json_node_limit_exceeded")
-    if in_string or escaped or depth != 0:
+    scanner = JsonStructureScanner(limits, cumulative_strings=True)
+    try:
+        scanner.feed(payload)
+        scanner.finish()
+    except JsonStructureLimitError as error:
+        raise OperationalLimitError(_PREFLIGHT_CODES[error.category]) from None
+    if not scanner.is_complete:
         raise OperationalLimitError("json_invalid")
+
+
+_OPEN_OBJECT: Final = 0x7B
+_QUOTE: Final = 0x22
+# Longest escape that may need lookahead: a surrogate pair is 12 bytes.
+_MAX_ESCAPE_BYTES: Final = 12
+# String content is matched in bounded windows so the regex engine never keeps
+# per-escape backtracking state for more than this many bytes at a time.
+_STRING_WINDOW_BYTES: Final = 16 * 1024
+# Counted tokens are string starts, container opens and closes, and new
+# scalars. Valid JSON has at most three per value (a key, the value and a
+# close), so this budget is never reached before the node ceiling; it bounds
+# CPU for malformed floods such as keys without values.
+_TOKENS_PER_NODE: Final = 4
+_TOKEN_SLACK: Final = 64
+# Group 1: separators. Group 2: an optional escape-free object key with its
+# colon. Then one of: 3 escape-free string completed in this buffer, 4 any
+# other string start, 5 container open, 6 run of container closes, 7 scalar
+# run (number or literal). Long strings are matched in C within fixed windows,
+# so Python work is one match per token.
+_TOKEN: Final = re.compile(
+    rb'([ \t\n\r,:]*)(?:"([^"\\]*)"[ \t\n\r]*:[ \t\n\r]*)?'
+    rb'(?:"([^"\\]*)"|(")|([\[{])|([\]}]+)|([^ \t\n\r,:\[\]{}"]+))?'
+)
+_STRING_CONTENT: Final = re.compile(
+    rb'(?:[^"\\]+'
+    rb'|\\["\\/bfnrt]'
+    rb"|\\u[dD][89abAB][0-9a-fA-F]{2}\\u[dD][c-fC-F][0-9a-fA-F]{2}"
+    rb"|\\u[dD][89abAB][0-9a-fA-F]{2}"
+    rb'(?=[^\\]|\\["\\/bfnrt]|\\u(?:[0-9a-cA-CeEfF]|[dD][0-9abAB]))'
+    rb"|\\u(?![dD][89abAB])[0-9a-fA-F]{4})*"
+)
+_LENIENT_STRING_DECODER: Final = json.JSONDecoder(strict=False)
+_NON_ASCII_BYTES: Final = bytes(range(0x80, 0x100))
+
+
+def _decoded_utf8_width(fragment: bytes) -> int:
+    """Return the UTF-8 length of a whole-escape JSON string fragment."""
+
+    if b"\\" not in fragment:
+        return len(fragment)
+    # Latin-1 maps each raw byte to one character, so the C decoder resolves
+    # escapes without rejecting a UTF-8 sequence split across fragments. Raw
+    # non-ASCII bytes then encode as two bytes each and are corrected below.
+    decoded = _LENIENT_STRING_DECODER.decode('"' + fragment.decode("latin-1") + '"')
+    non_ascii = len(fragment) - len(fragment.translate(None, _NON_ASCII_BYTES))
+    return len(decoded.encode("utf-8", "surrogatepass")) - non_ascii
+
+
+class JsonStructureScanner:
+    """Single-pass, non-recursive structural scan of a streamed JSON body.
+
+    The scanner bounds the work a JSON parser would do without building any
+    value. Feed body chunks in order, then call :meth:`finish`. The first
+    violation raises :class:`JsonStructureLimitError` and every later call
+    raises it again. Budgets follow :class:`OperationalLimits`:
+
+    * ``max_json_depth`` bounds container nesting; ``[]`` has depth one and
+      scalars add no depth.
+    * ``max_json_nodes`` bounds JSON values: every object, array, string,
+      number, ``true``, ``false`` and ``null`` (including the root) counts
+      once. Object keys are not values.
+    * ``max_json_string_bytes`` bounds the decoded UTF-8 length of the longest
+      single string or object key, with escapes such as ``\\u00e9`` measured
+      after decoding. ``cumulative_strings=True`` bounds the total of all
+      strings instead.
+
+    UTF-16 and UTF-32 bodies are transcoded first, matching the encodings
+    ``json.loads`` accepts for bytes. Input the JSON grammar cannot accept,
+    such as an invalid escape, halts the scan without raising so the parser
+    reports its own syntax error; :attr:`is_complete` is then false.
+    """
+
+    def __init__(
+        self,
+        limits: OperationalLimits | None = None,
+        *,
+        cumulative_strings: bool = False,
+    ) -> None:
+        """Create a scanner.
+
+        Args:
+            limits: Structural budgets; defaults to ``OperationalLimits()``.
+            cumulative_strings: Bound the total of all string bytes instead of
+                the longest single string.
+        """
+
+        self._limits = limits or OperationalLimits()
+        self._cumulative_strings = cumulative_strings
+        self._token_budget = (
+            _TOKENS_PER_NODE * self._limits.max_json_nodes + _TOKEN_SLACK
+        )
+        self._tokens = 0
+        self._prefix = b""
+        self._encoding_known = False
+        self._decoder: codecs.IncrementalDecoder | None = None
+        self._carry = b""
+        self._stack: list[int] = []
+        self._expect_key = False
+        self._awaiting_colon = False
+        self._in_string = False
+        self._in_scalar = False
+        self._string_bytes = 0
+        self._total_string_bytes = 0
+        self._longest_string_bytes = 0
+        self._nodes = 0
+        self._max_depth = 0
+        self._underflow = False
+        self._halted = False
+        self._finished = False
+        self._violation: tuple[JsonStructureCategory, int] | None = None
+
+    @property
+    def node_count(self) -> int:
+        """Number of JSON values seen so far."""
+
+        return self._nodes
+
+    @property
+    def max_depth(self) -> int:
+        """Deepest container nesting seen so far."""
+
+        return self._max_depth
+
+    @property
+    def longest_string_bytes(self) -> int:
+        """Decoded UTF-8 length of the longest string or key seen so far."""
+
+        return self._longest_string_bytes
+
+    @property
+    def is_complete(self) -> bool:
+        """Whether a finished scan saw balanced, fully terminated structure."""
+
+        return (
+            self._finished
+            and self._violation is None
+            and not self._halted
+            and not self._underflow
+            and not self._stack
+            and not self._in_string
+            and not self._carry
+        )
+
+    def feed(self, chunk: bytes) -> None:
+        """Scan the next body chunk.
+
+        Args:
+            chunk: The next bytes of the body, in arrival order.
+
+        Raises:
+            JsonStructureLimitError: A structural budget is exceeded.
+            ValueError: The scan was already finished.
+        """
+
+        self._raise_recorded_violation()
+        if self._finished:
+            raise ValueError("JSON structure scan is already finished")
+        if chunk and not self._halted:
+            self._guarded(bytes(chunk), final=False)
+
+    def finish(self) -> None:
+        """Flush buffered bytes after the last chunk.
+
+        Raises:
+            JsonStructureLimitError: A structural budget is exceeded.
+        """
+
+        self._raise_recorded_violation()
+        if self._finished:
+            return
+        self._finished = True
+        if not self._halted:
+            self._guarded(b"", final=True)
+
+    def _raise_recorded_violation(self) -> None:
+        if self._violation is not None:
+            raise JsonStructureLimitError(*self._violation)
+
+    def _guarded(self, data: bytes, *, final: bool) -> None:
+        try:
+            self._feed_bytes(data, final=final)
+        except JsonStructureLimitError as error:
+            self._violation = (error.category, error.ceiling)
+            raise
+
+    def _feed_bytes(self, data: bytes, *, final: bool) -> None:
+        if not self._encoding_known:
+            data = self._prefix + data
+            if len(data) < 4 and not final:
+                self._prefix = data
+                return
+            self._prefix = b""
+            self._encoding_known = True
+            encoding = json.detect_encoding(data)
+            if encoding == "utf-8-sig":
+                data = data[len(codecs.BOM_UTF8) :]
+            elif encoding != "utf-8":
+                self._decoder = codecs.getincrementaldecoder(encoding)("surrogatepass")
+        if self._decoder is not None:
+            try:
+                text = self._decoder.decode(data, final)
+            except UnicodeDecodeError:
+                self._halted = True
+                return
+            data = text.encode("utf-8", "surrogatepass")
+        self._scan(data, final=final)
+
+    def _scan(self, data: bytes, *, final: bool) -> None:
+        if self._carry:
+            data = self._carry + data
+            self._carry = b""
+        end = len(data)
+        position = 0
+        # Hot-loop state lives in locals and is written back on every exit.
+        stack = self._stack
+        nodes = self._nodes
+        tokens = self._tokens
+        expect_key = self._expect_key
+        awaiting_colon = self._awaiting_colon
+        in_scalar = self._in_scalar
+        max_nodes = self._limits.max_json_nodes
+        token_budget = self._token_budget
+        match_token = _TOKEN.match
+        try:
+            while position < end:
+                if self._in_string:
+                    position = self._scan_string(data, position, end, final=final)
+                    if self._halted:
+                        return
+                    continue
+                match = match_token(data, position)
+                separators_end = match.end(1)
+                kind = match.lastindex
+                if separators_end > position:
+                    in_scalar = False
+                    if (
+                        stack
+                        and stack[-1] == _OPEN_OBJECT
+                        and data.find(b",", position, separators_end) != -1
+                    ):
+                        expect_key = True
+                    if awaiting_colon:
+                        awaiting_colon = data.find(b":", position, separators_end) == -1
+                position = match.end()
+                if kind == 1:
+                    continue
+                if kind == 7 and in_scalar:
+                    # The rest of a number or literal split across chunks.
+                    in_scalar = position == end
+                    continue
+                tokens += 1
+                if tokens > token_budget or awaiting_colon:
+                    if awaiting_colon:
+                        # A key without a colon; every JSON parser stops here.
+                        self._halted = True
+                        return
+                    self._exceeded(JsonStructureCategory.NODES)
+                in_scalar = False
+                if match.start(2) >= 0:
+                    # ``"key":`` matched as one token, so the key needs no colon.
+                    if not (expect_key and stack and stack[-1] == _OPEN_OBJECT):
+                        self._halted = True
+                        return
+                    expect_key = False
+                    self._observe_string(match.end(2) - match.start(2))
+                    if kind == 6 or (kind == 2 and position < end):
+                        # A close or separator where the key's value belongs.
+                        self._halted = True
+                        return
+                    if kind == 2:
+                        continue
+                if kind == 3 or kind == 4:
+                    if expect_key and stack and stack[-1] == _OPEN_OBJECT:
+                        expect_key = False
+                        awaiting_colon = True
+                    else:
+                        nodes += 1
+                        if nodes > max_nodes:
+                            self._exceeded(JsonStructureCategory.NODES)
+                    if kind == 3:
+                        self._observe_string(match.end(3) - match.start(3))
+                    else:
+                        self._string_bytes = 0
+                        self._in_string = True
+                elif kind == 5:
+                    nodes += 1
+                    if nodes > max_nodes:
+                        self._exceeded(JsonStructureCategory.NODES)
+                    opened = data[position - 1]
+                    stack.append(opened)
+                    if len(stack) > self._max_depth:
+                        self._max_depth = len(stack)
+                        if len(stack) > self._limits.max_json_depth:
+                            self._exceeded(JsonStructureCategory.DEPTH)
+                    expect_key = opened == _OPEN_OBJECT
+                elif kind == 6:
+                    closed = position - match.start(6)
+                    if closed > len(stack):
+                        # An unmatched close; every JSON parser stops here too.
+                        self._underflow = True
+                        self._halted = True
+                        return
+                    del stack[len(stack) - closed :]
+                    expect_key = False
+                else:
+                    nodes += 1
+                    if nodes > max_nodes:
+                        self._exceeded(JsonStructureCategory.NODES)
+                    in_scalar = position == end
+        finally:
+            self._nodes = nodes
+            self._tokens = tokens
+            self._expect_key = expect_key
+            self._awaiting_colon = awaiting_colon
+            self._in_scalar = in_scalar
+
+    def _scan_string(self, data: bytes, position: int, end: int, *, final: bool) -> int:
+        window_end = min(end, position + _STRING_WINDOW_BYTES)
+        stop = _STRING_CONTENT.match(data, position, window_end).end()
+        if stop > position:
+            self._add_string_bytes(_decoded_utf8_width(data[position:stop]))
+        if stop < end and data[stop] == _QUOTE:
+            self._in_string = False
+            return stop + 1
+        if stop > position or stop == end:
+            return stop
+        # A backslash that could not be matched: either an escape cut by the
+        # end of this chunk, or an escape the JSON grammar rejects.
+        if not final and end - stop < _MAX_ESCAPE_BYTES:
+            self._carry = data[stop:end]
+            return end
+        self._halted = True
+        return end
+
+    def _observe_string(self, width: int) -> None:
+        self._string_bytes = 0
+        self._add_string_bytes(width)
+
+    def _add_string_bytes(self, width: int) -> None:
+        self._string_bytes += width
+        self._total_string_bytes += width
+        if self._string_bytes > self._longest_string_bytes:
+            self._longest_string_bytes = self._string_bytes
+        observed = (
+            self._total_string_bytes if self._cumulative_strings else self._string_bytes
+        )
+        if observed > self._limits.max_json_string_bytes:
+            self._exceeded(JsonStructureCategory.STRING_BYTES)
+
+    def _exceeded(self, category: JsonStructureCategory) -> None:
+        ceilings = {
+            JsonStructureCategory.DEPTH: self._limits.max_json_depth,
+            JsonStructureCategory.NODES: self._limits.max_json_nodes,
+            JsonStructureCategory.STRING_BYTES: self._limits.max_json_string_bytes,
+        }
+        raise JsonStructureLimitError(category, ceilings[category])
 
 
 def inspect_zip_payload(
@@ -362,6 +729,10 @@ def _zip_member_kind(info: zipfile.ZipInfo) -> str:
 
 __all__ = [
     "ArchiveLimitDecision",
+    "JSON_STRUCTURE_EXCEEDED",
+    "JsonStructureCategory",
+    "JsonStructureLimitError",
+    "JsonStructureScanner",
     "LimitDecision",
     "LimitState",
     "OPERATIONAL_LIMIT_COMPATIBILITY",

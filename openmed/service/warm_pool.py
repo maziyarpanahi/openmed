@@ -11,6 +11,7 @@ from typing import Any, Optional, Tuple
 
 from openmed.utils.validation import validate_model_name
 
+from .drain import ServiceShuttingDownError
 from .keep_alive import parse_keep_alive
 
 DEFAULT_WARM_PIPELINE_TASK = "token-classification"
@@ -150,6 +151,13 @@ class WarmPoolBackpressureError(RuntimeError):
         )
 
 
+class WarmPoolClosedError(ServiceShuttingDownError):
+    """Raised when a model activation or cold load is attempted after close."""
+
+    def __init__(self) -> None:
+        super().__init__("Model warm pool is closed for shutdown")
+
+
 @dataclass
 class WarmPoolEntry:
     """Resident model bookkeeping tracked by :class:`WarmPool`."""
@@ -198,6 +206,7 @@ class WarmPool:
     _entries: dict[str, WarmPoolEntry] = field(default_factory=dict, repr=False)
     _timers: dict[str, threading.Timer] = field(default_factory=dict, repr=False)
     _local: threading.local = field(default_factory=threading.local, repr=False)
+    _closed: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.max_resident_models = parse_max_resident_models(self.max_resident_models)
@@ -232,6 +241,8 @@ class WarmPool:
         """Mark a model as active for one service request."""
         model_key = self.resolve_model_name(model_name)
         with self._lock:
+            if self._closed:
+                raise WarmPoolClosedError()
             now = self.clock()
             self._drop_expired_locked(now)
             entry = self._entry_for_model_locked(model_key, now)
@@ -274,6 +285,14 @@ class WarmPool:
         entry.active_requests = max(entry.active_requests - 1, 0)
         entry.last_used = now
         if entry.active_requests:
+            return
+
+        if self._closed:
+            # The last reference of a drained generation releases its model.
+            if entry.resident:
+                self._unload_entry_locked(model_key)
+            else:
+                self._entries.pop(model_key, None)
             return
 
         if keep_alive_seconds is None:
@@ -374,6 +393,16 @@ class WarmPool:
         reserved_bytes = 0
         while True:
             with self._lock:
+                if self._closed:
+                    cached = self._entries.get(model_key)
+                    if not (
+                        reuse_cached
+                        and cached is not None
+                        and cache_key in cached.handles
+                    ):
+                        # Never cold-load after release; stragglers may only
+                        # reuse handles they already share.
+                        raise WarmPoolClosedError()
                 now = self.clock()
                 self._drop_expired_locked(now)
                 entry = self._entry_for_model_locked(model_key, now)
@@ -579,6 +608,37 @@ class WarmPool:
                 "released": released,
                 "active_models": active_models,
             }
+
+    @property
+    def closed(self) -> bool:
+        """Return whether the pool was closed for shutdown."""
+        return self._closed
+
+    def close(self) -> dict[str, int]:
+        """Fence new model activations and release every inactive model.
+
+        Requests that are still active keep the handles they hold; when the
+        last one finishes, its model is unloaded instead of being kept warm.
+
+        Returns:
+            Value-free counts of released components and retained references.
+        """
+        with self._lock:
+            self._closed = True
+            for model_name in list(self._timers):
+                self._cancel_timer_locked(model_name)
+        result = self.unload_all_models()
+        released = result.get("released", {})
+        return {
+            "released_models": int(released.get("models", 0)),
+            "released_pipelines": int(released.get("pipelines", 0)),
+            "active_requests": self.active_request_count(),
+        }
+
+    def active_request_count(self) -> int:
+        """Return active model references across every entry."""
+        with self._lock:
+            return sum(entry.active_requests for entry in self._entries.values())
 
     def drop_expired(self) -> list[str]:
         """Drop idle entries whose keep-alive deadlines have expired."""
