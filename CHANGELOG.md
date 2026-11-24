@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve OpenAI tool-call names and IDs while redacting JSON-encoded
+  `function.arguments` string leaves and restoring non-streaming response
+  arguments without breaking JSON. Invalid arguments fail closed with
+  `tool_arguments_invalid` (#5121).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer
