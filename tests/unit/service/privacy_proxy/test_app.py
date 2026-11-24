@@ -13,6 +13,7 @@ from openmed.service.privacy_proxy.app import create_app
 
 SYNTHETIC_NAME = "Avery Example"
 SYNTHETIC_PHONE = "555-0100"
+QUOTED_NAME = 'Avery "Ace" Example'
 
 
 def _entity(text: str, value: str, label: str) -> dict[str, Any]:
@@ -27,6 +28,8 @@ def _entity(text: str, value: str, label: str) -> dict[str, Any]:
 
 def _extractor(text: str, **_: Any) -> list[dict[str, Any]]:
     entities: list[dict[str, Any]] = []
+    if QUOTED_NAME in text:
+        entities.append(_entity(text, QUOTED_NAME, "NAME"))
     if SYNTHETIC_NAME in text:
         entities.append(_entity(text, SYNTHETIC_NAME, "NAME"))
     if SYNTHETIC_PHONE in text:
@@ -43,6 +46,42 @@ def _client(transport: Any) -> TestClient:
         ),
         base_url="http://127.0.0.1",
     )
+
+
+def _tool_call_request(arguments: Any) -> dict[str, Any]:
+    return {
+        "model": "local-fixture",
+        "messages": [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": SYNTHETIC_NAME,
+                        "type": "function",
+                        "function": {
+                            "name": SYNTHETIC_PHONE,
+                            "arguments": arguments,
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": SYNTHETIC_PHONE,
+                "content": "tool result",
+            },
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": SYNTHETIC_PHONE,
+                    "parameters": {"type": "object"},
+                },
+            }
+        ],
+    }
 
 
 def test_chat_completion_redacts_payload_before_transport_and_restores_response():
@@ -79,6 +118,186 @@ def test_chat_completion_redacts_payload_before_transport_and_restores_response(
     assert SYNTHETIC_NAME not in forwarded
     assert SYNTHETIC_PHONE not in forwarded
     assert "OPENMED_PHI" in forwarded
+
+
+def test_tool_call_arguments_are_redacted_as_json_with_identifiers_intact():
+    seen_payloads: list[dict[str, Any]] = []
+    original_arguments = {
+        "name": QUOTED_NAME,
+        "phone": SYNTHETIC_PHONE,
+        "type": SYNTHETIC_NAME,
+        "nested": {"contact": SYNTHETIC_NAME},
+    }
+
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        seen_payloads.append(payload)
+        tool_call = payload["messages"][0]["tool_calls"][0]
+        return {
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tool_call["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call["function"]["name"],
+                                    "arguments": tool_call["function"]["arguments"],
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ]
+        }
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json=_tool_call_request(json.dumps(original_arguments)),
+        )
+
+    assert response.status_code == 200
+    forwarded = seen_payloads[0]
+    forwarded_call = forwarded["messages"][0]["tool_calls"][0]
+    forwarded_arguments_text = forwarded_call["function"]["arguments"]
+    forwarded_arguments = json.loads(forwarded_arguments_text)
+
+    assert forwarded_call["id"] == SYNTHETIC_NAME
+    assert forwarded_call["function"]["name"] == SYNTHETIC_PHONE
+    assert forwarded["messages"][1]["tool_call_id"] == SYNTHETIC_PHONE
+    assert forwarded["tools"][0]["function"]["name"] == SYNTHETIC_PHONE
+    assert forwarded_arguments.keys() == original_arguments.keys()
+    assert forwarded_arguments["name"] != QUOTED_NAME
+    assert forwarded_arguments["phone"] != SYNTHETIC_PHONE
+    assert forwarded_arguments["type"] != SYNTHETIC_NAME
+    assert forwarded_arguments["nested"]["contact"] != SYNTHETIC_NAME
+    assert "OPENMED_PHI" in forwarded_arguments_text
+    assert QUOTED_NAME not in forwarded_arguments_text
+    assert SYNTHETIC_PHONE not in forwarded_arguments_text
+
+    restored_call = response.json()["choices"][0]["message"]["tool_calls"][0]
+    assert restored_call["id"] == SYNTHETIC_NAME
+    assert restored_call["function"]["name"] == SYNTHETIC_PHONE
+    assert json.loads(restored_call["function"]["arguments"]) == original_arguments
+
+
+def test_legacy_function_call_preserves_name_and_redacts_json_arguments():
+    seen_payloads: list[dict[str, Any]] = []
+    original_arguments = {"patient": SYNTHETIC_NAME, "phone": SYNTHETIC_PHONE}
+
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        seen_payloads.append(payload)
+        function_call = payload["messages"][0]["function_call"]
+        return {
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "function_call": function_call,
+                    },
+                    "finish_reason": "function_call",
+                }
+            ]
+        }
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "function_call": {
+                            "name": SYNTHETIC_PHONE,
+                            "arguments": json.dumps(original_arguments),
+                        },
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    forwarded_call = seen_payloads[0]["messages"][0]["function_call"]
+    assert forwarded_call["name"] == SYNTHETIC_PHONE
+    assert SYNTHETIC_NAME not in forwarded_call["arguments"]
+    assert SYNTHETIC_PHONE not in forwarded_call["arguments"]
+
+    restored_call = response.json()["choices"][0]["message"]["function_call"]
+    assert restored_call["name"] == SYNTHETIC_PHONE
+    assert json.loads(restored_call["arguments"]) == original_arguments
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        f'{{"patient": "{SYNTHETIC_NAME}"',
+        {"patient": SYNTHETIC_NAME},
+    ],
+    ids=["malformed-json", "not-encoded-json"],
+)
+def test_tool_call_arguments_must_be_json(arguments: Any):
+    def transport(*_args: Any, **_kwargs: Any) -> str:
+        pytest.fail("Invalid tool arguments reached the transport")
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json=_tool_call_request(arguments),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["details"]["reason"] == "tool_arguments_invalid"
+    assert SYNTHETIC_NAME not in response.text
+    assert SYNTHETIC_PHONE not in response.text
+    assert "patient" not in response.text
+
+
+def test_non_json_tool_arguments_in_response_fail_closed():
+    invalid_response_arguments = f'{{"patient": "{SYNTHETIC_NAME}"'
+
+    def transport(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {
+                                    "name": "lookup",
+                                    "arguments": invalid_response_arguments,
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ]
+        }
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json=_tool_call_request("{}"),
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["details"]["reason"] == "tool_arguments_invalid"
+    assert SYNTHETIC_NAME not in response.text
+    assert "patient" not in response.text
 
 
 def test_chat_completion_rejects_duplicated_response_placeholders():
