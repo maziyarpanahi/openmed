@@ -1,0 +1,287 @@
+{
+  "box_coordinate_system": "half-open pixels [x0, y0, x1, y1] in the RGB raster",
+  "description": "Synthetic photo-style label-reading and counting fixtures. Every label text and code is invented.",
+  "items": [
+    {
+      "answer": "LOT 2718",
+      "box": [
+        32,
+        60,
+        224,
+        104
+      ],
+      "id": "label_lot_2718",
+      "image": "label_lot_2718.png",
+      "kind": "label_reading",
+      "question": "What code is printed on the label?",
+      "sha256": "86d09339ef4f15b7127df5b40def461a30ea46a05242d8ce062d4922c246c93f"
+    },
+    {
+      "answer": "LOT 4409",
+      "box": [
+        32,
+        60,
+        224,
+        104
+      ],
+      "id": "label_lot_4409",
+      "image": "label_lot_4409.png",
+      "kind": "label_reading",
+      "question": "Read the printed code.",
+      "sha256": "125fb8d0475073786325e04274b07fff8b46cf9b0d8a59d598e03e03ac3e5c27"
+    },
+    {
+      "answer": "KIT 7B2",
+      "box": [
+        32,
+        60,
+        200,
+        104
+      ],
+      "id": "label_kit_7b2",
+      "image": "label_kit_7b2.png",
+      "kind": "label_reading",
+      "question": "What label text is visible?",
+      "sha256": "83cc81194f1368295c5f393f07dec8c3ed84d5b607db3c6111c9a5dfacd3bcf4"
+    },
+    {
+      "answer": "DOSE 05",
+      "box": [
+        32,
+        60,
+        200,
+        104
+      ],
+      "id": "label_dose_05",
+      "image": "label_dose_05.png",
+      "kind": "label_reading",
+      "question": "What dose text is printed?",
+      "sha256": "3307c351f0cc8e0837849a20303d39e1d1d5562665d11a85dded27560b28fe4c"
+    },
+    {
+      "answer": "DOSE 12",
+      "box": [
+        32,
+        60,
+        200,
+        104
+      ],
+      "id": "label_dose_12",
+      "image": "label_dose_12.png",
+      "kind": "label_reading",
+      "question": "Read the dose shown on the label.",
+      "sha256": "6833173f592da780a8a321531b47f900f20c1d37e6353fb23df73623ad7e0e7f"
+    },
+    {
+      "answer": "REF 83C",
+      "box": [
+        32,
+        60,
+        200,
+        104
+      ],
+      "id": "label_ref_83c",
+      "image": "label_ref_83c.png",
+      "kind": "label_reading",
+      "question": "What reference code is visible?",
+      "sha256": "4d913188c381496fd65afe3037ee87209b1ea30702cebd70b63bec3c58b32005"
+    },
+    {
+      "answer": "SET 44",
+      "box": [
+        32,
+        60,
+        176,
+        104
+      ],
+      "id": "label_set_44",
+      "image": "label_set_44.png",
+      "kind": "label_reading",
+      "question": "What set code is printed?",
+      "sha256": "214f2be42b246f8b72c21ba6899559322a21e7b3fe42ebac70a177feae8cd9d2"
+    },
+    {
+      "answer": "UNIT B12",
+      "box": [
+        32,
+        60,
+        224,
+        104
+      ],
+      "id": "label_unit_b12",
+      "image": "label_unit_b12.png",
+      "kind": "label_reading",
+      "question": "What unit code is visible?",
+      "sha256": "071ff4ffd3fd11d3d44bddbdae1325d917357fed441429c754b54b9bb9744f7b"
+    },
+    {
+      "answer": "CODE QX9",
+      "box": [
+        32,
+        60,
+        224,
+        104
+      ],
+      "id": "label_code_qx9",
+      "image": "label_code_qx9.png",
+      "kind": "label_reading",
+      "question": "Read the code on this label.",
+      "sha256": "e7f392bc20084650bf0304e3b63a950f53d98e0eb2219bd41bf2edbb23afaedf"
+    },
+    {
+      "answer": "LOT A17F",
+      "box": [
+        32,
+        60,
+        224,
+        104
+      ],
+      "id": "label_lot_a17f",
+      "image": "label_lot_a17f.png",
+      "kind": "label_reading",
+      "question": "What lot text is printed?",
+      "sha256": "0066be10c082ec73ebc825a7cca0cd6c252931241093feabb481429ea69fdb57"
+    },
+    {
+      "answer": "1",
+      "box": [
+        100,
+        30,
+        141,
+        71
+      ],
+      "id": "count_red_circles_1",
+      "image": "count_red_circles_1.png",
+      "kind": "counting",
+      "question": "How many red circles are visible?",
+      "sha256": "fb4b2cb797e9fb8ddfa286f23c4f37a138d386b10ecdc1d9d9cd09a6c8d13cb3"
+    },
+    {
+      "answer": "2",
+      "box": [
+        100,
+        30,
+        213,
+        121
+      ],
+      "id": "count_red_circles_2",
+      "image": "count_red_circles_2.png",
+      "kind": "counting",
+      "question": "How many red circles are visible?",
+      "sha256": "89bf375019251fe10c4f63544493ed1202a1d9530ea44b0a45c7f374ba69417e"
+    },
+    {
+      "answer": "3",
+      "box": [
+        28,
+        30,
+        213,
+        171
+      ],
+      "id": "count_red_circles_3",
+      "image": "count_red_circles_3.png",
+      "kind": "counting",
+      "question": "How many red circles are visible?",
+      "sha256": "97bbb3f931147366660fd7283b9cbbc5c56738e598552c08ecf5efc8675eef4d"
+    },
+    {
+      "answer": "4",
+      "box": [
+        28,
+        30,
+        285,
+        171
+      ],
+      "id": "count_red_circles_4",
+      "image": "count_red_circles_4.png",
+      "kind": "counting",
+      "question": "How many red circles are visible?",
+      "sha256": "ec65f1ee15a97193197caef066ada32e0afb637d045b9e5a0dad2b324bdd4055"
+    },
+    {
+      "answer": "1",
+      "box": [
+        100,
+        30,
+        141,
+        71
+      ],
+      "id": "count_blue_squares_1",
+      "image": "count_blue_squares_1.png",
+      "kind": "counting",
+      "question": "How many blue squares are visible?",
+      "sha256": "71bcde4a824c2cbe55bf93c1cf5e413f2894f45e8cf9f798c4c996e81c777081"
+    },
+    {
+      "answer": "2",
+      "box": [
+        100,
+        30,
+        213,
+        121
+      ],
+      "id": "count_blue_squares_2",
+      "image": "count_blue_squares_2.png",
+      "kind": "counting",
+      "question": "How many blue squares are visible?",
+      "sha256": "6ec031f130d8520eab17076b96cf3cc179853ec63c3392565822c4ef6ed56745"
+    },
+    {
+      "answer": "3",
+      "box": [
+        28,
+        30,
+        213,
+        171
+      ],
+      "id": "count_blue_squares_3",
+      "image": "count_blue_squares_3.png",
+      "kind": "counting",
+      "question": "How many blue squares are visible?",
+      "sha256": "29517bab6d4bff89eace890d7c2ea8770a131aaece8b7a168e0c9bd99868214d"
+    },
+    {
+      "answer": "2",
+      "box": [
+        100,
+        30,
+        213,
+        121
+      ],
+      "id": "count_green_triangles_2",
+      "image": "count_green_triangles_2.png",
+      "kind": "counting",
+      "question": "How many green triangles are visible?",
+      "sha256": "c83fdfafcad8e2d7480b6d5ddc2b94d57b9e46c9df4c1f736b0cbadd7b3f1d70"
+    },
+    {
+      "answer": "3",
+      "box": [
+        28,
+        30,
+        213,
+        171
+      ],
+      "id": "count_green_triangles_3",
+      "image": "count_green_triangles_3.png",
+      "kind": "counting",
+      "question": "How many green triangles are visible?",
+      "sha256": "8c3ed5a2754a45f3e0de8734570ecd79fcd39691da1ade94fbe4f00c6b12be6f"
+    },
+    {
+      "answer": "2",
+      "box": [
+        100,
+        30,
+        213,
+        121
+      ],
+      "id": "count_red_squares_2",
+      "image": "count_red_squares_2.png",
+      "kind": "counting",
+      "question": "How many red squares are visible?",
+      "sha256": "ff1acc9919af131681e6c86a5ea6de962156ee6091886219fd3e38947fdfdb77"
+    }
+  ],
+  "schema_version": "openmed.photo_qa_fixtures.v1"
+}
