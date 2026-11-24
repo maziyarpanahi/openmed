@@ -1,0 +1,235 @@
+{
+  "$id": "https://openmed.dev/schemas/v5/vision/vlm-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed edge-VLM result metadata",
+  "description": "Closed metadata-only payload emitted by VLMResult.to_json for a protected draft or an inference-stage abstention. Protected image bytes, prompts and generated text are never present.",
+  "schema_version": 1,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "confidence": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "box",
+        "confidence",
+        "end",
+        "image_digest",
+        "start"
+      ],
+      "properties": {
+        "box": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 0, "maximum": 65536},
+            {"type": "integer", "minimum": 0, "maximum": 65536},
+            {"type": "integer", "minimum": 0, "maximum": 65536},
+            {"type": "integer", "minimum": 0, "maximum": 65536}
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "image_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        }
+      }
+    },
+    "abstention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "schema_version",
+        "stage"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "capture_interrupted",
+            "consent_withdrawn",
+            "language_uncertain",
+            "language_unsupported",
+            "low_quality",
+            "phi_uncertainty",
+            "policy_refused",
+            "provider_unavailable",
+            "resource_limit",
+            "speaker_uncertainty",
+            "temporal_instability"
+          ]
+        },
+        "schema_version": {
+          "enum": [1, 2]
+        },
+        "stage": {
+          "const": "inference"
+        }
+      }
+    },
+    "common": {
+      "type": "object",
+      "required": [
+        "backend",
+        "deterministic",
+        "duration_ms",
+        "local_only",
+        "model_digest",
+        "notice",
+        "preprocessing_digest",
+        "request_digest",
+        "requires_network",
+        "review_required",
+        "schema_version"
+      ],
+      "properties": {
+        "backend": {
+          "enum": ["coreml", "mlx", "onnx", "synthetic", "torch"]
+        },
+        "deterministic": {
+          "const": true
+        },
+        "duration_ms": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "local_only": {
+          "const": true
+        },
+        "model_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "notice": {
+          "const": "Non-diagnostic model output. Explicit human review is required; do not use this output to trigger clinical decisions automatically."
+        },
+        "preprocessing_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "request_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requires_network": {
+          "const": false
+        },
+        "review_required": {
+          "const": true
+        },
+        "schema_version": {
+          "const": "openmed.vision.provider.v1"
+        }
+      }
+    },
+    "draft": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/common"
+        },
+        {
+          "type": "object",
+          "required": [
+            "abstention",
+            "confidence",
+            "evidence",
+            "output_digest",
+            "output_tokens"
+          ],
+          "properties": {
+            "abstention": {
+              "type": "null"
+            },
+            "confidence": {
+              "$ref": "#/$defs/confidence"
+            },
+            "evidence": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/evidence"
+              }
+            },
+            "output_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "abstained": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/common"
+        },
+        {
+          "type": "object",
+          "required": [
+            "abstention",
+            "confidence",
+            "evidence",
+            "output_digest",
+            "output_tokens"
+          ],
+          "properties": {
+            "abstention": {
+              "$ref": "#/$defs/abstention"
+            },
+            "confidence": {
+              "type": "null"
+            },
+            "evidence": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "output_digest": {
+              "type": "null"
+            },
+            "output_tokens": {
+              "const": 0
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/draft"
+    },
+    {
+      "$ref": "#/$defs/abstained"
+    }
+  ]
+}
