@@ -476,8 +476,14 @@ def _reproducible_zip_info(path: str) -> zipfile.ZipInfo:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source_directory", type=Path)
-    parser.add_argument("output_path", type=Path)
+    parser.add_argument("source_directory", type=Path, nargs="?")
+    parser.add_argument("output_path", type=Path, nargs="?")
+    parser.add_argument(
+        "--validate",
+        type=Path,
+        metavar="BUNDLE",
+        help="validate an existing bundle instead of building one",
+    )
     parser.add_argument(
         "--runtime",
         choices=sorted(MAPLE_BUNDLE_RUNTIMES),
@@ -489,10 +495,41 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Build one Maple bundle from command-line arguments."""
+def _manifest_digest(manifest: Mapping[str, Any]) -> str:
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
-    arguments = _build_parser().parse_args(argv)
+
+def _validate_bundle_cli(bundle_path: Path) -> int:
+    try:
+        result = validate_maple_onnx_bundle(bundle_path)
+    except FileNotFoundError:
+        payload = {"status": "invalid", "error_code": "bundle_not_found"}
+    except Exception:
+        payload = {"status": "invalid", "error_code": "invalid_bundle"}
+    else:
+        payload = {
+            "status": "valid",
+            "runtime": result.manifest["runtime"],
+            "file_count": len(result.manifest["files"]),
+            "total_bytes": result.total_size_bytes,
+            "manifest_digest": _manifest_digest(result.manifest),
+        }
+    print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    return 0 if payload["status"] == "valid" else 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Build or validate a Maple bundle from command-line arguments."""
+
+    parser = _build_parser()
+    arguments = parser.parse_args(argv)
+    if arguments.validate is not None:
+        if arguments.source_directory is not None or arguments.output_path is not None:
+            parser.error("--validate cannot be combined with build arguments")
+        return _validate_bundle_cli(arguments.validate)
+    if arguments.source_directory is None or arguments.output_path is None:
+        parser.error("source_directory and output_path are required when building")
     result = build_maple_onnx_bundle(
         arguments.source_directory,
         arguments.output_path,
