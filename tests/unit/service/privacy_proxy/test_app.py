@@ -241,8 +241,9 @@ def test_legacy_function_call_preserves_name_and_redacts_json_arguments():
     [
         f'{{"patient": "{SYNTHETIC_NAME}"',
         {"patient": SYNTHETIC_NAME},
+        '{"patient": NaN}',
     ],
-    ids=["malformed-json", "not-encoded-json"],
+    ids=["malformed-json", "not-encoded-json", "non-standard-json"],
 )
 def test_tool_call_arguments_must_be_json(arguments: Any):
     def transport(*_args: Any, **_kwargs: Any) -> str:
