@@ -681,6 +681,7 @@ nav:
       - Snowflake Python De-identification UDFs: snowflake-udf.md
       - Prefect Batch De-identification: prefect-integration.md
       - Airflow Redaction Operator: integrations/airflow.md
+      - medspaCy ConText Adapter: integrations/medspacy.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md

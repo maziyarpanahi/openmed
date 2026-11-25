@@ -687,6 +687,16 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="Local structured-event redaction before log emission.",
     ),
     _capability(
+        "medspacy_context",
+        "medspaCy ConText adapter",
+        "openmed.interop.medspacy_context",
+        extra="medspacy",
+        dependencies=("medspacy>=1.3.1,<2",),
+        documentation=("docs/integrations/medspacy.md",),
+        tests=("tests/unit/interop/test_medspacy_context_adapter.py",),
+        description="Exact-offset assertion context for existing OpenMed spans.",
+    ),
+    _capability(
         "omop",
         "OMOP/CDM",
         "openmed.interop.omop.cdm_loader",

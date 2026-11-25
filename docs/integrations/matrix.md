@@ -57,6 +57,7 @@ constraints, and PHI-free descriptions.
 | `langgraph` | LangGraph | `langgraph>=0.2,<2` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_graph_orchestration.py` | [Feature Map](../feature-map.md) |
 | `llamaindex` | LlamaIndex | `llama-index-core>=0.10,<1` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_llamaindex_redaction.py` | [LlamaIndex Redaction Transform](llamaindex.md) |
 | `log_redactor` | Structured log redaction | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/integrations/test_log_redactor.py` | [Feature Map](../feature-map.md) |
+| `medspacy_context` | medspaCy ConText adapter | `medspacy>=1.3.1,<2` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_medspacy_context_adapter.py` | [medspaCy ConText Adapter](medspacy.md) |
 | `omop` | OMOP/CDM | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_omop_cdm_loader.py` | [Feature Map](../feature-map.md) |
 | `openmrs` | OpenMRS REST and FHIR2 | `httpx>=0.27` | `configured-network` | `offline-unit` (1 test file) | `tests/unit/interop/test_openmrs_adapter.py` | [OpenMRS Adapter](../openmrs-adapter.md) |
 | `pandas` | pandas DataFrame | `pandas>=2.0` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_dataframe_accessor.py` | [Feature Map](../feature-map.md) |
