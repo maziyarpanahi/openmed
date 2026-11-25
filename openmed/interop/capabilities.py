@@ -781,7 +781,7 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         "openmed.interop.presidio",
         extra="presidio",
         dependencies=("presidio-analyzer>=2.2.354,<3",),
-        documentation=("docs/feature-map.md",),
+        documentation=("docs/integrations/presidio.md",),
         tests=("tests/unit/interop/test_presidio_adapter.py",),
         description="RecognizerResult conversion to canonical OpenMed spans.",
     ),
