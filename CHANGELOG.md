@@ -219,6 +219,13 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
   generated API documents declare `Cache-Control: no-cache`, and headers
   already set, such as on `/graphql`, are never duplicated (#3912).
 
+### Added
+
+- Add an EU evidence index page to the Compliance docs that links the existing
+  DPIA, DPA, GDPR DSAR export, EU AI Act model-card field, and ISO 27701
+  evidence pages, says what each is for and what it is not, and states that it
+  is an index and not legal advice (#5427).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
