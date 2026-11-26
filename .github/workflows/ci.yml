@@ -280,6 +280,10 @@ jobs:
       matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"full","coverage":true},{"os":"windows-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"windows-latest","python-version":"3.12","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"full","coverage":false}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"fast","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"fast","coverage":true},{"os":"windows-latest","python-version":"3.12","tier":"portability","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"portability","coverage":false}]}') }}
 
     steps:
+    - name: Preserve signed asset bytes on Windows
+      if: runner.os == 'Windows'
+      run: git config --global core.autocrlf false
+
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Python ${{ matrix.python-version }}

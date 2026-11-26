@@ -129,7 +129,7 @@ def test_disk_full_after_effect_then_restart_completes_once(tmp_path, monkeypatc
     assert len(sink.applied) == 1
 
 
-def test_interrupted_directory_sync_is_reconciled_from_ledger(tmp_path, monkeypatch):
+def test_interrupted_commit_ack_is_reconciled_from_ledger(tmp_path, monkeypatch):
     coord = build(tmp_path)
     sink = Sink()
     ledger_dir = str(tmp_path / "ledger")
@@ -143,7 +143,19 @@ def test_interrupted_directory_sync_is_reconciled_from_ledger(tmp_path, monkeypa
                 raise OSError(errno.EIO, "synthetic")
         return real_open(path, flags, *args, **kwargs)
 
-    monkeypatch.setattr(f"{LEDGER_MODULE}.open", open_)
+    if os.name == "nt":
+        # Windows publishes the entry with the hard link, without directory fsync.
+        real_link = os.link
+
+        def link_then_interrupt(source, target):
+            real_link(source, target)
+            seen["count"] += 1
+            if seen["count"] == 3:
+                raise OSError(errno.EIO, "synthetic")
+
+        monkeypatch.setattr(f"{LEDGER_MODULE}.link", link_then_interrupt)
+    else:
+        monkeypatch.setattr(f"{LEDGER_MODULE}.open", open_)
 
     receipt = coord.perform(
         OP, request_key=KEY, operation_digest=DIGEST, effect=sink.apply
