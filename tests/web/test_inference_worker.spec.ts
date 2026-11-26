@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { Worker as NodeWorker } from "node:worker_threads";
 
@@ -579,8 +580,19 @@ test("a real worker thread keeps parity, isolates crashes and restarts on recove
   const threads: NodeWorker[] = [];
   const client = createInferenceWorkerClient({
     createWorker: () => {
+      // Worker threads need their own TypeScript hooks on Node versions both
+      // with and without native type stripping. Register before loading the
+      // fixture so extensionless imports use the same resolver as this suite.
+      const require = createRequire(
+        new URL("../../js/openmedkit-web/package.json", import.meta.url),
+      );
+      const hooks = pathToFileURL(require.resolve("tsx/esm/api")).href;
+      const fixture = new URL("./fixtures/inference_worker_thread.ts", import.meta.url).href;
       const thread = new NodeWorker(
-        new URL("./fixtures/inference_worker_thread.ts", import.meta.url),
+        new URL(`data:text/javascript,${encodeURIComponent(
+          `import { register } from ${JSON.stringify(hooks)};\n` +
+          `register();\nawait import(${JSON.stringify(fixture)});`,
+        )}`),
       );
       threads.push(thread);
       return nodeWorkerEndpoint(thread);

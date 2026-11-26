@@ -32,6 +32,7 @@ trap cleanup EXIT
 command -v "$DOCKER_BIN" >/dev/null 2>&1 || die "Docker CLI is required"
 command -v "$K6_BIN" >/dev/null 2>&1 || die "k6 is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
+command -v openssl >/dev/null 2>&1 || die "OpenSSL is required"
 
 if [[ ! "$SERVICE_PORT" =~ ^[0-9]+$ ]] || (( SERVICE_PORT < 1024 || SERVICE_PORT > 65535 )); then
   die "LOADTEST_SERVICE_PORT must be an unprivileged port between 1024 and 65535"
@@ -58,6 +59,14 @@ if [[ "${LOADTEST_SKIP_BUILD-0}" != "1" ]]; then
     "$ROOT_DIR"
 fi
 
+# Scope a fresh credential to this ephemeral service. Only its hash enters the
+# container configuration; the client key is not retained in the SLO report.
+LOADTEST_API_KEY="$(openssl rand -hex 32)"
+service_digest_key="$(openssl rand -hex 32)"
+key_hash="$(printf '%s' "$LOADTEST_API_KEY" | openssl dgst -sha256)"
+key_hash="${key_hash##* }"
+auth_keys="[{\"id\":\"loadtest\",\"key_hash\":\"sha256:$key_hash\",\"scopes\":[\"analyze:write\",\"pii:write\",\"pii:read\"]}]"
+
 container_args=(
   run
   --detach
@@ -65,6 +74,9 @@ container_args=(
   --name "$CONTAINER_NAME"
   --publish "127.0.0.1:${SERVICE_PORT}:8080"
   --env "OPENMED_PROFILE=$SERVICE_PROFILE"
+  --env OPENMED_SERVICE_AUTH_ENABLED=true
+  --env "OPENMED_SERVICE_AUTH_API_KEYS=$auth_keys"
+  --env "OPENMED_SERVICE_DIGEST_KEY=$service_digest_key"
   --env "OPENMED_SERVICE_PRELOAD_MODELS=$PRELOAD_MODELS"
   --env "OPENMED_SERVICE_KEEP_ALIVE=$KEEP_ALIVE"
   --env HF_HOME=/home/nonroot/.cache/huggingface
@@ -101,20 +113,24 @@ if [[ "$WARMUP" == "1" ]]; then
   stream_payload='{"text":"Taylor Reed, born 1981-02-03, visited Example Clinic for a routine follow-up. Call the fictional records desk at 555-0100.","confidence_threshold":0,"chunk_size":128,"window_chars":256,"tokenizer_context_chars":64,"max_entity_chars":128,"include_text":false}'
 
   curl --fail --silent --show-error --max-time 300 \
+    -H "X-API-Key: $LOADTEST_API_KEY" \
     -H 'Content-Type: application/json' \
     --data "{\"text\":\"Taylor Reed, born 1981-02-03, visited Example Clinic for a routine follow-up. Call the fictional records desk at 555-0100.\",\"model_name\":\"disease_detection_superclinical\",\"confidence_threshold\":0}" \
     "$BASE_URL/analyze" >/dev/null
   curl --fail --silent --show-error --max-time 300 \
+    -H "X-API-Key: $LOADTEST_API_KEY" \
     -H 'Content-Type: application/json' \
     --data "$synthetic_payload" \
     "$BASE_URL/pii/deidentify" >/dev/null
   curl --fail --silent --show-error --max-time 300 \
+    -H "X-API-Key: $LOADTEST_API_KEY" \
     -H 'Content-Type: application/json' \
     --data "$stream_payload" \
     "$BASE_URL/pii/extract/stream" >/dev/null
 fi
 
 export BASE_URL
+export LOADTEST_API_KEY
 export LOADTEST_RESULT_FILE="$RESULT_FILE"
 "$K6_BIN" run "$ROOT_DIR/deploy/loadtest/scenario.js"
 

@@ -135,7 +135,7 @@ def stand_in_drill_steps() -> dict[tuple[str, str], drill.DrillStep]:
 
 
 def complete_drill_report(candidate: str = CANDIDATE) -> dict[str, Any]:
-    """Run the drill with TEST-ONLY stand-ins so every phase passes."""
+    """Run the reference drill with a TEST-ONLY candidate binding."""
 
     return drill.run_recovery_drill(
         candidate_commit=candidate,

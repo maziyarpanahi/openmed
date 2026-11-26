@@ -45,7 +45,7 @@ def _load(directory: Path) -> dict:
 
 def _dump(directory: Path, payload: dict) -> None:
     (directory / fixture_tool.SPANS_FILE).write_text(
-        fixture_tool.canonical_json(payload), encoding="utf-8"
+        fixture_tool.canonical_json(payload), encoding="utf-8", newline="\n"
     )
 
 
@@ -131,7 +131,9 @@ def test_changed_digest_fails(fixture_copy: Path) -> None:
     manifest_path = fixture_copy / fixture_tool.MANIFEST_FILE
     manifest = json.loads(manifest_path.read_text("utf-8"))
     manifest["files"][0]["sha256"] = "0" * 64
-    manifest_path.write_text(fixture_tool.canonical_json(manifest), encoding="utf-8")
+    manifest_path.write_text(
+        fixture_tool.canonical_json(manifest), encoding="utf-8", newline="\n"
+    )
 
     with pytest.raises(fixture_tool.FixtureError) as error:
         fixture_tool.check_fixture(fixture_copy)

@@ -463,7 +463,7 @@ def _observation_descriptor(
     flags = os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     if expected is None:
         flags |= os.O_CREAT | os.O_EXCL
-    descriptor = os.open(path, flags, 0o666)
+    descriptor = _open_observation_file(path, flags, 0o666)
     created = expected is None
     opened: os.stat_result | None = None
     succeeded = False
@@ -533,6 +533,42 @@ def _observation_descriptor(
                 except OSError:
                     if succeeded:
                         raise
+
+
+def _open_observation_file(path: Path, flags: int, mode: int = 0o666) -> int:
+    """Create exclusively without following a dangling Windows reparse point."""
+    if os.name != "nt" or not flags & os.O_EXCL:
+        return os.open(path, flags, mode)
+
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+    # CREATE_NEW + OPEN_REPARSE_POINT refuses an existing directory entry,
+    # including a dangling symlink, before its target can be created.
+    handle = create_file(str(path), 0x40000000, 0x00000003, None, 1, 0x00200080, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)
+    except BaseException:
+        close_handle(handle)
+        raise
 
 
 def _observation_cleanup_generation(
