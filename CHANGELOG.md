@@ -42,7 +42,7 @@ The migration guide includes replacement imports, Swift case changes, and Kotlin
 | JavaScript | `npm install openmed@4.0.0` |
 | Swift Package Manager | `.package(url: "https://github.com/maziyarpanahi/openmed.git", from: "4.0.0")` |
 | Android / JitPack | `com.github.maziyarpanahi:openmed:v4.0.0` |
-| Service image | `ghcr.io/maziyarpanahi/openmed:4.0.0` |
+| Service image | `ghcr.io/maziyarpanahi/openmed:v4.0.0` |
 
 This candidate concerns the library and SDKs. Clinical use requires independent validation for the intended population, device, and workflow, with qualified human review.
 
