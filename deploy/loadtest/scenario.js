@@ -120,11 +120,14 @@ export const options = {
 
 const jsonParams = {
   headers: {
-    ...(__ENV.LOADTEST_API_KEY ? { "x-api-key": __ENV.LOADTEST_API_KEY } : {}),
     Accept: "application/json",
     "Content-Type": "application/json",
   },
 };
+
+if (__ENV.LOADTEST_API_KEY) {
+  jsonParams.headers["x-api-key"] = __ENV.LOADTEST_API_KEY;
+}
 
 function recordResponse(endpoint, response) {
   const succeeded = response.status >= 200 && response.status < 300;
