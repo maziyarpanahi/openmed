@@ -423,6 +423,7 @@ nav:
       - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Federated Leakage Harness: evaluation/federated-leakage-harness.md
       - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
       - OpenPHI-Vision Fixed Fixtures: evaluation/openphi-vision-fixtures.md
       - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md

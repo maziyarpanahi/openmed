@@ -486,6 +486,7 @@ classification:
     - i18n/locale-pack-conformance.md
     - testing.md
     - eval-harness.md
+    - evaluation/federated-leakage-harness.md
     - evaluation/openphi-vision.md
     - evaluation/openphi-vision-fixtures.md
     - evaluation/edge-health-bench.md
