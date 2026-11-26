@@ -48,6 +48,10 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Added
 
+- Add `crosswalk_resource_to_conceptmap` to export redistributable grounding
+  crosswalks as deterministic FHIR R4 `ConceptMap` resources using registry
+  system URIs where one exists, refusing unredistributable, UMLS-backed, or
+  restricted-system inputs (#4655).
 - Add a standard-library synthetic side-view walker fixture for pose and gait
   tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
   double-support truth, asymmetry, far-leg occlusion, joint jitter and a
