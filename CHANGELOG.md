@@ -78,6 +78,10 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 - Add validated service security-policy generations: complete non-secret limit, authorization-policy and egress candidates activate atomically or are rejected with controlled findings, in-flight work stays pinned to one generation, and emergency tighten-only reloads apply at declared checkpoints (#3704).
 - Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
 - Make async `/jobs` work durable: workers claim jobs with expiring leases whose epoch fences every store write, coalesced checkpoints with chained output digests are the resume points, and the terminal state commits together with the final checkpoint and the webhook intent. Retryable failures back off within a bounded budget, poison or damaged work is quarantined until an authorized `DeidentifyJobQueue.replay()`, and a startup and periodic reconcile reclaims expired leases, resumes queued work, re-drives undelivered webhooks through the bounded dispatcher and fails corrupt recovery state closed. `POST /jobs` honours `Idempotency-Key` like the FHIR bulk starts, with keyed, owner-scoped digests (#3574).
+- Add an offline example that signs a synthetic de-identification audit report,
+  verifies a received copy and shows verification failing after one span offset
+  changes; the key comes from `OPENMED_AUDIT_KEY` or is generated and is never
+  printed (#5424).
 
 ### Changed
 
