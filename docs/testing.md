@@ -59,9 +59,9 @@ Configure these markers via `pytest.ini` entries in `pyproject.toml`.
 
 ## Running the suite
 
-For a Windows source checkout, use
-`git clone --config core.autocrlf=false https://github.com/maziyarpanahi/openmed.git`.
-The suite verifies packaged assets against their SHA-256 digests, including line endings.
+Git preserves LF line endings for text files on every platform through
+`.gitattributes`. This keeps digest-pinned assets and generated test fixtures
+byte-identical in Windows source checkouts.
 
 ```bash
 uv pip install ".[dev,hf]"
