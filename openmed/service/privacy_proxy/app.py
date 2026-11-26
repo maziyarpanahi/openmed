@@ -11,7 +11,9 @@ The factory applies the shared service inbound controls before a request body
 is parsed: a loopback-only trusted-host allowlist, opt-in API-key or JWT
 authentication, and the operational request-byte bound.  Message count, total
 text characters and streaming duration are bounded before redaction or any
-transport call, with controlled ``privacy_proxy_*`` error codes.
+transport call, with controlled ``privacy_proxy_*`` error codes.  Content
+parts other than text (and ``refusal`` on assistant turns) are refused for
+the whole request before anything is redacted.
 """
 
 from __future__ import annotations
@@ -70,6 +72,25 @@ _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6
 _UNREDACTED_KEYS = frozenset({"model", "role", "type"})
 _DONE = object()
 
+# Chat-completions content-part types the proxy can redact. Any other part
+# (``image_url``, ``input_audio``, ``file`` or an unrecognized type) carries
+# data the text detector cannot inspect, so the whole request is refused.
+# The outbound filter's ``_TEXT_CONTENT_TYPES`` is not reused because it also
+# admits the Responses API's ``input_text`` and ``output_text`` parts, which
+# chat completions does not define.
+_CHAT_CONTENT_PART_TYPES = frozenset({"text"})
+_ASSISTANT_CONTENT_PART_TYPES = _CHAT_CONTENT_PART_TYPES | {"refusal"}
+# An accepted part must hold its payload as a string under its own type name
+# (``text`` or ``refusal``) and may not also carry a media payload key.
+_MEDIA_CONTENT_PART_KEYS = frozenset({"image_url", "input_audio", "file"})
+# Only these fixed names are echoed in a refusal; any other type value is
+# caller input and is reported as ``unknown`` (a string) or ``invalid``.
+_REPORTABLE_CONTENT_PART_TYPES = frozenset(
+    {"refusal", "image_url", "input_audio", "file"}
+)
+_UNKNOWN_CONTENT_PART_TYPE = "unknown"
+_INVALID_CONTENT_PART_TYPE = "invalid"
+
 EntityExtractor = Callable[..., Any]
 ChatTransport = Callable[..., Any]
 
@@ -105,6 +126,21 @@ class _UnsupportedRequestMediaTypeError(PrivacyProxyRequestError):
 
     status_code = 415
     reason_code = "unsupported_content_type"
+
+
+class _UnsupportedContentPartError(PrivacyProxyRequestError):
+    """Raised when a message carries a content part that cannot be redacted.
+
+    ``part_type`` is a fixed name or marker, never the caller's raw value, and
+    ``message_index`` is the zero-based position in ``messages``.
+    """
+
+    reason_code = "unsupported_content_part"
+
+    def __init__(self, *, part_type: str, message_index: int) -> None:
+        super().__init__()
+        self.part_type = part_type
+        self.message_index = message_index
 
 
 class PrivacyProxyConfigurationError(PrivacyProxyError):
@@ -274,9 +310,21 @@ class PrivacyProxy:
         *,
         request_id_header: Optional[str] = None,
     ) -> RedactedChatRequest:
-        """Validate and redact one JSON chat-completion request."""
+        """Validate and redact one JSON chat-completion request.
+
+        Raises:
+            PrivacyProxyRequestError: If the request is invalid. A refused
+                content part has ``reason_code`` ``unsupported_content_part``
+                and the safe ``part_type`` and ``message_index`` attributes.
+            PrivacyProxyLimitError: If a message or text bound is exceeded.
+            PrivacyProxyRedactionError: If redaction or its tripwire fails.
+        """
         normalized = _validate_request_payload(payload)
         _enforce_request_limits(normalized, self.limits)
+        _validate_request_id_header(request_id_header)
+        # Classify parts before the body is serialized for the request ID, so
+        # a refused part never reaches that step (or its UTF-8 encoding).
+        _refuse_unsupported_content_parts(normalized["messages"])
         request_id = _stable_request_id(normalized, request_id_header)
         placeholder_map: dict[str, str] = {}
 
@@ -738,13 +786,63 @@ def _enforce_request_limits(
                 raise PrivacyProxyLimitError(reason_code="text_length_exceeded")
 
 
+def _refuse_unsupported_content_parts(messages: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse the request if any message has a part other than text.
+
+    Every message is checked before the first extractor call, so a text part
+    is never redacted or forwarded when a later part or message is refused.
+    Only ``messages[].content`` holds content parts; ``type`` keys elsewhere,
+    such as in ``tools`` or ``tool_calls``, are not inspected.
+    """
+    for message_index, message in enumerate(messages):
+        content = message.get("content")
+        if content is None or isinstance(content, str):
+            continue
+        if not isinstance(content, list):
+            raise PrivacyProxyRequestError(reason_code="message_content_invalid")
+        allowed = (
+            _ASSISTANT_CONTENT_PART_TYPES
+            if message.get("role") == "assistant"
+            else _CHAT_CONTENT_PART_TYPES
+        )
+        for part in content:
+            part_type = part.get("type") if isinstance(part, Mapping) else None
+            # Check the shape first: an unhashable value cannot be tested
+            # against a frozenset.
+            if not isinstance(part_type, str) or part_type not in allowed:
+                raise _UnsupportedContentPartError(
+                    part_type=_reportable_content_part_type(part_type),
+                    message_index=message_index,
+                )
+            if not isinstance(part.get(part_type), str) or any(
+                key in part for key in _MEDIA_CONTENT_PART_KEYS
+            ):
+                raise _UnsupportedContentPartError(
+                    part_type=_INVALID_CONTENT_PART_TYPE,
+                    message_index=message_index,
+                )
+
+
+def _reportable_content_part_type(part_type: Any) -> str:
+    """Map a refused part's ``type`` to a fixed name that is safe to echo."""
+    if not isinstance(part_type, str):
+        return _INVALID_CONTENT_PART_TYPE
+    if part_type in _REPORTABLE_CONTENT_PART_TYPES:
+        return part_type
+    return _UNKNOWN_CONTENT_PART_TYPE
+
+
+def _validate_request_id_header(request_id_header: Optional[str]) -> None:
+    if request_id_header is not None and not is_valid_request_id(request_id_header):
+        raise PrivacyProxyRequestError(reason_code="request_id_invalid")
+
+
 def _stable_request_id(
     payload: Mapping[str, Any],
     request_id_header: Optional[str],
 ) -> str:
     if request_id_header is not None:
-        if not is_valid_request_id(request_id_header):
-            raise PrivacyProxyRequestError(reason_code="request_id_invalid")
+        _validate_request_id_header(request_id_header)
         source = f"header:{request_id_header}"
     else:
         source = _canonical_json(payload)
@@ -1087,11 +1185,15 @@ def _restore_stream_text(
 
 
 def _error_payload(exc: PrivacyProxyError) -> dict[str, Any]:
+    details: dict[str, Any] = {"reason": exc.reason_code}
+    if isinstance(exc, _UnsupportedContentPartError):
+        details["part_type"] = exc.part_type
+        details["message_index"] = exc.message_index
     return {
         "error": {
             "code": exc.error_code,
             "message": "Privacy proxy request failed",
-            "details": {"reason": exc.reason_code},
+            "details": details,
         }
     }
 

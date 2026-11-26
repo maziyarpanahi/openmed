@@ -160,6 +160,17 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Security
 
+- **Breaking:** the local privacy proxy now refuses chat-completion requests
+  whose messages carry content parts it cannot redact. Any part other than
+  `text` (or `refusal` on assistant turns), including `image_url`,
+  `input_audio` and `file`, returns `400 unsupported_content_part` with only
+  the part type and zero-based message index, before any redaction or
+  transport call. These parts were previously run through the text detector
+  and forwarded, so identifiers inside images, audio or documents reached the
+  transport. Media parts are refused even if redacted beforehand: remove them,
+  and send any content they hold as text in a `text` part.
+  Message `content` that is not a string, `null` or a list now returns
+  `400 message_content_invalid` (#5097).
 - **Breaking:** evaluation reports no longer fall back to signing keys
   published in the source, which let anyone forge a signature that verifies.
   `run_relation_suite`, `run_suite(suite="relations")` and
