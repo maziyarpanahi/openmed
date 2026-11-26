@@ -102,7 +102,15 @@ _PRN_CONDITION_RE = re.compile(
 )
 # Candidate duration phrase to hand to normalize_duration.
 _DURATION_RE = re.compile(
-    r"(?:x|for)?\s*\d+\s*(?:day|days|week|weeks|wk|wks|month|months|mo|hour|hours|hr|hrs)\b",
+    r"(?<!\w)(?:"
+    r"(?:for\s+|x\s*)\d+(?:\.\d+)?\s*(?:days?|d|weeks?|wks?|wk|w)\b"
+    r"|(?<!/)(?:for\s+|x\s*)?\d+(?:\.\d+)?\s*/\s*(?:7|52)(?![\w/])"
+    r"|\d+(?:\.\d+)?\s*(?:days?|weeks?|wks?|wk)\b"
+    r")",
+    re.IGNORECASE,
+)
+_FREQUENCY_PREFIX_RE = re.compile(
+    r"(?<!\w)(?:every|q)\s*(?:\d+(?:\.\d+)?\s*[-–]\s*)?$",
     re.IGNORECASE,
 )
 _FREQUENCY_RANGE_RE = re.compile(
@@ -222,10 +230,13 @@ def _parse_frequency(text: str) -> tuple[float | None, object, str | None, bool]
 
 
 def _parse_duration(text: str) -> object:
-    match = _DURATION_RE.search(text)
-    if match is None:
-        return None
-    return normalize_duration(match.group(0))["days"]
+    for match in _DURATION_RE.finditer(text):
+        if _FREQUENCY_PREFIX_RE.search(text[: match.start()]):
+            continue
+        days = normalize_duration(match.group(0))["days"]
+        if days is not None:
+            return days
+    return None
 
 
 def _parse_condition(text: str) -> str | None:

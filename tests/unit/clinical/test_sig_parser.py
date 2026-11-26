@@ -177,3 +177,24 @@ def test_advisory_exposed():
     assert isinstance(SIG_PARSER_ADVISORY, str) and SIG_PARSER_ADVISORY
     # Sig is a typed mapping usable as a return annotation.
     assert Sig is not None
+
+
+# --------------------------------------------------------------------------
+# Duration parsing with frequency intervals
+# --------------------------------------------------------------------------
+
+
+def test_duration_ignores_preceding_frequency_interval(subtests):
+    for text, expected_days in [
+        ("500 mg PO every 8 hours x 7 days", 7),
+        ("500 mg PO q8hr for 10 days", 10),
+        ("20 mg PO every 2 days for 14 days", 14),
+        ("15 mg PO every 1 week for 4 weeks", 28),
+        ("20 mg PO every 2 days", None),
+        ("15 mg PO q2 weeks", None),
+        ("500 mg PO BID x7d", 7),
+        ("500 mg PO BID 10/7", 10),
+        ("500 mg PO BID start 10/7/2026", None),
+    ]:
+        with subtests.test(text=text, expected_days=expected_days):
+            assert parse_sig(text)["duration_days"] == expected_days
