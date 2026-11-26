@@ -167,11 +167,9 @@ class _SnapshotLoader:
 def _snapshot_system_key(value: object) -> str:
     """Normalize a snapshot mapping key or canonical system URI."""
 
-    key = canonical_system(value)
-    for system, uri in SYSTEM_URIS.items():
-        if key.rstrip("/") == uri.rstrip("/"):
-            return system
-    return key
+    # ``canonical_system`` already resolves any :data:`SYSTEM_URIS` value (and
+    # the input-only HL7 CPT URI) to its key, ignoring a trailing slash.
+    return canonical_system(value)
 
 
 def _index_from_terms(system: str, terms: Mapping[str, Any]) -> VocabularyIndex:

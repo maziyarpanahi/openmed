@@ -53,14 +53,35 @@ SYSTEM_ALIASES: Mapping[str, str] = {
 
 RESTRICTED_SYSTEMS = frozenset({"umls", "snomed", "cpt"})
 
+# URIs OpenMed accepts on input but does not emit: FHIR terminology operations
+# always carry system URIs, so the HL7 CPT URI is recognized as ``cpt`` on the
+# way in while OpenMed keeps emitting ``urn:openmed:restricted:cpt`` (changing
+# the emitted URI is a separate deprecation issue, #4574).
+_INPUT_ONLY_SYSTEM_URIS: Mapping[str, str] = {
+    "cpt": "http://www.ama-assn.org/go/cpt",
+}
+
 
 def canonical_system(value: object) -> str:
-    """Return a normalized terminology system key."""
+    """Return a normalized terminology system key.
+
+    FHIR terminology operations pass system URIs rather than short names, so
+    every URI in :data:`SYSTEM_URIS` (plus the input-only HL7 CPT URI) maps to
+    its canonical key; a trailing slash is ignored.
+    """
 
     if not isinstance(value, str):
         raise TypeError("terminology system must be a string")
     key = value.strip().casefold().replace(" ", "-")
-    return SYSTEM_ALIASES.get(key, key)
+    if key in SYSTEM_ALIASES:
+        return SYSTEM_ALIASES[key]
+    for system, uri in SYSTEM_URIS.items():
+        if key.rstrip("/") == uri.rstrip("/"):
+            return system
+    for system, uri in _INPUT_ONLY_SYSTEM_URIS.items():
+        if key.rstrip("/") == uri.rstrip("/"):
+            return system
+    return key
 
 
 def system_uri(value: object) -> str | None:

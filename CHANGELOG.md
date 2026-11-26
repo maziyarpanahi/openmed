@@ -89,6 +89,13 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Fixed
 
+- Recognize FHIR terminology system URIs on grounding input: `canonical_system()`
+  now maps every URI in `SYSTEM_URIS` (ignoring a trailing slash) back to its
+  canonical key, and accepts the HL7 CPT URI `http://www.ama-assn.org/go/cpt` as
+  `cpt`. Restricted-vocabulary URIs (SNOMED CT, UMLS, CPT) now raise
+  `RestrictedVocabularyError` and the `/ground` route answers
+  `restricted_terminology_unconfigured` instead of the generic
+  `grounding_invalid_request`; emitted CPT system URIs are unchanged (#4574).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer
