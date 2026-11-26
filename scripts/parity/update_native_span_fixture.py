@@ -929,12 +929,12 @@ def write_fixture(
     """
     payload = derive_payload(load_spans_payload(fixture_dir), fixture_dir)
     validate_payload(payload, fixture_dir)
-    (fixture_dir / SPANS_FILE).write_text(canonical_json(payload), encoding="utf-8")
+    (fixture_dir / SPANS_FILE).write_bytes(canonical_json(payload).encode("utf-8"))
     vectors = derive_kit_vectors(load_kit_vectors(vectors_file))
     validate_kit_vectors(vectors)
-    vectors_file.write_text(canonical_json(vectors), encoding="utf-8")
+    vectors_file.write_bytes(canonical_json(vectors).encode("utf-8"))
     manifest = build_manifest(payload, fixture_dir, vectors_file)
-    (fixture_dir / MANIFEST_FILE).write_text(canonical_json(manifest), encoding="utf-8")
+    (fixture_dir / MANIFEST_FILE).write_bytes(canonical_json(manifest).encode("utf-8"))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
