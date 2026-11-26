@@ -69,6 +69,7 @@ container_args=(
   --name "$CONTAINER_NAME"
   --publish "127.0.0.1:${SERVICE_PORT}:8080"
   --env "OPENMED_PROFILE=$SERVICE_PROFILE"
+  --env OPENMED_SERVICE_DIGEST_KEY
   --env OPENMED_SERVICE_AUTH_ENABLED=true
   --env "OPENMED_SERVICE_AUTH_API_KEYS=$key_record"
   --env "OPENMED_SERVICE_PRELOAD_MODELS=$PRELOAD_MODELS"
@@ -82,7 +83,7 @@ fi
 
 container_args+=("$SERVICE_IMAGE")
 
-"$DOCKER_BIN" "${container_args[@]}" >/dev/null
+OPENMED_SERVICE_DIGEST_KEY="$(openssl rand -hex 32)" "$DOCKER_BIN" "${container_args[@]}" >/dev/null
 CONTAINER_STARTED=1
 
 wait_for_ready() {
