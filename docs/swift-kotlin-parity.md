@@ -533,3 +533,11 @@ are for tests only. The expected blocks are derived from the Python reference by
 To change a profile, edit `openmed/core/policies/`, run
 `python scripts/parity/generate_portable_policies.py --write`, review the
 regenerated resources and vectors, and run every consumer above.
+
+## Parity Fixture Index
+
+Every shared contract vector in `tests/fixtures/parity/`, including the
+kit-parity and portable policy vectors above, is listed in its
+[README](https://github.com/maziyarpanahi/openmed/blob/master/tests/fixtures/parity/README.md)
+with its version, the Python, Swift and Android tests that read it, the
+workflow path filters that run them, and how to update it.
