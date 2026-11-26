@@ -2,10 +2,11 @@
 
 The proxy accepts the common ``/v1/chat/completions`` request shape, redacts
 text locally, and passes only the redacted JSON document to an injected
-transport.  Placeholder mappings stay in the request call stack and are
-never included in transport metadata, responses, or logs.  A second route
-without the ``/v1`` prefix is provided for clients whose base URL already
-contains the version path.
+transport. Tool-call identifiers are preserved while JSON-encoded arguments
+are redacted leaf by leaf and remain parseable. Placeholder mappings stay in
+the request call stack and are never included in transport metadata,
+responses, or logs. A second route without the ``/v1`` prefix is provided for
+clients whose base URL already contains the version path.
 
 The factory applies the shared service inbound controls before a request body
 is parsed: a loopback-only trusted-host allowlist, opt-in API-key or JWT
@@ -21,7 +22,14 @@ import inspect
 import json
 import re
 import time
-from collections.abc import AsyncIterable, AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Callable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass, field
 from typing import Any, Optional, cast
 
@@ -68,6 +76,7 @@ _REQUEST_ID_HEADER = "x-request-id"
 _PLACEHOLDER_PREFIX = "<<OPENMED_PHI_"
 _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
 _UNREDACTED_KEYS = frozenset({"model", "role", "type"})
+_TOOL_CONTAINER_KEYS = frozenset({"tools", "tool_calls"})
 _DONE = object()
 
 EntityExtractor = Callable[..., Any]
@@ -339,6 +348,8 @@ class PrivacyProxy:
             )
             with InboundPlaceholderRestorer(state) as restorer:
                 restored = restorer.restore(value)
+                if isinstance(value, Mapping) and isinstance(restored, Mapping):
+                    restored = _restore_tool_arguments(restored, value, restorer)
         except InboundRestorationError as exc:
             raise PrivacyProxyResponseError(
                 reason_code=getattr(exc, "reason_code", "response_rejected")
@@ -759,25 +770,163 @@ def _walk_json_strings(
     value: Any,
     redact: Callable[[str, tuple[str, ...]], str],
     path: tuple[str, ...] = (),
+    *,
+    inside_tool_arguments: bool = False,
 ) -> Any:
     if isinstance(value, Mapping):
         result: dict[str, Any] = {}
         for key, child in value.items():
             key_text = str(key)
             child_path = (*path, key_text)
-            if key_text in _UNREDACTED_KEYS:
+            if not inside_tool_arguments and key_text in _UNREDACTED_KEYS:
                 result[key_text] = child
+            elif not inside_tool_arguments and _is_tool_identifier_path(child_path):
+                result[key_text] = child
+            elif not inside_tool_arguments and _is_tool_argument_path(child_path):
+                result[key_text] = _redact_tool_arguments(
+                    child,
+                    redact,
+                    child_path,
+                )
             else:
-                result[key_text] = _walk_json_strings(child, redact, child_path)
+                result[key_text] = _walk_json_strings(
+                    child,
+                    redact,
+                    child_path,
+                    inside_tool_arguments=inside_tool_arguments,
+                )
         return result
     if isinstance(value, list):
         return [
-            _walk_json_strings(child, redact, (*path, str(index)))
+            _walk_json_strings(
+                child,
+                redact,
+                (*path, str(index)),
+                inside_tool_arguments=inside_tool_arguments,
+            )
             for index, child in enumerate(value)
         ]
     if isinstance(value, str):
         return redact(value, path)
     return value
+
+
+def _is_tool_identifier_path(path: tuple[str, ...]) -> bool:
+    if not path:
+        return False
+    field = path[-1]
+    if field == "tool_call_id":
+        return True
+    if field == "id":
+        return "tool_calls" in path[:-1]
+    if field != "name" or len(path) < 2:
+        return False
+    if path[-2] == "function_call":
+        return True
+    return path[-2] == "function" and any(
+        segment in _TOOL_CONTAINER_KEYS for segment in path[:-2]
+    )
+
+
+def _is_tool_argument_path(path: tuple[str, ...]) -> bool:
+    if len(path) < 2 or path[-1] != "arguments":
+        return False
+    if path[-2] == "function_call":
+        return True
+    return path[-2] == "function" and "tool_calls" in path[:-2]
+
+
+def _redact_tool_arguments(
+    value: Any,
+    redact: Callable[[str, tuple[str, ...]], str],
+    path: tuple[str, ...],
+) -> str:
+    parsed = _parse_tool_arguments(value, response=False)
+    redacted = _walk_json_strings(
+        parsed,
+        redact,
+        path,
+        inside_tool_arguments=True,
+    )
+    return _serialize_tool_arguments(redacted, response=False)
+
+
+def _restore_tool_arguments(
+    response: Mapping[str, Any],
+    source: Mapping[str, Any],
+    restorer: InboundPlaceholderRestorer,
+) -> Mapping[str, Any]:
+    paths = list(_tool_argument_paths(source))
+    if not paths:
+        return response
+    parsed = [
+        _parse_tool_arguments(_value_at_path(source, path), response=True)
+        for path in paths
+    ]
+    restored = restorer.restore(parsed)
+    for path, value in zip(paths, restored, strict=True):
+        _set_value_at_path(
+            response,
+            path,
+            _serialize_tool_arguments(value, response=True),
+        )
+    return response
+
+
+def _tool_argument_paths(
+    value: Any,
+    path: tuple[Any, ...] = (),
+) -> Iterator[tuple[Any, ...]]:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            child_path = (*path, key)
+            if _is_tool_argument_path(child_path):
+                yield child_path
+            else:
+                yield from _tool_argument_paths(child, child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _tool_argument_paths(child, (*path, index))
+
+
+def _value_at_path(value: Any, path: tuple[Any, ...]) -> Any:
+    for segment in path:
+        value = value[segment]
+    return value
+
+
+def _set_value_at_path(value: Any, path: tuple[Any, ...], replacement: Any) -> None:
+    for segment in path[:-1]:
+        value = value[segment]
+    value[path[-1]] = replacement
+
+
+def _parse_tool_arguments(value: Any, *, response: bool) -> Any:
+    error_type = PrivacyProxyResponseError if response else PrivacyProxyRequestError
+    if not isinstance(value, str):
+        raise error_type(reason_code="tool_arguments_invalid")
+    try:
+        return json.loads(value, parse_constant=_reject_json_constant)
+    except (TypeError, ValueError):
+        raise error_type(reason_code="tool_arguments_invalid") from None
+
+
+def _serialize_tool_arguments(value: Any, *, response: bool) -> str:
+    error_type = PrivacyProxyResponseError if response else PrivacyProxyRequestError
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError):
+        raise error_type(reason_code="tool_arguments_invalid") from None
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"unsupported JSON constant {value}")
 
 
 def _call_detector(detector: EntityExtractor, text: str, **kwargs: Any) -> Any:

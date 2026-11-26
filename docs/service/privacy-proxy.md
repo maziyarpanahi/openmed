@@ -59,6 +59,24 @@ asynchronous iterable of either. Placeholder tokens split across chunks are
 buffered until they can be restored; the replacement map itself is never sent
 as an event.
 
+## Tool calls
+
+The proxy keeps OpenAI tool-call metadata as a protocol boundary rather than
+free text. Function `name` values under `tools`, `tool_calls` and legacy
+`function_call`, plus call `id` and `tool_call_id`, are forwarded byte for
+byte so calls remain linked to their results. Values inside
+`function.arguments` are not: the field must contain a JSON string. The proxy
+parses it, redacts every string leaf, and writes the result back as compact,
+deterministically ordered JSON. Missing, non-string, malformed or
+NaN-bearing arguments are rejected before the transport with HTTP 400 and
+reason `tool_arguments_invalid`; the response does not echo the argument
+value.
+
+For non-streaming responses, tool-call arguments are restored structurally
+rather than with raw text substitution, so quotes, backslashes and other JSON
+escapes remain valid. An invalid transport response fails closed with HTTP
+502 and the same reason.
+
 ## Inbound protections
 
 `create_app` uses the same inbound controls as the REST service. They run in
@@ -131,11 +149,11 @@ replacement map.
 | 400 | `bad_request` | Untrusted `Host` header (shared service envelope) |
 | 401 / 403 / 429 | `authentication_required`, `invalid_credentials`, `forbidden`, `auth_rate_limited` | Shared service auth envelope |
 | 413 | `request_size_exceeded` | Body over the byte limit (shared operational-limit envelope) |
-| 400 | `privacy_proxy_invalid_request` | `invalid_json`, `messages_required`, `invalid_message`, `message_role_required`, `message_content_required`, `model_invalid`, `stream_invalid`, `request_id_invalid` |
+| 400 | `privacy_proxy_invalid_request` | `invalid_json`, `messages_required`, `invalid_message`, `message_role_required`, `message_content_required`, `model_invalid`, `stream_invalid`, `request_id_invalid`, `tool_arguments_invalid` |
 | 413 | `privacy_proxy_limit_exceeded` | `message_count_exceeded`, `text_length_exceeded` |
 | 400 | `privacy_proxy_redaction_failed` | `redaction_failed`, `outbound_tripwire_detected`, `placeholder_collision` and policy reasons |
 | 502 | `privacy_proxy_transport_failed` | `transport_failed`, `transport_not_callable`, `invalid_transport_response` |
-| 502 | `privacy_proxy_response_rejected` | `response_rejected`, `duplicate_placeholder`, `mangled_placeholder`, `invalid_stream_chunk` and restoration reasons |
+| 502 | `privacy_proxy_response_rejected` | `response_rejected`, `duplicate_placeholder`, `mangled_placeholder`, `invalid_stream_chunk`, `tool_arguments_invalid` and restoration reasons |
 | 502 | `privacy_proxy_error` | `privacy_proxy_error` (unexpected failure) |
 | 503 | `privacy_proxy_not_configured` | `missing_transport` |
 | Stream event | `privacy_proxy_timeout` | `stream_duration_exceeded` |
