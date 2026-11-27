@@ -8,6 +8,11 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     case cacheDeletionFailed
     case httpError(statusCode: Int)
     case missingManifest
+    /// The Core ML snapshot has no usable `openmed-coreml.json` or package
+    /// inventory.
+    case invalidCoreMLManifest
+    /// Core ML could not compile the downloaded `.mlpackage`.
+    case coreMLCompilationFailed
     case missingWeights
     /// A file transfer failed below HTTP (connection, TLS or local staging).
     case transferFailed
@@ -25,6 +30,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
         case .cacheDeletionFailed: return "cache_deletion_failed"
         case .httpError: return "http_status"
         case .missingManifest: return "missing_manifest"
+        case .invalidCoreMLManifest: return "invalid_coreml_manifest"
+        case .coreMLCompilationFailed: return "coreml_compilation_failed"
         case .missingWeights: return "missing_weights"
         case .transferFailed: return "transfer_failed"
         case .invalidManifestPath: return "invalid_manifest_path"
@@ -43,6 +50,10 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
             return "HTTP \(statusCode) while downloading an MLX model file."
         case .missingManifest:
             return "Downloaded MLX model is missing openmed-mlx.json."
+        case .invalidCoreMLManifest:
+            return "The Core ML model snapshot has no usable openmed-coreml.json."
+        case .coreMLCompilationFailed:
+            return "The downloaded Core ML package could not be compiled."
         case .missingWeights:
             return "Downloaded MLX model does not contain any usable weight file."
         case .transferFailed:
@@ -518,7 +529,7 @@ public enum OpenMedModelStore {
         }
     }
 
-    private static func resolveHubURL(
+    static func resolveHubURL(
         repoID: String,
         revision: String,
         relativePath: String
@@ -552,7 +563,7 @@ public enum OpenMedModelStore {
             .replacingOccurrences(of: ":", with: "_")
     }
 
-    private static func writeReadyMarker(to url: URL) throws {
+    static func writeReadyMarker(to url: URL) throws {
         let marker = [
             "state": OpenMedMLXModelCacheState.ready.rawValue,
             "completed_at": ISO8601DateFormatter().string(from: Date()),

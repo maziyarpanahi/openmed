@@ -1302,6 +1302,57 @@ Use CoreML when:
 
 For the current CoreML packaging status, see [CoreML packaging status](coreml-export.md).
 
+### Downloading Core ML snapshots through the model store
+
+`OpenMedModelStore` also acquires Core ML token-classification snapshots from
+the Hub, so apps no longer place Core ML artifacts themselves:
+
+```swift
+let model = try await OpenMedModelStore.downloadCoreMLModel(repoID: "OpenMed/<name>-coreml")
+let openmed = try OpenMed(backend: model.backend)
+```
+
+The snapshot root must hold an `openmed-coreml.json` that the store reads as
+follows. Every other field, such as latency, residency and provenance, is
+ignored.
+
+```json
+{
+  "format": "openmed-coreml",
+  "variants": [{"name": "coreml-fp16", "path": "Model.mlpackage"}],
+  "id2label": "Model_id2label.json",
+  "tokenizer": {"path": ".", "files": ["tokenizer.json", "tokenizer_config.json"]}
+}
+```
+
+- The first variant is used. Its `path` is a `.mlpackage` or `.mlmodelc`
+  directory. A package's files come from its own
+  `Model.mlpackage/openmed-coreml.json` provenance inventory, which
+  `openmed.coreml.convert` writes, or from an explicit `files` list relative
+  to the variant. A `.mlmodelc` variant must declare `files`.
+- `id2label` defaults to `id2label.json`. `tokenizer` defaults to the snapshot
+  root with `tokenizer.json` and `tokenizer_config.json`, plus the optional
+  `config.json`, `special_tokens_map.json`, `vocab.txt` and `added_tokens.json`.
+- Every declared path, including package inventory entries, passes the same
+  snapshot confinement as MLX manifests before any model file is requested.
+  An escaping path throws `OpenMedModelStoreError.invalidManifestPath` and
+  removes the files that download wrote. An unsupported manifest throws
+  `invalidCoreMLManifest`.
+- A `.mlpackage` is compiled with `MLModel.compileModel(at:)` only after every
+  file has downloaded. The compiled model lands in
+  `.openmed-compiled/Model.mlmodelc` inside the snapshot, and the source package
+  is kept (`OpenMedCoreMLModel.packageURL`). A failed compile throws
+  `coreMLCompilationFailed`. watchOS cannot compile Core ML models, so there a
+  `.mlpackage` variant throws `coreMLCompilationFailed` before its model files
+  download; publish a `.mlmodelc` variant for watchOS.
+- `coreMLModelCacheState(repoID:revision:cacheDirectory:)` reports `missing`,
+  `partial` or `ready` from the files on disk. A missing label map, tokenizer
+  file or compiled model leaves the snapshot `partial`.
+  `cachedCoreMLModel(repoID:revision:cacheDirectory:)` returns a ready snapshot
+  offline, and `downloadCoreMLModel` reuses one without network requests.
+- Core ML snapshots default to `Caches/OpenMed/CoreMLModels`, separate from
+  the MLX cache.
+
 ## Notes On Testing
 
 The Swift MLX runtime is intended for:
