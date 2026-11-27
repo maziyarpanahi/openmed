@@ -603,6 +603,7 @@ nav:
       - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
+      - Generated Contract Types: api/contract-types.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Minimum-necessary Field Selection: security/minimum-necessary.md
