@@ -424,6 +424,7 @@ classification:
     - configuration.md
     - configuration/precedence-audit.md
     - configuration/sdk-config.md
+    - configuration/environment-variables.md
     - profiles.md
     - plugin-sdk.md
     - skills/bundle-integrity.md

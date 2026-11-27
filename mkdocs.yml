@@ -359,6 +359,7 @@ nav:
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Portable SDK Configuration: configuration/sdk-config.md
+      - Environment Variables: configuration/environment-variables.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
       - Skill Bundle Integrity: skills/bundle-integrity.md

@@ -112,7 +112,8 @@ default.
 `openmed.core.settings_registry` returns these declarations without reading
 the environment, so its output is safe to render in documentation or audit
 reports. It declares settings only; each subsystem keeps parsing its own
-variables.
+variables. The [environment variable reference](configuration/environment-variables.md)
+is generated from the schema by `scripts/docs/render_settings_reference.py`.
 
 ```python
 from openmed.core.settings_registry import get_setting_declaration
