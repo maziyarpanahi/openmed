@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Load the per-span audit event schema as `audit_event` and list schema-name
+  aliases with `schema_aliases()`; `audit` keeps working and
+  `load_all_schemas()` and the fingerprint snapshot are unchanged (#5390).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
