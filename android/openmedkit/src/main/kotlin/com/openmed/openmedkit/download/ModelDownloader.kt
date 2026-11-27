@@ -1,6 +1,7 @@
 package com.openmed.openmedkit.download
 
 import android.content.Context
+import com.openmed.openmedkit.OpenMedSdkConfig
 import com.openmed.openmedkit.cache.CachedArtifactFile
 import com.openmed.openmedkit.cache.ModelCache
 import com.openmed.openmedkit.cache.UnsafeModelPathException
@@ -42,6 +43,22 @@ class ModelDownloader(
         logger,
     )
 
+    /**
+     * Downloader that applies a portable [config]: with `localOnly` it serves
+     * cached models only and fails before any network call, and it pins
+     * `modelRevision` for `modelId` when [download] gets no revision.
+     */
+    constructor(
+        cache: ModelCache,
+        config: OpenMedSdkConfig,
+        client: HuggingFaceModelClient = HttpHuggingFaceModelClient(),
+        logger: ModelDownloadLogger = ModelDownloadLogger.NONE,
+    ) : this(cache, client, logger) {
+        sdkConfig = config
+    }
+
+    private var sdkConfig: OpenMedSdkConfig? = null
+
     fun download(
         entry: ModelCatalogEntry,
         revision: String? = null,
@@ -65,6 +82,12 @@ class ModelDownloader(
             )
         }
 
+        val config = sdkConfig
+        if (config != null && config.localOnly) {
+            throw ModelDownloadException("Model is not cached and the SDK configuration is local_only")
+        }
+        val requested = revision ?: config?.modelRevision?.takeIf { config.modelId == entry.repoId }
+
         logger.log(
             ModelDownloadLogEvent(
                 repoId = entry.repoId,
@@ -73,14 +96,14 @@ class ModelDownloader(
             ),
         )
 
-        val modelInfo = client.fetchModelInfo(entry.repoId, revision)
+        val modelInfo = client.fetchModelInfo(entry.repoId, requested)
         val actualIntegrityHash = verifiedManifestHash(entry, modelInfo)
         val filesToDownload = runnableFiles(entry, modelInfo)
 
         val stagingDirectory = cache.createStagingDirectory(entry.repoId)
         var completed = false
         try {
-            val downloadRevision = revision ?: modelInfo.revisionSha ?: DEFAULT_REVISION
+            val downloadRevision = requested ?: modelInfo.revisionSha ?: DEFAULT_REVISION
             filesToDownload.forEach { remoteFile ->
                 val destination = resolveSafePath(stagingDirectory, remoteFile.path)
                 destination.parentFile?.mkdirs()

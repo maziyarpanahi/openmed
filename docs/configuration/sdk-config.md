@@ -96,6 +96,35 @@ policy_profile="hipaa_safe_harbor")` returns the validated subset of a config.
 It raises `SdkConfigError` when a value is outside the portable subset, for
 example a `pii_model` that is a local path.
 
+## Kotlin API
+
+The Android OpenMedKit reads the document with `OpenMedSdkConfig`:
+
+```kotlin
+val config = OpenMedSdkConfig.parse(configJson) // throws OpenMedSdkConfigException
+val issues = OpenMedSdkConfig.validate(configJson) // List<OpenMedSdkConfigIssue>
+
+val openMed = OpenMed(backend = null, config = config)
+val downloader = ModelDownloader(cache, config)
+```
+
+`validate` returns the same ordered issues as Python. Each issue holds only
+`code` and `field`, and text that is not a JSON object yields
+`config_not_object`. `OpenMedSdkConfigException.issues` carries the same
+list, and its message names only codes and keys. `OpenMedSdkConfig.DEFAULT` is
+the resolved empty document.
+
+`OpenMed(backend, config)` uses `confidence_threshold` as the default
+threshold of `analyzeText`, `extractPII` and `extractPIIChunked`.
+`ModelDownloader(cache, config)` still serves a cached model when
+`local_only` is `true`, the portable default. For a model that is not cached,
+it throws `ModelDownloadException` before calling the `HuggingFaceModelClient`.
+When `download` gets no revision and the entry is `model_id`, it requests
+`model_revision`. The existing constructors are unchanged and keep their
+current behaviour. `onnx_variant` and `policy_profile` are exposed as
+properties for the caller to pass to `OpenMedKit.fromDirectory` and
+`PolicyProfiles.load`.
+
 ## Shared vectors
 
 `tests/fixtures/parity/sdk_config_v1.json` is the cross-runtime contract. It

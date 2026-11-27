@@ -30,6 +30,7 @@ on:
       - 'tests/fixtures/parity/clinical_assertion_v1.json'
       - 'tests/fixtures/parity/context_cues_en_v1.json'
       - 'tests/fixtures/parity/document_intake_v1.json'
+      - 'tests/fixtures/parity/sdk_config_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -67,6 +68,7 @@ on:
       - 'tests/fixtures/parity/clinical_assertion_v1.json'
       - 'tests/fixtures/parity/context_cues_en_v1.json'
       - 'tests/fixtures/parity/document_intake_v1.json'
+      - 'tests/fixtures/parity/sdk_config_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -200,6 +202,7 @@ jobs:
         --tests '*DocumentEvidenceParityTest'
         --tests '*TokenizerConformanceTest'
         --tests '*CatalogFilterParityTest'
+        --tests '*SdkConfigParityTest'
         --stacktrace
 
     - name: Verify Android library budgets

@@ -389,6 +389,12 @@ de-identification run locally. No model is fetched at inference time, input PHI
 is never uploaded or fetched from a service, and there is no cloud fallback.
 An offline app that ships its model does not need network permission at all.
 
+To drive these settings from one portable document shared with Python and the
+other kits, parse it with `OpenMedSdkConfig.parse(json)` and pass the result to
+`ModelDownloader(cache, config)` and `OpenMed(backend, config)`. Its
+`local_only` key defaults to `true`, so such a downloader only serves cached
+models. See [Portable SDK configuration](configuration/sdk-config.md).
+
 The DJL tokenizer library that OpenMedKit uses runs usage telemetry whenever a
 tokenizer is created: it sends HTTP requests to the cloud instance-metadata
 address unless DJL's `OPT_OUT_TRACKING` switch is set. OpenMedKit sets that JVM

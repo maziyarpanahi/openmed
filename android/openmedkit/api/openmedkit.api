@@ -149,6 +149,7 @@ public final class com/openmed/openmedkit/OpenMed {
 	public fun <init> ()V
 	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/OpenMedSdkConfig;)V
 	public final fun analyzeText (Ljava/lang/String;F)Ljava/util/List;
 	public static synthetic fun analyzeText$default (Lcom/openmed/openmedkit/OpenMed;Ljava/lang/String;FILjava/lang/Object;)Ljava/util/List;
 	public final fun extractPII (Ljava/lang/String;FZ)Ljava/util/List;
@@ -418,6 +419,36 @@ public final class com/openmed/openmedkit/OpenMedRuntimeStatus {
 	public final fun getSessionsOpened ()J
 	public final fun getState ()Lcom/openmed/openmedkit/OpenMedRuntimeState;
 	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/OpenMedSdkConfig {
+	public static final field Companion Lcom/openmed/openmedkit/OpenMedSdkConfig$Companion;
+	public static final field DEFAULT Lcom/openmed/openmedkit/OpenMedSdkConfig;
+	public static final field VERSION I
+	public synthetic fun <init> (DZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getConfidenceThreshold ()D
+	public final fun getLocalOnly ()Z
+	public final fun getModelId ()Ljava/lang/String;
+	public final fun getModelRevision ()Ljava/lang/String;
+	public final fun getOnnxVariant ()Ljava/lang/String;
+	public final fun getPolicyProfile ()Ljava/lang/String;
+	public static final fun parse (Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedSdkConfig;
+	public static final fun validate (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OpenMedSdkConfig$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedSdkConfig;
+	public final fun validate (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OpenMedSdkConfigException : java/lang/IllegalArgumentException {
+	public final fun getIssues ()Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OpenMedSdkConfigIssue {
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getField ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -2986,6 +3017,8 @@ public final class com/openmed/openmedkit/download/ModelDownloader {
 	public static final field STAGED_FILE_COMPLETE J
 	public fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
 	public synthetic fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/OpenMedSdkConfig;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/OpenMedSdkConfig;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
 	public synthetic fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun download (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
