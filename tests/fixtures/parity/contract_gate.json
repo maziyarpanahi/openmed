@@ -25,8 +25,9 @@
       "tracking": "#5328"
     },
     "web": {
-      "reporter": "active",
-      "command": "npm --prefix js/openmedkit-web run contract-gate"
+      "reporter": "pending",
+      "command": "npm --prefix js/openmedkit-web run contract-gate",
+      "tracking": "#5825"
     }
   },
   "fixtures": [

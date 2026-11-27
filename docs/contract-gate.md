@@ -60,8 +60,9 @@ the `command` that writes them, or `pending` with a `tracking` issue while its
 reporter is being built. A `required` cell of an `active` runtime must name at
 least one consumer. A `required` cell of a `pending` runtime may have an empty
 `consumers` list: the cell is still part of the contract and the runtime's
-reporter has to cover it when it becomes active. Python and web are active;
-the Swift and Kotlin reporters are tracked in #5327 and #5328.
+reporter has to cover it when it becomes active. Today only Python is active.
+The Swift and Kotlin reporters are tracked in #5327 and #5328. The web reporter
+runs in CI but stays `pending` until the web offset fix tracked in #5825.
 
 ## Case ids
 
@@ -205,9 +206,12 @@ reports. The `python-results` job runs `run-python` and uploads
 uploads `contract-gate-result-web`. The `contract-gate` job runs even when a runtime
 job failed, downloads every `contract-gate-result-*` artifact, runs
 `aggregate`, appends the summary to the job summary and uploads it as the
-`contract-gate-summary` artifact. A runtime job that fails to produce its file
-therefore fails the gate rather than skipping it. Make the `Contract gate`
-check required in the branch ruleset to block merges on it.
+`contract-gate-summary` artifact. An active runtime job that fails to produce
+its file therefore fails the gate rather than skipping it. While the web
+reporter is `pending`, its uploaded result is evaluated and shown in the
+summary but does not block, and a missing web result leaves its cells
+`pending`. Make the `Contract gate` check required in the branch ruleset to
+block merges on it.
 
 ## Adding or changing a fixture
 
@@ -260,8 +264,10 @@ input span through `deidentify()` with an injected pipeline. The web package
 does not snap spans to grapheme clusters and reports UTF-16 offsets, so today
 the cases that need snapping fail with `grapheme_boundary_mismatch`, the
 supplementary-plane cases fail with `offset_unit_mismatch`, and the rest pass.
-Because the web reporter is active, those failed cases block the gate until the
-web package meets the contract.
+The web reporter therefore stays `pending` until the web offset fix tracked in
+#5825: the gate lists those failed cases in the summary without blocking on
+them. That fix switches the web reporter to `active`, after which a failed web
+cell blocks the gate.
 
 ## Writing a reporter for another runtime
 

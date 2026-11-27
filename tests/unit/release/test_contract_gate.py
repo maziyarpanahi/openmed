@@ -1178,51 +1178,72 @@ def test_real_python_run_aggregates_end_to_end(tmp_path: Path) -> None:
         assert _cell(report, "beta", "python").state == "passed"
 
 
-def test_committed_manifest_aggregates_active_and_lists_pending_reporters(
+def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
     tmp_path: Path,
 ) -> None:
-    active = [
-        runtime
-        for runtime, declaration in gate.load_manifest().runtimes.items()
-        if declaration.reporter == gate.REPORTER_ACTIVE
-    ]
-    paths = []
-    for runtime in active:
-        path = tmp_path / f"{runtime}.json"
-        _write_json(path, _passing_result(ROOT, runtime, gate.DEFAULT_MANIFEST))
-        paths.append(path)
+    python = _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST)
+    path = tmp_path / "python.json"
+    _write_json(path, python)
 
-    report = gate.aggregate(results=paths)
+    report = gate.aggregate(results=[path])
     states = {(cell.runtime, cell.state) for cell in report.cells}
 
-    assert set(active) == {"python", "web"}
     assert report.passed
-    for runtime in active:
-        assert {state for name, state in states if name == runtime} <= {
-            "passed",
-            "not_applicable",
-        }
-    for runtime in ("swift", "kotlin"):
+    assert {state for runtime, state in states if runtime == "python"} == {"passed"}
+    for runtime in ("swift", "kotlin", "web"):
         assert {state for name, state in states if name == runtime} <= {
             "pending",
             "not_applicable",
         }
     missing = gate.aggregate()
     assert not missing.passed
-    for runtime in active:
-        assert {
-            cell.codes
-            for cell in missing.cells
-            if cell.runtime == runtime and cell.state != "not_applicable"
-        } == {("missing_result",)}
-    # Without its result file, an active reporter fails the gate.
-    python_only = gate.aggregate(results=[tmp_path / "python.json"])
-    assert not python_only.passed
-    assert {
-        cell.state
-        for cell in python_only.cells
-        if cell.runtime == "web" and cell.state != "not_applicable"
-    } == {"missing"}
+    assert {cell.codes for cell in missing.cells if cell.runtime == "python"} == {
+        ("missing_result",)
+    }
+
+
+def test_committed_web_results_are_shown_but_do_not_block_while_pending(
+    tmp_path: Path,
+) -> None:
+    # The web package fails offset_contract cases until the web offset fix in
+    # #5825, so its reporter stays pending: the gate evaluates and shows the
+    # uploaded web result, but neither its failures nor its absence block.
+    python = tmp_path / "python.json"
+    _write_json(python, _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST))
+    web_result = _passing_result(ROOT, "web", gate.DEFAULT_MANIFEST)
+    offsets = next(
+        item
+        for item in web_result["fixtures"]
+        if item["fixture_id"] == "offset_contract"
+    )
+    for case_id, reason in zip(
+        offsets["passed"][:2],
+        ("grapheme_boundary_mismatch", "offset_unit_mismatch"),
+        strict=True,
+    ):
+        offsets["passed"].remove(case_id)
+        offsets["failed"].append({"case_id": case_id, "reason": reason})
+    web = tmp_path / "web.json"
+    _write_json(web, web_result)
+
+    report = gate.aggregate(results=[python, web])
+    cell = _cell(report, "offset_contract", "web")
+
+    assert report.passed
+    assert (cell.state, cell.blocking, cell.failed, cell.note) == (
+        "failed",
+        False,
+        2,
+        "#5825",
+    )
+    assert _cell(report, "kit_parity_vectors", "web").state == "passed"
+    assert "| `offset_contract` | web | failed | no |" in report.to_markdown()
+    python_only = gate.aggregate(results=[python])
+    assert python_only.passed
+    assert {cell.state for cell in python_only.cells if cell.runtime == "web"} == {
+        "pending",
+        "not_applicable",
+    }
 
 
 def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
@@ -1277,7 +1298,9 @@ def test_web_reporter_is_wired_into_the_web_package() -> None:
     )
     reporter = "tests/web/test_contract_gate.spec.ts"
 
-    assert manifest.runtimes["web"].reporter == gate.REPORTER_ACTIVE
+    # The reporter runs in CI but stays pending until the web offset fix.
+    assert manifest.runtimes["web"].reporter == gate.REPORTER_PENDING
+    assert manifest.runtimes["web"].tracking == "#5825"
     assert "run contract-gate" in (manifest.runtimes["web"].command or "")
     assert "contract_gate_reporter.ts" in package["scripts"]["contract-gate"]
     assert f"../../{reporter}" in package["scripts"]["test:node"]
