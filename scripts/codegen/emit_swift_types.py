@@ -404,8 +404,7 @@ def _record_block(record: Record) -> str:
         if doc:
             lines.append(f"{i1}/// {doc}")
         lines.append(
-            f"{i1}public let {_identifier(swift)}: "
-            f"{_field_type(field, record)}"
+            f"{i1}public let {_identifier(swift)}: {_field_type(field, record)}"
         )
 
     # Memberwise initializer; constants are fixed by the schema.
@@ -419,9 +418,7 @@ def _record_block(record: Record) -> str:
         for index, (field, swift) in enumerate(parameters):
             default = " = nil" if not field.required else ""
             comma = "," if index < len(parameters) - 1 else ""
-            lines.append(
-                f"{i2}{swift}: {_field_type(field, record)}{default}{comma}"
-            )
+            lines.append(f"{i2}{swift}: {_field_type(field, record)}{default}{comma}")
         lines.append(f"{i1}) {{")
     else:
         lines.append(f"{i1}public init() {{")
