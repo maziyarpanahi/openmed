@@ -5,6 +5,10 @@ applications that already speak the common message-completion protocol. It
 listens locally, redacts text before calling an injected inference transport,
 and restores the placeholders only in the local response.
 
+A runnable, network-free walkthrough using an in-process echo transport is
+available in
+[`examples/privacy_proxy_echo.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/privacy_proxy_echo.py).
+
 The proxy exposes both `POST /v1/chat/completions` and
 `POST /chat/completions`. Both routes require a single
 `Content-Type: application/json` header and accept parameters such as
