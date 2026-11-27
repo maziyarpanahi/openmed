@@ -1,0 +1,1359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/settings.schema.json",
+  "title": "OpenMedSettings",
+  "description": "Declared OpenMed environment settings, grouped into named sections. Each property is one environment variable; its JSON type describes the parsed value. The schema declares settings only and never carries deployment values.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Settings schema contract version.",
+      "const": 1
+    },
+    "core": {
+      "title": "Core",
+      "description": "Library settings that map onto OpenMedConfig fields declared in config.schema.json.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "HF_TOKEN": {
+          "$ref": "config.schema.json#/properties/hf_token",
+          "description": "Hugging Face token for private models; kept in memory only.",
+          "x-config-key": "hf_token",
+          "x-secret": true,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_BNB_4BIT_USE_DOUBLE_QUANT": {
+          "$ref": "config.schema.json#/properties/bnb_4bit_use_double_quant",
+          "default": true,
+          "x-config-key": "bnb_4bit_use_double_quant",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CHINESE_PKUSEG_DOMAIN": {
+          "$ref": "config.schema.json#/properties/chinese_pkuseg_domain",
+          "default": "medicine",
+          "x-config-key": "chinese_pkuseg_domain",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CHINESE_SEGMENTATION_BACKEND": {
+          "$ref": "config.schema.json#/properties/chinese_segmentation_backend",
+          "default": "jieba",
+          "x-config-key": "chinese_segmentation_backend",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CHINESE_USER_DICT": {
+          "$ref": "config.schema.json#/properties/chinese_user_dict_path",
+          "default": null,
+          "x-env-format": "path",
+          "x-config-key": "chinese_user_dict_path",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CLINICAL_PROTECT": {
+          "$ref": "config.schema.json#/properties/clinical_protect_enabled",
+          "default": true,
+          "x-config-key": "clinical_protect_enabled",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CLINICAL_PROTECT_TERMS": {
+          "$ref": "config.schema.json#/properties/clinical_protect_terms",
+          "default": null,
+          "x-env-format": "csv",
+          "x-config-key": "clinical_protect_terms",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CLINICAL_PROTECT_USE_BUILTIN": {
+          "$ref": "config.schema.json#/properties/clinical_protect_use_builtin",
+          "default": true,
+          "x-config-key": "clinical_protect_use_builtin",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_CONFIG": {
+          "description": "OpenMedConfig TOML file loaded when no path is passed.",
+          "type": "string",
+          "default": "~/.config/openmed/config.toml",
+          "x-env-format": "path",
+          "x-default-note": "the directory follows XDG_CONFIG_HOME when it is set.",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_DEVICE": {
+          "$ref": "config.schema.json#/properties/device",
+          "description": "Legacy torch device override, checked after OPENMED_TORCH_DEVICE.",
+          "default": null,
+          "x-config-key": "device",
+          "x-secret": false,
+          "x-module": "openmed.torch.device"
+        },
+        "OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD": {
+          "$ref": "config.schema.json#/properties/indic_name_similarity_threshold",
+          "default": 0.8,
+          "x-config-key": "indic_name_similarity_threshold",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_LOAD_IN_4BIT": {
+          "$ref": "config.schema.json#/properties/load_in_4bit",
+          "default": false,
+          "x-config-key": "load_in_4bit",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS": {
+          "$ref": "config.schema.json#/properties/medical_tokenizer_exceptions",
+          "default": null,
+          "x-env-format": "csv",
+          "x-config-key": "medical_tokenizer_exceptions",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_OFFLINE": {
+          "$ref": "config.schema.json#/properties/local_only",
+          "description": "Keep inference and de-identification cache-only; any value other than 0, false, no, off or empty enables it.",
+          "default": false,
+          "x-config-key": "local_only",
+          "x-secret": false,
+          "x-module": "openmed.core.offline"
+        },
+        "OPENMED_PROFILE": {
+          "$ref": "config.schema.json#/properties/profile",
+          "default": null,
+          "x-default-note": "the REST service treats an unset profile as prod.",
+          "x-config-key": "profile",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_TORCH_ATTENTION_BACKEND": {
+          "$ref": "config.schema.json#/properties/torch_attention_backend",
+          "default": "auto",
+          "x-config-key": "torch_attention_backend",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_TORCH_DEVICE": {
+          "$ref": "config.schema.json#/properties/device",
+          "description": "Torch device override checked when the configured device is unset or auto.",
+          "default": null,
+          "x-default-note": "unset selects MPS, then CUDA, then CPU.",
+          "x-config-key": "device",
+          "x-secret": false,
+          "x-module": "openmed.torch.device"
+        },
+        "OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING": {
+          "$ref": "config.schema.json#/properties/transliteration_aware_name_matching",
+          "default": false,
+          "x-config-key": "transliteration_aware_name_matching",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        },
+        "OPENMED_USE_MEDICAL_TOKENIZER": {
+          "$ref": "config.schema.json#/properties/use_medical_tokenizer",
+          "default": true,
+          "x-config-key": "use_medical_tokenizer",
+          "x-secret": false,
+          "x-module": "openmed.core.config"
+        }
+      }
+    },
+    "service": {
+      "title": "Service",
+      "description": "REST, gRPC and GraphQL service settings read under openmed/service/.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "OPENMED_SERVICE_ADMISSION_MAX_CONCURRENCY": {
+          "description": "Fair-admission global in-flight request ceiling; 0 leaves that level unlimited.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_MAX_QUEUE": {
+          "description": "Requests that may wait at the global admission level; 0 rejects a request that cannot start at once.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_NAMESPACE_CLAIM": {
+          "description": "JWT claim whose value names the admission namespace; unset disables namespace accounting.",
+          "type": ["string", "null"],
+          "default": null,
+          "pattern": "^[A-Za-z0-9_.:-]{1,64}$",
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_NAMESPACE_MAX_CONCURRENCY": {
+          "description": "Fair-admission per-namespace in-flight request ceiling; 0 leaves that level unlimited.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_NAMESPACE_MAX_QUEUE": {
+          "description": "Requests that may wait at the per-namespace admission level; 0 rejects a request that cannot start at once.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_PRINCIPAL_MAX_CONCURRENCY": {
+          "description": "Fair-admission per-principal in-flight request ceiling; 0 leaves that level unlimited.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_PRINCIPAL_MAX_QUEUE": {
+          "description": "Requests that may wait at the per-principal admission level; 0 rejects a request that cannot start at once.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_QUEUE_TIMEOUT_SECONDS": {
+          "description": "Seconds a queued request waits for admission before it is rejected.",
+          "type": "number",
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_ADMISSION_RETRY_AFTER_SECONDS": {
+          "description": "Retry-After seconds returned with an admission rejection.",
+          "type": "number",
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.admission"
+        },
+        "OPENMED_SERVICE_AUTH_API_KEYS": {
+          "description": "Hashed static API-key credentials as a JSON list (or an object with a keys list).",
+          "type": ["array", "object"],
+          "x-env-format": "json",
+          "x-secret": true,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_API_KEYS_FILE": {
+          "description": "File holding OPENMED_SERVICE_AUTH_API_KEYS, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_SERVICE_AUTH_API_KEYS",
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT": {
+          "description": "Require authentication on routes that have no explicit scope policy.",
+          "type": "boolean",
+          "default": true,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_ENABLED": {
+          "description": "Enable API-key and JWT authentication for the REST and gRPC service.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST": {
+          "description": "Burst capacity of the failed-authentication rate limiter.",
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY": {
+          "description": "Client identity that keys failed-authentication buckets (aliases process, xff, client and remote are accepted).",
+          "type": "string",
+          "enum": ["global", "x-forwarded-for", "peer"],
+          "default": "x-forwarded-for",
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS": {
+          "description": "Refill rate of the failed-authentication rate limiter, per second.",
+          "type": "number",
+          "default": 5.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWKS": {
+          "description": "Inline JSON Web Key Set used to verify bearer JWTs.",
+          "type": ["array", "object"],
+          "x-env-format": "json",
+          "x-secret": true,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWKS_FILE": {
+          "description": "File holding the JSON Web Key Set used to verify bearer JWTs.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_SERVICE_AUTH_JWKS",
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWT_AUDIENCE": {
+          "description": "Comma- or space-separated accepted JWT audiences (aud); empty accepts any.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWT_ISSUER": {
+          "description": "Required JWT issuer (iss); unset accepts any issuer.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWT_LEEWAY_SECONDS": {
+          "description": "Clock-skew leeway in seconds for JWT time claims.",
+          "type": "number",
+          "default": 0.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_JWT_MAX_LIFETIME_SECONDS": {
+          "description": "Longest accepted JWT lifetime in seconds.",
+          "type": ["number", "null"],
+          "default": 3600.0,
+          "minimum": 0,
+          "x-default-note": "3600 under the prod security profile; unset under dev applies no lifetime cap.",
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_AUTH_ROUTE_SCOPES": {
+          "description": "JSON object of per-route scope overrides keyed by 'METHOD /path'.",
+          "type": ["object", "null"],
+          "default": null,
+          "x-env-format": "json",
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_BATCHING_ENABLED": {
+          "description": "Enable dynamic batching for model-backed REST endpoints.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_HIGH_WATERMARK": {
+          "description": "Outstanding-request depth at which load shedding starts.",
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "x-default-note": "the value of OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE.",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_LOW_WATERMARK": {
+          "description": "Depth below which load shedding stops; must be below the high watermark.",
+          "type": "integer",
+          "default": 128,
+          "minimum": 0,
+          "x-default-note": "half of OPENMED_SERVICE_BATCH_HIGH_WATERMARK.",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE": {
+          "description": "Per-priority dynamic-batching queue capacity.",
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS": {
+          "description": "Longest time in milliseconds a request may wait before batch dispatch.",
+          "type": "number",
+          "default": 1000.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_MAX_SIZE": {
+          "description": "Largest dynamic batch.",
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 100,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BATCH_MAX_WAIT_MS": {
+          "description": "Milliseconds a batch waits to fill before dispatch.",
+          "type": "number",
+          "default": 5.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_BULK_INPUT_ROOTS": {
+          "description": "Comma-separated local directories FHIR bulk jobs may read from.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.bulk_data"
+        },
+        "OPENMED_SERVICE_BULK_JOB_TTL_SECONDS": {
+          "description": "Seconds a terminal FHIR bulk job record is retained.",
+          "type": "integer",
+          "default": 3600,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.bulk_data"
+        },
+        "OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS": {
+          "description": "Largest number of retained FHIR bulk job records.",
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.bulk_data"
+        },
+        "OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS": {
+          "description": "Largest number of concurrently running FHIR bulk jobs.",
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.bulk_data"
+        },
+        "OPENMED_SERVICE_BULK_OUTPUT_ROOT": {
+          "description": "Local directory under which FHIR bulk jobs write their output.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.bulk_data"
+        },
+        "OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD": {
+          "description": "Consecutive failures that open the circuit breaker.",
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS": {
+          "description": "Seconds an open circuit breaker waits before a trial call.",
+          "type": "number",
+          "default": 30.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_COALESCING_ENABLED": {
+          "description": "Coalesce identical concurrent model requests.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS": {
+          "description": "Seconds a request waits for a concurrency slot before rejection.",
+          "type": "number",
+          "default": 0.05,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_CORS_ORIGINS": {
+          "description": "Comma-separated exact CORS origins; wildcards are rejected.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.security_headers"
+        },
+        "OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES": {
+          "description": "Assumed per-model memory footprint for admission when a model reports none.",
+          "type": "integer",
+          "default": 536870912,
+          "minimum": 1,
+          "x-env-format": "byte-size",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_DIGEST_KEY": {
+          "description": "Deployment secret, at least 32 bytes, for keyed digests of identifiers in job records and audits.",
+          "type": "string",
+          "minLength": 32,
+          "x-secret": true,
+          "x-module": "openmed.service.keyed_digest"
+        },
+        "OPENMED_SERVICE_DIGEST_KEY_FILE": {
+          "description": "File holding OPENMED_SERVICE_DIGEST_KEY, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_SERVICE_DIGEST_KEY",
+          "x-module": "openmed.service.keyed_digest"
+        },
+        "OPENMED_SERVICE_DIGEST_KEY_ID": {
+          "description": "Public identifier recorded with keyed digests.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.service.keyed_digest"
+        },
+        "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT": {
+          "description": "Enable the experimental multimodal preflight route.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.app"
+        },
+        "OPENMED_SERVICE_GRAPHQL_DEADLINE_SECONDS": {
+          "description": "Seconds one GraphQL request may run, from body parsing to cleanup.",
+          "type": "number",
+          "default": 300.0,
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_ALIASES": {
+          "description": "Aliased fields after GraphQL fragment expansion.",
+          "type": "integer",
+          "default": 16,
+          "minimum": 0,
+          "maximum": 1000000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_DEPTH": {
+          "description": "Field nesting after GraphQL fragment expansion.",
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 128,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_DOCUMENT_BYTES": {
+          "description": "UTF-8 bytes allowed in a GraphQL query document.",
+          "type": "integer",
+          "default": 131072,
+          "minimum": 1,
+          "maximum": 16777216,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_FRAGMENTS": {
+          "description": "Fragment definitions allowed in one GraphQL document.",
+          "type": "integer",
+          "default": 64,
+          "minimum": 0,
+          "maximum": 10000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_NESTING": {
+          "description": "Deepest bracket nesting in a GraphQL document.",
+          "type": "integer",
+          "default": 32,
+          "minimum": 1,
+          "maximum": 128,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_NODES": {
+          "description": "Syntax-tree nodes allowed in a parsed GraphQL document.",
+          "type": "integer",
+          "default": 5000,
+          "minimum": 1,
+          "maximum": 1000000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_OPERATIONS": {
+          "description": "Operation definitions allowed in one GraphQL document.",
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 1000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_SELECTED_FIELDS": {
+          "description": "Field selections after GraphQL fragment expansion.",
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 1000000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_TOKENS": {
+          "description": "Lexical tokens allowed in a GraphQL document.",
+          "type": "integer",
+          "default": 2000,
+          "minimum": 1,
+          "maximum": 1000000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_VARIABLES": {
+          "description": "Variables supplied with, or declared by, a GraphQL request.",
+          "type": "integer",
+          "default": 32,
+          "minimum": 0,
+          "maximum": 10000,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_VARIABLE_BYTES": {
+          "description": "Compact UTF-8 JSON size of GraphQL variables.",
+          "type": "integer",
+          "default": 8388608,
+          "minimum": 0,
+          "maximum": 268435456,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_GRAPHQL_MAX_VARIABLE_DEPTH": {
+          "description": "Container nesting allowed in GraphQL variables.",
+          "type": "integer",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 128,
+          "x-secret": false,
+          "x-module": "openmed.service.graphql_limits"
+        },
+        "OPENMED_SERVICE_IDEMPOTENCY_MAX_KEYS": {
+          "description": "Largest number of remembered idempotency keys.",
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 100000,
+          "x-secret": false,
+          "x-module": "openmed.service.idempotency"
+        },
+        "OPENMED_SERVICE_IDEMPOTENCY_TTL_SECONDS": {
+          "description": "Seconds an idempotency key is remembered.",
+          "type": "integer",
+          "default": 86400,
+          "minimum": 1,
+          "maximum": 604800,
+          "x-secret": false,
+          "x-module": "openmed.service.idempotency"
+        },
+        "OPENMED_SERVICE_JOBS_LEASE_SECONDS": {
+          "description": "Seconds a worker's async job lease lasts before recovery may reclaim it.",
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_MAX_ATTEMPTS": {
+          "description": "Attempts per async job, including the first.",
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_MAX_DOCUMENTS": {
+          "description": "Largest number of documents in one async job.",
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_MAX_PENDING": {
+          "description": "Largest number of pending async jobs.",
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES": {
+          "description": "Largest total queued async job text, in bytes.",
+          "type": "integer",
+          "default": 67108864,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_PAYLOAD_DIR": {
+          "description": "Directory for encrypted async job payloads.",
+          "type": "string",
+          "default": "~/.cache/openmed/service-job-payloads",
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_PAYLOAD_MODE": {
+          "description": "Async job payload retention: memory only, or encrypted on disk with a caller-supplied key provider.",
+          "type": ["string", "null"],
+          "enum": [null, "memory", "encrypted"],
+          "default": null,
+          "x-default-note": "unset keeps payloads in memory unless a key provider is supplied.",
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS": {
+          "description": "Longest async job payload retention in seconds.",
+          "type": "integer",
+          "default": 86400,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_RECONCILE_SECONDS": {
+          "description": "Interval of the background async job reconcile pass; 0 disables it.",
+          "type": "number",
+          "default": 5.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_RETRY_BASE_SECONDS": {
+          "description": "Base retry delay for async jobs, in seconds.",
+          "type": "integer",
+          "default": 5,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_RETRY_MAX_SECONDS": {
+          "description": "Largest retry delay for async jobs, in seconds.",
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_STORE_PATH": {
+          "description": "Async job metadata store file.",
+          "type": "string",
+          "default": "~/.cache/openmed/service-jobs.json",
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_TTL_SECONDS": {
+          "description": "Seconds terminal async job metadata is retained.",
+          "type": "integer",
+          "default": 86400,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOBS_WORKERS": {
+          "description": "Async job worker threads.",
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.jobs"
+        },
+        "OPENMED_SERVICE_JOURNEY_GRANTS": {
+          "description": "Inline Journey grant document as JSON; set this or the file form, not both.",
+          "type": ["array", "object", "null"],
+          "default": null,
+          "x-env-format": "json",
+          "x-secret": false,
+          "x-module": "openmed.service.journey_access"
+        },
+        "OPENMED_SERVICE_JOURNEY_GRANTS_FILE": {
+          "description": "File holding the Journey grant document.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.journey_access"
+        },
+        "OPENMED_SERVICE_KEEP_ALIVE": {
+          "description": "Default model keep-alive as seconds or a duration such as 5m; unset or off keeps models resident.",
+          "type": ["number", "null"],
+          "default": null,
+          "minimum": 0,
+          "x-env-format": "duration",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_LIMIT_CONCURRENCY": {
+          "description": "Reference launcher connection concurrency limit.",
+          "type": "integer",
+          "default": 128,
+          "minimum": 1,
+          "maximum": 100000,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_LISTEN_HOST": {
+          "description": "Bind host recorded by the reference launcher for the security-profile self-check.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-secret": false,
+          "x-module": "openmed.service.security_profile"
+        },
+        "OPENMED_SERVICE_LISTEN_TLS": {
+          "description": "Whether the listener terminates TLS, recorded by the reference launcher.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.security_profile"
+        },
+        "OPENMED_SERVICE_LOG_FORMAT": {
+          "description": "Access-log format: plain or text selects plain lines, anything else JSON.",
+          "type": "string",
+          "enum": ["json", "plain", "text"],
+          "default": "json",
+          "x-secret": false,
+          "x-module": "openmed.service.logging"
+        },
+        "OPENMED_SERVICE_LOG_LEVEL": {
+          "description": "Access-log level name or number; off disables the access log.",
+          "type": "string",
+          "default": "INFO",
+          "x-secret": false,
+          "x-module": "openmed.service.logging"
+        },
+        "OPENMED_SERVICE_MAX_REQUEST_BYTES": {
+          "description": "Largest accepted request body in bytes.",
+          "type": "integer",
+          "default": 16777216,
+          "minimum": 1,
+          "maximum": 268435456,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_MAX_RESIDENT_MODELS": {
+          "description": "Largest number of models kept resident in the warm pool; unset is unbounded.",
+          "type": ["integer", "null"],
+          "default": null,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MAX_TEXT_LENGTH": {
+          "description": "Largest request text in characters; invalid values fall back to the default.",
+          "type": "integer",
+          "default": 1000000,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.limits"
+        },
+        "OPENMED_SERVICE_METRICS_ENABLED": {
+          "description": "Expose the Prometheus /metrics endpoint.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.metrics"
+        },
+        "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET": {
+          "description": "MLX-LM paged KV-cache memory budget in bytes or a size such as 2GiB; 0 disables the paged cache.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-env-format": "byte-size",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN": {
+          "description": "Estimated KV-cache bytes per token used for MLX budget accounting.",
+          "type": "integer",
+          "default": 65536,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS": {
+          "description": "Prefill chunk size in tokens for the MLX paged KV cache.",
+          "type": "integer",
+          "default": 512,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS": {
+          "description": "Tokens per MLX paged KV-cache page.",
+          "type": "integer",
+          "default": 128,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS": {
+          "description": "Sliding attention window in tokens for the MLX paged KV cache; unset keeps the full context.",
+          "type": ["integer", "null"],
+          "default": null,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS": {
+          "description": "Seconds a model load waits for memory budget before rejection.",
+          "type": "number",
+          "default": 0.05,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES": {
+          "description": "Warm-pool memory budget in bytes or a size such as 4GiB; unset is unbounded.",
+          "type": ["integer", "null"],
+          "default": null,
+          "minimum": 1,
+          "x-env-format": "byte-size",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_MTLS_CA_BUNDLE": {
+          "description": "CA bundle that verifies client certificates; required with mTLS.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_CLIENT_CERT_HEADER": {
+          "description": "Header a trusted proxy uses to forward the client certificate.",
+          "type": ["string", "null"],
+          "default": null,
+          "pattern": "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_CRL_FAIL_CLOSED": {
+          "description": "Reject requests when a CRL is invalid or stale; only dev and test profiles may disable it.",
+          "type": "boolean",
+          "default": true,
+          "x-default-note": "false under the dev and test profiles.",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_CRL_FILES": {
+          "description": "Comma-separated local PEM or DER certificate revocation list files.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_CRL_GRACE_SECONDS": {
+          "description": "Seconds a CRL stays usable past its next-update time.",
+          "type": "number",
+          "default": 0.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_ENABLED": {
+          "description": "Require client certificates (mTLS) for the service.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_PRINCIPALS": {
+          "description": "JSON list mapping certificate subjects or SANs to principals.",
+          "type": ["array", "null"],
+          "default": null,
+          "x-env-format": "json",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_RELOAD_INTERVAL_SECONDS": {
+          "description": "Poll interval for reloading the CA bundle and CRLs; unset disables reloading.",
+          "type": ["number", "null"],
+          "default": null,
+          "minimum": 1,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_TRUSTED_PROXIES": {
+          "description": "Comma-separated proxy addresses or CIDR networks allowed to forward client certificates.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_MTLS_TRUST_OVERLAP_SECONDS": {
+          "description": "Seconds a replaced CA bundle stays trusted after a reload.",
+          "type": "number",
+          "default": 300.0,
+          "minimum": 0,
+          "maximum": 86400,
+          "x-secret": false,
+          "x-module": "openmed.service.mtls"
+        },
+        "OPENMED_SERVICE_OPENAPI_ENABLED": {
+          "description": "Serve /openapi.json; outside the dev profile it stays behind authentication and the HTML docs stay disabled.",
+          "type": "boolean",
+          "default": false,
+          "x-default-note": "true when OPENMED_PROFILE is dev.",
+          "x-secret": false,
+          "x-module": "openmed.service.auth"
+        },
+        "OPENMED_SERVICE_OTLP_ENDPOINT": {
+          "description": "OTLP exporter endpoint for traces; setting it opts in to tracing.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "url",
+          "x-secret": false,
+          "x-module": "openmed.service.tracing"
+        },
+        "OPENMED_SERVICE_OTLP_HEADERS": {
+          "description": "Comma-separated key=value headers sent to the OTLP exporter, such as credentials.",
+          "type": "string",
+          "x-secret": true,
+          "x-module": "openmed.service.tracing"
+        },
+        "OPENMED_SERVICE_OTLP_HEADERS_FILE": {
+          "description": "File holding OPENMED_SERVICE_OTLP_HEADERS, such as a mounted secret.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-secret-file-for": "OPENMED_SERVICE_OTLP_HEADERS",
+          "x-module": "openmed.service.tracing"
+        },
+        "OPENMED_SERVICE_OTLP_TIMEOUT_SECONDS": {
+          "description": "OTLP exporter timeout in seconds.",
+          "type": "number",
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.tracing"
+        },
+        "OPENMED_SERVICE_PRELOAD_MODELS": {
+          "description": "Comma-separated model identifiers loaded at startup.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT": {
+          "description": "External LLM endpoint that receives only redacted content through the privacy gateway; unset disables the gateway transport.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "url",
+          "x-secret": false,
+          "x-module": "openmed.service.privacy_gateway"
+        },
+        "OPENMED_SERVICE_RATE_LIMIT_BURST": {
+          "description": "Token-bucket burst capacity; 0 disables rate limiting.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY": {
+          "description": "Largest number of in-flight model requests; 0 leaves it unlimited.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RATE_LIMIT_RPS": {
+          "description": "Token-bucket refill rate in requests per second; 0 disables rate limiting.",
+          "type": "number",
+          "default": 0.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE": {
+          "description": "Comma-separated replica-local components accepted in multi-replica mode.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.replica_state"
+        },
+        "OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE": {
+          "description": "Comma-separated replica-local components to disable.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.replica_state"
+        },
+        "OPENMED_SERVICE_REPLICA_MODE": {
+          "description": "Replica topology the service is deployed in.",
+          "type": "string",
+          "enum": ["single", "multi"],
+          "default": "single",
+          "x-secret": false,
+          "x-module": "openmed.service.replica_state"
+        },
+        "OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS": {
+          "description": "Seconds before the minimum body transfer rate applies.",
+          "type": "number",
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND": {
+          "description": "Minimum request body transfer rate once the grace period is spent.",
+          "type": "integer",
+          "default": 1024,
+          "minimum": 0,
+          "maximum": 1073741824,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS": {
+          "description": "Seconds allowed to receive a whole request body.",
+          "type": "number",
+          "default": 60.0,
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_REQUEST_SIGNING_MAX_SKEW_SECONDS": {
+          "description": "Largest accepted request-signature clock skew in seconds.",
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.request_signing"
+        },
+        "OPENMED_SERVICE_REQUEST_SIGNING_NONCE_CACHE_SIZE": {
+          "description": "Nonces remembered for request-signature replay protection.",
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.request_signing"
+        },
+        "OPENMED_SERVICE_REQUEST_SIGNING_ROUTES": {
+          "description": "Comma-separated 'METHOD /template' routes that require an HMAC request signature.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.request_signing"
+        },
+        "OPENMED_SERVICE_REQUEST_SIGNING_SECRET_FILE": {
+          "description": "File holding the request-signing HMAC secret; required with signed routes.",
+          "type": ["string", "null"],
+          "default": null,
+          "x-env-format": "path",
+          "x-secret": false,
+          "x-module": "openmed.service.request_signing"
+        },
+        "OPENMED_SERVICE_RESILIENCE_ENABLED": {
+          "description": "Enable retries and circuit breaking around model calls.",
+          "type": "boolean",
+          "default": true,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS": {
+          "description": "Initial retry backoff in seconds.",
+          "type": "number",
+          "default": 0.05,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RETRY_BACKOFF_JITTER_SECONDS": {
+          "description": "Random jitter added to each retry backoff, in seconds.",
+          "type": "number",
+          "default": 0.01,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RETRY_BACKOFF_MAX_SECONDS": {
+          "description": "Largest retry backoff in seconds.",
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RETRY_BACKOFF_MULTIPLIER": {
+          "description": "Exponential retry backoff multiplier.",
+          "type": "number",
+          "default": 2.0,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_RETRY_MAX_ATTEMPTS": {
+          "description": "Attempts per model call, including the first.",
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_SECURITY_PROFILE": {
+          "description": "Service security profile.",
+          "type": "string",
+          "enum": ["dev", "prod"],
+          "default": "prod",
+          "x-default-note": "unset follows OPENMED_PROFILE: dev, test and fast select dev; anything else selects prod.",
+          "x-secret": false,
+          "x-module": "openmed.service.security_profile"
+        },
+        "OPENMED_SERVICE_SERVED_MODELS": {
+          "description": "Comma-separated model identifiers network requests may select.",
+          "type": ["array", "null"],
+          "items": {"type": "string"},
+          "default": null,
+          "x-env-format": "csv",
+          "x-default-note": "unset serves the built-in default models plus the preloaded ones.",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS": {
+          "description": "Seconds accepted work may finish during graceful shutdown.",
+          "type": "number",
+          "default": 30.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS": {
+          "description": "Seconds for the flush-and-release window after the shutdown drain.",
+          "type": "number",
+          "default": 5.0,
+          "minimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_STREAM_MAX_EVENTS": {
+          "description": "Largest number of NDJSON events one stream may emit.",
+          "type": "integer",
+          "default": 100000,
+          "minimum": 1,
+          "maximum": 10000000,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS": {
+          "description": "Seconds one NDJSON stream write may stay blocked on the client.",
+          "type": "number",
+          "default": 30.0,
+          "exclusiveMinimum": 0,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_SYSTEM_ONE": {
+          "description": "Enable the opt-in POST /v1/systemone privacy route.",
+          "type": "boolean",
+          "default": false,
+          "x-secret": false,
+          "x-module": "openmed.service.app"
+        },
+        "OPENMED_SERVICE_THROTTLE_KEY": {
+          "description": "Client identity that keys throttle buckets (aliases process, xff, client and remote are accepted).",
+          "type": "string",
+          "enum": ["global", "x-forwarded-for", "peer"],
+          "default": "global",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS": {
+          "description": "Per-limiter bound on tracked client identities.",
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN": {
+          "description": "Seconds shutdown waits for open connections before cancelling.",
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE": {
+          "description": "Seconds an idle HTTP keep-alive connection stays open.",
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 3600,
+          "x-secret": false,
+          "x-module": "openmed.service.request_limits"
+        },
+        "OPENMED_SERVICE_TRACING_ENABLED": {
+          "description": "Enable OpenTelemetry request tracing.",
+          "type": "boolean",
+          "default": false,
+          "x-default-note": "true when OPENMED_SERVICE_OTLP_ENDPOINT is set.",
+          "x-secret": false,
+          "x-module": "openmed.service.tracing"
+        },
+        "OPENMED_SERVICE_TRUSTED_HOSTS": {
+          "description": "Comma-separated allowed Host header values; the global '*' is rejected.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["localhost", "127.0.0.1", "[::1]"],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.security_headers"
+        },
+        "OPENMED_SERVICE_TRUSTED_PROXIES": {
+          "description": "Comma-separated reverse-proxy addresses or CIDR networks whose X-Forwarded-For entries may identify clients.",
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "x-env-format": "csv",
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        },
+        "OPENMED_SERVICE_TRUSTED_PROXY_HOPS": {
+          "description": "Trusted proxy hops skipped when reading X-Forwarded-For.",
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "x-secret": false,
+          "x-module": "openmed.service.runtime"
+        }
+      }
+    }
+  }
+}
