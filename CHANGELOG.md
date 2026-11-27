@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Draft multilingual lexical injection cue packs for Spanish, French, German,
+  Portuguese, Chinese and Hindi, with offset-only findings, synthetic coverage
+  budgets and explicit pending fluent contributor review (#3782).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
