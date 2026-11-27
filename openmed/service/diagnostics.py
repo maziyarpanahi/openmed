@@ -46,6 +46,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 BUNDLE_FORMAT: Final = "openmed.diagnostic-bundle"
 BUNDLE_SCHEMA_VERSION: Final = 1
 TIMESTAMP_PRECISION_SECONDS: Final = 3600
@@ -481,7 +483,7 @@ _DISK_LOW_BYTES: Final = 2 * 1024**3
 # ---------------------------------------------------------------------------
 
 
-class DiagnosticRequestError(ValueError):
+class DiagnosticRequestError(ValueError, LegacyRootedError):
     """Value-free refusal of an invalid diagnostic request or output.
 
     Attributes:

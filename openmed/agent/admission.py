@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Iterator, Protocol, TypeVar
 
 from openmed.agent.identifiers import GovernanceIdError, WorkflowId
+from openmed.core.errors import LegacyRootedError
 
 SCHEMA = "openmed.agent.effect_admission.v1"
 _ZERO_DIGEST = "sha256:" + "0" * 64
@@ -51,7 +52,7 @@ class AdmissionReason(str, Enum):
     MAINTENANCE = "maintenance"
 
 
-class AdmissionError(ValueError):
+class AdmissionError(ValueError, LegacyRootedError):
     """Report only a controlled admission failure code."""
 
 

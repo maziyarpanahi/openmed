@@ -22,9 +22,10 @@ from openmed.agent.action_graph import (
     validate_action_graph,
 )
 from openmed.agent.correlation import RunId
+from openmed.core.errors import LegacyRootedError
 
 
-class SchedulerError(ValueError):
+class SchedulerError(ValueError, LegacyRootedError):
     """Controlled validation error that never retains rejected values."""
 
 

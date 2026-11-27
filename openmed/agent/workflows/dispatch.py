@@ -53,6 +53,7 @@ from openmed.agent.workflows.recovery import (
     advance_checkpoint,
     recover_workflow,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.mcp.tool_registry import ToolSpec, validate_tool_input
 
 
@@ -178,7 +179,7 @@ class DispatchResult:
         }
 
 
-class GuardedDispatchError(ValueError):
+class GuardedDispatchError(ValueError, LegacyRootedError):
     """Non-retryable workflow failure with a content-free typed result."""
 
     def __init__(self, result: DispatchResult) -> None:

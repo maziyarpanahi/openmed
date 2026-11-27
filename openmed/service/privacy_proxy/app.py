@@ -28,6 +28,7 @@ from typing import Any, Optional, cast
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from openmed.core.errors import LegacyRootedError
 from openmed.guard.operational_limits import OperationalLimits
 
 from ..auth import ServiceAuth, ServiceAuthConfig
@@ -74,7 +75,7 @@ EntityExtractor = Callable[..., Any]
 ChatTransport = Callable[..., Any]
 
 
-class PrivacyProxyError(RuntimeError):
+class PrivacyProxyError(RuntimeError, LegacyRootedError):
     """Base class for safe, PHI-free proxy errors."""
 
     status_code = 502

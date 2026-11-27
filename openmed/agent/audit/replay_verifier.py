@@ -24,6 +24,7 @@ from openmed.agent.permissions.grants import (
     CapabilityGrantRequest,
     CapabilityGrantVerifier,
 )
+from openmed.core.errors import LegacyRootedError
 
 REPLAY_SCHEMA_VERSION: Final = "openmed.agent.deterministic_replay.v1"
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -39,7 +40,7 @@ _FIELDS = (
 )
 
 
-class ReplayError(ValueError):
+class ReplayError(ValueError, LegacyRootedError):
     """Value-free refusal to replay incomplete or unauthenticated evidence."""
 
     def __init__(self, code: str) -> None:

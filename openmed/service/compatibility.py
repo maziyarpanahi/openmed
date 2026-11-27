@@ -47,6 +47,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 COMPATIBILITY_SCHEMA_VERSION = "openmed.service.compatibility.v1"
 COMPATIBILITY_MATRIX_SCHEMA_VERSION = "openmed.service.compatibility-matrix.v1"
 ROLLOUT_EVIDENCE_SCHEMA_VERSION = "openmed.service.rollout-evidence.v1"
@@ -149,7 +151,7 @@ _ENVELOPE_KEYS = frozenset(
 )
 
 
-class CompatibilityError(ValueError):
+class CompatibilityError(ValueError, LegacyRootedError):
     """Raised when a contract, descriptor or envelope is not well formed.
 
     Attributes:
@@ -161,7 +163,7 @@ class CompatibilityError(ValueError):
         self.code = code
 
 
-class IncompatibleStateError(RuntimeError):
+class IncompatibleStateError(RuntimeError, LegacyRootedError):
     """Raised before a durable store is mutated outside the declared window.
 
     Attributes:

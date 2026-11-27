@@ -21,6 +21,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 SERVICE_DIGEST_KEY_ENV_VAR: Final = "OPENMED_SERVICE_DIGEST_KEY"
 SERVICE_DIGEST_KEY_ID_ENV_VAR: Final = "OPENMED_SERVICE_DIGEST_KEY_ID"
 KEYED_DIGEST_ALGORITHM: Final = "hmac-sha256"
@@ -34,7 +36,7 @@ _KEY_ID_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _VALUE_RE: Final = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class DigestKeyError(ValueError):
+class DigestKeyError(ValueError, LegacyRootedError):
     """Value-free failure while configuring the service digest key.
 
     Attributes:

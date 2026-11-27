@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 ABSTRACTION_EVIDENCE_SCHEMA: Final = "openmed.agent.workflows.abstraction_evidence.v1"
 
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -64,7 +66,7 @@ class ReviewerState(str, Enum):
     REJECTED = "rejected"
 
 
-class AbstractionEvidenceError(ValueError):
+class AbstractionEvidenceError(ValueError, LegacyRootedError):
     """A value-free evidence validation or finalization error.
 
     Args:

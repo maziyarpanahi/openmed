@@ -1,0 +1,2098 @@
+{
+  "classes": {
+    "openmed.structured.cohort.circe:CirceInputError": {
+      "code": "circe_input_error",
+      "mro": [
+        "openmed.structured.cohort.circe:CirceInputError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('circe_invalid',)",
+          "call": 0,
+          "pickle_args": "('circe_invalid',)",
+          "pickle_str": "circe_invalid",
+          "pickle_type": "openmed.structured.cohort.circe:CirceInputError",
+          "str": "circe_invalid"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.circe:CirceInputError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.cohort.circe:CirceLimitError": {
+      "code": "circe_limit_error",
+      "mro": [
+        "openmed.structured.cohort.circe:CirceLimitError",
+        "openmed.structured.cohort.circe:CirceInputError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('circe_invalid',)",
+          "call": 0,
+          "pickle_args": "('circe_invalid',)",
+          "pickle_str": "circe_invalid",
+          "pickle_type": "openmed.structured.cohort.circe:CirceLimitError",
+          "str": "circe_invalid"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.circe:CirceLimitError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.cohort.dsl:PhenotypeDefinitionError": {
+      "code": "phenotype_definition_error",
+      "mro": [
+        "openmed.structured.cohort.dsl:PhenotypeDefinitionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.dsl:PhenotypeDefinitionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.dsl:PhenotypeDefinitionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.dsl:PhenotypeDefinitionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.exchange:CohortExchangeConflictError": {
+      "code": "cohort_exchange_conflict_error",
+      "mro": [
+        "openmed.structured.cohort.exchange:CohortExchangeConflictError",
+        "openmed.structured.cohort.exchange:CohortExchangeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.exchange:CohortExchangeError": {
+      "code": "cohort_exchange_error",
+      "mro": [
+        "openmed.structured.cohort.exchange:CohortExchangeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.exchange:CohortExchangeUnsupportedError": {
+      "code": "cohort_exchange_unsupported_error",
+      "mro": [
+        "openmed.structured.cohort.exchange:CohortExchangeUnsupportedError",
+        "openmed.structured.cohort.exchange:CohortExchangeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.exchange:CohortExchangeUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.saved:SavedCohortConflictError": {
+      "code": "saved_cohort_conflict_error",
+      "mro": [
+        "openmed.structured.cohort.saved:SavedCohortConflictError",
+        "openmed.structured.cohort.saved:SavedCohortError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.saved:SavedCohortError": {
+      "code": "saved_cohort_error",
+      "mro": [
+        "openmed.structured.cohort.saved:SavedCohortError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.cohort.saved:SavedCohortUnsupportedError": {
+      "code": "saved_cohort_unsupported_error",
+      "mro": [
+        "openmed.structured.cohort.saved:SavedCohortUnsupportedError",
+        "openmed.structured.cohort.saved:SavedCohortError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.cohort.saved:SavedCohortUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.datasets.governed:GovernedDatasetConflictError": {
+      "code": "governed_dataset_conflict_error",
+      "mro": [
+        "openmed.structured.datasets.governed:GovernedDatasetConflictError",
+        "openmed.structured.datasets.governed:GovernedDatasetError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.datasets.governed:GovernedDatasetError": {
+      "code": "governed_dataset_error",
+      "mro": [
+        "openmed.structured.datasets.governed:GovernedDatasetError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.datasets.governed:GovernedDatasetUnsupportedError": {
+      "code": "governed_dataset_unsupported_error",
+      "mro": [
+        "openmed.structured.datasets.governed:GovernedDatasetUnsupportedError",
+        "openmed.structured.datasets.governed:GovernedDatasetError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.datasets.governed:GovernedDatasetUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.decision:DecisionConflictError": {
+      "code": "decision_conflict_error",
+      "mro": [
+        "openmed.structured.decision:DecisionConflictError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.decision:DecisionConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.decision:DecisionConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.decision:DecisionConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.decision:DecisionError": {
+      "code": "decision_error",
+      "mro": [
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.decision:DecisionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.decision:DecisionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.decision:DecisionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.decision:DecisionUnsupportedError": {
+      "code": "decision_unsupported_error",
+      "mro": [
+        "openmed.structured.decision:DecisionUnsupportedError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.decision:DecisionUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.decision:DecisionUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.decision:DecisionUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.decision_interop:DecisionRequestShapeError": {
+      "code": "decision_request_shape_error",
+      "mro": [
+        "openmed.structured.decision_interop:DecisionRequestShapeError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('decision request shape refused: no_shape',)",
+          "call": 1,
+          "pickle_args": "('decision request shape refused: no_shape',)",
+          "pickle_str": "decision request shape refused: no_shape",
+          "pickle_type": "openmed.structured.decision_interop:DecisionRequestShapeError",
+          "str": "decision request shape refused: no_shape"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_media:DecisionMediaError": {
+      "code": "decision_media_error",
+      "mro": [
+        "openmed.structured.decision_media:DecisionMediaError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.decision_media:DecisionMediaError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.decision_media:DecisionMediaError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.decision_media:DecisionMediaError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.decision_server:DecisionServerConflictError": {
+      "code": "decision_server_conflict_error",
+      "mro": [
+        "openmed.structured.decision_server:DecisionServerConflictError",
+        "openmed.structured.decision_server:DecisionServerError",
+        "openmed.structured.decision:DecisionConflictError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The decision server reported a different model than declared.',)",
+          "call": 0,
+          "pickle_args": "('The decision server reported a different model than declared.',)",
+          "pickle_str": "The decision server reported a different model than declared.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerConflictError",
+          "str": "The decision server reported a different model than declared."
+        },
+        {
+          "args": "('The decision server reported a different model than declared.',)",
+          "call": 1,
+          "pickle_args": "('The decision server reported a different model than declared.',)",
+          "pickle_str": "The decision server reported a different model than declared.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerConflictError",
+          "str": "The decision server reported a different model than declared."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_server:DecisionServerEndpointError": {
+      "code": "decision_server_endpoint_error",
+      "mro": [
+        "openmed.structured.decision_server:DecisionServerEndpointError",
+        "openmed.structured.decision_server:DecisionServerError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The decision server endpoint was refused by policy.',)",
+          "call": 0,
+          "pickle_args": "('The decision server endpoint was refused by policy.',)",
+          "pickle_str": "The decision server endpoint was refused by policy.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerEndpointError",
+          "str": "The decision server endpoint was refused by policy."
+        },
+        {
+          "args": "('The decision server endpoint was refused by policy.',)",
+          "call": 1,
+          "pickle_args": "('The decision server endpoint was refused by policy.',)",
+          "pickle_str": "The decision server endpoint was refused by policy.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerEndpointError",
+          "str": "The decision server endpoint was refused by policy."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_server:DecisionServerError": {
+      "code": "decision_server_error",
+      "mro": [
+        "openmed.structured.decision_server:DecisionServerError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The decision server request failed.',)",
+          "call": 0,
+          "pickle_args": "('The decision server request failed.',)",
+          "pickle_str": "The decision server request failed.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerError",
+          "str": "The decision server request failed."
+        },
+        {
+          "args": "('The decision server request failed.',)",
+          "call": 1,
+          "pickle_args": "('The decision server request failed.',)",
+          "pickle_str": "The decision server request failed.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerError",
+          "str": "The decision server request failed."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_server:DecisionServerTimeoutError": {
+      "code": "decision_server_timeout_error",
+      "mro": [
+        "openmed.structured.decision_server:DecisionServerTimeoutError",
+        "openmed.structured.decision_server:DecisionServerError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:TimeoutError",
+        "builtins:OSError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The decision server did not answer within the timeout.',)",
+          "call": 0,
+          "pickle_args": "('The decision server did not answer within the timeout.',)",
+          "pickle_str": "The decision server did not answer within the timeout.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerTimeoutError",
+          "str": "The decision server did not answer within the timeout."
+        },
+        {
+          "args": "('The decision server did not answer within the timeout.',)",
+          "call": 1,
+          "pickle_args": "('The decision server did not answer within the timeout.',)",
+          "pickle_str": "The decision server did not answer within the timeout.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerTimeoutError",
+          "str": "The decision server did not answer within the timeout."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_server:DecisionServerUnsupportedError": {
+      "code": "decision_server_unsupported_error",
+      "mro": [
+        "openmed.structured.decision_server:DecisionServerUnsupportedError",
+        "openmed.structured.decision_server:DecisionServerError",
+        "openmed.structured.decision:DecisionUnsupportedError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The decision server rejected the request.',)",
+          "call": 0,
+          "pickle_args": "('The decision server rejected the request.',)",
+          "pickle_str": "The decision server rejected the request.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerUnsupportedError",
+          "str": "The decision server rejected the request."
+        },
+        {
+          "args": "('The decision server rejected the request.',)",
+          "call": 1,
+          "pickle_args": "('The decision server rejected the request.',)",
+          "pickle_str": "The decision server rejected the request.",
+          "pickle_type": "openmed.structured.decision_server:DecisionServerUnsupportedError",
+          "str": "The decision server rejected the request."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.decision_snapshot:DecisionSnapshotError": {
+      "code": "decision_snapshot_error",
+      "mro": [
+        "openmed.structured.decision_snapshot:DecisionSnapshotError",
+        "openmed.structured.decision:DecisionUnsupportedError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.decision_snapshot:DecisionSnapshotError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.decision_snapshot:DecisionSnapshotError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.decision_snapshot:DecisionSnapshotError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.facts.normalization:FactNormalizationError": {
+      "code": "fact_normalization_error",
+      "mro": [
+        "openmed.structured.facts.normalization:FactNormalizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.facts.normalization:FactNormalizationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.facts.normalization:FactNormalizationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.facts.normalization:FactNormalizationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.facts.reconciliation:FactReconciliationError": {
+      "code": "fact_reconciliation_error",
+      "mro": [
+        "openmed.structured.facts.reconciliation:FactReconciliationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.facts.reconciliation:FactReconciliationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.facts.reconciliation:FactReconciliationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.facts.reconciliation:FactReconciliationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.generalize:AnonymizationError": {
+      "code": "anonymization_error",
+      "mro": [
+        "openmed.structured.generalize:AnonymizationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.generalize:AnonymizationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.generalize:AnonymizationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.generalize:AnonymizationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.hierarchies.functions:HierarchyError": {
+      "code": "hierarchy_error",
+      "mro": [
+        "openmed.structured.hierarchies.functions:HierarchyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.hierarchies.functions:HierarchyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.hierarchies.functions:HierarchyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.hierarchies.functions:HierarchyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.offset_properties:OffsetProjectionError": {
+      "code": "offset_projection_error",
+      "mro": [
+        "openmed.structured.offset_properties:OffsetProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('offset projection failed (adapter_error)',)",
+          "call": 1,
+          "pickle_args": "('offset projection failed (adapter_error)',)",
+          "pickle_str": "offset projection failed (adapter_error)",
+          "pickle_type": "openmed.structured.offset_properties:OffsetProjectionError",
+          "str": "offset projection failed (adapter_error)"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.privacy_lab:StructuredPrivacyLabError": {
+      "code": "structured_privacy_lab_error",
+      "mro": [
+        "openmed.structured.privacy_lab:StructuredPrivacyLabError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.privacy_lab:StructuredPrivacyLabError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.privacy_lab:StructuredPrivacyLabError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.privacy_lab:StructuredPrivacyLabError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.qi_detect:DiscoveryConfigurationError": {
+      "code": "discovery_configuration_error",
+      "mro": [
+        "openmed.structured.qi_detect:DiscoveryConfigurationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.qi_detect:DiscoveryConfigurationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.qi_detect:DiscoveryConfigurationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.qi_detect:DiscoveryConfigurationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.quality.profiler:QualityGateError": {
+      "code": "quality_gate_error",
+      "mro": [
+        "openmed.structured.quality.profiler:QualityGateError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.redaction_contract:RedactionContractError": {
+      "code": "redaction_contract_error",
+      "mro": [
+        "openmed.structured.redaction_contract:RedactionContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.redaction_contract:RedactionInputError": {
+      "code": "redaction_input_error",
+      "mro": [
+        "openmed.structured.redaction_contract:RedactionInputError",
+        "builtins:TypeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionInputError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionInputError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.redaction_contract:RedactionInputError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.registry.contracts:RegistryConflictError": {
+      "code": "registry_conflict_error",
+      "mro": [
+        "openmed.structured.registry.contracts:RegistryConflictError",
+        "openmed.structured.registry.contracts:RegistryContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.registry.contracts:RegistryContractError": {
+      "code": "registry_contract_error",
+      "mro": [
+        "openmed.structured.registry.contracts:RegistryContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.registry.contracts:RegistryUnsupportedError": {
+      "code": "registry_unsupported_error",
+      "mro": [
+        "openmed.structured.registry.contracts:RegistryUnsupportedError",
+        "openmed.structured.registry.contracts:RegistryContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.registry.contracts:RegistryUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.registry.naaccr:NAACCRDictionaryError": {
+      "code": "naaccr_dictionary_error",
+      "mro": [
+        "openmed.structured.registry.naaccr:NAACCRDictionaryError",
+        "openmed.structured.registry.naaccr:NAACCRProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 1,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRDictionaryError",
+          "str": "NAACCR projection refused."
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 2,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRDictionaryError",
+          "str": "NAACCR projection refused."
+        }
+      ]
+    },
+    "openmed.structured.registry.naaccr:NAACCRProjectionError": {
+      "code": "naaccr_projection_error",
+      "mro": [
+        "openmed.structured.registry.naaccr:NAACCRProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 1,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRProjectionError",
+          "str": "NAACCR projection refused."
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 2,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRProjectionError",
+          "str": "NAACCR projection refused."
+        }
+      ]
+    },
+    "openmed.structured.registry.naaccr:NAACCRValueError": {
+      "code": "naaccr_value_error",
+      "mro": [
+        "openmed.structured.registry.naaccr:NAACCRValueError",
+        "openmed.structured.registry.naaccr:NAACCRProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 1,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRValueError",
+          "str": "NAACCR projection refused."
+        },
+        {
+          "args": "('NAACCR projection refused.',)",
+          "call": 2,
+          "pickle_args": "('NAACCR projection refused.',)",
+          "pickle_str": "NAACCR projection refused.",
+          "pickle_type": "openmed.structured.registry.naaccr:NAACCRValueError",
+          "str": "NAACCR projection refused."
+        }
+      ]
+    },
+    "openmed.structured.relational:DanglingForeignKeyError": {
+      "code": "dangling_foreign_key_error",
+      "mro": [
+        "openmed.structured.relational:DanglingForeignKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.relational:DanglingForeignKeyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.relational:DanglingForeignKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.relational:DanglingForeignKeyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.relational:RelationalPrivacyError": {
+      "code": "relational_privacy_error",
+      "mro": [
+        "openmed.structured.relational:RelationalPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.relational:RelationalPrivacyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.relational:RelationalPrivacyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.relational:RelationalPrivacyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.relational:RelationalSchemaError": {
+      "code": "relational_schema_error",
+      "mro": [
+        "openmed.structured.relational:RelationalSchemaError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.relational:RelationalSchemaError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.relational:RelationalSchemaError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.relational:RelationalSchemaError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.scan:ProfilerNotAvailableError": {
+      "code": "profiler_not_available_error",
+      "mro": [
+        "openmed.structured.scan:ProfilerNotAvailableError",
+        "builtins:ImportError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.scan:ProfilerNotAvailableError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.scan:ProfilerNotAvailableError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.scan:ProfilerNotAvailableError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.scan:ProfilerReportError": {
+      "code": "profiler_report_error",
+      "mro": [
+        "openmed.structured.scan:ProfilerReportError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.scan:ProfilerReportError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.scan:ProfilerReportError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.scan:ProfilerReportError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.scan:RoleOverrideError": {
+      "code": "role_override_error",
+      "mro": [
+        "openmed.structured.scan:RoleOverrideError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.scan:RoleOverrideError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.scan:RoleOverrideError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.scan:RoleOverrideError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.schema_extract:SchemaDefinitionError": {
+      "code": "schema_definition_error",
+      "mro": [
+        "openmed.structured.schema_extract:SchemaDefinitionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.schema_extract:SchemaDefinitionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.schema_extract:SchemaDefinitionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.schema_extract:SchemaDefinitionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.schema_policy:SchemaPolicyError": {
+      "code": "schema_policy_error",
+      "mro": [
+        "openmed.structured.schema_policy:SchemaPolicyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.schema_policy:SchemaPolicyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.schema_policy:SchemaPolicyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.schema_policy:SchemaPolicyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.deadlines:StoreBusyError": {
+      "code": "store_busy",
+      "mro": [
+        "openmed.structured.store.deadlines:StoreBusyError",
+        "openmed.structured.store.deadlines:StoreWaitError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('journey store is busy',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "journey store is busy"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.store.deadlines:StoreDeadlineExceededError": {
+      "code": "store_deadline_exceeded",
+      "mro": [
+        "openmed.structured.store.deadlines:StoreDeadlineExceededError",
+        "openmed.structured.store.deadlines:StoreWaitError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('journey store deadline exceeded',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "journey store deadline exceeded"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.store.deadlines:StoreTimeoutsError": {
+      "code": "store_timeouts_invalid",
+      "mro": [
+        "openmed.structured.store.deadlines:StoreTimeoutsError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.deadlines:StoreTimeoutsError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.deadlines:StoreTimeoutsError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.deadlines:StoreTimeoutsError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.deadlines:StoreWaitError": {
+      "code": "store_wait_failed",
+      "mro": [
+        "openmed.structured.store.deadlines:StoreWaitError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('journey store wait failed',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "journey store wait failed"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.store.encryption:JourneyEncryptionError": {
+      "code": "journey_encryption_error",
+      "mro": [
+        "openmed.structured.store.encryption:JourneyEncryptionError",
+        "openmed.core.key_provider:EncryptionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Journey storage encryption failed (journey_encryption_failed)',)",
+          "call": 0,
+          "pickle_args": "('Journey storage encryption failed (journey_encryption_failed)',)",
+          "pickle_str": "Journey storage encryption failed (journey_encryption_failed)",
+          "pickle_type": "openmed.structured.store.encryption:JourneyEncryptionError",
+          "str": "Journey storage encryption failed (journey_encryption_failed)"
+        },
+        {
+          "args": "('encryption operation failed (synthetic_reason)',)",
+          "call": 1,
+          "pickle_args": "('Journey storage encryption failed (journey_encryption_failed)',)",
+          "pickle_str": "Journey storage encryption failed (journey_encryption_failed)",
+          "pickle_type": "openmed.structured.store.encryption:JourneyEncryptionError",
+          "str": "encryption operation failed (synthetic_reason)"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.store.local:LocalStoreError": {
+      "code": "local_store_error",
+      "mro": [
+        "openmed.structured.store.local:LocalStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.local:LocalStoreError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.local:LocalStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.local:LocalStoreError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.local:StoreCompatibilityError": {
+      "code": "store_compatibility_error",
+      "mro": [
+        "openmed.structured.store.local:StoreCompatibilityError",
+        "openmed.structured.store.local:LocalStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.local:StoreCompatibilityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.local:StoreCompatibilityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.local:StoreCompatibilityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.local:StoreConstraintError": {
+      "code": "store_constraint_error",
+      "mro": [
+        "openmed.structured.store.local:StoreConstraintError",
+        "openmed.structured.store.local:LocalStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.local:StoreConstraintError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.local:StoreConstraintError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.local:StoreConstraintError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.local:StoreMigrationError": {
+      "code": "store_migration_error",
+      "mro": [
+        "openmed.structured.store.local:StoreMigrationError",
+        "openmed.structured.store.local:LocalStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.local:StoreMigrationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.local:StoreMigrationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.local:StoreMigrationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.postgres:PostgresStoreError": {
+      "code": "postgres_store_error",
+      "mro": [
+        "openmed.structured.store.postgres:PostgresStoreError",
+        "openmed.structured.store.local:LocalStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.postgres:PostgresStoreError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.postgres:PostgresStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.postgres:PostgresStoreError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.store.protocols:CommitStatusUnknown": {
+      "code": "commit_status_unknown",
+      "mro": [
+        "openmed.structured.store.protocols:CommitStatusUnknown",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.store.protocols:CommitStatusUnknown",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.store.protocols:CommitStatusUnknown",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.store.protocols:CommitStatusUnknown",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.synth:SyntheticDataGateError": {
+      "code": "synthetic_data_gate_error",
+      "mro": [
+        "openmed.structured.synth:SyntheticDataGateError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.terminology_cache:StaleTerminologyError": {
+      "code": "stale_terminology_error",
+      "mro": [
+        "openmed.structured.terminology_cache:StaleTerminologyError",
+        "openmed.structured.terminology_cache:TerminologyProvenanceError",
+        "openmed.structured.terminology_cache:TerminologyCacheError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.structured.terminology_cache:TerminologyCacheError": {
+      "code": "terminology_cache_error",
+      "mro": [
+        "openmed.structured.terminology_cache:TerminologyCacheError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyCacheError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyCacheError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyCacheError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.structured.terminology_cache:TerminologyProvenanceError": {
+      "code": "terminology_provenance_error",
+      "mro": [
+        "openmed.structured.terminology_cache:TerminologyProvenanceError",
+        "openmed.structured.terminology_cache:TerminologyCacheError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyProvenanceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyProvenanceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.structured.terminology_cache:TerminologyProvenanceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

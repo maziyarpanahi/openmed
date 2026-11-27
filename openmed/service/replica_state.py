@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 SERVICE_REPLICA_MODE_ENV_VAR = "OPENMED_SERVICE_REPLICA_MODE"
 SERVICE_REPLICA_ACCEPT_ENV_VAR = "OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE"
 SERVICE_REPLICA_DISABLE_ENV_VAR = "OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE"
@@ -127,7 +129,7 @@ _DISABLEABLE_CATEGORIES = tuple(
 )
 
 
-class ReplicaComponentUnavailableError(RuntimeError):
+class ReplicaComponentUnavailableError(RuntimeError, LegacyRootedError):
     """Raised when a route's replica-local component may not serve requests.
 
     Attributes:

@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 COHORT_EXPLANATION_SCHEMA: Final = "openmed.agent.workflows.cohort_explanation.v1"
 
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -56,7 +58,7 @@ class MembershipState(str, Enum):
     REVIEW_REQUIRED = "review_required"
 
 
-class CohortExplanationError(ValueError):
+class CohortExplanationError(ValueError, LegacyRootedError):
     """A PHI-safe cohort-explanation validation error.
 
     Args:

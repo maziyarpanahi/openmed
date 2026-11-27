@@ -12,6 +12,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .identifiers import (
     CapabilityId,
     GovernanceIdError,
@@ -40,7 +42,7 @@ _KNOWN_REASON_CODES = frozenset().union(
 )
 
 
-class PolicyMatrixError(ValueError):
+class PolicyMatrixError(ValueError, LegacyRootedError):
     """Raised when policy-matrix input fails closed validation.
 
     Args:

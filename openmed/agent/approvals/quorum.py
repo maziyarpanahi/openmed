@@ -17,6 +17,8 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from openmed.core.errors import LegacyRootedError
+
 from .tokens import (
     ApprovalAuthorization,
     ApprovalReceipt,
@@ -30,7 +32,7 @@ _ACTION_CLASS = re.compile(r"[a-z][a-z0-9-]{0,63}")
 _MAX_RECEIPTS = 10_000
 
 
-class ApprovalQuorumError(ValueError):
+class ApprovalQuorumError(ValueError, LegacyRootedError):
     """Fail closed with a fixed code and no input values."""
 
 

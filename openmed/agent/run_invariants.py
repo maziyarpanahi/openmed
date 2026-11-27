@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .action_graph import GRAPH_REASON_CODES, ActionNode, validate_action_graph
 from .artifact_reference import ArtifactReference, validate_artifact_references
 from .correlation import ActionCorrelation, RunId
@@ -57,7 +59,7 @@ RUN_INVARIANT_REASON_CODES = frozenset(
 )
 
 
-class RunInvariantError(ValueError):
+class RunInvariantError(ValueError, LegacyRootedError):
     """Structural error with a fixed code and no submitted values."""
 
     def __init__(self, code: str) -> None:

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 ARTIFACT_REFERENCE_VERSION: Final = 1
 MAX_ARTIFACT_BYTE_SIZE: Final = (1 << 63) - 1
 
@@ -46,7 +48,7 @@ class ArtifactKind(str, Enum):
     EVALUATION = "evaluation"
 
 
-class ArtifactReferenceError(ValueError):
+class ArtifactReferenceError(ValueError, LegacyRootedError):
     """Raised when an artifact reference fails closed validation.
 
     Args:

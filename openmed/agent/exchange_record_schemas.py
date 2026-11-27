@@ -40,6 +40,7 @@ from openmed.agent.workflows.recovery import (
     RecoveryPhase,
     RecoveryReason,
 )
+from openmed.core.errors import LegacyRootedError
 
 EXCHANGE_RECORD_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 
@@ -96,7 +97,7 @@ _CAPABILITY_ACTION_PATTERN = _kind_pattern("action")
 _POLICY_PROFILE_PATTERN = _kind_pattern("policy")
 
 
-class ExchangeRecordSchemaError(ValueError):
+class ExchangeRecordSchemaError(ValueError, LegacyRootedError):
     """Raised when an exchange record schema name is unknown or not a string."""
 
     def __init__(self, code: str) -> None:

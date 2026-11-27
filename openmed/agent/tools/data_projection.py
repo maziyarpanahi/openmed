@@ -21,6 +21,7 @@ from openmed.agent.tool_contract_lint import (
     PURPOSE_ANNOTATION,
     lint_tool_contract,
 )
+from openmed.core.errors import LegacyRootedError
 
 DATA_CLASS_ANNOTATION: Final = "x-openmed-data-class"
 DATA_PROJECTION_PLAN_SCHEMA_VERSION: Final = "openmed.agent.data_projection.v1"
@@ -53,7 +54,7 @@ class ProjectionReasonCode(str, Enum):
     PURPOSE_MISMATCH = "purpose_mismatch"
 
 
-class DataProjectionError(ValueError):
+class DataProjectionError(ValueError, LegacyRootedError):
     """Base class for value-free projection failures."""
 
     def __init__(self, code: str, field_name: str) -> None:

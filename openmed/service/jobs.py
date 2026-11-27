@@ -58,6 +58,7 @@ from typing import Any, Callable, Collection, Final, NamedTuple, Optional, Seque
 import openmed
 from openmed.clinical.journey_contracts import canonical_digest
 from openmed.core.config import PROFILE_ENV_VAR
+from openmed.core.errors import LegacyRootedError
 from openmed.core.key_provider import EncryptionError, KeyProvider
 
 from .compatibility import (
@@ -241,7 +242,7 @@ StoreMutation = Callable[[dict[str, Any]], Optional[Sequence[Mapping[str, Any]]]
 _RecordSnapshots = dict[str, Optional[dict[str, Any]]]
 
 
-class JobStoreSchemaError(ValueError):
+class JobStoreSchemaError(ValueError, LegacyRootedError):
     """Value-free refusal of a job metadata document this binary cannot read.
 
     Attributes:

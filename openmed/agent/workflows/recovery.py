@@ -26,6 +26,7 @@ from typing import Any, Callable, Final, ParamSpec, TypeVar, cast
 from openmed.agent.correlation import ActionId, CorrelationIdError, RunId
 from openmed.agent.identifiers import GovernanceIdError, ToolId, WorkflowId
 from openmed.agent.run_summary import RunSummary
+from openmed.core.errors import LegacyRootedError
 
 RECOVERY_CHECKPOINT_SCHEMA_VERSION: Final = "openmed.agent.recovery_checkpoint.v1"
 RECOVERY_EVIDENCE_SCHEMA_VERSION: Final = "openmed.agent.recovery_evidence.v1"
@@ -69,7 +70,7 @@ _EFFECT_FIELDS = frozenset(
 )
 
 
-class RecoveryError(ValueError):
+class RecoveryError(ValueError, LegacyRootedError):
     """Raised when recovery metadata cannot be trusted.
 
     Error text contains only a stable code and optional field name. Callers

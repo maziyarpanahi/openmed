@@ -16,6 +16,7 @@ from importlib import resources
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .dsl import PHENOTYPE_SCHEMA_VERSION, PhenotypeDefinition
@@ -30,7 +31,7 @@ _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _OPAQUE_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$")
 
 
-class CohortExchangeError(ValueError):
+class CohortExchangeError(ValueError, LegacyRootedError):
     """Base error for malformed cohort exchange contracts."""
 
 

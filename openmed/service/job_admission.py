@@ -16,6 +16,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 DEFAULT_MAX_PENDING_JOBS = 64
 DEFAULT_MAX_QUEUED_TEXT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_DOCUMENTS_PER_JOB = 1_000
@@ -114,7 +116,7 @@ class JobAdmissionSnapshot:
     queued_text_bytes: int
 
 
-class JobAdmissionError(Exception):
+class JobAdmissionError(LegacyRootedError):
     """Base class for value-free job submission rejections.
 
     Attributes:

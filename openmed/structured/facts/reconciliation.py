@@ -33,6 +33,7 @@ from openmed.clinical.review_sla import (
     summarize_review_queue,
 )
 from openmed.clinical.review_transitions import ClinicalReviewPacket
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import (
     CanonicalRecord,
     JobMetadata,
@@ -72,7 +73,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class FactReconciliationError(ValueError):
+class FactReconciliationError(ValueError, LegacyRootedError):
     """Raised when fact reconciliation inputs violate the public contract."""
 
 

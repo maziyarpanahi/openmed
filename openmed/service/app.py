@@ -27,6 +27,7 @@ from openmed.core.errors import (
     InferenceError,
     InputError,
     InternalError,
+    LegacyRootedError,
     OpenMedError,
     PolicyError,
 )
@@ -380,7 +381,7 @@ class _PIIExtractBatchJob:
 _SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 
 
-class ServiceTimeoutError(RuntimeError):
+class ServiceTimeoutError(RuntimeError, LegacyRootedError):
     """Raised when a request exceeds the configured service timeout."""
 
     def __init__(self, timeout_seconds: float):
@@ -1972,6 +1973,12 @@ def create_app(
         _: Request,
         exc: OpenMedError,
     ) -> JSONResponse:
+        if isinstance(exc, LegacyRootedError):
+            # Rerooted legacy errors keep their pre-taxonomy handling. Their
+            # builtin bases precede OpenMedError in the MRO, so no handler for
+            # one of them was bypassed; re-raising reaches the catch-all
+            # handler exactly as the unrooted class did.
+            raise exc
         return _openmed_error_response(exc)
 
     @app.exception_handler(IdempotencyError)

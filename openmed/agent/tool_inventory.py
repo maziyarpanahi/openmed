@@ -17,6 +17,7 @@ from itertools import islice
 from typing import Any, Final
 
 from openmed.agent.identifiers import CapabilityId, GovernanceIdError, ToolId
+from openmed.core.errors import LegacyRootedError
 
 TOOL_INVENTORY_SCHEMA_VERSION: Final = "openmed.agent.tool_inventory.v1"
 MAX_TOOL_INVENTORY_RECORDS: Final = 10_000
@@ -36,7 +37,7 @@ _RECORD_FIELDS = frozenset(
 _INVENTORY_FIELDS = frozenset({"schema_version", "tools"})
 
 
-class ToolInventoryError(ValueError):
+class ToolInventoryError(ValueError, LegacyRootedError):
     """Raised when inventory input violates the content-free contract.
 
     Error text contains only a fixed field name and stable reason code. The

@@ -21,6 +21,7 @@ from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.bridges.dp_synth import (
     DEFAULT_ENGINE_TIMEOUT_SECONDS,
     DPSynthBridge,
@@ -37,7 +38,7 @@ DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING = 0.10
 SUPPORTED_SYNTHETIC_OUTPUT_SUFFIXES = frozenset({".csv", ".parquet"})
 
 
-class SyntheticDataGateError(ValueError):
+class SyntheticDataGateError(ValueError, LegacyRootedError):
     """Raised when a generated table fails utility or membership-risk gates."""
 
     def __init__(self, privacy_report: Mapping[str, Any]) -> None:

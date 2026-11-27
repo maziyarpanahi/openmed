@@ -28,6 +28,7 @@ from openmed.clinical.journey_contracts import (
     compute_derivation_hash,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 CLINICAL_FACT_NORMALIZATION_SCHEMA_VERSION = "1.0.0"
@@ -86,7 +87,7 @@ _STATE_PRECEDENCE = {
 }
 
 
-class FactNormalizationError(ValueError):
+class FactNormalizationError(ValueError, LegacyRootedError):
     """Raised when a normalization input violates the public contract."""
 
 

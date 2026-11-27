@@ -21,6 +21,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
+from openmed.core.errors import LegacyRootedError
+
 SIGNATURE_HEADER = "X-OpenMed-Signature"
 TIMESTAMP_HEADER = "X-OpenMed-Timestamp"
 NONCE_HEADER = "X-OpenMed-Nonce"
@@ -54,7 +56,7 @@ Body = Union[bytes, bytearray, memoryview, str]
 Secret = Union[bytes, str]
 
 
-class SignatureVerificationError(ValueError):
+class SignatureVerificationError(ValueError, LegacyRootedError):
     """Base class for request-signature verification failures."""
 
 

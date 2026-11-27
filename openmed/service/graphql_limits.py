@@ -41,6 +41,8 @@ from graphql.language import (
 )
 from strawberry.extensions import SchemaExtension
 
+from openmed.core.errors import LegacyRootedError
+
 GRAPHQL_LIMITS_SCHEMA_VERSION: Final = "1.0.0"
 GRAPHQL_LIMITS_COMPATIBILITY: Final = "same_major"
 
@@ -325,7 +327,7 @@ class GraphQLLimitViolation:
         return {"message": self.message, "extensions": self.to_extensions()}
 
 
-class GraphQLLimitError(Exception):
+class GraphQLLimitError(LegacyRootedError):
     """Raised by transport hooks when a request is rejected before execution."""
 
     def __init__(self, violation: GraphQLLimitViolation) -> None:
