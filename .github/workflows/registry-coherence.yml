@@ -13,6 +13,9 @@ on:
       - "README.md"
       - "docs/model-cards/registry/**"
       - "docs/model-registry.md"
+      - "scripts/android/build_android_catalog.py"
+      - "scripts/swift/build_swift_catalog.py"
+      - "swift/OpenMedKit/Sources/OpenMedKit/Resources/openmed_model_catalog.jsonl"
       - ".github/workflows/registry-coherence.yml"
   push:
     branches: [master]
@@ -27,6 +30,9 @@ on:
       - "README.md"
       - "docs/model-cards/registry/**"
       - "docs/model-registry.md"
+      - "scripts/android/build_android_catalog.py"
+      - "scripts/swift/build_swift_catalog.py"
+      - "swift/OpenMedKit/Sources/OpenMedKit/Resources/openmed_model_catalog.jsonl"
       - ".github/workflows/registry-coherence.yml"
   workflow_dispatch:
 
@@ -57,6 +63,9 @@ jobs:
 
       - name: Validate pointer and lineage coherence
         run: python scripts/release/registry_ctl.py check
+
+      - name: Check the bundled Swift model catalog
+        run: python scripts/swift/build_swift_catalog.py --check
 
       - name: Fail on registry surface drift
         run: >-

@@ -1,0 +1,167 @@
+{
+  "schema": "openmed.model_repro_hash_vectors",
+  "version": 1,
+  "description": "Synthetic reproducibility-hash vectors. Repository ids resolve to no real repository. expected_hash is sha256 over the canonical JSON {\"released\",\"repo_id\",\"sha\",\"siblings\"} with sorted keys, compact separators, ASCII escapes and siblings sorted by code point; released is the first ten characters of last_modified, else created_at.",
+  "cases": [
+    {
+      "id": "unsorted-siblings-with-commit-and-date",
+      "repo_id": "OpenMed/Synthetic-Repro-Alpha-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-06-24T12:34:56.000Z",
+      "created_at": "2026-01-02T03:04:05.000Z",
+      "siblings": [
+        "weights.safetensors",
+        "config.json",
+        "openmed-mlx.json",
+        "tokenizer.json",
+        "id2label.json"
+      ],
+      "released": "2026-06-24",
+      "expected_hash": "sha256:80a25850fd99f3a9346a8d76a30025fb24b0832bd21e586b07fe99cfeee960bc"
+    },
+    {
+      "id": "changed-sibling-list-changes-the-hash",
+      "repo_id": "OpenMed/Synthetic-Repro-Alpha-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-06-24T12:34:56.000Z",
+      "created_at": "2026-01-02T03:04:05.000Z",
+      "siblings": [
+        "weights.safetensors",
+        "config.json",
+        "openmed-mlx.json",
+        "tokenizer.json",
+        "id2label.json",
+        "extra.bin"
+      ],
+      "released": "2026-06-24",
+      "expected_hash": "sha256:c766eb841ecab95e7fc19180f575c0c4941eb1d9a222e72b828deb1478bbd33c"
+    },
+    {
+      "id": "null-commit-sha",
+      "repo_id": "OpenMed/Synthetic-Repro-Beta-mlx",
+      "sha": null,
+      "last_modified": "2026-07-01T00:00:00.000Z",
+      "created_at": null,
+      "siblings": [
+        "config.json",
+        "weights.npz"
+      ],
+      "released": "2026-07-01",
+      "expected_hash": "sha256:8bc37a1996f4078fde2bf59984a344069a3152db2a48111ca9a6075d9ec1c936"
+    },
+    {
+      "id": "null-release-date",
+      "repo_id": "OpenMed/Synthetic-Repro-Gamma-mlx",
+      "sha": "fedcba9876543210fedcba9876543210fedcba98",
+      "last_modified": null,
+      "created_at": null,
+      "siblings": [
+        "config.json"
+      ],
+      "released": null,
+      "expected_hash": "sha256:19ccd3afcffb0480e8e708aecb2f67056a3c45da354fd128e8c8c9f78b661b15"
+    },
+    {
+      "id": "created-at-fallback",
+      "repo_id": "OpenMed/Synthetic-Repro-Delta-mlx",
+      "sha": "fedcba9876543210fedcba9876543210fedcba98",
+      "last_modified": null,
+      "created_at": "2025-12-31T23:59:59.000Z",
+      "siblings": [
+        "config.json",
+        "weights.safetensors"
+      ],
+      "released": "2025-12-31",
+      "expected_hash": "sha256:112590958a941af91048e0903374a36e0bb9c959a894cd23b078e2ea06936cb4"
+    },
+    {
+      "id": "empty-sibling-list",
+      "repo_id": "OpenMed/Synthetic-Repro-Epsilon-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-03-04T05:06:07.000Z",
+      "created_at": null,
+      "siblings": [],
+      "released": "2026-03-04",
+      "expected_hash": "sha256:76b0fa3e0552d98a7c9782c2a103f697b5d50b34ad0115d05219bd76f5d1845d"
+    },
+    {
+      "id": "nested-paths-sort-by-code-point",
+      "repo_id": "OpenMed/Synthetic-Repro-Zeta-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-08-09T10:11:12.000Z",
+      "created_at": null,
+      "siblings": [
+        "tokenizer/vocab.txt",
+        "Tokenizer.json",
+        "a/b.json",
+        "README.md",
+        "_private.txt",
+        "9.bin",
+        "tokenizer/merges.txt"
+      ],
+      "released": "2026-08-09",
+      "expected_hash": "sha256:9bea173b2fcaccf48b494d97c4d0356347b00bc9bf7df60586810f9e3cea2921"
+    },
+    {
+      "id": "non-ascii-file-names-use-json-ascii-escapes",
+      "repo_id": "OpenMed/Synthetic-Repro-Eta-mlx",
+      "sha": "fedcba9876543210fedcba9876543210fedcba98",
+      "last_modified": "2026-09-10T11:12:13.000Z",
+      "created_at": null,
+      "siblings": [
+        "donn\u00e9es/\u00e9t\u00e9.json",
+        "\u65e5\u672c\u8a9e.txt",
+        "emoji-\ud83d\ude00.bin",
+        "\uff21-fullwidth.txt"
+      ],
+      "released": "2026-09-10",
+      "expected_hash": "sha256:6c75f8dccf0c8a1b9e448e38abf09764c695abdf100e80c91871feba32963fe5"
+    },
+    {
+      "id": "json-special-characters-are-escaped",
+      "repo_id": "OpenMed/Synthetic-Repro-Theta-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-10-11T12:13:14.000Z",
+      "created_at": null,
+      "siblings": [
+        "quote\"name.json",
+        "back\\slash.txt",
+        "tab\tname.txt",
+        "line\nbreak.txt",
+        "delete\u007fchar.txt",
+        "bell\u0007char.txt"
+      ],
+      "released": "2026-10-11",
+      "expected_hash": "sha256:8cd2a5f37bffbecfceb66e0327028590df35c6d901a256d203d5fd93e44395c9"
+    },
+    {
+      "id": "non-ascii-repo-id-uses-json-ascii-escapes",
+      "repo_id": "OpenMed/Synthetic-Repro-\u00dcn\u00efc\u00f8d\u00e9-\u03b1\u03b2-mlx",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "last_modified": "2026-11-01T08:09:10.000Z",
+      "created_at": null,
+      "siblings": [
+        "config.json",
+        "\u00e9t\u00e9.json"
+      ],
+      "released": "2026-11-01",
+      "expected_hash": "sha256:6132cbd28ab551d53dfa047a2c0d2fab4a9c5866caea50e144379b6cd2d1d2bc"
+    },
+    {
+      "id": "supplementary-characters-sort-by-code-point-not-utf16",
+      "repo_id": "OpenMed/Synthetic-Repro-Iota-mlx",
+      "sha": "fedcba9876543210fedcba9876543210fedcba98",
+      "last_modified": "2026-11-02T08:09:10.000Z",
+      "created_at": null,
+      "siblings": [
+        "\ud83d\ude00.bin",
+        "\uff21.txt",
+        "\ue000.txt",
+        "z.txt",
+        "\ud800\udc00.bin"
+      ],
+      "released": "2026-11-02",
+      "expected_hash": "sha256:7d6983d04e261c938e88965b93432dcb49345b2a94eec795029ca48829c72952"
+    }
+  ]
+}

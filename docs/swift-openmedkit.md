@@ -469,6 +469,49 @@ let openmed = try OpenMed(
 Core ML backends have no default tokenizer. Ship the tokenizer that matches
 the model; see [Offline Tokenizer Assets](#offline-tokenizer-assets).
 
+## Discovering Models With the Bundled Catalog
+
+OpenMedKit bundles `openmed_model_catalog.jsonl`, a read-only list of the
+Apple-runnable (MLX and Core ML) OpenMed models, so apps can choose a model by
+format, size, language or license instead of hard-coding repository names:
+
+```swift
+let catalog = try OpenMedModelCatalog.bundled()
+let candidates = catalog.filter(format: "mlx-fp", maxParamCount: 50_000_000, language: "de")
+if let entry = candidates.first {
+    let modelDirectory = try await OpenMedModelStore.downloadMLXModel(repoID: entry.repoID)
+}
+```
+
+- `OpenMedModelCatalog.bundled()` reads the package resource and never makes a
+  network request. The parsed catalog is cached for the process.
+- Each `OpenMedModelCatalogEntry` carries `repoID`, `formats`, `tier`,
+  `paramCount`, `languages`, `license` and `reproducibilityHash`, the same
+  fields as the Android `ModelCatalogEntry`. `formats` lists only MLX and Core
+  ML formats.
+- `filter(format:tier:maxParamCount:language:license:)` follows the Android
+  `ModelCatalog.filter` semantics: a `nil` argument matches every row, strings
+  compare case-insensitively, `format` and `language` match any listed value,
+  and `maxParamCount` is inclusive and skips rows without a parameter count.
+  Results keep catalog order (repository ids sorted case-insensitively).
+- `entry(repoID:)` is an exact-match lookup, like Android `byRepoId`.
+- Malformed resources throw `OpenMedModelCatalogError` with a reason code and
+  a line number, never row content.
+
+The resource is generated from the canonical `models.jsonl` manifest by
+`scripts/swift/build_swift_catalog.py`, which reuses the Android builder's row
+format and permissive-license allowlist and keeps only Apple-runnable formats.
+After changing `models.jsonl`, regenerate and commit it:
+
+```bash
+python3 scripts/swift/build_swift_catalog.py
+python3 scripts/swift/build_swift_catalog.py --check   # CI: fails when stale
+```
+
+`tests/fixtures/model_catalog/` holds a synthetic manifest subset, its
+generated catalog and shared filter vectors. The Python generator test and the
+Swift `OpenMedModelCatalogTests` both run those vectors.
+
 ## Downloading MLX Models From Hugging Face
 
 OpenMedKit includes a built-in downloader and local cache for Hub-hosted MLX artifacts:
@@ -488,6 +531,51 @@ Behavior:
 - returns a local directory URL ready for `OpenMedBackend.mlx`
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
+
+### Pinned, hash-verified downloads from the catalog
+
+Downloading by repository name caches whatever the revision (`main` by
+default) resolves to under that name, so the same cache key can name different
+bytes after an upstream push. Download a catalog entry instead to pin the
+snapshot to one commit and verify it against the catalog:
+
+```swift
+let entry = try OpenMedModelCatalog.bundled().entry(repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx")!
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(entry: entry)
+let commit = try OpenMedModelStore.cachedMLXModelRevisionSHA(
+    repoID: entry.repoID,
+    revision: modelDirectory.lastPathComponent
+)
+```
+
+`downloadMLXModel(entry:revision:cacheDirectory:)`:
+
+1. Returns a ready snapshot already verified for `entry.reproducibilityHash`
+   without any network request (`cachedMLXModelDirectory(entry:cacheDirectory:)`
+   performs the same lookup on its own).
+2. Otherwise fetches `api/models/<repo>/revision/<revision>` and recomputes the
+   reproducibility hash from the repository id, commit sha, release date and
+   sibling list. A mismatch throws `OpenMedModelStoreError.reproducibilityHashMismatch`
+   before any directory or file is created. A response without a valid
+   40-character commit sha throws `invalidModelInfo`.
+3. Downloads every file from `resolve/<commit sha>/…`, never from the moving
+   revision name, into `<cache>/<repo>/<commit sha>`, so one cache directory
+   always holds one commit.
+4. Records `revision_sha`, `reproducibility_hash` and `requested_revision` in the
+   ready marker. `cachedMLXModelRevisionSHA(repoID:revision:cacheDirectory:)`
+   returns the recorded sha, or `nil` for snapshots downloaded by name.
+
+`OpenMedModelIntegrity.reproducibilityHash(repoID:revisionSHA:released:siblings:)`
+is the same canonical hash that `scripts/manifest/generate_manifest.py`,
+`openmed/core/model_integrity.py` and Android's `ModelIntegrity` compute:
+SHA-256 over compact sorted-key JSON of `released` (`YYYY-MM-DD` or `null`),
+`repo_id`, `sha` (or `null`) and the code-point-sorted `siblings`, with Python's
+default ASCII escaping. The synthetic vectors in
+`tests/fixtures/parity/model_repro_hash_v1.json` are checked by the Python
+production functions, by `OpenMedModelIntegrityTests` and by Android's
+`ModelDownloaderTest`. The hash describes the
+snapshot's commit and file list. It does not hash file contents. Signed portable
+bundles (see [Bundle cache](models/bundle-cache.md)) cover those.
 
 The model store validates every manifest path before requesting artifact files,
 including all weight candidates and segmenter resources. Paths must be relative
@@ -924,6 +1012,7 @@ path, to a role-based case.
 | `OpenMedZeroShotError` | `unsupportedArtifact` with task and family values from the OpenMedKit MLX vocabulary (for example `token-classification` and `bert`), `missingPromptSpec` (a `prompt_spec` field name), `emptyInput`. |
 | `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
 | `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
+| `OpenMedModelCatalogError` | `resourceMissing`, `invalidEncoding`, `invalidEntry(line:)` (a 1-based line number, never the row). |
 | `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
 | String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
 
