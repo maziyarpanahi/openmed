@@ -146,6 +146,32 @@ future major release will require explicit preparation: a local `model` path or
 a `pipeline` you load yourself. Prepare models that way now, and turn on
 offline-only mode to catch any download that remains.
 
+### Identifier Validators
+
+The `openmed/validators` subpath ships the portable checksum validators that
+Python and the native kits use to confirm or reject identifier-shaped spans.
+They are not part of the main entry, so its bundle does not grow:
+
+```ts
+import { validateIban, validateLuhn } from "openmed/validators";
+
+validateLuhn("4992 7378 7789 3288"); // true: Luhn check over the digits
+validateIban("DE00YVOKYS9RYAPB2JJUKQ"); // false: wrong mod-97 check digits
+```
+
+`validateLuhn`, `validateSsn`, `validateNpi`, `validateIban`,
+`validateCanadianSin`, `validateUkNhsNumber`, `validateAadhaar`,
+`validateChineseResidentId`, `validateDutchBsn`, `validateFrenchNir` and
+`validateSpanishDni` each port the Python function of the same name and give
+its result on the shared vectors in
+`tests/fixtures/parity/identifier_validators_v1.json`; `IDENTIFIER_VALIDATORS`
+maps the Python names to them. They follow Python's string rules, including
+its whitespace set and Unicode decimal digits where the reference accepts them.
+`validateChineseResidentId` rejects a birth date after today, and its `today`
+option sets that date for tests. Validators never throw: anything that is not
+a string, or not shaped like the identifier, returns `false`. They perform no
+I/O and log nothing.
+
 ### Token Offsets
 
 Transformers.js token-classification output carries no character offsets.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add the portable identifier validator subset to the openmed web package on the `openmed/validators` subpath: Luhn, SSN, NPI, IBAN, Canadian SIN, UK NHS number, Aadhaar, Chinese resident ID, Dutch BSN, French NIR and Spanish DNI ports that match the Python references on every shared vector, never throw, and leave the main entry's bundle unchanged (#5421).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
