@@ -76,6 +76,24 @@ revision_sha=..., digest=...)` after commit and `emit_model_rolled_back(sink,
 ..., reason=...)` after a rollback; wiring those hooks into
 `openmed.service.model_activation` is separate work (#3575).
 
+## Android OpenMedKit
+
+`ModelDownloader(cache, client, logger, lifecycleSink, progressListener)` emits
+the same event bodies as `ModelLifecycleEvent`, alongside per-file byte
+progress through `ModelDownloadProgressListener`, which is not part of this
+vocabulary. `ModelDownloaderTest` replays the prefetch sequences of the shared
+vectors through a fake Hub. Two prefetch sequences do not apply to Android:
+
+- Android checks a file without a published digest by its size, so it does
+  not fail with `metadata_missing_digest`.
+- `ModelDownloader` has no offline mode, so there is no `offline_cache_miss`.
+
+The eviction and activation sequences come from other components. Android also
+reports a catalog reproducibility-hash mismatch as `integrity_failed` for the
+manifest (`file_count` 1, `byte_count` 0, the catalog digest), followed by
+`failed` with `integrity_unverifiable`. See
+[Android integration](../android-integration.md#lifecycle-events-and-byte-progress).
+
 ## Schema and shared vectors
 
 `openmed/core/schemas/json/model_lifecycle_event.schema.json` describes one
