@@ -10,13 +10,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.security.MessageDigest
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -139,9 +134,9 @@ class ModelDownloaderTest {
             val id = case.text("id")!!
             val stamp = case.text("last_modified") ?: case.text("created_at")
             val expected = case.text("expected_hash")
-            assertEquals(id, expected, vectorHash(case, stamp))
-            assertEquals(id, expected, vectorHash(case, case.text("released")))
-            assertEquals(id, expected, vectorHash(case, stamp, case.siblings().reversed()))
+            assertEquals(expected, vectorHash(case, stamp), id)
+            assertEquals(expected, vectorHash(case, case.text("released")), id)
+            assertEquals(expected, vectorHash(case, stamp, case.siblings().reversed()), id)
         }
     }
 
@@ -172,10 +167,10 @@ class ModelDownloaderTest {
             val names = case.siblings() + case.text("repo_id")!!
             val legacy = legacyHash(case)
             if (names.all(::printable)) {
-                assertEquals(case.text("id"), case.text("expected_hash"), legacy)
+                assertEquals(case.text("expected_hash"), legacy, case.text("id"))
             } else {
                 changed += 1
-                assertFalse(case.text("id"), legacy == case.text("expected_hash"))
+                assertFalse(legacy == case.text("expected_hash"), case.text("id"))
             }
         }
         assertTrue(changed >= 4)
