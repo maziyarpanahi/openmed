@@ -207,10 +207,27 @@ test("errors that had reason codes keep them beside the registry code", async ()
   );
   assert.ok(offsets instanceof PortablePolicyError);
   assert.deepEqual([offsets.code, offsets.errorCode], ["detection_offset_invalid", "input_error"]);
+  // Override problems are policy errors, as in Swift and Kotlin.
+  for (const [overrides, reason] of [
+    [{ NOT_A_LABEL: "keep" }, "override_label_unknown"],
+    [{ PERSON: "obliterate" }, "override_action_unknown"],
+  ] as const) {
+    const override = await thrown(() =>
+      decidePortablePolicy(loadPortablePolicy("hipaa_safe_harbor"), "x".repeat(14), [], {
+        overrides,
+      }),
+    );
+    assert.ok(override instanceof PortablePolicyError);
+    assert.deepEqual(
+      [override.code, override.errorCode, override.fieldPath],
+      [reason, "policy_error", "$.overrides"],
+    );
+  }
   for (const [reason, expected] of [
     ["detection_offset_invalid", "input_error"],
     ["detection_label_invalid", "input_error"],
-    ["override_action_unknown", "input_error"],
+    ["override_label_unknown", "policy_error"],
+    ["override_action_unknown", "policy_error"],
     ["surrogate_key_invalid", "configuration_error"],
     ["capability_missing", "capability_error"],
     ["profile_unknown", "policy_error"],

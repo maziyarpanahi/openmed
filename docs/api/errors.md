@@ -260,10 +260,10 @@ message checks and `String(error)` keep working.
 | Token offsets that cannot be aligned, a model output that is not a tensor | `inference_error` |
 | A disposed pipeline, session or WebGPU head is used | `input_error` |
 | Pipeline or session disposal failed, uninitialized WebGPU head | `internal_error` |
-| `PortablePolicyError` `detection_*` and `override_*` | `input_error` |
+| `PortablePolicyError` `detection_*` | `input_error` |
 | `PortablePolicyError` `surrogate_key_invalid` | `configuration_error` |
 | `PortablePolicyError` `capability_missing` | `capability_error` |
-| Any other `PortablePolicyError` (unknown or invalid profiles, resources, digests) | `policy_error` |
+| Any other `PortablePolicyError` (unknown or invalid profiles, resources, digests, and `override_*`) | `policy_error` |
 | `OpenMedOfflineError` `remote_model_refused` and `local_assets_unavailable` | `model_load_error` |
 | `OpenMedOfflineError` `remote_asset_refused` | `configuration_error` |
 

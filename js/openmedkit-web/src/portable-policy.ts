@@ -64,13 +64,13 @@ const ACTION_STRENGTH: Readonly<Record<string, number>> = {
 };
 
 /**
- * Portable registry code for a policy reason code: rejected detections and
- * overrides are caller input, a bad surrogate key is configuration, a missing
- * capability is a capability gap, and everything else (unknown or invalid
- * profiles, resources and digests) is a policy error.
+ * Portable registry code for a policy reason code: rejected detections are
+ * caller input, a bad surrogate key is configuration, a missing capability is
+ * a capability gap, and everything else (unknown or invalid profiles,
+ * resources, digests and overrides) is a policy error, as in Swift and Kotlin.
  */
 export function portablePolicyErrorCode(code: string): OpenMedErrorCode {
-  if (code.startsWith("detection_") || code.startsWith("override_")) {
+  if (code.startsWith("detection_")) {
     return "input_error";
   }
   if (code === "surrogate_key_invalid") {
