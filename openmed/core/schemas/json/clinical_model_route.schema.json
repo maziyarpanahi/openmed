@@ -34,6 +34,6 @@
     "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|builtin-v[1-9][0-9]*|local-v[1-9][0-9]*)$"},
     "runtime": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
     "schema_version": {"const": "1.0.0"},
-    "task": {"enum": ["assertion", "classification", "pair_scoring", "relation_extraction", "span_extraction", "temporality", "token_classification"]}
+    "task": {"enum": ["assertion", "classification", "pair_scoring", "passage_embedding", "relation_extraction", "reranking", "span_extraction", "temporality", "token_classification"]}
   }
 }
