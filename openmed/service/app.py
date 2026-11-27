@@ -31,6 +31,7 @@ from openmed.core.errors import (
     InferenceError,
     InputError,
     InternalError,
+    LegacyRootedError,
     OpenMedError,
     PolicyError,
 )
@@ -1977,6 +1978,12 @@ def create_app(
         _: Request,
         exc: OpenMedError,
     ) -> JSONResponse:
+        if isinstance(exc, LegacyRootedError):
+            # Rerooted legacy errors keep their pre-taxonomy handling. Their
+            # builtin bases precede OpenMedError in the MRO, so no handler for
+            # one of them was bypassed; re-raising reaches the catch-all
+            # handler exactly as the unrooted class did.
+            raise exc
         return _openmed_error_response(exc)
 
     @app.exception_handler(IdempotencyError)

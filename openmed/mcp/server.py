@@ -33,6 +33,7 @@ from openmed.core.errors import (
     InferenceError,
     InputError,
     InternalError,
+    LegacyRootedError,
     MissingExtraError,
     OpenMedError,
 )
@@ -287,7 +288,9 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
             },
             "is_error": True,
         }
-    if isinstance(error, OpenMedError):
+    # Rerooted legacy errors keep the specialized mapping below that they had
+    # before they gained the OpenMedError root.
+    if isinstance(error, OpenMedError) and not isinstance(error, LegacyRootedError):
         return mcp_error_payload(error)
     error_module = error.__class__.__module__
     if isinstance(error, ConsentReceiptRequiredError):
