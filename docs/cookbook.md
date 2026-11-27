@@ -51,6 +51,7 @@ using the same workflow with real data.
 | Run the v3 five-source synthetic Journey gate | [`examples/v3_golden_journey.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v3_golden_journey.py) |
 | De-identify, extract, ground, and export a FHIR Bundle | [`examples/ground_then_export_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/ground_then_export_fhir.py) |
 | Ground a synthetic mention offline | [`examples/offline_grounding.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/offline_grounding.py) |
+| Check codes against a local ValueSet offline, with a synthetic vocabulary | [`examples/valueset_validate_code.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/valueset_validate_code.py) |
 | Prepare a local OpenMRS de-identified handoff | [`examples/openmrs_deid_handoff.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/openmrs_deid_handoff.py) |
 | Build a de-identified DHIS2 district export | [`examples/dhis2_district_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/dhis2_district_export.py) |
 | Extend the SDOH status vocabulary with a local domain | [`examples/custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/custom_status_vocabulary.py) |
