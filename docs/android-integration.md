@@ -735,6 +735,28 @@ throws `IllegalArgumentException`; neither results nor errors contain the key.
 `ReceiptVerificationParityTest` replays the shared vectors in
 `tests/fixtures/parity/receipt_verification_v1.json`.
 
+## Patient-keyed date-shift offsets
+
+`DateShift` reproduces Python's `openmed.core.date_shift` offsets byte for
+byte using only JDK crypto, so one patient's dates shift by the same number of
+days on Android and on a server:
+
+```kotlin
+val days = DateShift.stableOffset(patientKey, secret, maxDays = 365)
+val shifted = DateShift.shift("2024-03-01", days) // ISO YYYY-MM-DD
+val seeded = DateShift.stableOffsetFromSeed(requestSeed, maxDays = 30)
+```
+
+An offset is a non-zero number of days in `[-maxDays, maxDays]`.
+`stableOffset` uses HMAC-SHA256 of the UTF-8 patient key under the caller's
+secret. `stableOffsetFromSeed` hashes the seed's decimal text, accepting a
+`Long` or a `BigInteger` of any size, as Python does. `shift` uses the
+proleptic Gregorian calendar and refuses results outside years 1 to 9999.
+Errors use fixed messages and never contain keys, secrets, seeds or dates, and
+nothing is logged or stored. The caller keeps custody of the secret. A
+date-shift `DeidentifyMethod` is separate work (#3643).
+`DateShiftParityTest` replays `tests/fixtures/parity/date_shift_v1.json`.
+
 ## Shared C++ runtime (libc++_shared.so)
 
 `libdjl_tokenizer.so` from `ai.djl.android:tokenizer-native` 0.33.0 links

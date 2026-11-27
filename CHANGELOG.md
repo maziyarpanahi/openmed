@@ -123,6 +123,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run the shared error-code vectors in the Android OpenMedKit: Kotlin failures expose the portable registry code as `errorCode` through `OpenMedCodedError` next to their unchanged reason codes (`PolicyProfileException`, `InferenceError`, the downloader exceptions, `ArtifactAcquisitionResult`, and the new `OpenMedArgumentException`, still an `IllegalArgumentException`, for invalid `OpenMedSpan` fields and an empty `hashSalt`), and `ErrorCodeParityTest` runs every required Kotlin scenario offline (#5367).
 - Run the shared error-code vectors in OpenMedKit Swift: `PolicyError`, `OpenMedModelStoreError`, `OpenMedTokenizerError`, `OpenMedMLXRuntimeError` and MLX artifact load failures conform to the new `OpenMedCodedError` protocol and expose the portable `openMedErrorCode` next to their unchanged reason codes, and `ErrorCodeParityTests` runs every required Swift scenario in `error_codes_v1.json` (#5366).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
+- Port patient-keyed date-shift offsets to the Android OpenMedKit: `DateShift.stableOffset`, `stableOffsetFromSeed` (any-size seeds) and ISO `shift` match Python `openmed.core.date_shift` on every vector in `date_shift_v1.json`, with JDK crypto only and value-free errors (#5416).
+- Add synthetic cross-runtime date-shift vectors for the patient-keyed and
+  seeded offset helpers, covering non-ASCII patient keys, raw-byte secrets,
+  seeds beyond 64 bits, and leap-day, month-end and year-boundary shifted
+  dates, with a Python test that recomputes every vector and reports
+  mismatches by vector id only (#5413).
 
 ### Changed
 
