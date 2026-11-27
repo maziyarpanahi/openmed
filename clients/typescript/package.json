@@ -1,6 +1,6 @@
 {
   "name": "@openmed/rest-client",
-  "version": "3.3.0",
+  "version": "4.0.0",
   "description": "Dependency-light TypeScript client for the OpenMed REST service.",
   "keywords": [
     "openmed",
