@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Declare every `OPENMED_SERVICE_*` setting the service reads, plus the core `OpenMedConfig` environment variables, in a sectioned Draft 2020-12 `openmed/core/settings.schema.json` with type, default, bounds, secret flag and owning module, covered by the schema fingerprint snapshot and an AST scan of service environment reads; `openmed.core.settings_registry` returns the declarations without reading the environment (#5337).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
