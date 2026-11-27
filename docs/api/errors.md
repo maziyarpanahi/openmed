@@ -306,6 +306,27 @@ public API. The Android kit reports them as described in
 [Android OpenMedKit](#android-openmedkit). Run the script with `--check` to
 verify the committed files; the unit tests do this.
 
+In OpenMedKit Swift, errors that conform to `OpenMedCodedError` expose the
+portable code as `openMedErrorCode`, next to their existing reason code. The
+reason codes, cases and descriptions are unchanged:
+
+| Swift error | `openMedErrorCode` |
+| --- | --- |
+| `PolicyError` | `configuration_error` for `surrogate_key_invalid`; `input_error` for `detection_label_invalid`, `detection_offset_invalid`, `detection_offset_out_of_bounds`, `detection_confidence_invalid` and `detection_source_invalid`; `capability_error` for `capability_missing`; `policy_error` for every other code, such as `profile_unknown` |
+| `OpenMedModelStoreError` | `model_load_error` |
+| `OpenMedTokenizerError` | `configuration_error` for `pinnedRevisionRequired`, `invalidPin` and `identityMismatch`; otherwise `model_load_error`, such as `missingLocalAssets` |
+| `OpenMedMLXRuntimeError` | `capability_error` |
+| MLX artifact load failures | `capability_error` for an unsupported task or family; otherwise `model_load_error` |
+
+```swift
+do {
+    _ = try Policy(named: name)
+} catch let error as any OpenMedCodedError {
+    print(error.openMedErrorCode.rawValue)  // policy_error
+}
+```
+
+
 ### Shared error-code vectors
 
 `tests/fixtures/parity/error_codes_v1.json` (`openmed.error_code_vectors`
@@ -328,6 +349,12 @@ reason. A kit cell may name its entry point and what the kit raises today,
 which tells kit adoption what to map. Only the code is part of the contract;
 messages are not. `tests/unit/core/test_error_code_vectors.py` checks the
 fixture against the registry and runs the Python scenarios.
+`ErrorCodeParityTests` in OpenMedKit Swift runs every scenario whose Swift cell
+is `required` and checks `openMedErrorCode` (`cd swift/OpenMedKit && swift test
+--filter ErrorCodeParityTests`). Its `model_missing_offline` entry is
+`OpenMed(backend:)` without local model or tokenizer assets: OpenMedKit makes
+no request by default, so the load fails with `OpenMedTokenizerError`
+`tokenizer_assets_missing`.
 
 Three Python failures used to raise a bare builtin and now carry a code. Each
 keeps its builtin base and its message, so existing handlers still catch it:

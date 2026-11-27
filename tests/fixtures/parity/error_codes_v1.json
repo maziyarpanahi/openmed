@@ -232,9 +232,9 @@
         "swift": {
           "status": "required",
           "entry": [
-            "OpenMedModelStore load of an absent local model"
+            "OpenMed(backend:) with no local model or tokenizer assets; OpenMedKit makes no request by default"
           ],
-          "today": "OpenMedModelStore missing_manifest or missing_weights"
+          "today": "OpenMedTokenizerError tokenizer_assets_missing"
         },
         "kotlin": {
           "status": "required",
