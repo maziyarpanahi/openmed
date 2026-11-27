@@ -16,10 +16,10 @@ matrix and synthetic resources are in
 | ETag conflict | Stale `If-Match` update | Pass for 409, 412, or 428; missing version metadata fails |
 | Transaction atomicity | Valid and invalid synthetic write in one transaction | Pass only when the transaction fails and the first resource remains absent |
 | Partial failure | Batch with one valid and one invalid synthetic write | Pass if the content-free compensation report detects partial failure; absent batch declaration is unsupported |
-| Subscription duplicate | Local checkpoint exercise | Server interoperability unsupported pending #2776 |
-| Token refresh | Replacement credential custody exercise | Server interoperability unsupported pending #2772 |
-| Scope narrowing | Local least-privilege exercise | Server interoperability unsupported pending #3084 |
-| Token revocation | Local custody revocation exercise | Server interoperability unsupported pending #2772 |
+| Subscription duplicate | Local checkpoint exercise (#2776) | Not probed on the server: needs a caller-provisioned subscription channel; reported unsupported (`dependency_pending`) |
+| Token refresh | Replacement credential custody exercise (#2772) | Not probed on the server: needs a caller-provisioned SMART authorization server; reported unsupported (`dependency_pending`) |
+| Scope narrowing | Local least-privilege exercise (#3084) | Not probed on the server: needs a caller-provisioned SMART authorization server; reported unsupported (`dependency_pending`) |
+| Token revocation | Local custody revocation exercise (#2772) | Not probed on the server: needs a caller-provisioned SMART authorization server; reported unsupported (`dependency_pending`) |
 
 Results use `pass`, `fail`, `expected_variance`, or `unsupported`. The
 `expected_variance` classification is reserved for a documented, version-bound

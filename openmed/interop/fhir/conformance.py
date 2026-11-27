@@ -140,7 +140,23 @@ def classify(
     passed: bool,
     expected_variance: bool = False,
 ) -> ConformanceResult:
-    """Classify a probe without copying its response or exception content."""
+    """Classify a probe without copying its response or exception content.
+
+    Args:
+        profile: Server profile whose name and declared version the result
+            carries.
+        case: One of :data:`CASES`.
+        supported: Whether the server advertised the probed interaction.
+        passed: Whether the observed behavior matched the expectation.
+        expected_variance: Whether a failed probe is a documented,
+            version-bound deviation rather than an unexpected response.
+
+    Returns:
+        A value-free :class:`ConformanceResult`.
+
+    Raises:
+        ValueError: If ``case`` is not a declared matrix case.
+    """
 
     if case not in CASES:
         raise ValueError("unknown conformance case")
@@ -177,6 +193,19 @@ def run_reference_server(
     ``client`` is an HTTPX-compatible client configured by the caller. No
     response body, URL, token, or generated resource ID enters the result.
     Cleanup is best effort; discard the isolated container after a run.
+
+    Args:
+        profile: Validated loopback profile with the exact declared
+            ``CapabilityStatement.software.version``.
+        client: HTTPX-compatible client exposing ``request``.
+
+    Returns:
+        One :class:`ConformanceResult` per entry in :data:`CASES`, in that
+        order. Any transport or parsing exception marks every case as
+        ``fail`` without copying the exception.
+
+    Raises:
+        TypeError: If ``profile`` is not a :class:`ReferenceProfile`.
     """
 
     if not isinstance(profile, ReferenceProfile):
