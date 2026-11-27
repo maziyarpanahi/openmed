@@ -1,0 +1,147 @@
+{
+  "schema": "openmed.task_pack_vectors",
+  "schema_version": "1.0.0",
+  "pack_id": "clinical_entity",
+  "offset_unit": "unicode_scalar",
+  "confidence_threshold": 0.5,
+  "description": "Synthetic clinical-entity pack vectors. A fake token-classification backend emits model_output; a kit keeps a span only when its label normalizes to a pack canonical label and its confidence is at or above the threshold, and returns that label as the category with the same Unicode scalar offsets.",
+  "cases": [
+    {
+      "id": "ascii_mixed_labels",
+      "text": "Synthetic note: history of asthma and type 2 diabetes, chronic cough, a healed fracture, mild fatigue, left knee swelling; given aspirin.",
+      "model_output": [
+        {
+          "label": "DISEASE",
+          "start": 27,
+          "end": 33,
+          "confidence": 0.98
+        },
+        {
+          "label": "Disease",
+          "start": 38,
+          "end": 53,
+          "confidence": 0.91
+        },
+        {
+          "label": "CONDITION",
+          "start": 55,
+          "end": 68,
+          "confidence": 0.77
+        },
+        {
+          "label": "Pathology",
+          "start": 79,
+          "end": 87,
+          "confidence": 0.66
+        },
+        {
+          "label": "CONDITION",
+          "start": 94,
+          "end": 101,
+          "confidence": 0.31
+        },
+        {
+          "label": "ANATOMY",
+          "start": 103,
+          "end": 112,
+          "confidence": 0.88
+        },
+        {
+          "label": "SIGN_SYMPTOM",
+          "start": 113,
+          "end": 121,
+          "confidence": 0.9
+        },
+        {
+          "label": "CHEM",
+          "start": 129,
+          "end": 136,
+          "confidence": 0.95
+        }
+      ],
+      "expected": [
+        {
+          "category": "DISEASE",
+          "start": 27,
+          "end": 33,
+          "text": "asthma"
+        },
+        {
+          "category": "DISEASE",
+          "start": 38,
+          "end": 53,
+          "text": "type 2 diabetes"
+        },
+        {
+          "category": "CONDITION",
+          "start": 55,
+          "end": 68,
+          "text": "chronic cough"
+        },
+        {
+          "category": "PATHOLOGY",
+          "start": 79,
+          "end": 87,
+          "text": "fracture"
+        }
+      ]
+    },
+    {
+      "id": "non_ascii_scalar_offsets",
+      "text": "🧪 Synthetic note — naïve patient with Crohn’s disease and 😷 influenza; café visit.",
+      "model_output": [
+        {
+          "label": "PERSON",
+          "start": 25,
+          "end": 32,
+          "confidence": 0.9
+        },
+        {
+          "label": "DISEASE",
+          "start": 38,
+          "end": 53,
+          "confidence": 0.93
+        },
+        {
+          "label": "CONDITION",
+          "start": 60,
+          "end": 69,
+          "confidence": 0.89
+        }
+      ],
+      "expected": [
+        {
+          "category": "DISEASE",
+          "start": 38,
+          "end": 53,
+          "text": "Crohn’s disease"
+        },
+        {
+          "category": "CONDITION",
+          "start": 60,
+          "end": 69,
+          "text": "influenza"
+        }
+      ]
+    },
+    {
+      "id": "no_mapped_labels",
+      "text": "Synthetic note: metformin 500 mg, right shoulder.",
+      "model_output": [
+        {
+          "label": "CHEM",
+          "start": 16,
+          "end": 25,
+          "confidence": 0.97
+        },
+        {
+          "label": "ANATOMY",
+          "start": 34,
+          "end": 48,
+          "confidence": 0.92
+        }
+      ],
+      "expected": []
+    }
+  ]
+}
