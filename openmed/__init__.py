@@ -142,6 +142,7 @@ _LAZY_IMPORTS = {
     "record_review_decision": ".core.review_workflow",
     "get_result_cache": ".core.result_cache",
     "make_cache_key": ".core.result_cache",
+    "notify_model_generation_change": ".core.result_cache",
     "AnalyzeResult": ".core.results",
     "StreamingBufferError": ".core.streaming",
     "StreamingDeidentificationEvent": ".core.streaming",
