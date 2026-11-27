@@ -90,6 +90,7 @@ successful case and a rejected case with its stable reason code.
 | Review a structured release | [`examples/structured_release_risk.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/structured_release_risk.py) |
 | Compare a release with a reference population | [`examples/structured_population_risk.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/structured_population_risk.py) |
 | Exercise policy, audit, and release gates | [`examples/v16_policy_audit_release_gates.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v16_policy_audit_release_gates.py) |
+| Verify a signed audit report and catch tampering | [`examples/verify_audit_report.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/verify_audit_report.py) |
 | Produce the signed v3 Journey release packet | [`scripts/release/journey_release_gate.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/release/journey_release_gate.py) |
 | Exercise multimodal, interop, and browser exports | [`examples/v17_multimodal_browser_interop.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v17_multimodal_browser_interop.py) |
 | Audit SMART scopes before an agent workflow | [`examples/smart_scope_audit.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/smart_scope_audit.py) |
