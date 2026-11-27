@@ -7715,6 +7715,87 @@
     "OpenMedKit.OpenMedMemoryPressureSource.observe": [
       "func OpenMedKit.OpenMedMemoryPressureSource.observe<Self where Self : OpenMedKit.OpenMedMemoryPressureSource>(_: (OpenMedKit.OpenMedMemoryPressureLevel) -> Swift.Void) -> any OpenMedKit.OpenMedRuntimeObservation"
     ],
+    "OpenMedKit.OpenMedModelCatalog": [
+      "conformance OpenMedKit.OpenMedModelCatalog: Sendable",
+      "struct OpenMedKit.OpenMedModelCatalog"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.bundled": [
+      "static func OpenMedKit.OpenMedModelCatalog.bundled() throws -> OpenMedKit.OpenMedModelCatalog"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.entries": [
+      "var OpenMedKit.OpenMedModelCatalog.entries: [OpenMedKit.OpenMedModelCatalogEntry] { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.entry": [
+      "func OpenMedKit.OpenMedModelCatalog.entry(repoID: Swift.String) -> OpenMedKit.OpenMedModelCatalogEntry?"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.filter": [
+      "func OpenMedKit.OpenMedModelCatalog.filter(format: Swift.String? = default, tier: Swift.String? = default, maxParamCount: Swift.Int64? = default, language: Swift.String? = default, license: Swift.String? = default) -> [OpenMedKit.OpenMedModelCatalogEntry]"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.init": [
+      "OpenMedKit.OpenMedModelCatalog.init(entries: [OpenMedKit.OpenMedModelCatalogEntry]) -> OpenMedKit.OpenMedModelCatalog",
+      "OpenMedKit.OpenMedModelCatalog.init(jsonLines: Foundation.Data) throws -> OpenMedKit.OpenMedModelCatalog"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.resourceExtension": [
+      "static var OpenMedKit.OpenMedModelCatalog.resourceExtension: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalog.resourceName": [
+      "static var OpenMedKit.OpenMedModelCatalog.resourceName: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry": [
+      "conformance OpenMedKit.OpenMedModelCatalogEntry: Decodable",
+      "conformance OpenMedKit.OpenMedModelCatalogEntry: Encodable",
+      "conformance OpenMedKit.OpenMedModelCatalogEntry: Equatable",
+      "conformance OpenMedKit.OpenMedModelCatalogEntry: Hashable",
+      "conformance OpenMedKit.OpenMedModelCatalogEntry: Sendable",
+      "struct OpenMedKit.OpenMedModelCatalogEntry"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.formats": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.formats: [Swift.String] { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.init": [
+      "OpenMedKit.OpenMedModelCatalogEntry.init(from: any Swift.Decoder) throws -> OpenMedKit.OpenMedModelCatalogEntry",
+      "OpenMedKit.OpenMedModelCatalogEntry.init(repoID: Swift.String, formats: [Swift.String], tier: Swift.String? = default, paramCount: Swift.Int64? = default, languages: [Swift.String] = default, license: Swift.String? = default, reproducibilityHash: Swift.String) -> OpenMedKit.OpenMedModelCatalogEntry"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.languages": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.languages: [Swift.String] { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.license": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.license: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.paramCount": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.paramCount: Swift.Int64? { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.repoID": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.repoID: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.reproducibilityHash": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.reproducibilityHash: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogEntry.tier": [
+      "var OpenMedKit.OpenMedModelCatalogEntry.tier: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError": [
+      "conformance OpenMedKit.OpenMedModelCatalogError: Equatable",
+      "conformance OpenMedKit.OpenMedModelCatalogError: Error",
+      "conformance OpenMedKit.OpenMedModelCatalogError: LocalizedError",
+      "conformance OpenMedKit.OpenMedModelCatalogError: Sendable",
+      "enum OpenMedKit.OpenMedModelCatalogError"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError.errorDescription": [
+      "var OpenMedKit.OpenMedModelCatalogError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError.invalidEncoding": [
+      "case OpenMedKit.OpenMedModelCatalogError.invalidEncoding"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError.invalidEntry": [
+      "case OpenMedKit.OpenMedModelCatalogError.invalidEntry: (Swift.Int) -> OpenMedKit.OpenMedModelCatalogError"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError.reason": [
+      "var OpenMedKit.OpenMedModelCatalogError.reason: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelCatalogError.resourceMissing": [
+      "case OpenMedKit.OpenMedModelCatalogError.resourceMissing"
+    ],
     "OpenMedKit.OpenMedModelStore": [
       "enum OpenMedKit.OpenMedModelStore"
     ],
