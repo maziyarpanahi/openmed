@@ -300,6 +300,26 @@ def test_pattern_prefixes_become_template_literal_types() -> None:
     assert "  country_code: string;" in source
 
 
+@pytest.mark.parametrize(
+    ("pattern", "prefix"),
+    [
+        ("^hmac-sha256:[0-9a-f]{64}$", "hmac-sha256:"),
+        ("^ab+c", "ab"),
+        ("^ab?c", "a"),
+        ("^ab*c", "a"),
+        ("^ab{0,1}c", "a"),
+        ("^a?", None),
+        ("^abc|^xyz", None),
+        ("^(?:abc)", None),
+        ("abc", None),
+    ],
+)
+def test_pattern_prefix_never_requires_an_optional_literal(
+    pattern: str, prefix: str | None
+) -> None:
+    assert contract_schema._literal_prefix(pattern) == prefix
+
+
 def test_web_span_type_is_guarded_against_the_generated_contract() -> None:
     source = WEB_TYPES.read_text(encoding="utf-8")
 

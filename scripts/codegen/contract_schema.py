@@ -526,11 +526,15 @@ def _const_matches(kind: str, value: object) -> bool:
 
 
 def _literal_prefix(pattern: str) -> str | None:
-    if not pattern.startswith("^"):
+    # An alternation anywhere means no single literal prefix is required.
+    if not pattern.startswith("^") or "|" in pattern:
         return None
     prefix: list[str] = []
     for char in pattern[1:]:
         if char in _REGEX_META:
+            # ``?``, ``*`` and ``{m,n}`` may make the previous literal optional.
+            if char in "?*{" and prefix:
+                prefix.pop()
             break
         prefix.append(char)
     return "".join(prefix) or None
