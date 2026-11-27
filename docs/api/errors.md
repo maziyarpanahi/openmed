@@ -237,6 +237,18 @@ keeps its builtin base and its message, so existing handlers still catch it:
   `openmed.core.offline.OfflineModelUnavailableError`, an `OfflineModeError`
   (a `RuntimeError`) that is also a `ModelLoadError`.
 
+Like every taxonomy class, they also gain the taxonomy's extra builtin bases:
+`TypeError` for both, plus `KeyError` for `ConfigurationError`, and
+`ImportError` and `ValueError` for `OfflineModelUnavailableError`, so an
+`except ImportError` around a model load now also catches an offline cache
+miss. The adapters now map them as taxonomy errors: REST answers
+`400 configuration_error` or `400 input_error` instead of
+`400 bad_request`, and `503 model_load_error` instead of a generic 500 for
+the offline miss; MCP reports `configuration_error`, `input_error` and
+`model_load_error` instead of `invalid_arguments` and `execution_error`; and
+agent error envelopes report `invalid_configuration`, `invalid_input` and
+`model_unavailable` instead of `internal_error`.
+
 ### Recorded divergences
 
 Where surfaces disagree today, the registry records the difference instead of
