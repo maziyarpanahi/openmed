@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Register the clinical review packet, review packet mapping, decision result and DP budget snapshot migrators in the stored-record migration registry, with a synthetic before/after fixture pair for every edge and the budget normalisation marked lossy (#5393).
 - Add `openmed migrate records <dir> --dry-run`, which runs every `.json` and `.jsonl` record under a directory through its registered migration chain in memory and prints only counts per schema id, version and outcome (`current`, `migratable`, `lossy`, `no_path`, `invalid`), with bounded walks and symlinks that leave the directory counted as invalid (#5394).
 - Add `openmed migrate check <file>`, a read-only dry run that identifies one stored JSON record's schema id and version, runs its registered migration chain in memory, and prints only the field paths, versions, counts and digests, with a usage exit code when no path exists (#5364).
+- Add a release gate that fails when a packaged JSON Schema version bump since the last release tag has neither a registered record migration chain nor a `no_record_migration` exemption with a reason, and when a registered migrator names a missing fixture pair (#5363).
 - Add `openmed.core.record_migrations`, a registry of stored-record migrators keyed by schema id and version that resolves unique chains, refuses duplicate, cyclic and ambiguous edges, and reports only the field paths a migration adds, moves, changes or drops (#5362).
 
 ### Fixed

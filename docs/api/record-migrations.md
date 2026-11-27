@@ -109,6 +109,48 @@ echoed, and a migrator's exception message is replaced by its class name.
 | `migrator_output_invalid` | A migrator returned something that is not a JSON-compatible mapping. |
 | `version_mismatch` | A migrator returned a record that is not at the edge's target version. |
 
+## Release gate for schema version bumps
+
+`scripts/release/record_migration_gate.py` links packaged JSON Schema version
+bumps to record migrators. It reads every packaged `*.schema.json` at the last
+release tag (`git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD`) straight
+from Git and compares each record version with the working tree: the record
+`schema_version` property's `const` or highest `enum` value, else the
+top-level `schema_version`, else the version in `$id`. For every schema whose
+version changed, it requires one of:
+
+- a registered chain from the released version to the new one, under the same
+  schema id as the packaged schema name; or
+- an entry in `scripts/release/record_migration_exemptions.json` that names the
+  schema and both versions and gives a non-empty `reason`:
+
+```json
+{
+  "schema_version": 1,
+  "no_record_migration": [
+    {
+      "schema": "decision_request",
+      "from_version": "1.1.0",
+      "to_version": "1.2.0",
+      "reason": "Why stored records need no migration."
+    }
+  ]
+}
+```
+
+The gate also requires every registered edge to name an existing
+`before.json` and `after.json` fixture pair. It fails (exit code 1) on a bump
+with neither a migrator nor an exemption, an exemption without a reason, a
+malformed exemption, or a missing fixture. Unreadable refs or exemption files
+exit with code 2, including a shallow clone without tags. Exemptions that match
+no bump, and exemptions for bumps that also have a migrator, are reported
+without failing so they can be cleaned up. The `Model Release Gates` workflow
+runs the gate on every manual release run:
+
+```bash
+python scripts/release/record_migration_gate.py --json report.json
+```
+
 ## Default registry
 
 The module-level functions act on `default_registry()`, a process-wide
