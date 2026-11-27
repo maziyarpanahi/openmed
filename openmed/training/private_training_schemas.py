@@ -564,7 +564,10 @@ def build_schema(name: str) -> dict[str, Any]:
     """
 
     if type(name) is not str or name not in PRIVATE_TRAINING_SCHEMA_BUILDERS:
-        raise PrivateTrainingSchemaError("unknown private-training schema")
+        expected = ", ".join(sorted(PRIVATE_TRAINING_SCHEMA_BUILDERS))
+        raise PrivateTrainingSchemaError(
+            f"unknown private-training schema; expected one of: {expected}"
+        )
     return PRIVATE_TRAINING_SCHEMA_BUILDERS[name]()
 
 
