@@ -16,6 +16,9 @@ so API drift is caught in tests instead of downstream apps.
 | `EntityPrediction.confidence` | `EntityPrediction.confidence` | Present |
 | `EntityPrediction.start` | `EntityPrediction.start` | Present |
 | `EntityPrediction.end` | `EntityPrediction.end` | Present |
+| `OpenMedModelStore.listCachedModels(cacheDirectory:)` | `ModelCache.isAvailable(repoId)`, `ModelCache.sizeBytes(repoId)` | Present; Swift lists every snapshot with its state, size and modification date |
+| `OpenMedModelStore.totalCacheSizeBytes(cacheDirectory:)` | `ModelCache.totalSizeBytes()` | Present; Swift counts every regular file under the cache root, Android counts ready models |
+| `OpenMedModelStore.deleteModel(repoID:revision:cacheDirectory:)` | `ModelCache.evict(repoId)` | Present; Swift has no lease protection yet (#3644) |
 | `OpenMedModelStore.downloadMLXModel(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` | Android acquires ONNX or TFLite artifacts; the MLX-named member stays deprecated for source compatibility and never downloads |
 | `OpenMedModelStore.cachedMLXModelDirectory(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory` | Present; MLX-named member deprecated |
 | `OpenMedModelStore.isMLXModelCached(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |

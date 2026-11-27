@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Port the streaming speech data contract to the Android OpenMedKit: `SpeechTokenTiming`, `SpeechRecognition` and `SpeechEngineProvenance` validate token order, millisecond bounds, `confidence_ppm` and provenance like Swift and Python, refuse with both the Swift code and the Python category, and are checked against the shared speech fixture (#5371).
 - Add `family`, `task` and `canonical_labels` to the bundled Android model catalog, expose them as optional `ModelCatalogEntry.family`, `task` and `canonicalLabels` (older assets still load), and add a `family` predicate to `ModelCatalog.filter`, keeping the previous constructor, `copy` and `filter` signatures binary-compatible (#5422).
 - Add `LegacyRootedError`, a compatibility root that lets existing builtin-based exceptions join `OpenMedError` with unchanged `args`, `str()`, MRO and transport mapping, plus a shrink-only gate for unrooted public exceptions (#5365).
+- List, measure and delete OpenMedKit Swift cached models through `OpenMedModelStore.listCachedModels`, `totalCacheSizeBytes` and `deleteModel`: the ready marker goes first so an interrupted delete is never reported ready, and symlinked or escaping cache paths are refused with a path-free error (#5376).
 
 ### Changed
 

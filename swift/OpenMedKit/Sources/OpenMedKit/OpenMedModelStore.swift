@@ -4,6 +4,8 @@ import Foundation
 /// revision, or filesystem path, so errors are safe to log and report.
 public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     case invalidResponse
+    /// A cached model could not be moved aside or removed.
+    case cacheDeletionFailed
     case httpError(statusCode: Int)
     case missingManifest
     case missingWeights
@@ -18,6 +20,7 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     public var reason: String {
         switch self {
         case .invalidResponse: return "invalid_response"
+        case .cacheDeletionFailed: return "cache_deletion_failed"
         case .httpError: return "http_status"
         case .missingManifest: return "missing_manifest"
         case .missingWeights: return "missing_weights"
@@ -31,6 +34,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
         switch self {
         case .invalidResponse:
             return "Invalid response while downloading an MLX model file."
+        case .cacheDeletionFailed:
+            return "The cached model could not be deleted."
         case .httpError(let statusCode):
             return "HTTP \(statusCode) while downloading an MLX model file."
         case .missingManifest:
@@ -332,7 +337,7 @@ public enum OpenMedModelStore {
         return try cacheState(at: modelDirectory)
     }
 
-    private static func cacheState(at modelDirectory: URL) throws -> OpenMedMLXModelCacheState {
+    static func cacheState(at modelDirectory: URL) throws -> OpenMedMLXModelCacheState {
         let fileManager = FileManager.default
         let boundary = try OpenMedMLXPathBoundary(directoryURL: modelDirectory)
         let isComplete: Bool
