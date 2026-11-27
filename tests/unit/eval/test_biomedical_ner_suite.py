@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from openmed.eval.datasets import (
     map_biomedical_ner_label,
     run_biomedical_ner_benchmark,
 )
+from openmed.eval.metrics import compute_exact_span_f1
 from openmed.eval.suites import load_suite_fixtures, suite_metadata
 
 
@@ -110,6 +112,63 @@ def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
         assert corpus_metrics["fixture_count"] == 1
         assert corpus_metrics["exact_span_f1"]["f1"] == 1.0
         assert corpus_metrics["relaxed_span_f1"]["f1"] == 1.0
+
+
+def test_biomedical_ner_runner_runs_exactly_once_per_fixture(
+    tmp_path: Path,
+) -> None:
+    _write_synthetic_suite(tmp_path)
+    fixtures = load_biomedical_ner_fixtures(tmp_path)
+    calls: list[str] = []
+
+    def counting_runner(fixture, model_name, device):
+        calls.append(fixture.fixture_id)
+        return list(fixture.gold_spans)
+
+    run_biomedical_ner_benchmark(
+        fixtures,
+        model_name="fixture-model",
+        runner=counting_runner,
+    )
+
+    # One inference per fixture: overall and per-corpus slices share the
+    # same predictions (issue #4963).
+    assert len(calls) == len(fixtures)
+    assert len(calls) == len(set(calls))
+    assert sorted(calls) == sorted(fixture.fixture_id for fixture in fixtures)
+
+
+def test_biomedical_ner_non_deterministic_runner_slices_match_overall(
+    tmp_path: Path,
+) -> None:
+    _write_synthetic_suite(tmp_path)
+    fixtures = load_biomedical_ner_fixtures(tmp_path)
+    per_corpus = {
+        fixture.fixture_id: str(fixture.metadata["dataset"]) for fixture in fixtures
+    }
+
+    def unstable_runner(fixture, model_name, device):
+        # Alternate a single span's extent on every call, so two independent
+        # passes over the same fixture would diverge.
+        return [replace(fixture.gold_spans[0], end=fixture.gold_spans[0].end + 1)]
+
+    report = run_biomedical_ner_benchmark(
+        fixtures,
+        model_name="fixture-model",
+        runner=unstable_runner,
+    )
+
+    per_corpus_metrics = report.metrics["per_corpus"]
+    # Each slice is derived from the *same* captured pass the overall score
+    # uses: per-corpus exact F1 must equal the F1 recomputed from that one
+    # prediction per fixture, not from a second, diverging run.
+    for fixture in fixtures:
+        corpus = per_corpus[fixture.fixture_id]
+        expected = compute_exact_span_f1(
+            list(fixture.gold_spans),
+            [replace(fixture.gold_spans[0], end=fixture.gold_spans[0].end + 1)],
+        )
+        assert per_corpus_metrics[corpus]["exact_span_f1"] == expected.to_dict()
 
 
 def test_biomedical_ner_suite_registry_and_metadata(tmp_path: Path) -> None:

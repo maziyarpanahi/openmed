@@ -89,6 +89,11 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Fixed
 
+- Run the biomedical NER suite's model once per fixture instead of twice: the
+  per-corpus exact/relaxed F1 slices now replay the same captured predictions
+  the overall report uses, so a non-deterministic runner no longer produces
+  per-corpus numbers that diverge from the overall score, and a reproduction
+  run no longer doubles inference cost (#4963).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer

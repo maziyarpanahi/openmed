@@ -420,12 +420,22 @@ def run_biomedical_ner_benchmark(
     )
     report_metadata = biomedical_ner_suite_metadata(split=split)
     report_metadata.update(dict(metadata or {}))
+    # Run the model once over every fixture, then replay the captured
+    # predictions for the per-corpus slices so each fixture is inferred a
+    # single time (issue #4963). A non-deterministic runner previously produced
+    # overall and per-corpus metrics from two different prediction passes.
+    predictions = _capture_predictions(
+        suite_fixtures,
+        runner=runner,
+        model_name=model_name,
+        device=device,
+    )
     report = run_benchmark(
         suite_fixtures,
         suite=BIOMEDICAL_NER,
         model_name=model_name,
         device=device,
-        runner=runner,
+        runner=_replay_runner(predictions),
         generated_at=generated_at,
         metadata=report_metadata,
     )
@@ -434,7 +444,7 @@ def run_biomedical_ner_benchmark(
         suite_fixtures,
         model_name=model_name,
         device=device,
-        runner=runner,
+        predictions=predictions,
         generated_at=generated_at,
     )
     return BenchmarkReport(
@@ -448,12 +458,47 @@ def run_biomedical_ner_benchmark(
     )
 
 
+def _capture_predictions(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    runner: ModelRunner | None,
+    model_name: str,
+    device: str,
+) -> dict[str, list[Any]]:
+    """Run *runner* once per fixture and return predictions keyed by id.
+
+    ``runner=None`` defers to the harness default *at call time*, so test
+    monkeypatching of ``harness.default_model_runner`` still takes effect.
+    """
+    if runner is not None:
+        model_runner = runner
+    else:
+        from openmed.eval.harness import default_model_runner as _default_runner
+
+        model_runner = _default_runner
+    return {
+        fixture.fixture_id: list(model_runner(fixture, model_name, device))
+        for fixture in fixtures
+    }
+
+
+def _replay_runner(predictions: Mapping[str, Sequence[Any]]) -> ModelRunner:
+    """Return a runner that replays captured predictions, without re-running."""
+
+    def replay(
+        fixture: BenchmarkFixture, model_name: str, device: str
+    ) -> Iterable[Any]:
+        return list(predictions.get(fixture.fixture_id, ()))
+
+    return replay
+
+
 def _per_corpus_metrics(
     fixtures: Sequence[BenchmarkFixture],
     *,
     model_name: str,
     device: str,
-    runner: ModelRunner | None,
+    predictions: Mapping[str, Sequence[Any]],
     generated_at: str | None,
 ) -> dict[str, dict[str, Any]]:
     grouped: dict[str, list[BenchmarkFixture]] = defaultdict(list)
@@ -471,7 +516,7 @@ def _per_corpus_metrics(
             suite=f"{BIOMEDICAL_NER}:{corpus}",
             model_name=model_name,
             device=device,
-            runner=runner,
+            runner=_replay_runner(predictions),
             generated_at=generated_at,
             metadata={"corpus": corpus, "suite": BIOMEDICAL_NER},
         )
