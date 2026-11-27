@@ -14,7 +14,7 @@ replicaState:
 
 image:
   repository: ghcr.io/maziyarpanahi/openmed
-  tag: "v3.3.0"
+  tag: "v4.0.0"
 
 config:
   preloadModels:
