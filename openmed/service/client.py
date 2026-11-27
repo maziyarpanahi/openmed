@@ -309,6 +309,7 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         request_fields=_request_field_names(PrivacyGatewayRequest),
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
+    "capabilities": ClientEndpoint(method="GET", path="/v1/capabilities"),
     "journey_resources": ClientEndpoint(method="GET", path="/v1/journey/resources"),
     "system_one": ClientEndpoint(
         method="POST",
@@ -678,6 +679,10 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
     def loaded_models(self, *, request_id: Optional[str] = None) -> JsonDict:
         """Return loaded model and warm-pool state."""
         return self._request("GET", "/models/loaded", request_id=request_id)
+
+    def capabilities(self, *, request_id: Optional[str] = None) -> JsonDict:
+        """Return the server's value-free capability descriptor and digest."""
+        return self._request("GET", "/v1/capabilities", request_id=request_id)
 
     def journey_resources(
         self,

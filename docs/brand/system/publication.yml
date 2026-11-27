@@ -114,6 +114,7 @@ classification:
     - cli/help-drift.md
     - cli/machine-contract.md
     - cli/service-recovery.md
+    - cli/capabilities.md
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md
@@ -652,6 +653,7 @@ classification:
     - api/errors.md
     - api/compatibility-gate.md
     - api/protocol-parity.md
+    - api/capabilities.md
     - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md

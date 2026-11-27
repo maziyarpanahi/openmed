@@ -9,6 +9,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /livez`
 - `GET /readyz`
 - `GET /models/loaded`
+- `GET /v1/capabilities`
 - `GET /v1/journey/resources`
 - `POST /models/unload`
 - `POST /analyze`
@@ -1045,6 +1046,15 @@ Returns currently cached model resources and idle-unload status:
   }
 }
 ```
+
+### `GET /v1/capabilities`
+
+Returns the value-free [capability descriptor](api/capabilities.md) of this
+server: installed backends and surfaces, the served public model ids, the
+canonical schema versions, the policy profile names and a `sha256:` digest of
+the descriptor. It never contains hostnames, filesystem paths, cache locations
+or environment values. With authentication enabled it requires `models:read`,
+like `GET /models/loaded`.
 
 ### `POST /models/unload`
 
