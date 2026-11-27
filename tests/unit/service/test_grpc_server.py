@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import grpc
+import pytest
 from google.protobuf.json_format import MessageToDict
 
 import openmed
@@ -207,6 +208,10 @@ def test_grpc_stream_deidentify_yields_chunked_results_offline(monkeypatch):
     assert observed["loader"] is runtime.get_loader()
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 15),
+    reason="grpcio-tools is excluded on CPython 3.15; see docs/testing.md",
+)
 def test_grpc_generated_stubs_are_current():
     repo_root = Path(__file__).resolve().parents[3]
     result = subprocess.run(
