@@ -704,6 +704,65 @@ expiration. Use `OpenMedRuntime` when you need those guarantees.
 Device and simulator memory evidence for these paths is not part of the package
 test suite; the unit tests drive every signal through deterministic fakes.
 
+## App Intents: Redact Text with OpenMed
+
+The `OpenMedIntents` library product adds a "Redact Text with OpenMed" action
+to Shortcuts, Siri and Spotlight. It is backed by `RedactTextIntent`. The
+intent takes text and a bundled policy name (default `hipaa_safe_harbor`) and
+returns the redacted text alone.
+
+```swift
+.product(name: "OpenMedIntents", package: "openmed")
+```
+
+```swift
+import AppIntents
+import OpenMedIntents
+
+struct MyAppIntents: AppIntentsPackage {
+    static var includedPackages: [any AppIntentsPackage.Type] { [OpenMedIntentsPackage.self] }
+}
+
+// At launch, point the intents at a model the app downloads with OpenMedModelStore.
+OpenMedIntentsConfiguration.redactor = .cachedMLXModel(
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
+)
+```
+
+The intent follows these rules:
+
+- **On-device only.** De-identification runs in the app's process with a
+  model already in the `OpenMedModelStore` cache. The intent never downloads a
+  model and has no cloud fallback. If the model is not cached, it fails with a
+  localized message asking the person to download one in the app.
+- **Returns only the redacted text.** No spans, labels, offsets, confidences
+  or original values are returned. Shortcuts can pass the output to any other
+  app or web action, so only already-redacted text may leave.
+- **Review before sharing.** Redaction is automated and can miss
+  identifiers. Unlike the Share extension, the intent shows no preview, so a
+  shortcut that forwards the result to another app or web action should let
+  the person review it first.
+- **Never opens the app** (`openAppWhenRun` is `false`) and **logs nothing**
+  about its input.
+- **Value-free errors.** Every failure surfaces as `OpenMedIntentError`, whose
+  message comes from the package's `Localizable` catalog and never contains
+  text, paths or model names. The cases are `emptyInput`, `inputTooLarge`
+  (over `OpenMedIntentsConfiguration.maximumInputUTF8Bytes`, 64 KiB),
+  `unknownPolicy`, `noCachedModel`, `runtimeUnavailable` (for example MLX on
+  the iOS Simulator, or on watchOS and visionOS) and `redactionFailed`.
+- **Custom pipelines.** Pass any local pipeline as
+  `OpenMedIntentRedactor { text, policy in ... }`, for example one built on a
+  bundled Core ML model. Tests use the same seam with a fake pipeline.
+
+`OpenMedIntents` ships its own `PrivacyInfo.xcprivacy`, declaring no tracking,
+no collected data and no required-reason APIs.
+
+`PIISummaryIntent` ("Summarize PII with OpenMed") uses the same boundary. It
+returns an `OpenMedPIISummary` that holds the redacted text, the identifier
+count and `label: count` entries, never values or offsets. See
+[OpenMedKit App Intents](runtimes/apple-app-intents.md) for the full
+contract and the shortcuts the demo app registers.
+
 ## Public API
 
 ### `OpenMedBackend`

@@ -11,6 +11,7 @@
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000003 /* Assets.xcassets */; };
 		A1000004 /* OpenMedKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001 /* OpenMedKit */; };
+		A1000005 /* OpenMedIntents in Frameworks */ = {isa = PBXBuildFile; productRef = AA000003 /* OpenMedIntents */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000004 /* OpenMedKit in Frameworks */,
+				A1000005 /* OpenMedIntents in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +80,7 @@
 			name = OpenMedDemo;
 			packageProductDependencies = (
 				AA000001 /* OpenMedKit */,
+				AA000003 /* OpenMedIntents */,
 			);
 			productName = OpenMedDemo;
 			productReference = A2000010 /* OpenMedDemo.app */;
@@ -281,6 +284,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
 			productName = OpenMedKit;
+		};
+		AA000003 /* OpenMedIntents */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
+			productName = OpenMedIntents;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

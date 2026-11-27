@@ -34,6 +34,10 @@ let package = Package(
             name: "OpenMedActionExtension",
             targets: ["OpenMedActionExtension"]
         ),
+        .library(
+            name: "OpenMedIntents",
+            targets: ["OpenMedIntents"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
@@ -132,6 +136,14 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedIntents",
+            dependencies: ["OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/OpenMedIntents",
+            resources: [
+                .process("Resources")
+            ]
+        ),
         // Test support only: no product exposes this target, so apps never link it.
         .target(
             name: "OpenMedPrivacySweep",
@@ -155,6 +167,11 @@ let package = Package(
                 "OpenMedPrivacySweep",
             ],
             path: "swift/OpenMedKit/Tests/ExtensionTests"
+        ),
+        .testTarget(
+            name: "OpenMedIntentsTests",
+            dependencies: ["OpenMedIntents", "OpenMedKit"],
+            path: "swift/OpenMedKit/Tests/OpenMedIntentsTests"
         ),
     ]
 )
