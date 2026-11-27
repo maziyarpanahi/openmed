@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, schema versions, policy profiles and a digest) at `GET /v1/capabilities`,
   built by `openmed.core.capabilities.capability_descriptor()` and typed in OpenAPI
   by the bundled descriptor schema (#5343).
+- Add a GraphQL `capabilities` query that returns the canonical capability descriptor,
+  digest included, behind the same `models:read` scope as `GET /v1/capabilities` (#5344).
 
 ### Fixed
 
