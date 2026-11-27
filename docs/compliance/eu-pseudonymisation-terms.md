@@ -116,5 +116,5 @@ anonymous, and it does not make any processing compliant with the GDPR.
   for structured releases. Its output supports a qualified reviewer's
   conclusion and is not that conclusion.
 
-See the [compliance posture](../compliance.md) for OpenMed's other evidence
-pages.
+See the [EU evidence index](eu-evidence.md) and the
+[compliance posture](../compliance.md) for OpenMed's other evidence pages.

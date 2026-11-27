@@ -121,6 +121,7 @@ or a data quality and utility label under Article 78.
 
 ## Related pages
 
+- [EU evidence index](eu-evidence.md) lists the EU-facing pages in one place.
 - [Compliance posture](../compliance.md) lists OpenMed's evidence and the
   framework split.
 - [Data Protection Impact Assessment template](dpia-template.md) for the GDPR

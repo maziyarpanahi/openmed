@@ -34,6 +34,13 @@ surrogate-vault entries, logs the export to a tamper-evident audit chain, and
 previews an Article 17 erasure without deleting anything. It does not verify the
 requester's identity or discover data held outside OpenMed.
 
+### [EU Pseudonymisation and Anonymisation Terms](eu-pseudonymisation-terms.md)
+
+How GDPR Article 4(5), Recital 26 and EDPB Guidelines 01/2025 use the terms
+pseudonymisation and anonymisation, with the default category of each OpenMed
+de-identification action and the evidence an anonymisation claim would need. It
+does not decide the legal status of any dataset.
+
 ## EU AI Act
 
 ### [EU AI Act and GDPR Model-Card Field Specification](model-card-eu-ai-act-fields.md)
@@ -43,6 +50,22 @@ limitations, accuracy and leakage metrics, human oversight, robustness, and
 de-identification evidence, with rendering rules and field owners. It does not
 decide whether a system is high-risk, perform a conformity assessment, or
 replace the technical documentation a deployment requires.
+
+### [AI Act Technical Documentation Mapping](eu-ai-act-technical-documentation.md)
+
+A section-by-section map from Annex IV of the AI Act to the OpenMed artifacts
+that can support each part, and who owns the rest. It does not classify a
+system as high-risk, demonstrate conformity or replace the provider's technical
+documentation.
+
+## EU Health Data Space
+
+### [EHDS Secondary-Use Evidence Map](eu-ehds-secondary-use.md)
+
+How OpenMed artifacts map to concepts in Chapter IV of the European Health Data
+Space Regulation, with application dates and the duties OpenMed does not cover.
+It does not establish compliance with that Regulation, and OpenMed is not a
+health data access body or a secure processing environment.
 
 ## Supporting Controls
 

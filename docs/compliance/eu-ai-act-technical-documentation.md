@@ -113,6 +113,7 @@ OpenMed provides neither the simplified form nor that combined documentation.
 
 ## Related pages
 
+- [EU evidence index](eu-evidence.md) lists the EU-facing pages in one place.
 - [Compliance posture](../compliance.md) lists OpenMed's evidence and the
   framework split.
 - [EU AI Act and GDPR model-card field specification](model-card-eu-ai-act-fields.md)
