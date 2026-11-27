@@ -23,6 +23,9 @@ so API drift is caught in tests instead of downstream apps.
 | `OpenMedMLXModelCacheState.missing` | `ArtifactCacheState.MISSING` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.partial` | `ArtifactCacheState.PARTIAL` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.ready` | `ArtifactCacheState.READY` | Present; MLX-named enum deprecated |
+| `OpenMedModelCatalog.bundled()` | `ModelCatalog.load(context)` | Present; same row format and filter semantics, platform-runnable formats only (MLX/Core ML on Swift, ONNX/TFLite on Android) |
+| `OpenMedModelCatalog.filter(format:tier:maxParamCount:language:license:)` | `ModelCatalog.filter(format, tier, maxParamCount, language, license)` | Present; Swift covered by the shared vectors in `tests/fixtures/model_catalog/`, Kotlin by [the catalog filter vectors](#model-catalog-filters) |
+| `OpenMedModelCatalog.entry(repoID:)` | `ModelCatalog.byRepoId(repoId)` | Present |
 
 Android never runs MLX artifacts. See
 [Migrating from the MLX-named store](android-integration.md#migrating-from-the-mlx-named-store)
@@ -30,6 +33,39 @@ for the format-aware replacements.
 
 The checklist only proves that a few names exist. The committed public API
 baselines below catch every removed or changed declaration.
+
+## Model Catalog Filters
+
+The Android `ModelCatalog.filter()` defines the catalog filter rules. The Swift
+`OpenMedModelCatalog` and the web `openmed/catalog` subpath follow them:
+
+| Filter | Rule |
+| --- | --- |
+| `format` | Case-insensitive equality with any of the row's formats. It never matches by prefix: `onnx` does not select a row whose only format is `onnx-int8`. |
+| `tier`, `license` | Case-insensitive equality. A row whose value is `null` never matches a filter on that field. |
+| `maxParamCount` | Inclusive: keeps rows with `param_count <= maxParamCount`. A row with a `null` parameter count never matches. |
+| `language` | Case-insensitive membership in the row's languages. `en` does not match `en-US`. |
+| Combined | Every given filter must match. No filter returns every row. Results keep catalog order. |
+| Lookup | `byRepoId` matches `repo_id` exactly, including case. |
+
+`tests/fixtures/parity/catalog_filters_v1.json` (schema
+`openmed.model_catalog_filters`, version 1) pins these rules. It holds
+synthetic rows in the Android catalog JSONL row format, filter queries with the
+expected repo ids, and lookups. The cases cover an unknown format, a format
+prefix, mixed-case tokens in rows and queries, null tier, null parameter count,
+null license, a zero parameter count, region-tagged languages and combined
+predicates. Tokens are ASCII, so case folding is the same on every platform.
+
+| Surface | Test | CI gate |
+| --- | --- | --- |
+| Python | `tests/unit/parity/test_catalog_filter_vectors.py` checks the fixture against a reference of the rules | the `pytest` run in `.github/workflows/ci.yml` |
+| Kotlin | `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/CatalogFilterParityTest.kt` loads the rows with `ModelCatalog.fromJsonLines` | `--tests '*CatalogFilterParityTest'` in `.github/workflows/android-ci.yml` |
+| Swift | `testSharedCatalogFilterParityVectors` in `swift/OpenMedKit/Tests/OpenMedKitTests/OpenMedModelCatalogTests.swift` loads the rows with `OpenMedModelCatalog(jsonLines:)` | the `swift test` run in `.github/workflows/swift-test.yml` |
+
+```bash
+cd android
+./gradlew :openmedkit:testDebugUnitTest --tests '*CatalogFilterParityTest'
+```
 
 ## Public API Baselines
 

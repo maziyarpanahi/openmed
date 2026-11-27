@@ -34,6 +34,12 @@ jobs:
       - name: Regenerate registry-derived surfaces
         run: python scripts/release/registry_ctl.py regenerate
 
+      - name: Regenerate the bundled Swift model catalog
+        run: python scripts/swift/build_swift_catalog.py
+
+      - name: Regenerate the web package model catalog
+        run: python scripts/web/build_web_catalog.py
+
       - name: Open manifest refresh PR
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:

@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence, TextIO
+from typing import Any, Callable, Iterable, Mapping, Sequence, TextIO
 
 DEFAULT_MANIFEST = Path("models.jsonl")
 DEFAULT_OUTPUT = Path("android/openmedkit/src/main/assets/openmed_model_catalog.jsonl")
@@ -73,20 +73,35 @@ def load_manifest_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def build_catalog_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Return Android catalog rows derived from canonical manifest *rows*."""
+def build_catalog_rows(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    is_runnable_format: Callable[[object], bool] = is_android_runnable_format,
+) -> list[dict[str, Any]]:
+    """Return catalog rows derived from canonical manifest *rows*.
+
+    Args:
+        rows: Canonical ``models.jsonl`` rows.
+        is_runnable_format: Predicate that keeps the formats a platform can
+            run. Defaults to the Android ONNX/TFLite filter; the Swift catalog
+            builder passes its Apple MLX/Core ML filter.
+
+    Returns:
+        Permissively licensed rows with at least one runnable format, sorted
+        case-insensitively by ``repo_id``.
+    """
     catalog_rows: list[dict[str, Any]] = []
     for row in rows:
         license_name = row.get("license")
         if not is_permissive_license(license_name):
             continue
 
-        android_formats = [
+        runnable_formats = [
             str(format_name)
             for format_name in row.get("formats") or []
-            if is_android_runnable_format(format_name)
+            if is_runnable_format(format_name)
         ]
-        if not android_formats:
+        if not runnable_formats:
             continue
 
         repo_id = row.get("repo_id")
@@ -96,7 +111,7 @@ def build_catalog_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
         catalog_rows.append(
             {
                 "repo_id": str(repo_id),
-                "formats": android_formats,
+                "formats": runnable_formats,
                 "tier": row.get("tier"),
                 "param_count": row.get("param_count"),
                 "languages": [str(language) for language in row.get("languages") or []],
@@ -108,14 +123,24 @@ def build_catalog_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
     return sorted(catalog_rows, key=lambda item: item["repo_id"].lower())
 
 
+def render_catalog(rows: Iterable[Mapping[str, Any]]) -> str:
+    """Return *rows* as deterministic compact JSONL text.
+
+    Each line holds exactly ``ANDROID_CATALOG_FIELDS`` in that order, so the
+    output is byte-stable for a given manifest.
+    """
+    lines = []
+    for row in rows:
+        ordered = {field: row.get(field) for field in ANDROID_CATALOG_FIELDS}
+        lines.append(json.dumps(ordered, separators=(",", ":")) + "\n")
+    return "".join(lines)
+
+
 def write_catalog(rows: Iterable[Mapping[str, Any]], output: Path) -> None:
     """Write *rows* as deterministic JSONL to *output*."""
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            ordered = {field: row.get(field) for field in ANDROID_CATALOG_FIELDS}
-            handle.write(json.dumps(ordered, separators=(",", ":")))
-            handle.write("\n")
+        handle.write(render_catalog(rows))
 
 
 def build_parser() -> argparse.ArgumentParser:
