@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The license metadata now uses the PEP 639 SPDX form (#5400).
 - Document which optional extras install on Python 3.14 on Linux and macOS,
   with the date and commands used (#5426).
+- Declare portable PII, clinical-entity and medication task packs in one generated manifest (`openmed/core/data/task_packs.json`) with a JSON Schema, an offline `scripts/manifest/build_task_packs.py --check` generator and a download-free `openmed.core.task_packs.resolve(pack_id, runtime)`; the medication pack carries an extraction-only notice (#5379).
 
 ## [4.0.0] - 2026-11-25
 

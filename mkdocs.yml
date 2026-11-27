@@ -321,6 +321,7 @@ nav:
       - Crash-safe Bundle Generation Caches: models/bundle-cache.md
       - Decision Calibration in Bundles: models/portable-bundle-calibration.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
+      - Portable Task Packs: models/task-packs.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
