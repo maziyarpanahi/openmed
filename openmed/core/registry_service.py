@@ -22,6 +22,7 @@ from .registry_errors import (
 from .registry_errors import (
     RegistryStateError as RegistryStateError,
 )
+from .result_cache import notify_model_generation_change
 
 REGISTRY_STATE_SCHEMA_VERSION = 1
 REGISTRY_STATE_PATH = (
@@ -533,6 +534,7 @@ class RegistryService:
         self._validate_coherence(candidate)
         _write_state_atomic(self.state_path, candidate)
         self._state = candidate
+        notify_model_generation_change()
 
 
 def _load_manifest_rows(path: Path) -> list[dict[str, Any]]:

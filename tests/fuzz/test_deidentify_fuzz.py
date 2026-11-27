@@ -383,11 +383,13 @@ def test_every_sentinel_is_deterministically_covered_and_removed(label, value):
     )
 
 
-def test_malformed_iscii_preserves_clinical_text_and_identifier_spans(subtests):
+@pytest.mark.parametrize("label", ["NAME", "PERSON"])
+def test_malformed_iscii_preserves_clinical_text_and_identifier_spans(subtests, label):
+    """Malformed input keeps its spans for both legacy and canonical name labels."""
     for prefix in ["", "ïB"]:
         for use_safety_sweep in [False, True]:
             with subtests.test(prefix=prefix, use_safety_sweep=use_safety_sweep):
-                label, value = _PLANTED_IDENTIFIERS[0]
+                _, value = _PLANTED_IDENTIFIERS[0]
                 planted = ((label, value),)
                 # Enough high bytes to exercise the heuristic even with an ASCII suffix.
                 text = prefix + "³" * 80 + "ï Patient " + value + " BP 120/80"
@@ -414,9 +416,17 @@ def test_malformed_iscii_preserves_clinical_text_and_identifier_spans(subtests):
                 _assert_planted_spans_covered(
                     result.pii_entities, result.original_text, planted
                 )
+                _assert_identifier_absent(
+                    result.deidentified_text,
+                    label,
+                    value,
+                    context="malformed ISCII masked output",
+                )
+                # Mask placeholders name the canonical label, so NAME masks as
+                # [PERSON] (see ``_placeholder_label``).
                 _assert_text_equal(
                     result.deidentified_text,
-                    text.replace(value, "[NAME]"),
+                    text.replace(value, "[PERSON]"),
                     context="masked clinical text mismatch",
                 )
 
