@@ -1278,3 +1278,13 @@ def test_kotlin_job_runs_every_declared_consumer_and_uploads_its_result() -> Non
         for consumer in cell.consumers:
             assert consumer.startswith("android/openmedkit/src/test/kotlin/"), consumer
             assert "ContractGateRule(" in (ROOT / consumer).read_text("utf-8"), consumer
+    # The Kotlin consumers read the manifest, and the reporter test reads the
+    # result schema, so a change to either must run the Android unit tests.
+    android = yaml.load(
+        (ROOT / ".github" / "workflows" / "android-ci.yml").read_text("utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    for event in ("push", "pull_request"):
+        paths = android["on"][event]["paths"]
+        assert "tests/fixtures/parity/contract_gate.json" in paths, event
+        assert "tests/fixtures/parity/contract_gate_result.schema.json" in paths, event
