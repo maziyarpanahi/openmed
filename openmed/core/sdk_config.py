@@ -154,6 +154,9 @@ def _field_issue(name: str, value: object) -> str | None:
     if name == "confidence_threshold":
         if not _is_number(value):
             return CODE_WRONG_TYPE
+        # Compare integers exactly: float() overflows on a huge JSON integer.
+        if isinstance(value, int):
+            return None if 0 <= value <= 1 else CODE_OUT_OF_RANGE
         number = float(value)  # type: ignore[arg-type]
         if not math.isfinite(number) or not 0.0 <= number <= 1.0:
             return CODE_OUT_OF_RANGE

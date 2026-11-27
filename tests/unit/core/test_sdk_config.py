@@ -192,6 +192,14 @@ def test_non_finite_threshold_is_out_of_range() -> None:
         )
 
 
+def test_huge_integer_threshold_is_out_of_range_not_an_overflow() -> None:
+    for text in ("1" + "0" * 400, "-" + "9" * 400):
+        document = json.loads('{"confidence_threshold": ' + text + "}")
+        assert validate_sdk_config(document) == (
+            SdkConfigIssue("out_of_range", "confidence_threshold"),
+        )
+
+
 def test_to_sdk_config_projects_the_default_config() -> None:
     projected = OpenMedConfig().to_sdk_config()
 
