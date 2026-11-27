@@ -2198,6 +2198,7 @@
     "OPENMED_CANONICAL_HASH_SYSTEM": "name of an exported FHIR identifier-system or extension constant",
     "OPENMED_CLINICAL_DISCLAIMER": "name of the exported clinical disclaimer constant, checked in __all__",
     "OPENMED_CONFIDENCE_EXTENSION": "name of an exported FHIR identifier-system or extension constant",
+    "OPENMED_CONFIG_FIELDS": "name of the exported tuple of portable SDK configuration fields",
     "OPENMED_DEID": "DICOM implementation version name written to outputs",
     "OPENMED_DEIDENTIFY": "default Snowflake UDF name",
     "OPENMED_DEIDENTIFY_DESCRIPTOR": "name of an exported UDF descriptor constant",

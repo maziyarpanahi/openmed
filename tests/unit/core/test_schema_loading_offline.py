@@ -89,7 +89,18 @@ def test_every_packaged_schema_checks_against_its_metaschema_offline(
     for path in paths:
         schema = json.loads(path.read_text(encoding="utf-8"))
         validator_for(schema).check_schema(schema)
-        assert all(ref.startswith("#") for ref in _refs(schema)), path.name
+        for ref in _refs(schema):
+            if ref.startswith("#"):
+                continue
+            # A reference to another packaged schema in the same directory loads
+            # from the package, never from the $id URL.
+            target, _, fragment = ref.partition("#")
+            assert "/" not in target and not target.startswith("."), (path.name, ref)
+            sibling = path.parent / target
+            assert sibling.is_file(), (path.name, ref)
+            node: Any = json.loads(sibling.read_text(encoding="utf-8"))
+            for part in [p for p in fragment.split("/") if p]:
+                node = node[part]
     assert blocked_network == []
 
 
