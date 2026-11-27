@@ -110,6 +110,23 @@ final class OpenMedCoreMLStoreTests: XCTestCase {
         }
     #endif
 
+    #if os(watchOS)
+        func testPackageSnapshotIsRefusedOnWatchOSBeforeItsFilesDownload() async throws {
+            CoreMLSnapshotURLProtocol.install(files: try Self.packageSnapshot())
+
+            await assertThrowsAsync(
+                try await OpenMedModelStore.downloadCoreMLModel(
+                    repoID: Self.repoID, cacheDirectory: cacheRoot, session: Self.session())
+            ) { error in
+                XCTAssertEqual(error as? OpenMedModelStoreError, .coreMLCompilationFailed)
+            }
+            XCTAssertEqual(
+                CoreMLSnapshotURLProtocol.requestedPaths, ["openmed-coreml.json", "Tiny.mlpackage/openmed-coreml.json"])
+            XCTAssertNotEqual(
+                try OpenMedModelStore.coreMLModelCacheState(repoID: Self.repoID, cacheDirectory: cacheRoot), .ready)
+        }
+    #endif
+
     func testCompiledVariantWithDeclaredFilesBecomesReadyWithoutCompiling() async throws {
         CoreMLSnapshotURLProtocol.install(files: Self.compiledSnapshot())
 

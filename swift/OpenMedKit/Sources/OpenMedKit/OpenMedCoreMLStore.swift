@@ -176,7 +176,12 @@ extension OpenMedModelStore {
             if manifest.variant.files == nil {
                 _ = try await fetch("\(manifest.variant.path)/\(coreMLManifestFileName)")
             }
-            for path in try variantFiles(manifest, boundary: boundary) { _ = try await fetch(path) }
+            let modelFiles = try variantFiles(manifest, boundary: boundary)
+            #if os(watchOS)
+                // watchOS cannot compile a `.mlpackage`: refuse it before downloading it.
+                if manifest.isPackage { throw OpenMedModelStoreError.coreMLCompilationFailed }
+            #endif
+            for path in modelFiles { _ = try await fetch(path) }
             _ = try await fetch(manifest.labelMapPath)
             for file in manifest.tokenizerSpec.files { _ = try await fetch(manifest.tokenizerFile(file)) }
             if manifest.tokenizer == nil {
@@ -318,27 +323,41 @@ extension OpenMedModelStore {
         _ manifest: OpenMedCoreMLStoreManifest,
         boundary: OpenMedMLXPathBoundary
     ) async throws {
-        let package = try boundary.fileURL(manifest.variant.path)
-        let compiled: URL
-        do {
-            compiled = try await MLModel.compileModel(at: package)
-        } catch {
+        #if os(watchOS)
+            // `MLModel.compileModel(at:)` is unavailable on watchOS.
             throw OpenMedModelStoreError.coreMLCompilationFailed
-        }
-        defer { try? FileManager.default.removeItem(at: compiled) }
-        let destination = try boundary.fileURL(manifest.compiledModelPath, rejectSymlinks: true)
-        try FileManager.default.createDirectory(
-            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        _ = try boundary.fileURL(manifest.compiledModelPath, rejectSymlinks: true)
-        if (try? FileManager.default.attributesOfItem(atPath: destination.path)) != nil {
-            try? FileManager.default.removeItem(at: destination)
-        }
-        do {
-            try FileManager.default.moveItem(at: compiled, to: destination)
-        } catch {
-            throw OpenMedModelStoreError.coreMLCompilationFailed
-        }
+        #else
+            try await compileCoreMLPackageOnDevice(manifest, boundary: boundary)
+        #endif
     }
+
+    #if !os(watchOS)
+        private static func compileCoreMLPackageOnDevice(
+            _ manifest: OpenMedCoreMLStoreManifest,
+            boundary: OpenMedMLXPathBoundary
+        ) async throws {
+            let package = try boundary.fileURL(manifest.variant.path)
+            let compiled: URL
+            do {
+                compiled = try await MLModel.compileModel(at: package)
+            } catch {
+                throw OpenMedModelStoreError.coreMLCompilationFailed
+            }
+            defer { try? FileManager.default.removeItem(at: compiled) }
+            let destination = try boundary.fileURL(manifest.compiledModelPath, rejectSymlinks: true)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            _ = try boundary.fileURL(manifest.compiledModelPath, rejectSymlinks: true)
+            if (try? FileManager.default.attributesOfItem(atPath: destination.path)) != nil {
+                try? FileManager.default.removeItem(at: destination)
+            }
+            do {
+                try FileManager.default.moveItem(at: compiled, to: destination)
+            } catch {
+                throw OpenMedModelStoreError.coreMLCompilationFailed
+            }
+        }
+    #endif
 
     private static func readyCoreMLModel(
         boundary: OpenMedMLXPathBoundary,

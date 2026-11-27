@@ -1029,7 +1029,9 @@ ignored.
   file has downloaded. The compiled model lands in
   `.openmed-compiled/Model.mlmodelc` inside the snapshot, and the source package
   is kept (`OpenMedCoreMLModel.packageURL`). A failed compile throws
-  `coreMLCompilationFailed`.
+  `coreMLCompilationFailed`. watchOS cannot compile Core ML models, so there a
+  `.mlpackage` variant throws `coreMLCompilationFailed` before its model files
+  download; publish a `.mlmodelc` variant for watchOS.
 - `coreMLModelCacheState(repoID:revision:cacheDirectory:)` reports `missing`,
   `partial` or `ready` from the files on disk. A missing label map, tokenizer
   file or compiled model leaves the snapshot `partial`.
