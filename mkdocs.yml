@@ -30,6 +30,7 @@ nav:
       - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
       - Service Recovery CLI: cli/service-recovery.md
+      - Stored Record Migration CLI: cli/migrate.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Governed Agents:
@@ -598,6 +599,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
+      - Stored Record Migrations: api/record-migrations.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Service Protocol Parity: api/protocol-parity.md
       - Local Decision Models: decision-models.md
