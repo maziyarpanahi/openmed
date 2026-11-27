@@ -120,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root every public `openmed.clinical` and `openmed.interop` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling and transport mapping are unchanged, and each class gains a stable `code` (#5396).
 - Root every public `openmed.service`, `openmed.structured` and `openmed.agent` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling, and REST, MCP and agent error envelopes are unchanged, and each class gains a stable `code` (#5397).
 - The TypeScript REST client `@openmed/rest-client` is now a publishable package: it is no longer private, tracks the `openmed` release version (checked by the release preflight and `tests/unit/test_publish_workflow_version.py`), declares its Apache-2.0 license, repository, Node.js 20 engine, ESM `exports` map and public provenance `publishConfig`, ships a lockfile, and packs only `dist/`, `README.md` and `LICENSE` (#5359).
+- Generate the canonical fields of the GraphQL `OpenMedSpan` type from `span.schema.json`
+  and check the Strawberry type against the schema; `label` and `text` are now deprecated in
+  the SDL in favour of `canonicalLabel` and `textHash`, with unchanged values (#5336).
 
 ### Fixed
 

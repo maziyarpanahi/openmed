@@ -163,12 +163,12 @@ enum JourneyResourceKind {
 }
 
 type OpenMedSpan {
-  label: String!
-  start: Int
-  end: Int
-  text: String
+  label: String! @deprecated(reason: "Use canonicalLabel. label is kept for compatibility; removing it is a 5.0 decision.")
+  text: String @deprecated(reason: "Use textHash. text can carry the raw span surface and is kept for compatibility; removing it is a 5.0 decision.")
   schemaVersion: Int
   docId: String
+  start: Int
+  end: Int
   textHash: String
   entityType: String
   canonicalLabel: String
