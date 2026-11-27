@@ -20,6 +20,49 @@ export function applyKitParitySpans(sourceText: string, spans: readonly KitParit
 export function assertOfflineAssetPath(path: string, label?: string): string;
 
 // @public
+export const AUDIT_REPORT_SIGNATURE_ALGORITHM = "HMAC-SHA256";
+
+// @public
+export const AUDIT_REPORT_VERIFICATION_REASONS: readonly ["valid", "hash_mismatch", "signature_mismatch", "unsupported_algorithm", "malformed"];
+
+// @public
+export class AuditReceiptError extends Error {
+    constructor(code: AuditReceiptErrorCode);
+    // (undocumented)
+    readonly code: AuditReceiptErrorCode;
+}
+
+// @public (undocumented)
+export type AuditReceiptErrorCode = "key_invalid" | "malformed" | "verifier_unavailable";
+
+// @public
+export type AuditReportCrypto = Pick<SubtleCrypto, "digest" | "importKey" | "verify">;
+
+// @public
+export interface AuditReportPayload {
+    repro: Uint8Array;
+    signing: Uint8Array;
+    // (undocumented)
+    spanOrder: AuditReportSpanOrder;
+}
+
+// @public
+export function auditReportPayloads(json: string | Uint8Array): AuditReportPayload[];
+
+// @public
+export type AuditReportSpanOrder = "sorted" | "stored";
+
+// @public (undocumented)
+export interface AuditReportVerification {
+    reason: AuditReportVerificationReason;
+    result: boolean;
+    spanOrder: AuditReportSpanOrder | null;
+}
+
+// @public (undocumented)
+export type AuditReportVerificationReason = (typeof AUDIT_REPORT_VERIFICATION_REASONS)[number];
+
+// @public
 export const BUDGET_LADDER: {
     readonly minBytes: number;
     readonly maxBytes: number;
@@ -348,8 +391,11 @@ export type BundleResumeReason = (typeof BUNDLE_RESUME_REASONS)[number];
 // @public
 export function bundleTrustDigest(policy: PortableBundleTrustPolicy): string;
 
-// @public (undocumented)
+// @public
 export const CANONICAL_LABELS: readonly ["ACCOUNT_NUMBER", "AGE", "AMOUNT", "API_KEY", "BIC", "BITCOIN_ADDRESS", "BUILDING_NUMBER", "CREDIT_CARD", "CREDIT_CARD_ISSUER", "CURRENCY", "CVV", "DATE", "DATE_OF_BIRTH", "EMAIL", "ETHEREUM_ADDRESS", "EYE_COLOR", "FIRST_NAME", "GENDER", "GPS_COORDINATES", "HEIGHT", "IBAN", "ID_NUM", "IMEI", "IP_ADDRESS", "JOB_DEPARTMENT", "JOB_TITLE", "LAST_NAME", "LITECOIN_ADDRESS", "LOCATION", "MAC_ADDRESS", "MASKED_NUMBER", "MIDDLE_NAME", "OCCUPATION", "ORDINAL_DIRECTION", "ORGANIZATION", "OTHER", "PASSWORD", "PERSON", "PHONE", "PIN", "PREFIX", "SSN", "STREET_ADDRESS", "TIME", "URL", "USER_AGENT", "USERNAME", "VEHICLE_REGISTRATION", "VIN", "ZIPCODE"];
+
+// @public
+export function canonicalAuditJson(json: string | Uint8Array): string;
 
 // @public
 export function canonicalJson(value: unknown): string;
@@ -409,6 +455,16 @@ export function createOrtDecisionEncoder(options: OrtDecisionEncoderOptions): De
 
 // @public (undocumented)
 export function createWebGpuClassificationHead(device: unknown, config: WebGpuClassificationHeadConfig): Promise<WebGpuClassificationHead>;
+
+// @public
+export class DateShiftError extends Error {
+    constructor(code: DateShiftErrorCode);
+    // (undocumented)
+    readonly code: DateShiftErrorCode;
+}
+
+// @public (undocumented)
+export type DateShiftErrorCode = "max_days_invalid" | "patient_key_invalid" | "secret_invalid" | "seed_invalid" | "date_invalid" | "days_invalid" | "date_out_of_range" | "crypto_unavailable";
 
 // @public
 export function decidePortablePolicy(policy: PortablePolicy, text: string, detections: readonly PortablePolicyDetection[], options?: PortablePolicyDecideOptions): PortablePolicyDecisionResult;
@@ -779,6 +835,9 @@ export function decodePortablePolicyTaxonomy(text: string, digest: string): Port
 
 // @public (undocumented)
 export function decodeWebGpuTokenSpans(logits: TokenClassificationLogits, id2label: Readonly<Record<string, string>> | ReadonlyMap<number, string>, attentionMask?: TokenIdData): WebGpuTokenSpan[];
+
+// @public
+export const DEFAULT_DATE_SHIFT_MAX_DAYS = 365;
 
 // @public
 export const DEFAULT_DECISION_ACCESS_POLICY: Readonly<DecisionAccessPolicy>;
@@ -1451,6 +1510,20 @@ export interface KitParitySpan {
     start: number;
 }
 
+// @public
+export interface LoadedTaskPack {
+    readonly candidate: TaskPackCandidate | null;
+    deidentify(text: string, options?: TaskPackDeidentifyOptions): Promise<OpenMedDeidentifyResult>;
+    dispose(): Promise<void>;
+    extract(text: string, options?: TaskPackExtractOptions): Promise<OpenMedSpan[]>;
+    // (undocumented)
+    readonly notice: string;
+    // (undocumented)
+    readonly notice_key: string;
+    // (undocumented)
+    readonly resolution: TaskPackResolution;
+}
+
 // @public (undocumented)
 export interface LoadModelOptions {
     // (undocumented)
@@ -1584,8 +1657,255 @@ export function openBundleCacheStorage(options?: {
     databaseName?: string;
 }): Promise<BundleCacheStorage>;
 
+// @public
+export const OPENMED_ERROR_CODE_RETRYABLE: Readonly<Record<OpenMedErrorCode, boolean>>;
+
+// @public
+export const OPENMED_ERROR_CODES: Readonly<{
+    readonly budgetExceeded: "budget_exceeded";
+    readonly capabilityError: "capability_error";
+    readonly configurationError: "configuration_error";
+    readonly inferenceError: "inference_error";
+    readonly inputError: "input_error";
+    readonly internalError: "internal_error";
+    readonly modelLoadError: "model_load_error";
+    readonly policyError: "policy_error";
+}>;
+
 // @public (undocumented)
 export const OPENMED_SPAN_SCHEMA_VERSION: 1;
+
+// @public
+export interface OpenMedContractAction {
+    // (undocumented)
+    action: SpanAction;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    // (undocumented)
+    policy_label: PolicyLabel;
+    // (undocumented)
+    replacement: string | null;
+    // (undocumented)
+    reversible_id: string | null;
+    // (undocumented)
+    schema_version: 1;
+}
+
+// @public
+export interface OpenMedContractAuditEvent {
+    // (undocumented)
+    actor: string | null;
+    doc_id: string;
+    event_id: string;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    // (undocumented)
+    provenance_id: string | null;
+    // (undocumented)
+    schema_version: 1;
+    // (undocumented)
+    span_id: string | null;
+    timestamp: string;
+}
+
+// @public
+export interface OpenMedContractCode {
+    code: string;
+    confidence: number | null;
+    // (undocumented)
+    display: string | null;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    // (undocumented)
+    provenance_id: string | null;
+    // (undocumented)
+    schema_version: 1;
+    system: string;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestation {
+    disclaimer: string;
+    // (undocumented)
+    execution: OpenMedContractDataResidencyAttestationExecution;
+    generated_at: string;
+    integrity_hash: `sha256:${string}`;
+    // (undocumented)
+    jurisdiction: OpenMedContractDataResidencyAttestationJurisdiction;
+    models: OpenMedContractDataResidencyAttestationModelsItem[];
+    // (undocumented)
+    policy: OpenMedContractDataResidencyAttestationPolicy;
+    profile_id: string;
+    repro_hash: `sha256:${string}`;
+    // (undocumented)
+    run: OpenMedContractDataResidencyAttestationRun;
+    // (undocumented)
+    schema_version: 1;
+    // (undocumented)
+    template: OpenMedContractDataResidencyAttestationTemplate;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationExecution {
+    // (undocumented)
+    host_local: true;
+    host_local_statement: string;
+    // (undocumented)
+    offline_assertion: OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+    offline_statement: string;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationExecutionOfflineAssertion {
+    // (undocumented)
+    asserted: boolean;
+    // (undocumented)
+    dependency_flags_enabled: boolean;
+    // (undocumented)
+    environment_flags: OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+    // (undocumented)
+    local_only: boolean;
+    // (undocumented)
+    network_guard_requested: boolean;
+    // (undocumented)
+    source: "none" | "config" | "environment" | "config+environment";
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags {
+    // (undocumented)
+    HF_DATASETS_OFFLINE: boolean;
+    // (undocumented)
+    HF_HUB_OFFLINE: boolean;
+    // (undocumented)
+    OPENMED_OFFLINE: boolean;
+    // (undocumented)
+    TRANSFORMERS_OFFLINE: boolean;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationJurisdiction {
+    attestation_title: string;
+    country_code: string;
+    guide_field: string;
+    legal_reference: string;
+    name: string;
+    residency_statement: string;
+    source_url: string;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationModelsItem {
+    checksum: `sha256:${string}`;
+    file_count: number;
+    // (undocumented)
+    kind: "file" | "directory";
+    name: string;
+    path: string;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationPolicy {
+    // (undocumented)
+    default_action: SpanAction;
+    name: string;
+    posture: string;
+    schema_version: number;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationRun {
+    audit_repro_hash: `sha256:${string}`;
+    deidentified_text_hash: `sha256:${string}`;
+    document_length: number;
+    input_hash: `sha256:${string}`;
+    manifest_hash: `sha256:${string}`;
+    openmed_version: string;
+    span_count: number;
+}
+
+// @public
+export interface OpenMedContractDataResidencyAttestationTemplate {
+    hash: `sha256:${string}`;
+    id: string;
+    version: number;
+}
+
+// @public
+export interface OpenMedContractEntity {
+    canonical_label: string;
+    entity_type: string;
+    // (undocumented)
+    policy_label: PolicyLabel;
+    // (undocumented)
+    regulatory_tags: string[];
+    // (undocumented)
+    schema_version: 1;
+}
+
+// @public
+export interface OpenMedContractProvenance {
+    // (undocumented)
+    artifact_hash: string | null;
+    detector: string;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    // (undocumented)
+    model: string | null;
+    // (undocumented)
+    parameters: Record<string, unknown>;
+    provenance_id: string;
+    // (undocumented)
+    schema_version: 1;
+    // (undocumented)
+    version: string | null;
+}
+
+// @public
+export interface OpenMedContractRelation {
+    // (undocumented)
+    evidence: Record<string, unknown>;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    relation_type: string;
+    // (undocumented)
+    schema_version: 1;
+    score: number | null;
+    source_span_id: string;
+    target_span_id: string;
+}
+
+// @public
+export interface OpenMedContractSpan {
+    // (undocumented)
+    action: SpanAction;
+    // (undocumented)
+    canonical_label: CanonicalLabel;
+    // (undocumented)
+    detector: string | null;
+    doc_id: string;
+    end: number;
+    entity_type: string;
+    // (undocumented)
+    evidence: Record<string, unknown>;
+    // (undocumented)
+    metadata: Record<string, unknown>;
+    // (undocumented)
+    policy_label: PolicyLabel;
+    // (undocumented)
+    regulatory_tags: string[];
+    // (undocumented)
+    replacement: string | null;
+    // (undocumented)
+    reversible_id: string | null;
+    // (undocumented)
+    schema_version: 1;
+    score: number | null;
+    // (undocumented)
+    section: string | null;
+    start: number;
+    text_hash: `hmac-sha256:${string}`;
+}
 
 // @public (undocumented)
 export interface OpenMedDeidentifyResult {
@@ -1598,7 +1918,27 @@ export interface OpenMedDeidentifyResult {
 }
 
 // @public
-export class OpenMedOfflineError extends Error {
+export class OpenMedError extends Error {
+    constructor(errorCode: OpenMedErrorCode, message: string, options?: OpenMedErrorOptions);
+    readonly code: string;
+    readonly errorCode: OpenMedErrorCode;
+    get retryable(): boolean;
+}
+
+// @public
+export type OpenMedErrorCode = (typeof OPENMED_ERROR_CODES)[keyof typeof OPENMED_ERROR_CODES];
+
+// @public
+export function openMedErrorCode(error: unknown): OpenMedErrorCode | null;
+
+// @public (undocumented)
+export interface OpenMedErrorOptions {
+    cause?: unknown;
+    code?: string;
+}
+
+// @public
+export class OpenMedOfflineError extends OpenMedError {
     constructor(code: OpenMedOfflineErrorCode);
     // (undocumented)
     readonly code: OpenMedOfflineErrorCode;
@@ -1609,6 +1949,16 @@ export type OpenMedOfflineErrorCode = "remote_model_refused" | "remote_asset_ref
 
 // @public (undocumented)
 export type OpenMedOnnxVariant = "int8" | "fp32" | "fp16";
+
+// @public
+export interface OpenMedSdkConfig {
+    readonly confidence_threshold: number;
+    readonly local_only: boolean;
+    readonly model_id: string | null;
+    readonly model_revision: string | null;
+    readonly onnx_variant: SdkConfigOnnxVariant;
+    readonly policy_profile: SdkConfigPolicyProfile;
+}
 
 // @public (undocumented)
 export interface OpenMedSpan {
@@ -1943,6 +2293,12 @@ export function parsePortableBundleManifest(manifest: Uint8Array, understoodExte
 // @public
 export function parsePortableBundleTrustPolicy(value: unknown): PortableBundleTrustPolicy;
 
+// @public
+export function parseSdkConfig(value: unknown): Readonly<OpenMedSdkConfig>;
+
+// @public
+export const piiPack: TaskPack;
+
 // @public (undocumented)
 export interface PlanInvalidationInput extends ResolveExecutionPlanInput {
     // (undocumented)
@@ -1952,8 +2308,8 @@ export interface PlanInvalidationInput extends ResolveExecutionPlanInput {
 // @public
 export const PLATFORM_PROVIDERS: Readonly<Record<string, readonly ExecutionProvider[]>>;
 
-// @public (undocumented)
-export const POLICY_LABELS: readonly ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"];
+// @public
+export const POLICY_LABELS: readonly ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "SENSITIVE_ATTRIBUTE", "CLINICAL_CONCEPT"];
 
 // @public (undocumented)
 export type PolicyLabel = (typeof POLICY_LABELS)[number];
@@ -2220,10 +2576,8 @@ export interface PortablePolicyDetection {
 }
 
 // @public
-export class PortablePolicyError extends Error {
+export class PortablePolicyError extends OpenMedError {
     constructor(code: string, fieldPath?: string);
-    // (undocumented)
-    readonly code: string;
     // (undocumented)
     readonly fieldPath: string;
 }
@@ -2347,6 +2701,55 @@ export function scalarToUtf16Offset(text: string, scalarOffset: number): number;
 // @public
 export function scalarToUtf8Offset(text: string, scalarOffset: number): number;
 
+// @public
+export const SDK_CONFIG_DEFAULTS: Readonly<OpenMedSdkConfig>;
+
+// @public
+export const SDK_CONFIG_FIELDS: readonly ["confidence_threshold", "local_only", "model_id", "model_revision", "onnx_variant", "policy_profile"];
+
+// @public
+export const SDK_CONFIG_ISSUE_CODES: readonly ["config_not_object", "invalid_format", "missing_dependency", "not_allowed_value", "out_of_range", "unknown_field", "wrong_type"];
+
+// @public (undocumented)
+export const SDK_CONFIG_ONNX_VARIANTS: readonly ["auto", "int8", "fp16", "fp32"];
+
+// @public
+export const SDK_CONFIG_POLICY_PROFILES: readonly ["australia_privacy_act", "canada_pipeda", "clinical_minimal_redaction", "gdpr_art9_health", "gdpr_pseudonymization", "hipaa_expert_review_assist", "hipaa_safe_harbor", "research_limited_dataset", "strict_no_leak"];
+
+// @public (undocumented)
+export const SDK_CONFIG_SCHEMA_ID = "https://openmed.life/schemas/sdk_config.schema.json";
+
+// @public (undocumented)
+export const SDK_CONFIG_VERSION = 1;
+
+// @public
+export class SdkConfigError extends Error {
+    constructor(issues: readonly SdkConfigIssue[]);
+    // (undocumented)
+    readonly code = "sdk_config_invalid";
+    // (undocumented)
+    readonly issues: readonly SdkConfigIssue[];
+}
+
+// @public (undocumented)
+export type SdkConfigField = (typeof SDK_CONFIG_FIELDS)[number];
+
+// @public
+export interface SdkConfigIssue {
+    // (undocumented)
+    readonly code: SdkConfigIssueCode;
+    readonly field: SdkConfigField | null;
+}
+
+// @public (undocumented)
+export type SdkConfigIssueCode = (typeof SDK_CONFIG_ISSUE_CODES)[number];
+
+// @public (undocumented)
+export type SdkConfigOnnxVariant = (typeof SDK_CONFIG_ONNX_VARIANTS)[number];
+
+// @public (undocumented)
+export type SdkConfigPolicyProfile = (typeof SDK_CONFIG_POLICY_PROFILES)[number];
+
 // @public (undocumented)
 export function selectOrtWebBackend(profile: OrtWebCapabilityProfile): OrtWebBackendChoice;
 
@@ -2378,7 +2781,10 @@ export class Sha256 {
 // @public
 export function sha256Digest(text: string): string;
 
-// @public (undocumented)
+// @public
+export function shiftIsoDate(date: string, days: number): string;
+
+// @public
 export const SPAN_ACTIONS: readonly ["keep", "redact", "replace", "mask", "hash", "format_preserve"];
 
 // @public (undocumented)
@@ -2387,11 +2793,80 @@ export type SpanAction = (typeof SPAN_ACTIONS)[number];
 // @public
 export function spansToRedactedText(text: string, spans: OpenMedSpan[]): string;
 
+// @public
+export function stableDateShiftOffset(options: StableDateShiftOffsetOptions): Promise<number>;
+
+// @public
+export function stableDateShiftOffsetFromSeed(seed: number | bigint | string, maxDays?: number): Promise<number>;
+
+// @public (undocumented)
+export interface StableDateShiftOffsetOptions {
+    maxDays?: number;
+    patientKey: string | Uint8Array;
+    secret: string | Uint8Array;
+}
+
 // @public (undocumented)
 export const SUPPORTED_DECISION_SCHEMA_VERSIONS: readonly ["1.0.0", "1.1.0", "1.2.0"];
 
 // @public (undocumented)
+export interface TaskPack {
+    // (undocumented)
+    readonly id: string;
+    load(options?: TaskPackLoadOptions): Promise<LoadedTaskPack>;
+    resolve(): TaskPackResolution;
+}
+
+// @public
+export type TaskPackCandidate = WebTaskPackCandidateData;
+
+// @public (undocumented)
+export type TaskPackDeidentifyOptions = Omit<DeidentifyOptions, "pipeline" | "model" | "modelLoader" | "loaderOptions" | "offlineOnly">;
+
+// @public
+export class TaskPackError extends Error {
+    constructor(code: TaskPackErrorCode);
+    // (undocumented)
+    readonly code: TaskPackErrorCode;
+}
+
+// @public (undocumented)
+export type TaskPackErrorCode = "unknown_pack" | "catalog_mismatch" | "no_candidate" | "local_model_unavailable" | "candidates_unavailable" | "remote_model_refused" | "remote_asset_refused" | "pipeline_disposal_failed";
+
+// @public
+export type TaskPackExtractOptions = Omit<ExtractPiiOptions, "pipeline" | "model" | "modelLoader" | "loaderOptions" | "offlineOnly">;
+
+// @public (undocumented)
+export interface TaskPackLoadOptions extends Omit<LoadOnnxModelOptions, "localFilesOnly" | "allowRemoteModels" | "revision"> {
+    allowRemoteModels?: boolean;
+    pipeline?: RawTokenClassificationPipeline;
+}
+
+// @public
+export interface TaskPackResolution {
+    readonly candidates: readonly TaskPackCandidate[];
+    readonly canonical_labels: readonly string[];
+    // (undocumented)
+    readonly format: "onnx";
+    readonly notice: string;
+    readonly notice_key: string;
+    // (undocumented)
+    readonly pack_id: string;
+    // (undocumented)
+    readonly pack_version: string;
+    // (undocumented)
+    readonly runtime: "web";
+    // (undocumented)
+    readonly status: "resolved" | "no_candidate";
+    // (undocumented)
+    readonly task: string;
+}
+
+// @public (undocumented)
 export type TextHash = `hmac-sha256:${string}`;
+
+// @public
+export function toExtractPiiOptions(config: OpenMedSdkConfig): ExtractPiiOptions;
 
 // @public (undocumented)
 export interface TokenClassificationCallOptions {
@@ -2445,6 +2920,9 @@ export type TokenIdData = readonly number[] | Int32Array | Uint32Array | BigInt6
 // @public
 export function toKitParityResult(result: OpenMedDeidentifyResult): KitParityResult;
 
+// @public
+export function toLoadModelOptions(config: OpenMedSdkConfig): LoadOnnxModelOptions;
+
 // @public (undocumented)
 export interface TransformersRuntime {
     // (undocumented)
@@ -2479,7 +2957,18 @@ export function validateDecisionCalibrationRequest(request: DecisionCalibrationR
 export function validateKitParityResult(result: KitParityResult): void;
 
 // @public
+export function validateSdkConfig(value: unknown): readonly SdkConfigIssue[];
+
+// @public
 export function verificationDigest(verification: PortableBundleVerification): Promise<string>;
+
+// @public
+export function verifyAuditReport(json: string | Uint8Array, key: string | Uint8Array, options?: VerifyAuditReportOptions): Promise<AuditReportVerification>;
+
+// @public (undocumented)
+export interface VerifyAuditReportOptions {
+    crypto?: AuditReportCrypto;
+}
 
 // @public
 export function verifyKitParityResult(result: KitParityResult, sourceText: string): void;
