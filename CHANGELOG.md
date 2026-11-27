@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `openmed migrate check <file>`, a read-only dry run that identifies one stored JSON record's schema id and version, runs its registered migration chain in memory, and prints only the field paths, versions, counts and digests, with a usage exit code when no path exists (#5364).
+- Add `openmed.core.record_migrations`, a registry of stored-record migrators keyed by schema id and version that resolves unique chains, refuses duplicate, cyclic and ambiguous edges, and reports only the field paths a migration adds, moves, changes or drops (#5362).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
