@@ -186,6 +186,7 @@ def test_client_calls_service_endpoints_with_asgi_transport(
         keep_mapping=True,
     )
     loaded = rest_client.loaded_models()
+    capabilities = rest_client.capabilities()
     unload_one = rest_client.unload_model("disease_detection_superclinical")
     unload_all = rest_client.unload_all_models()
 
@@ -193,6 +194,8 @@ def test_client_calls_service_endpoints_with_asgi_transport(
     assert extract["entities"][0]["label"] == "NAME"
     assert deidentify["deidentified_text"] == "Paciente: [NAME]"
     assert "disease_detection_superclinical" in loaded["models"]
+    assert capabilities["schema"] == "openmed.capabilities"
+    assert capabilities["digest"].startswith("sha256:")
     assert unload_one["unloaded"] is True
     assert unload_one["released"]["pipelines"] == 1
     assert unload_all["released"]["pipelines"] == 0
@@ -276,6 +279,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "deidentify",
         "privacy_gateway",
         "loaded_models",
+        "capabilities",
         "journey_resources",
         "decision",
         "openai_decisions",
