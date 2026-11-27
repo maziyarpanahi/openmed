@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
 
@@ -11,6 +12,7 @@ from openmed.onnx.maple_bundle import (
     MAPLE_BUNDLE_FILENAME,
     MapleBundleError,
     build_maple_onnx_bundle,
+    main,
     validate_maple_onnx_bundle,
 )
 
@@ -153,3 +155,77 @@ def test_rejects_undeclared_archive_entry(tmp_path):
 
     with pytest.raises(MapleBundleError, match="exactly match"):
         validate_maple_onnx_bundle(invalid)
+
+
+def test_validate_cli_reports_valid_bundle_summary(tmp_path, capsys):
+    source = tmp_path / "export"
+    source.mkdir()
+    _write_fake_export(source)
+    bundle = build_maple_onnx_bundle(source, tmp_path / "maple.zip")
+
+    assert main(["--validate", str(bundle.bundle_path)]) == 0
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    expected_digest = hashlib.sha256(
+        json.dumps(bundle.manifest, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert payload == {
+        "status": "valid",
+        "runtime": "onnxruntime-mobile",
+        "file_count": 5,
+        "total_bytes": bundle.total_size_bytes,
+        "manifest_digest": expected_digest,
+    }
+    assert str(tmp_path) not in output
+
+
+def test_validate_cli_reports_invalid_bundle_without_path(tmp_path, capsys):
+    source = tmp_path / "export"
+    source.mkdir()
+    _write_fake_export(source)
+    original = build_maple_onnx_bundle(source, tmp_path / "maple.zip")
+    tampered = tmp_path / "tampered.zip"
+
+    with zipfile.ZipFile(original.bundle_path) as source_archive:
+        with zipfile.ZipFile(tampered, "w", compression=zipfile.ZIP_STORED) as output:
+            for entry in source_archive.infolist():
+                payload = source_archive.read(entry)
+                if entry.filename == "decoder_model.ort":
+                    payload = b"tampered-data"
+                output.writestr(entry.filename, payload)
+
+    assert main(["--validate", str(tampered)]) == 1
+
+    output = capsys.readouterr().out
+    assert json.loads(output) == {
+        "status": "invalid",
+        "error_code": "invalid_bundle",
+    }
+    assert str(tmp_path) not in output
+
+
+def test_validate_cli_reports_missing_bundle_without_path(tmp_path, capsys):
+    missing = tmp_path / "missing.zip"
+
+    assert main(["--validate", str(missing)]) == 1
+
+    output = capsys.readouterr().out
+    assert json.loads(output) == {
+        "status": "invalid",
+        "error_code": "bundle_not_found",
+    }
+    assert str(tmp_path) not in output
+
+
+def test_build_cli_invocation_is_unchanged(tmp_path, capsys):
+    source = tmp_path / "export"
+    source.mkdir()
+    _write_fake_export(source)
+    destination = tmp_path / "maple.zip"
+
+    assert main([str(source), str(destination)]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["bundle"] == str(destination.resolve())
+    assert payload["runtime"] == "onnxruntime-mobile"
