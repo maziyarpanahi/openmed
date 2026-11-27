@@ -199,3 +199,70 @@ def test_deidentify_cache_with_five_calls(monkeypatch) -> None:
     assert fourth is not first
     assert fifth is not first
     assert calls["count"] == 3
+
+
+def test_cache_key_includes_model_revision() -> None:
+    params = {"text": "Patient John", "model_name": "pii"}
+
+    unpinned = result_cache.make_cache_key("extract_pii", params)
+    rev_a = result_cache.make_cache_key("extract_pii", {**params, "revision": "a" * 40})
+    rev_b = result_cache.make_cache_key("extract_pii", {**params, "revision": "b" * 40})
+    via_kwargs = result_cache.make_cache_key(
+        "analyze_text", {**params, "pipeline_kwargs": {"revision": "a" * 40}}
+    )
+
+    assert len({unpinned, rev_a, rev_b}) == 3
+    assert via_kwargs != result_cache.make_cache_key("analyze_text", params)
+    for key in (unpinned, rev_a, rev_b, via_kwargs):
+        assert "Patient John" not in key
+        assert "a" * 40 not in key
+
+
+def test_model_generation_change_invalidates_cache() -> None:
+    reset_cache()
+    params = {"text": "Patient John", "model_name": "pii"}
+    cache = result_cache.get_result_cache(max_entries=4)
+    before = result_cache.make_cache_key("extract_pii", params)
+    cache.set(before, "old weights")
+
+    generation = result_cache.notify_model_generation_change()
+
+    after = result_cache.make_cache_key("extract_pii", params)
+    assert generation == result_cache.current_model_generation()
+    assert after != before
+    assert cache.get(before) is None
+    assert cache.get(after) is None
+    assert len(cache) == 0
+
+
+def test_analyze_text_misses_cache_after_model_generation_change() -> None:
+    reset_cache()
+
+    class FakeLoader:
+        config = None
+
+        def __init__(self):
+            self.create_calls = 0
+
+        def create_pipeline(self, *args, **kwargs):
+            self.create_calls += 1
+            return lambda text, **call_kwargs: []
+
+        def get_max_sequence_length(self, model_name, tokenizer=None):
+            return 128
+
+    loader = FakeLoader()
+    kwargs = dict(
+        model_name="fixture-ner-model",
+        loader=loader,
+        sentence_detection=False,
+        cache_results=True,
+    )
+
+    openmed.analyze_text("History of asthma.", **kwargs)
+    openmed.analyze_text("History of asthma.", **kwargs)
+    assert loader.create_calls == 1
+
+    result_cache.notify_model_generation_change()
+    openmed.analyze_text("History of asthma.", **kwargs)
+    assert loader.create_calls == 2
