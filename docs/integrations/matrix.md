@@ -66,7 +66,7 @@ constraints, and PHI-free descriptions.
 | `postgres` | PostgreSQL transaction adapter | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_postgres.py` | [PostgreSQL Redaction Adapter](postgres.md) |
 | `postgres_plpython` | PostgreSQL PL/Python | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/integrations/test_postgres_plpython.py` | [PostgreSQL Redaction Adapter](postgres.md) |
 | `prefect` | Prefect | `prefect>=3.7,<4` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_prefect_tasks.py` | [Prefect Batch De-identification](../prefect-integration.md) |
-| `presidio` | Microsoft Presidio | `presidio-analyzer>=2.2.354,<3` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_presidio_adapter.py` | [Feature Map](../feature-map.md) |
+| `presidio` | Microsoft Presidio | `presidio-analyzer>=2.2.354,<3` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_presidio_adapter.py` | [Presidio RecognizerResult Adapter](presidio.md) |
 | `pydeid` | pyDeid | `pyDeid>=0.0.1` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_pydeid_adapter.py` | [Feature Map](../feature-map.md) |
 | `quickumls` | QuickUMLS | `quickumls>=1.4,<2` | `user-supplied-resource` | `offline-unit` (1 test file) | `tests/unit/interop/test_scispacy_linker_adapter.py` | [Feature Map](../feature-map.md) |
 | `ray` | Ray Data | `ray[data]>=2.30,<3` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_ray_data.py` | [Feature Map](../feature-map.md) |
