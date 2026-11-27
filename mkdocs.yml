@@ -598,6 +598,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
+      - Stored Record Migrations: api/record-migrations.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Service Protocol Parity: api/protocol-parity.md
       - Local Decision Models: decision-models.md
