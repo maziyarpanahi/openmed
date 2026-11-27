@@ -909,3 +909,17 @@ invented or computed through an unbounded combinatorial count.
 
 For the broader legal and operational boundary, see
 [Compliance Posture](compliance.md).
+
+## Generalizing quasi-identifiers from free text
+
+`openmed.risk.text_qi_bridge.bridge_text_qis` accepts local documents with
+detected spans and a `TextQIPolicy`. It verifies offsets and surfaces, then
+groups exact ages into bands, full dates into years, US ZIP codes into
+three-digit prefixes and location or occupation labels into caller-supplied
+group codes. Unmapped values are counted in the column profile.
+
+Feed `result.rows` directly to `kanon_report` and specify the relevant column
+names from `result.profile["columns"]`. Rows stay local. To treat multiple
+documents as one unit, pass `by_unit=True` and attach a keyed unit digest to
+each document. For `OpenMedSpan` inputs, pass `span_hmac_key` to verify each
+surface at its declared offsets against the stored text HMAC.
