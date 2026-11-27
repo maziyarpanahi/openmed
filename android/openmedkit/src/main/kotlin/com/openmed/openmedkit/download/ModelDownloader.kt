@@ -42,22 +42,55 @@ class ModelDownloader(
         logger,
     )
 
+    /**
+     * Downloader that also reports [ModelLifecycleEvent]s to [lifecycleSink]
+     * and per-file byte progress to [progressListener]. [logger] keeps
+     * receiving the same [ModelDownloadLogEvent]s.
+     */
+    constructor(
+        cache: ModelCache,
+        client: HuggingFaceModelClient = HttpHuggingFaceModelClient(),
+        logger: ModelDownloadLogger = ModelDownloadLogger.NONE,
+        lifecycleSink: ModelLifecycleSink,
+        progressListener: ModelDownloadProgressListener = ModelDownloadProgressListener.NONE,
+    ) : this(cache, client, logger) {
+        this.lifecycleSink = lifecycleSink
+        this.progressListener = progressListener
+    }
+
+    private var lifecycleSink = ModelLifecycleSink.NONE
+    private var progressListener = ModelDownloadProgressListener.NONE
+
+    /**
+     * Downloads [entry] unless a verified copy is cached.
+     *
+     * Lifecycle events follow the shared vocabulary: `requested`, then `ready`
+     * for a cache hit; otherwise `fetching` and `verified` (or
+     * `integrity_failed`) for each file with a published size and SHA-256,
+     * then `ready`, or `failed` with a reason. A file that fails its size or
+     * digest check is fetched once more before the download fails with
+     * `integrity_retry_exhausted`. A reproducibility-hash mismatch reports
+     * `integrity_failed` for the manifest and downloads nothing.
+     */
     fun download(
         entry: ModelCatalogEntry,
         revision: String? = null,
     ): ModelDownloadResult {
+        val repoId = entry.repoId
+        emit(ModelLifecycleEvent("requested", repoId, revision, null, null, null, null))
         if (cache.isAvailable(entry)) {
-            val sizeBytes = cache.sizeBytes(entry.repoId)
+            val sizeBytes = cache.sizeBytes(repoId)
             logger.log(
                 ModelDownloadLogEvent(
-                    repoId = entry.repoId,
+                    repoId = repoId,
                     status = ModelDownloadStatus.CACHE_HIT,
                     sizeBytes = sizeBytes,
                 ),
             )
+            emit(ModelLifecycleEvent("ready", repoId, cache.readyRevisionSha(repoId), null, null, null, null))
             return ModelDownloadResult(
-                repoId = entry.repoId,
-                directory = cache.modelDirectory(entry.repoId),
+                repoId = repoId,
+                directory = cache.modelDirectory(repoId),
                 totalSizeBytes = sizeBytes,
                 filesDownloaded = 0,
                 fromCache = true,
@@ -67,50 +100,136 @@ class ModelDownloader(
 
         logger.log(
             ModelDownloadLogEvent(
-                repoId = entry.repoId,
+                repoId = repoId,
                 status = ModelDownloadStatus.DOWNLOAD_STARTED,
                 sizeBytes = 0L,
             ),
         )
 
-        val modelInfo = client.fetchModelInfo(entry.repoId, revision)
-        val actualIntegrityHash = verifiedManifestHash(entry, modelInfo)
-        val filesToDownload = runnableFiles(entry, modelInfo)
+        var failure = "download_error"
+        try {
+            val modelInfo = client.fetchModelInfo(repoId, revision)
+            val actualIntegrityHash = try {
+                verifiedManifestHash(entry, modelInfo)
+            } catch (error: ModelIntegrityException) {
+                failure = "integrity_unverifiable"
+                emit(
+                    ModelLifecycleEvent(
+                        "integrity_failed",
+                        repoId,
+                        modelInfo.revisionSha,
+                        1,
+                        0L,
+                        entry.reproducibilityHash,
+                        "digest_mismatch",
+                    ),
+                )
+                throw error
+            }
+            failure = "no_matching_files"
+            val filesToDownload = runnableFiles(entry, modelInfo)
+            failure = "download_error"
+            return downloadFiles(entry, modelInfo, revision, filesToDownload, actualIntegrityHash) {
+                failure = it
+            }
+        } catch (error: UnsafeModelPathException) {
+            emit(ModelLifecycleEvent("failed", repoId, null, null, null, null, "metadata_invalid_filename"))
+            throw error
+        } catch (error: Exception) {
+            emit(ModelLifecycleEvent("failed", repoId, null, null, null, null, failure))
+            throw error
+        }
+    }
 
-        val stagingDirectory = cache.createStagingDirectory(entry.repoId)
+    private fun downloadFiles(
+        entry: ModelCatalogEntry,
+        modelInfo: HuggingFaceModelInfo,
+        revision: String?,
+        filesToDownload: List<HuggingFaceModelFile>,
+        actualIntegrityHash: String,
+        onFailure: (String) -> Unit,
+    ): ModelDownloadResult {
+        val repoId = entry.repoId
+        val revisionSha = modelInfo.revisionSha
+        val stagingDirectory = cache.createStagingDirectory(repoId)
         var completed = false
         try {
-            val downloadRevision = revision ?: modelInfo.revisionSha ?: DEFAULT_REVISION
-            filesToDownload.forEach { remoteFile ->
+            val downloadRevision = revision ?: revisionSha ?: DEFAULT_REVISION
+            var totalBytes = 0L
+            filesToDownload.forEachIndexed { index, remoteFile ->
                 val destination = resolveSafePath(stagingDirectory, remoteFile.path)
                 destination.parentFile?.mkdirs()
-                client.downloadFile(
-                    repoId = entry.repoId,
-                    path = remoteFile.path,
-                    revision = downloadRevision,
-                    destination = destination,
-                )
-                verifyDownloadedFile(entry.repoId, remoteFile, destination)
+                val size = remoteFile.sizeBytes
+                val sha256 = remoteFile.sha256?.lowercase()?.takeIf(SHA256_HEX::matches)
+                // Per-file events need the published size and digest the schema requires.
+                fun file(event: String, reason: String?) {
+                    if (size != null && sha256 != null) {
+                        emit(ModelLifecycleEvent(event, repoId, revisionSha, 1, size, "sha256:$sha256", reason))
+                    }
+                }
+                var reported = -1L
+                val report = { written: Long ->
+                    // An oversized failed attempt must not report past the published size.
+                    val bytes = if (size != null) minOf(written, size) else written
+                    if (bytes > reported) {
+                        reported = bytes
+                        try {
+                            progressListener.onProgress(index, filesToDownload.size, bytes, size)
+                        } catch (ignored: Exception) {
+                        }
+                    }
+                }
+                var attempts = 0
+                while (true) {
+                    file("fetching", null)
+                    report(0L)
+                    destination.delete()
+                    val transfer = ModelFileTransfer()
+                    transfer.onBytes = report
+                    client.downloadFile(repoId, remoteFile.path, downloadRevision, destination, transfer)
+                    try {
+                        verifyDownloadedFile(repoId, remoteFile, destination)
+                        break
+                    } catch (error: ModelIntegrityException) {
+                        file(
+                            "integrity_failed",
+                            when (error.failure) {
+                                ModelFailure.SIZE -> "size_mismatch"
+                                ModelFailure.MISSING_FILE -> "file_missing"
+                                else -> "digest_mismatch"
+                            },
+                        )
+                        attempts += 1
+                        if (attempts > 1) {
+                            onFailure("integrity_retry_exhausted")
+                            throw error
+                        }
+                    }
+                }
+                file("verified", null)
+                report(destination.length())
+                totalBytes += destination.length()
             }
 
             val readyDirectory = cache.storeReadyModel(
-                repoId = entry.repoId,
+                repoId = repoId,
                 sourceDirectory = stagingDirectory,
                 expectedIntegrityHash = entry.reproducibilityHash,
                 actualIntegrityHash = actualIntegrityHash,
-                revisionSha = modelInfo.revisionSha,
+                revisionSha = revisionSha,
             )
-            val sizeBytes = cache.sizeBytes(entry.repoId)
+            val sizeBytes = cache.sizeBytes(repoId)
             completed = true
             logger.log(
                 ModelDownloadLogEvent(
-                    repoId = entry.repoId,
+                    repoId = repoId,
                     status = ModelDownloadStatus.DOWNLOAD_COMPLETE,
                     sizeBytes = sizeBytes,
                 ),
             )
+            emit(ModelLifecycleEvent("ready", repoId, revisionSha, filesToDownload.size, totalBytes, null, null))
             return ModelDownloadResult(
-                repoId = entry.repoId,
+                repoId = repoId,
                 directory = readyDirectory,
                 totalSizeBytes = sizeBytes,
                 filesDownloaded = filesToDownload.size,
@@ -121,6 +240,14 @@ class ModelDownloader(
             if (!completed) {
                 stagingDirectory.deleteRecursively()
             }
+        }
+    }
+
+    private fun emit(event: ModelLifecycleEvent) {
+        try {
+            lifecycleSink.emit(event)
+        } catch (ignored: Exception) {
+            // A sink never changes the download outcome.
         }
     }
 
@@ -385,6 +512,7 @@ class ModelDownloader(
     private companion object {
         const val DEFAULT_REVISION = "main"
         const val STAGED_FILE_COMPLETE = -1L
+        val SHA256_HEX = Regex("[0-9a-f]{64}")
 
         val REQUIRED_SIDECAR_FILES = setOf(
             "added_tokens.json",
@@ -434,10 +562,11 @@ data class ModelDownloadLogEvent(
     val sizeBytes: Long?,
 )
 
-enum class ModelDownloadStatus {
-    CACHE_HIT,
-    DOWNLOAD_STARTED,
-    DOWNLOAD_COMPLETE,
+/** Legacy download status; [lifecycleEvent] is the matching shared lifecycle event. */
+enum class ModelDownloadStatus(val lifecycleEvent: String) {
+    CACHE_HIT("ready"),
+    DOWNLOAD_STARTED("requested"),
+    DOWNLOAD_COMPLETE("ready"),
 }
 
 interface HuggingFaceModelClient {
@@ -489,7 +618,10 @@ class ModelFileTransfer(
     val resumeFromBytes: Long = 0L,
     val expectedSizeBytes: Long? = null,
     val control: ModelTransferControl = ModelTransferControl.NONE,
-)
+) {
+    /** Receives the bytes of the file written so far, from clients that report them. */
+    internal var onBytes: ((Long) -> Unit)? = null
+}
 
 /** Where a file transfer started and how many bytes it fetched. */
 class ModelFileTransferOutcome(
@@ -674,7 +806,8 @@ class HttpHuggingFaceModelClient(
                     path,
                     revision,
                     destination,
-                    ModelFileTransfer(0L, transfer.expectedSizeBytes, transfer.control),
+                    ModelFileTransfer(0L, transfer.expectedSizeBytes, transfer.control)
+                        .also { it.onBytes = transfer.onBytes },
                 )
             }
             if (statusCode !in 200..299 || (partial && !append)) {
@@ -723,6 +856,7 @@ class HttpHuggingFaceModelClient(
             }
             output.write(buffer, 0, read)
             written += read
+            transfer.onBytes?.invoke(startOffset + written)
         }
     }
 
