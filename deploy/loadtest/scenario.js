@@ -43,6 +43,9 @@ const BASE_URL = envValue(
   ["LOADTEST_BASE_URL", "BASE_URL"],
   "http://127.0.0.1:8080",
 ).replace(/\/+$/, "");
+if (!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(BASE_URL)) {
+  throw new Error("Load tests require a loopback HTTP service");
+}
 const DURATION_SECONDS = envInteger(
   ["LOADTEST_DURATION_SECONDS", "LOADTEST_DURATION"],
   30,
@@ -92,6 +95,8 @@ const requestCount = new Counter("loadtest_requests");
 
 export const options = {
   discardResponseBodies: true,
+  maxRedirects: 0,
+  summaryTrendStats: ["avg", "min", "med", "max", "p(95)", "p(99)"],
   scenarios: {
     mixed_traffic: {
       executor: "constant-arrival-rate",
@@ -119,6 +124,10 @@ const jsonParams = {
     "Content-Type": "application/json",
   },
 };
+
+if (__ENV.LOADTEST_API_KEY) {
+  jsonParams.headers["x-api-key"] = __ENV.LOADTEST_API_KEY;
+}
 
 function recordResponse(endpoint, response) {
   const succeeded = response.status >= 200 && response.status < 300;

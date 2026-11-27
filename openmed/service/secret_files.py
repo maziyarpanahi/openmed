@@ -64,6 +64,7 @@ SECRET_SOURCE_ERROR_CODES = frozenset(_REASONS)
 _READ_CHUNK_BYTES = 64 * 1024
 _OPEN_FLAGS = (
     os.O_RDONLY
+    | getattr(os, "O_BINARY", 0)
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOCTTY", 0)
     # A FIFO would otherwise block the open until a writer appears.
@@ -223,12 +224,17 @@ def read_secret_file(
     # Errors are raised outside ``except`` blocks so that no OSError (which
     # carries the path) is chained to, or kept as context of, the failure.
     descriptor: Optional[int]
+    open_error = SECRET_FILE_UNREADABLE
     try:
         descriptor = os.open(path, _OPEN_FLAGS)
+    except PermissionError:
+        descriptor = None
+        if os.path.isdir(path):
+            open_error = SECRET_FILE_NOT_REGULAR
     except (OSError, TypeError, ValueError):
         descriptor = None
     if descriptor is None:
-        raise SecretSourceError(setting, SECRET_FILE_UNREADABLE)
+        raise SecretSourceError(setting, open_error)
     try:
         data, code = _read_descriptor(
             descriptor,

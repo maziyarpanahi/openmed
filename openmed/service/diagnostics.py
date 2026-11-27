@@ -891,9 +891,17 @@ class DiagnosticSection:
         limits = shared.limits
         shared.open_file()
         try:
-            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0),
+            )
         except FileNotFoundError:
             raise _SourceProblem("source_absent") from None
+        except PermissionError:
+            # Windows refuses a directory at open, before fstat can classify it.
+            if path.is_dir():
+                raise _SourceProblem("source_unsafe") from None
+            raise _SourceProblem("source_unreadable") from None
         except OSError:
             raise _SourceProblem("source_unreadable") from None
         try:
@@ -2898,7 +2906,10 @@ def read_diagnostic_bundle(path: str | Path) -> bytes:
         OSError: If the file cannot be opened or is not a regular file.
     """
 
-    descriptor = os.open(Path(path), os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    descriptor = os.open(
+        Path(path),
+        os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0),
+    )
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise OSError("bundle source is not a regular file")
