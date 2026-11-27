@@ -604,6 +604,7 @@ nav:
       - Structured Public Errors: api/errors.md
       - Stored Record Migrations: api/record-migrations.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Published JSON Schemas: api/schemas.md
       - Service Protocol Parity: api/protocol-parity.md
       - Capability Descriptor: api/capabilities.md
       - Local Decision Models: decision-models.md

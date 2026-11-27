@@ -656,6 +656,7 @@ classification:
     - api/errors.md
     - api/record-migrations.md
     - api/compatibility-gate.md
+    - api/schemas.md
     - api/protocol-parity.md
     - api/capabilities.md
     - decision-models.md
