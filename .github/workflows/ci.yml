@@ -652,6 +652,33 @@ jobs:
         # After reviewing the change, run `npm run api:update` in that package.
         npm --prefix js/openmedkit-web run api:check
 
+  typescript-rest-client:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: clients/typescript/package-lock.json
+
+    - name: Install TypeScript REST client dependencies
+      run: npm ci --prefix clients/typescript
+
+    - name: Typecheck, build and test the TypeScript REST client
+      run: |
+        npm --prefix clients/typescript run typecheck
+        npm --prefix clients/typescript run build
+        npm --prefix clients/typescript run test:workflow
+        npm --prefix clients/typescript run test:decisions
+        npm --prefix clients/typescript run test:api
+
+    - name: Check the TypeScript REST client API baseline
+      run: npm --prefix clients/typescript run api:check
+
   browser-extension:
     needs: repo-policy
     runs-on: ubuntu-latest

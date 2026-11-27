@@ -31,6 +31,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:workflow": "node --test tests/workflow-client.test.mjs",
     "test:decisions": "node --test tests/decision-client.test.mjs",
+    "test:api": "node --test tests/api-baseline.test.mjs",
+    "api:check": "node scripts/api-baseline.mjs --check",
+    "api:update": "node scripts/api-baseline.mjs --update",
     "prepack": "npm run build"
   },
   "dependencies": {},
