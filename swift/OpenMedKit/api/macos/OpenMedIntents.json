@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedIntents",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {
+    "OpenMedIntents.OpenMedIntentError": [
+      "conformance OpenMedIntents.OpenMedIntentError: CaseIterable",
+      "conformance OpenMedIntents.OpenMedIntentError: CustomLocalizedStringResourceConvertible",
+      "conformance OpenMedIntents.OpenMedIntentError: Equatable",
+      "conformance OpenMedIntents.OpenMedIntentError: Error",
+      "conformance OpenMedIntents.OpenMedIntentError: Hashable",
+      "conformance OpenMedIntents.OpenMedIntentError: LocalizedError",
+      "conformance OpenMedIntents.OpenMedIntentError: Sendable",
+      "enum OpenMedIntents.OpenMedIntentError"
+    ],
+    "OpenMedIntents.OpenMedIntentError.emptyInput": [
+      "case OpenMedIntents.OpenMedIntentError.emptyInput"
+    ],
+    "OpenMedIntents.OpenMedIntentError.errorDescription": [
+      "var OpenMedIntents.OpenMedIntentError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedIntents.OpenMedIntentError.inputTooLarge": [
+      "case OpenMedIntents.OpenMedIntentError.inputTooLarge"
+    ],
+    "OpenMedIntents.OpenMedIntentError.localizedStringResource": [
+      "var OpenMedIntents.OpenMedIntentError.localizedStringResource: Foundation.LocalizedStringResource { get }"
+    ],
+    "OpenMedIntents.OpenMedIntentError.noCachedModel": [
+      "case OpenMedIntents.OpenMedIntentError.noCachedModel"
+    ],
+    "OpenMedIntents.OpenMedIntentError.reason": [
+      "var OpenMedIntents.OpenMedIntentError.reason: Swift.String { get }"
+    ],
+    "OpenMedIntents.OpenMedIntentError.redactionFailed": [
+      "case OpenMedIntents.OpenMedIntentError.redactionFailed"
+    ],
+    "OpenMedIntents.OpenMedIntentError.runtimeUnavailable": [
+      "case OpenMedIntents.OpenMedIntentError.runtimeUnavailable"
+    ],
+    "OpenMedIntents.OpenMedIntentError.unknownPolicy": [
+      "case OpenMedIntents.OpenMedIntentError.unknownPolicy"
+    ],
+    "OpenMedIntents.OpenMedIntentRedactor": [
+      "conformance OpenMedIntents.OpenMedIntentRedactor: Sendable",
+      "struct OpenMedIntents.OpenMedIntentRedactor"
+    ],
+    "OpenMedIntents.OpenMedIntentRedactor.Redact": [
+      "typealias OpenMedIntents.OpenMedIntentRedactor.Redact = (Swift.String, OpenMedKit.Policy) async throws -> OpenMedKit.PolicyDeidentificationResult"
+    ],
+    "OpenMedIntents.OpenMedIntentRedactor.cachedMLXModel": [
+      "static func OpenMedIntents.OpenMedIntentRedactor.cachedMLXModel(repoID: Swift.String, revision: Swift.String = default, cacheDirectory: Foundation.URL? = default) -> OpenMedIntents.OpenMedIntentRedactor"
+    ],
+    "OpenMedIntents.OpenMedIntentRedactor.deidentify": [
+      "func OpenMedIntents.OpenMedIntentRedactor.deidentify(_: Swift.String, policyName: Swift.String) async throws -> OpenMedKit.PolicyDeidentificationResult"
+    ],
+    "OpenMedIntents.OpenMedIntentRedactor.init": [
+      "OpenMedIntents.OpenMedIntentRedactor.init(_: OpenMedIntents.OpenMedIntentRedactor.Redact) -> OpenMedIntents.OpenMedIntentRedactor"
+    ],
+    "OpenMedIntents.OpenMedIntentsConfiguration": [
+      "enum OpenMedIntents.OpenMedIntentsConfiguration"
+    ],
+    "OpenMedIntents.OpenMedIntentsConfiguration.defaultModelRepoID": [
+      "static var OpenMedIntents.OpenMedIntentsConfiguration.defaultModelRepoID: Swift.String { get }"
+    ],
+    "OpenMedIntents.OpenMedIntentsConfiguration.maximumInputUTF8Bytes": [
+      "static var OpenMedIntents.OpenMedIntentsConfiguration.maximumInputUTF8Bytes: Swift.Int { get }"
+    ],
+    "OpenMedIntents.OpenMedIntentsConfiguration.redactor": [
+      "static var OpenMedIntents.OpenMedIntentsConfiguration.redactor: OpenMedIntents.OpenMedIntentRedactor { get set }"
+    ],
+    "OpenMedIntents.OpenMedIntentsPackage": [
+      "conformance OpenMedIntents.OpenMedIntentsPackage: AppIntentsPackage",
+      "struct OpenMedIntents.OpenMedIntentsPackage"
+    ],
+    "OpenMedIntents.RedactTextIntent": [
+      "conformance OpenMedIntents.RedactTextIntent: AppIntent",
+      "conformance OpenMedIntents.RedactTextIntent: PersistentlyIdentifiable",
+      "conformance OpenMedIntents.RedactTextIntent: Sendable",
+      "struct OpenMedIntents.RedactTextIntent"
+    ],
+    "OpenMedIntents.RedactTextIntent.description": [
+      "static var OpenMedIntents.RedactTextIntent.description: AppIntents.IntentDescription? { get }"
+    ],
+    "OpenMedIntents.RedactTextIntent.init": [
+      "OpenMedIntents.RedactTextIntent.init() -> OpenMedIntents.RedactTextIntent",
+      "OpenMedIntents.RedactTextIntent.init(text: Swift.String, policyName: Swift.String = default) -> OpenMedIntents.RedactTextIntent"
+    ],
+    "OpenMedIntents.RedactTextIntent.openAppWhenRun": [
+      "static var OpenMedIntents.RedactTextIntent.openAppWhenRun: Swift.Bool { get }"
+    ],
+    "OpenMedIntents.RedactTextIntent.parameterSummary": [
+      "static var OpenMedIntents.RedactTextIntent.parameterSummary: some AppIntents.ParameterSummary { get }"
+    ],
+    "OpenMedIntents.RedactTextIntent.perform": [
+      "func OpenMedIntents.RedactTextIntent.perform() async throws -> some AppIntents.ReturnsValue<Swift.String>"
+    ],
+    "OpenMedIntents.RedactTextIntent.policyName": [
+      "var OpenMedIntents.RedactTextIntent.policyName: Swift.String { get set }"
+    ],
+    "OpenMedIntents.RedactTextIntent.text": [
+      "var OpenMedIntents.RedactTextIntent.text: Swift.String { get set }"
+    ],
+    "OpenMedIntents.RedactTextIntent.title": [
+      "static var OpenMedIntents.RedactTextIntent.title: Foundation.LocalizedStringResource { get }"
+    ]
+  }
+}

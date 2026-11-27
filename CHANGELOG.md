@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
