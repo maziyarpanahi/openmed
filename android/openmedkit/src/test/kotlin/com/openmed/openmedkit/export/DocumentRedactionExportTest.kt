@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import com.openmed.openmedkit.export.DocumentRedactionExportContract as Contract
 import com.openmed.openmedkit.export.DocumentRedactionExportReason as Reason
 import com.openmed.openmedkit.export.DocumentRedactionMask as Mask
+import com.openmed.openmedkit.parity.ContractGateRule
 import com.openmed.openmedkit.intake.DocumentBox
 import com.openmed.openmedkit.intake.DocumentEvidenceMapper
 import com.openmed.openmedkit.intake.DocumentImagePage
@@ -51,6 +52,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -186,6 +188,9 @@ private class BlockPdfSource(private val pages: List<SyntheticPage>) : PdfPageSo
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [26])
 class DocumentRedactionExportTest {
+    @get:Rule
+    val contractGate = ContractGateRule("document_intake_v1")
+
     private lateinit var context: Context
     private val exporters = mutableListOf<DocumentRedactionExporter>()
 
@@ -338,8 +343,7 @@ class DocumentRedactionExportTest {
 
     @Test
     fun forwardTransformReproducesSharedIntakeVectors() {
-        val corpus = requireNotNull(javaClass.classLoader?.getResourceAsStream("document_intake_v1.json"))
-            .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }
+        val corpus = JSONObject(contractGate.fixtureText())
         var checked = 0
         corpus.getJSONArray("cases").objects().forEach { case ->
             val exact = case.getDouble("tolerance") == 0.0

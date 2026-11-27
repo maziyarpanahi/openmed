@@ -21,8 +21,8 @@
       "tracking": "#5327"
     },
     "kotlin": {
-      "reporter": "pending",
-      "tracking": "#5328"
+      "reporter": "active",
+      "command": "cd android && ./gradlew :openmedkit:testDebugUnitTest -PopenmedContractGateResultsDir=<results-dir>"
     },
     "web": {
       "reporter": "pending",

@@ -12,6 +12,7 @@ import com.openmed.openmedkit.segmentation.Icu4jTextSegmentationAdapter
 import com.openmed.openmedkit.segmentation.IcuTextSegmenter
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,6 +25,9 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class OffsetContractParityTest {
+    @get:Rule
+    val contractGate = ContractGateRule("offset_contract")
+
     private val androidSegmenter = IcuTextSegmenter(
         AndroidIcuTextSegmentationAdapter(),
     )
@@ -66,7 +70,7 @@ class OffsetContractParityTest {
             },
         )
 
-        for (fixtureCase in cases.objects()) {
+        contractGate.cases(cases.objects(), { "cases/${it.getString("id")}" }) { fixtureCase ->
             assertCaseParity(fixtureCase)
         }
     }
@@ -190,16 +194,7 @@ class OffsetContractParityTest {
         )
     }
 
-    private fun loadFixture(): JSONObject {
-        val stream = requireNotNull(
-            javaClass.classLoader?.getResourceAsStream("offset_contract.json"),
-        ) {
-            "shared offset_contract.json was not synced into Android test resources"
-        }
-        return stream.bufferedReader(Charsets.UTF_8).use {
-            JSONObject(it.readText())
-        }
-    }
+    private fun loadFixture(): JSONObject = JSONObject(contractGate.fixtureText())
 
     private fun JSONArray.objects(): List<JSONObject> =
         (0 until length()).map(::getJSONObject)

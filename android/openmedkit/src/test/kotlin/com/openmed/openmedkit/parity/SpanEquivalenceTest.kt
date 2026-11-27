@@ -8,6 +8,7 @@ import com.openmed.openmedkit.UnicodeOffsetContract
 import com.openmed.openmedkit.policy.PolicyProfiles
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,6 +32,9 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class SpanEquivalenceTest {
+    @get:Rule
+    val contractGate = ContractGateRule("expected_spans")
+
     @Test
     fun fixtureSchemaAndDigestAreCurrent() {
         val manifest = readJson(MANIFEST_FILE)
@@ -56,7 +60,7 @@ class SpanEquivalenceTest {
     fun androidExtractionMatchesSharedSpans() {
         val openMed = OpenMed()
 
-        for (case in loadValidatedCases()) {
+        contractGate.cases(loadValidatedCases(), { "cases/${it.id}" }) { case ->
             val extracted = openMed.extractPII(case.text, useSmartMerging = false)
             assertEquals(
                 emptyList<String>(),
@@ -83,7 +87,7 @@ class SpanEquivalenceTest {
         var sawSurrogatePairShift = false
         var sawMultibyteUtf8Shift = false
 
-        for (case in loadValidatedCases()) {
+        contractGate.cases(loadValidatedCases(), { "cases/${it.id}" }) { case ->
             case.spans.forEachIndexed { index, span ->
                 val tag = "case=${case.id} span=$index"
                 listOf(
@@ -122,7 +126,7 @@ class SpanEquivalenceTest {
         val openMed = OpenMed()
         val engine = DeidentifyEngine()
 
-        for (case in loadValidatedCases()) {
+        contractGate.cases(loadValidatedCases(), { "cases/${it.id}" }) { case ->
             val entities = openMed.extractPII(case.text, useSmartMerging = false)
             val result = engine.deidentify(case.text, entities, PolicyProfiles.load(case.policy))
 
@@ -348,6 +352,9 @@ class SpanEquivalenceTest {
         JSONObject(String(readFixtureBytes(name), Charsets.UTF_8))
 
     private fun readFixtureBytes(name: String): ByteArray {
+        if (name == SPANS_FILE) {
+            return contractGate.fixtureBytes()
+        }
         val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream(name)) {
             "shared fixtures/parity/$name was not registered as an Android test resource"
         }
