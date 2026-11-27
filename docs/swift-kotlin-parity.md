@@ -60,6 +60,7 @@ predicates. Tokens are ASCII, so case folding is the same on every platform.
 | --- | --- | --- |
 | Python | `tests/unit/parity/test_catalog_filter_vectors.py` checks the fixture against a reference of the rules | the `pytest` run in `.github/workflows/ci.yml` |
 | Kotlin | `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/CatalogFilterParityTest.kt` loads the rows with `ModelCatalog.fromJsonLines` | `--tests '*CatalogFilterParityTest'` in `.github/workflows/android-ci.yml` |
+| Swift | `testSharedCatalogFilterParityVectors` in `swift/OpenMedKit/Tests/OpenMedKitTests/OpenMedModelCatalogTests.swift` loads the rows with `OpenMedModelCatalog(jsonLines:)` | the `swift test` run in `.github/workflows/swift-test.yml` |
 
 ```bash
 cd android
