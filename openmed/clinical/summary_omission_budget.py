@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_OMISSION_BUDGET_SCHEMA_VERSION: Final[int] = 1
 MANDATORY_OMISSION_REFUSAL: Final[str] = "mandatory_class_omitted"
 CLASS_BUDGET_REFUSAL: Final[str] = "class_omission_budget_exceeded"
@@ -20,7 +22,7 @@ CLASS_BUDGET_REFUSAL: Final[str] = "class_omission_budget_exceeded"
 _OPAQUE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-class SummaryOmissionBudgetError(ValueError):
+class SummaryOmissionBudgetError(ValueError, LegacyRootedError):
     """Raised when an omission policy or evidence record is invalid."""
 
 

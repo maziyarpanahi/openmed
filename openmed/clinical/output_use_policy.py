@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Any, Final
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 
 OUTPUT_USE_POLICY_SCHEMA_VERSION: Final = 1
 OUTPUT_USE_POLICY_NAME: Final = "openmed-clinical-output-use-v1"
@@ -105,7 +106,7 @@ _REASON_ORDER_INDEX: Final = {code: index for index, code in enumerate(_REASON_O
 _MISSING = object()
 
 
-class OutputUsePolicyError(ValueError):
+class OutputUsePolicyError(ValueError, LegacyRootedError):
     """Payload-free policy error carrying only stable reason codes."""
 
     def __init__(self, reason_codes: str | Sequence[str] | Any) -> None:

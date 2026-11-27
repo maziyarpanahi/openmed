@@ -11,12 +11,14 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 UMLS_SYSTEM = "UMLS"
 _MISSING = object()
 _REQUIRED_RESOURCE_NAMES = ("umls-simstring.db", "cui-semtypes.db")
 
 
-class QuickUMLSResourceError(RuntimeError):
+class QuickUMLSResourceError(RuntimeError, LegacyRootedError):
     """Raised when a user-supplied QuickUMLS resource is unavailable."""
 
 

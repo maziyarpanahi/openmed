@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "ARX_COMMAND_ENV",
     "ARX_PROTOCOL_VERSION",
@@ -55,7 +57,7 @@ _RESULT_RECORD_KEYS: Final = ("records", "anonymized_records", "data")
 _CommandSpec = str | os.PathLike[str] | Sequence[str | os.PathLike[str]]
 
 
-class ARXBridgeError(RuntimeError):
+class ARXBridgeError(RuntimeError, LegacyRootedError):
     """Base exception for fail-closed ARX bridge failures."""
 
 

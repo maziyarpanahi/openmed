@@ -13,6 +13,7 @@ from importlib import resources
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, derived_opaque_id
+from openmed.core.errors import LegacyRootedError
 
 DRUG_SAFETY_SCHEMA_VERSION: Final = "1.0.0"
 DRUG_SAFETY_COMPATIBILITY_POLICY: Final = "same_major"
@@ -36,7 +37,7 @@ _OPAQUE_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$")
 _VERSION_RE = re.compile(r"^[1-9][0-9]*\.[0-9]+\.[0-9]+$")
 
 
-class DrugSafetyContractError(ValueError):
+class DrugSafetyContractError(ValueError, LegacyRootedError):
     """Raised when a drug-safety artifact violates its contract."""
 
 

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import is_local_only
 
 __all__ = [
@@ -82,7 +83,7 @@ _VOCABULARY_REQUIRED_COLUMNS = ("vocabulary_id", "vocabulary_version")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 
 
-class AthenaBundleError(ValueError):
+class AthenaBundleError(ValueError, LegacyRootedError):
     """Raised when a local Athena bundle is malformed."""
 
 

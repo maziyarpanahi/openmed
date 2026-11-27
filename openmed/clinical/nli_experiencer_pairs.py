@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Any, Final, Literal, TypeAlias, cast
 
 from openmed.core.audit import hash_text, stable_hash
+from openmed.core.errors import LegacyRootedError
 
 from .context import FAMILY_EXPERIENCER, PATIENT_EXPERIENCER
 
@@ -147,7 +148,7 @@ class ExperiencerCompatibility(str, Enum):
     UNRESOLVED = "unresolved"
 
 
-class NliExperiencerPairError(ValueError):
+class NliExperiencerPairError(ValueError, LegacyRootedError):
     """Base error for malformed or unsafe experiencer-aware pair inputs."""
 
 

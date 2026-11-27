@@ -26,6 +26,7 @@ from openmed.clinical.brief_cancellation import (
     call_with_cancellation,
     check_cancellation,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.pii import DeidentificationResult, deidentify
 from openmed.core.script_detect import (
     ZERO_WIDTH_CHARS,
@@ -119,7 +120,7 @@ class SummarizerBackend(Protocol):
         """Return a summary of de-identified ``text``."""
 
 
-class SummarizationOrderError(ValueError):
+class SummarizationOrderError(ValueError, LegacyRootedError):
     """Raised when the guarded summarization stage receives raw text."""
 
 
@@ -166,7 +167,7 @@ class LeakageCheck:
         }
 
 
-class SummarizationLeakageError(ValueError):
+class SummarizationLeakageError(ValueError, LegacyRootedError):
     """Raised when a backend returns a summary containing source PHI."""
 
     def __init__(self, check: LeakageCheck) -> None:

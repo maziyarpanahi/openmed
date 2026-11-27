@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from typing import Any, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 REVIEWED_LOCAL_EVIDENCE_VERSION = 1
 REVIEWED_LOCAL_EVIDENCE_KIND = "reviewed_local_evidence"
 REVIEWED_LOCAL_PROVENANCE = "reviewed_local"
@@ -35,7 +37,7 @@ class ReviewAdmissionRefusal(str, Enum):
     POLICY_CHANGED = "review_policy_changed"
 
 
-class ReviewAdmissionError(ValueError):
+class ReviewAdmissionError(ValueError, LegacyRootedError):
     """Admission failed with a fixed code and no caller-controlled values."""
 
     def __init__(self, reason: ReviewAdmissionRefusal):

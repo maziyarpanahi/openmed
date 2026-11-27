@@ -26,6 +26,7 @@ from openmed.clinical.review_state_machine import (
     validate_review_history,
 )
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 
 __all__ = [
     "EVIDENCE_PACKET_KIND",
@@ -103,7 +104,7 @@ _RAW_TEXT_KEYS = frozenset(
 _SYNTHETIC_PREFIXES = ("fixture:", "fixture-", "synthetic:", "synthetic-")
 
 
-class EvidencePacketValidationError(ValueError):
+class EvidencePacketValidationError(ValueError, LegacyRootedError):
     """Raised when a reference or packet violates the evidence boundary.
 
     ``category`` is deliberately the only diagnostic detail retained.  The

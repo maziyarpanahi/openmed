@@ -20,6 +20,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias, cast
 
+from openmed.core.errors import LegacyRootedError
+
 DEFAULT_ELASTICSEARCH_GROK_PATTERNS = (
     "%{EMAILADDRESS:openmed_email}",
     "%{IP:openmed_ip}",
@@ -57,11 +59,13 @@ _MIN_INTEGER = -(1 << 63)
 _MAX_INTEGER = (1 << 63) - 1
 
 
-class ElasticsearchRedactionError(RuntimeError):
+class ElasticsearchRedactionError(RuntimeError, LegacyRootedError):
     """Raised when a configured ingest document cannot be redacted safely."""
 
 
-class UnsupportedDynamicFieldError(ElasticsearchRedactionError, ValueError):
+class UnsupportedDynamicFieldError(
+    ElasticsearchRedactionError, ValueError, LegacyRootedError
+):
     """Raised when a dynamic field path or value is encountered."""
 
 

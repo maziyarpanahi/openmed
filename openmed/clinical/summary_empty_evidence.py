@@ -21,6 +21,8 @@ from enum import Enum
 from itertools import islice
 from typing import Any, Final, TypeVar
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "EMPTY_EVIDENCE_REFUSAL_CODE",
     "SUMMARY_EMPTY_EVIDENCE_DISCLAIMER",
@@ -262,7 +264,7 @@ class SummaryEmptyEvidenceRefusal:
         raise SummaryEmptyEvidenceError(self)
 
 
-class SummaryEmptyEvidenceError(ValueError):
+class SummaryEmptyEvidenceError(ValueError, LegacyRootedError):
     """Fixed-code exception for callers that require evidence before generation.
 
     The exception message contains only the stable refusal code.  The complete

@@ -31,6 +31,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .fact_projection import (
@@ -91,7 +92,7 @@ _DOMAIN_DATE_COLUMNS: Final = MappingProxyType(
 )
 
 
-class OmopQualityError(ValueError):
+class OmopQualityError(ValueError, LegacyRootedError):
     """Base error for an invalid OMOP quality contract."""
 
 

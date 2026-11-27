@@ -17,6 +17,7 @@ import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.profiles import get_profile
 from openmed.interop.fhir.validation import validate, validation_result
 from openmed.interop.fhir.versions import (
@@ -70,7 +71,7 @@ _IDENTIFIER_SYSTEM = "https://openmed.dev/fhir/sid/pseudonymous-identifier"
 _DEFAULT_DATE = "2026-01-01T00:00:00Z"
 
 
-class FHIRExchangeError(ValueError):
+class FHIRExchangeError(ValueError, LegacyRootedError):
     """Base error for an exchange workbench operation."""
 
 

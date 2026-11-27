@@ -18,6 +18,7 @@ from openmed.clinical.context import assert_context, scan_context_cues
 from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_date
 
 CLINICAL_CONTEXT_VERSION = "clinical-context-v5"
@@ -59,7 +60,7 @@ _LABELS = {
 }
 
 
-class ClinicalAnalysisError(ValueError):
+class ClinicalAnalysisError(ValueError, LegacyRootedError):
     """A finite, source-free error code for the clinical composition boundary."""
 
 

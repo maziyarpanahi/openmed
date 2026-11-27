@@ -14,10 +14,12 @@ Use :func:`redact_detail` when untrusted text must be correlated locally.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any, ClassVar, Final, Mapping, Optional
 
 __all__ = [
     "ERROR_CODES",
+    "LegacyRootedError",
     "OpenMedError",
     "InputError",
     "ConfigurationError",
@@ -28,6 +30,7 @@ __all__ = [
     "BudgetExceededError",
     "InternalError",
     "InferenceError",
+    "legacy_error_code",
     "redact_detail",
 ]
 
@@ -281,6 +284,146 @@ class InferenceError(InternalError):
     """A model or backend returned a structurally invalid inference result."""
 
     code = "inference_error"
+
+
+_CODE_WORD_BOUNDARY: Final = re.compile(
+    r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
+)
+_STABLE_CODE: Final = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def _snake_case_code(class_name: str) -> str:
+    words = _CODE_WORD_BOUNDARY.sub("_", class_name).lower()
+    code = re.sub(r"_+", "_", words).strip("_")
+    return code if _STABLE_CODE.fullmatch(code) else OpenMedError.code
+
+
+def legacy_error_code(error_class: type[BaseException]) -> str:
+    """Return the stable code a legacy exception class reports once rooted.
+
+    The nearest class in the method resolution order that defines a ``code``
+    class attribute wins, so existing explicit codes and the codes subclasses
+    inherit from them never change. A class without one reports the
+    snake_case form of its own name, for example ``"aecg_error"`` for
+    ``AecgError``. Set ``code`` explicitly to keep a code across a rename.
+
+    The function works on classes that are not rooted yet, which lets release
+    tooling record the code a class will report before it is rerooted.
+
+    Args:
+        error_class: Exception class to inspect.
+
+    Returns:
+        The class-level stable code.
+
+    Raises:
+        TypeError: If ``error_class`` is not an exception class, or the
+            nearest ``code`` attribute is not a string.
+    """
+
+    if not isinstance(error_class, type) or not issubclass(error_class, BaseException):
+        raise TypeError("legacy_error_code() expects an exception class")
+    for klass in error_class.__mro__:
+        if klass is LegacyRootedError or klass is OpenMedError:
+            break
+        if "code" in vars(klass):
+            code = vars(klass)["code"]
+            if not isinstance(code, str):
+                raise TypeError("an exception code must be a string class attribute")
+            return code
+    return _snake_case_code(error_class.__name__)
+
+
+def _legacy_member(error_class: type, name: str) -> Any:
+    """Return ``name`` as the MRO would resolve it without the OpenMed roots."""
+
+    mro = error_class.__mro__
+    for klass in mro[mro.index(LegacyRootedError) + 1 :]:
+        if klass is not OpenMedError and name in vars(klass):
+            return vars(klass)[name]
+    raise AttributeError(name)  # pragma: no cover - BaseException defines both
+
+
+class _LegacyCode:
+    """Class-level ``code`` default for legacy-rooted exceptions.
+
+    It is a non-data descriptor: a ``code`` defined on a subclass, or set on
+    an instance, takes precedence exactly as a plain attribute would.
+    """
+
+    def __get__(self, instance: object, owner: Optional[type] = None) -> str:
+        error_class = owner if owner is not None else type(instance)
+        return _snake_case_code(error_class.__name__)
+
+
+class LegacyRootedError(OpenMedError):
+    """Compatibility root for exceptions that predate :class:`OpenMedError`.
+
+    Rerooting an existing exception adds this class *after* its builtin base,
+    for example ``class AecgError(ValueError, LegacyRootedError)``, or replaces
+    a bare ``Exception`` base (``class ToolError(LegacyRootedError)``). The
+    class then satisfies ``except OpenMedError`` and gains :attr:`code` and
+    :meth:`to_dict` while everything callers already rely on stays the same:
+
+    * the constructor accepts any positional arguments, including none, and
+      ``args`` keeps exactly the values passed;
+    * ``str()``, ``repr()``, pickling and copying behave as the builtin base
+      defines them, byte for byte;
+    * the builtin bases keep their position in the method resolution order,
+      so ``except ValueError`` handlers and MRO-based dispatch tables resolve
+      as before. ``LegacyRootedError`` and :class:`OpenMedError` sit directly
+      in front of ``Exception``;
+    * attributes the class or its instances already define, including
+      ``code`` and ``to_dict``, keep their values, and no other attribute is
+      added: ``hasattr(error, "message")`` and ``hasattr(error, "details")``
+      answer as before. Instances get no new instance attributes, so
+      ``vars(error)`` and pickled state are unchanged too.
+
+    :attr:`code` is the nearest explicit ``code`` class attribute or, when
+    none exists, the snake_case class name (see :func:`legacy_error_code`).
+    :meth:`to_dict` reports that code, ``str(error)`` as the message, and
+    empty details, because attributes of a legacy class were never reviewed
+    against the PHI-safe details contract.
+
+    The REST and MCP adapters keep the transport mapping these errors had
+    before they were rooted; moving them onto the taxonomy envelopes is a
+    separate, explicit change.
+    """
+
+    code = _LegacyCode()  # type: ignore[assignment]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize exactly as the builtin base would.
+
+        Args:
+            *args: Positional arguments stored unchanged in ``args``.
+            **kwargs: Keyword arguments forwarded to the builtin initializer,
+                which rejects or consumes them as it always has.
+        """
+
+        _legacy_member(type(self), "__init__")(self, *args, **kwargs)
+
+    def __str__(self) -> str:
+        """Return the message exactly as the builtin base formats it."""
+
+        return _legacy_member(type(self), "__str__")(self)
+
+    def to_dict(self, *, include_details: bool = True) -> dict[str, Any]:
+        """Return a JSON-ready error object.
+
+        Args:
+            include_details: Include the (always empty) details mapping, for
+                parity with :meth:`OpenMedError.to_dict`.
+
+        Returns:
+            A mapping with ``code``, ``message`` (``str(error)``) and, when
+            requested, an empty ``details`` mapping.
+        """
+
+        payload: dict[str, Any] = {"code": self.code, "message": str(self)}
+        if include_details:
+            payload["details"] = {}
+        return payload
 
 
 # Public class-name registry used by service and MCP adapters. Codes are stable

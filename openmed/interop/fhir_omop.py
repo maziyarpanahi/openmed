@@ -23,6 +23,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 from .omop.cdm_loader import (
     UNMAPPED_CONCEPT_ID,
     UNMAPPED_CONCEPT_NAME,
@@ -222,7 +224,7 @@ _FHIR_SOURCE_TABLES = (
 )
 
 
-class FhirOmopError(ValueError):
+class FhirOmopError(ValueError, LegacyRootedError):
     """Base error for invalid or non-conformant FHIR-to-OMOP input."""
 
 

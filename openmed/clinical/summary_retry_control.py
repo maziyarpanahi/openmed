@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_RETRY_CONTROL_SCHEMA_VERSION: Final[int] = 1
 RETRY_CEILING_REFUSAL: Final[str] = "summary_retry_ceiling_exhausted"
 REPEATED_FAILURE_REFUSAL: Final[str] = "summary_repeated_failure_class"
@@ -22,7 +24,7 @@ _OPAQUE_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _ACTIONS = frozenset({"generate", "retry", "complete", "refuse"})
 
 
-class SummaryRetryControlError(ValueError):
+class SummaryRetryControlError(ValueError, LegacyRootedError):
     """Raised when retry-control input or state is invalid."""
 
 

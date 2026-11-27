@@ -23,6 +23,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from ..matcher import ConceptMatch, LexicalConcept, LexicalMatcher, VocabularyTerms
 from ..vocab import VocabLoaderError
 
@@ -77,7 +79,7 @@ _JSON_SYNONYM_KEYS = (
 )
 
 
-class HPOVocabularyError(VocabLoaderError, ValueError):
+class HPOVocabularyError(VocabLoaderError, ValueError, LegacyRootedError):
     """Raised when a supplied HPO release cannot be loaded safely."""
 
 

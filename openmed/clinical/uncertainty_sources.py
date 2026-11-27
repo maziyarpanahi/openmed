@@ -23,6 +23,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 UNCERTAINTY_SOURCE_SCHEMA_VERSION: Final[int] = 1
 UNCERTAINTY_SOURCES_SCHEMA_VERSION: Final[int] = UNCERTAINTY_SOURCE_SCHEMA_VERSION
 UNCERTAINTY_SOURCE_DISCLAIMER: Final[str] = (
@@ -32,7 +34,7 @@ UNCERTAINTY_SOURCE_DISCLAIMER: Final[str] = (
 UNCERTAINTY_SOURCES_DISCLAIMER: Final[str] = UNCERTAINTY_SOURCE_DISCLAIMER
 
 
-class UncertaintySourceError(ValueError):
+class UncertaintySourceError(ValueError, LegacyRootedError):
     """Raised when a typed uncertainty source cannot be constructed safely."""
 
 

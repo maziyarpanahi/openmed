@@ -15,8 +15,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from openmed.core.errors import LegacyRootedError
 
-class SubscriptionCheckpointError(ValueError):
+
+class SubscriptionCheckpointError(ValueError, LegacyRootedError):
     """A value-free checkpoint validation or storage error."""
 
 

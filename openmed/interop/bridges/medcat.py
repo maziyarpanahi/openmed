@@ -22,6 +22,8 @@ import subprocess
 import sys
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from openmed.core.errors import LegacyRootedError
+
 LICENSE_ENV_VAR = "OPENMED_ACCEPT_MEDCAT_LICENSE"
 
 LICENSE_NOTICE = (
@@ -39,11 +41,11 @@ _VALID_SYSTEMS = frozenset({"UMLS", "SNOMED"})
 Runner = Callable[..., str]
 
 
-class MedCATLicenseNotAcknowledgedError(RuntimeError):
+class MedCATLicenseNotAcknowledgedError(RuntimeError, LegacyRootedError):
     """Raised when the bridge is invoked without an explicit license acknowledgement."""
 
 
-class MedCATBridgeError(RuntimeError):
+class MedCATBridgeError(RuntimeError, LegacyRootedError):
     """Raised when the MedCAT subprocess fails or returns unparsable output."""
 
 
