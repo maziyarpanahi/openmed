@@ -8,6 +8,8 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
+from .errors import ModelLoadError
+
 OFFLINE_ENV_VAR = "OPENMED_OFFLINE"
 HF_OFFLINE_ENV_VARS = (
     "HF_HUB_OFFLINE",
@@ -30,6 +32,15 @@ OFFLINE_NETWORK_ERROR = (
 
 class OfflineModeError(RuntimeError):
     """Raised when offline mode blocks a remote operation."""
+
+
+class OfflineModelUnavailableError(ModelLoadError, OfflineModeError):
+    """Raised when offline mode is active and a requested model is not cached.
+
+    It carries the stable ``model_load_error`` code and stays an
+    :class:`OfflineModeError` and a ``RuntimeError``, so existing handlers
+    keep catching it with the same message.
+    """
 
 
 def env_flag_enabled(value: str | None) -> bool:

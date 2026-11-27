@@ -1,0 +1,286 @@
+{
+  "schema": "openmed.error_code_vectors",
+  "schema_version": 1,
+  "synthetic": true,
+  "description": "Shared error-code vectors: every portable code from the OpenMed error-code registry with its HTTP status, CLI exit code and retryable flag, and offline scenarios each runtime triggers with synthetic inputs. Only the code is part of the contract; messages are not.",
+  "registry": {
+    "path": "openmed/core/error_codes.json",
+    "contract": "openmed.errors.code-registry",
+    "contract_version": "1.0.0"
+  },
+  "runtimes": [
+    "python",
+    "swift",
+    "kotlin",
+    "web"
+  ],
+  "statuses": {
+    "required": "The runtime must raise the scenario's code with its existing APIs.",
+    "pending": "The runtime must raise the code once the named work lands.",
+    "not_applicable": "The runtime cannot reach the scenario; the reason says why."
+  },
+  "codes": [
+    {
+      "code": "budget_exceeded",
+      "category": "resource_exhausted",
+      "http_status": 503,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": []
+    },
+    {
+      "code": "capability_error",
+      "category": "unavailable",
+      "http_status": 503,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": []
+    },
+    {
+      "code": "configuration_error",
+      "category": "invalid_argument",
+      "http_status": 400,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": [
+        "empty_hash_secret",
+        "invalid_sdk_config"
+      ]
+    },
+    {
+      "code": "inference_error",
+      "category": "internal",
+      "http_status": 500,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": []
+    },
+    {
+      "code": "input_error",
+      "category": "invalid_argument",
+      "http_status": 400,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": [
+        "invalid_offsets"
+      ]
+    },
+    {
+      "code": "internal_error",
+      "category": "internal",
+      "http_status": 500,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": []
+    },
+    {
+      "code": "model_load_error",
+      "category": "unavailable",
+      "http_status": 503,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": [
+        "model_missing_offline"
+      ]
+    },
+    {
+      "code": "policy_error",
+      "category": "invalid_argument",
+      "http_status": 400,
+      "cli_exit_code": 1,
+      "retryable": false,
+      "scenarios": [
+        "unknown_policy_profile"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "empty_hash_secret",
+      "summary": "A keyed-hash secret is empty.",
+      "code": "configuration_error",
+      "inputs": {
+        "secret": ""
+      },
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "entry": [
+            "openmed.core.schemas.span.hmac_text_hash",
+            "openmed.core.pipeline.Pipeline(hmac_secret=...)"
+          ],
+          "builtin": "ValueError"
+        },
+        "swift": {
+          "status": "required",
+          "entry": [
+            "PolicyEngine surrogateKey"
+          ],
+          "today": "PolicyError surrogate_key_invalid"
+        },
+        "kotlin": {
+          "status": "required",
+          "entry": [
+            "DeidentifyEngine hashSalt"
+          ],
+          "today": "IllegalArgumentException without a code"
+        },
+        "web": {
+          "status": "required",
+          "entry": [
+            "extractPii and deidentify hashSecret option",
+            "hmacTextHash"
+          ],
+          "today": "OpenMedError configuration_error"
+        }
+      }
+    },
+    {
+      "id": "invalid_offsets",
+      "summary": "A span or detection ends before it starts.",
+      "code": "input_error",
+      "inputs": {
+        "text_length": 14,
+        "start": 5,
+        "end": 2
+      },
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "entry": [
+            "openmed.core.schemas.OpenMedSpan"
+          ],
+          "builtin": "ValueError"
+        },
+        "swift": {
+          "status": "required",
+          "entry": [
+            "PolicyEngine detections"
+          ],
+          "today": "PolicyError detection_offset_invalid"
+        },
+        "kotlin": {
+          "status": "required",
+          "entry": [
+            "OpenMedSpan",
+            "PolicyEngine detections"
+          ],
+          "today": "IllegalArgumentException without a code, or PolicyProfileException detection_offset_invalid"
+        },
+        "web": {
+          "status": "required",
+          "entry": [
+            "portable policy decide detections"
+          ],
+          "today": "PortablePolicyError detection_offset_invalid"
+        }
+      }
+    },
+    {
+      "id": "unknown_policy_profile",
+      "summary": "A policy profile name matches no bundled profile.",
+      "code": "policy_error",
+      "inputs": {
+        "profile": "synthetic_unknown_profile"
+      },
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "entry": [
+            "openmed.core.policy.canonical_policy_name"
+          ],
+          "builtin": "ValueError"
+        },
+        "swift": {
+          "status": "required",
+          "entry": [
+            "Policy(named:)"
+          ],
+          "today": "PolicyError profile_unknown"
+        },
+        "kotlin": {
+          "status": "required",
+          "entry": [
+            "PolicyProfiles.load"
+          ],
+          "today": "PolicyProfileException profile_unknown"
+        },
+        "web": {
+          "status": "required",
+          "entry": [
+            "loadPortablePolicy"
+          ],
+          "today": "PortablePolicyError profile_unknown"
+        }
+      }
+    },
+    {
+      "id": "model_missing_offline",
+      "summary": "Offline mode is on and the requested model is not cached.",
+      "code": "model_load_error",
+      "inputs": {
+        "model_id": "OpenMed/synthetic-missing-model",
+        "offline": true
+      },
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "entry": [
+            "openmed.core.hf_hub.prefetch_model"
+          ],
+          "builtin": "RuntimeError"
+        },
+        "swift": {
+          "status": "required",
+          "entry": [
+            "OpenMedModelStore load of an absent local model"
+          ],
+          "today": "OpenMedModelStore missing_manifest or missing_weights"
+        },
+        "kotlin": {
+          "status": "required",
+          "entry": [
+            "model resolution from ModelCache with network disallowed"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "entry": [
+            "setOfflineOnly(true), then a load without local assets",
+            "setOfflineOnly(true), then a Hub id load"
+          ],
+          "today": "OpenMedOfflineError local_assets_unavailable or remote_model_refused"
+        }
+      }
+    },
+    {
+      "id": "invalid_sdk_config",
+      "summary": "A portable SDK configuration carries an unknown key.",
+      "code": "configuration_error",
+      "inputs": {
+        "config": {
+          "local_only": true,
+          "synthetic_unknown_key": true
+        }
+      },
+      "runtimes": {
+        "python": {
+          "status": "pending",
+          "reason": "The portable SDK configuration loader is #5342 (open PR #5599); its unknown-key refusal must raise ConfigurationError."
+        },
+        "swift": {
+          "status": "pending",
+          "reason": "The Swift SDK configuration loader is #5387."
+        },
+        "kotlin": {
+          "status": "pending",
+          "reason": "The Android SDK configuration loader is #5388."
+        },
+        "web": {
+          "status": "pending",
+          "reason": "The web SDK configuration loader is #5389."
+        }
+      }
+    }
+  ]
+}

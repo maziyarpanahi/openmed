@@ -50,7 +50,9 @@ divergences give the exact variants.
 ## Known divergences
 
 Where transports genuinely differ today, the map records the difference with
-an owning follow-up instead of changing a contract here:
+an owning follow-up instead of changing a contract here. The per-code view,
+including MCP and the CLI, is the
+[error-code registry](errors.md#error-code-registry):
 
 - `rest_limits_reported_as_validation`: REST reports over-limit text and
   stream chunk sizes as `422 validation_error`.

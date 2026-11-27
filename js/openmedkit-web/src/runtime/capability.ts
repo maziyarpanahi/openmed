@@ -1,3 +1,5 @@
+import { OpenMedError } from "../errors";
+
 export type OrtWebBackend = "webgpu" | "wasm-simd-threads" | "wasm-basic";
 
 export interface OrtWebCapabilityProfile {
@@ -178,7 +180,10 @@ export function selectOrtWebBackend(
   }
 
   if (!profile.wasm) {
-    throw new Error("ONNX Runtime Web requires WebAssembly when WebGPU is absent.");
+    throw new OpenMedError(
+      "capability_error",
+      "ONNX Runtime Web requires WebAssembly when WebGPU is absent.",
+    );
   }
 
   if (wasmThreadsAvailable) {
