@@ -305,7 +305,10 @@ indirect enum ReceiptJSON {
     ///   surrogate, a duplicate member, a non-finite number, excessive nesting
     ///   or more than ``OpenMedReceiptVerifier/maximumReportBytes``.
     static func parse(_ data: Data) -> ReceiptJSON? {
+        // Foundation's UTF-8 decoding drops a leading byte order mark; Python's
+        // json.loads and the Kotlin and web verifiers reject it.
         guard data.count <= OpenMedReceiptVerifier.maximumReportBytes,
+            !data.starts(with: [0xEF, 0xBB, 0xBF]),
             let text = String(data: data, encoding: .utf8)
         else { return nil }
         var parser = ReceiptJSONParser(scalars: Array(text.unicodeScalars))

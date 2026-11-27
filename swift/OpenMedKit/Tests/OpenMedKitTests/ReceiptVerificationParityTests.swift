@@ -131,6 +131,8 @@ final class ReceiptVerificationParityTests: XCTestCase {
         inputs.append(ReceiptJSON.encode(replacing("spans", with: .array([.object([ReceiptJSON.Member(key: "start", value: .double(8))])]), in: baseline)))
         let canonical = String(decoding: ReceiptJSON.encode(baseline), as: UTF8.self)
         inputs.append(Data(("{\"policy\":\"\(secret)\"," + canonical.dropFirst()).utf8))
+        // A byte order mark is not JSON, even in front of a valid report.
+        inputs.append(Data([0xEF, 0xBB, 0xBF]) + ReceiptJSON.encode(baseline))
 
         for (index, input) in inputs.enumerated() {
             let verification = verifier.verify(input)
