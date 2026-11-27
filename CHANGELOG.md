@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add the portable identifier validator subset to the Android OpenMedKit: `PiiValidators` gains IBAN, Aadhaar, UK NHS number, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN checks that match the Python references on every vector in `identifier_validators_v1.json`, next to the existing SSN, Luhn, NPI and US phone validators (#5420).
+
+### Changed
+
+- Android OpenMedKit `PiiValidators.validateSSN`, `validateLuhn`, `validateNPI` and `validatePhoneUS` no longer accept non-ASCII digits. Like their Python references they read only the ASCII digits 0-9, so an Arabic-Indic or fullwidth number that passed in OpenMedKit Android 4.0 is now rejected (#5420).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
