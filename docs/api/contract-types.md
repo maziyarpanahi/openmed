@@ -74,6 +74,56 @@ const provenance: OpenMedContractProvenance = JSON.parse(body);
 The types describe the wire shape only. They do not validate values at run
 time; validate untrusted JSON against the schema before relying on it.
 
+## Swift
+
+`scripts/codegen/emit_swift_types.py` writes
+`swift/OpenMedKit/Sources/OpenMedKit/Generated/ContractTypes.swift`. Every
+record is a public `Codable, Equatable, Sendable` struct with `let`
+properties, `camelCase` names and explicit `CodingKeys` for the snake_case
+JSON keys. The shared label, policy and action enums are `String`-backed,
+`CaseIterable` enums (`OpenMedContractCanonicalLabel`,
+`OpenMedContractPolicyLabel`, `OpenMedContractSpanAction`); other enums are
+named after their record and property, for example
+`OpenMedContractDataResidencyAttestationModelsItemKind`.
+
+| JSON Schema | Swift |
+| --- | --- |
+| `string` | `String` |
+| `integer` | `Int` |
+| `number` | `Double` |
+| `boolean` | `Bool` |
+| `enum` | a generated `String`-backed enum |
+| `["T", "null"]` | `T?` |
+| object with `properties` | a generated struct |
+| object without `properties` | `[String: OpenMedContractJSONValue]` |
+| `array` | `[T]` |
+| property not in `required` | `T?`, omitted when `nil` |
+
+`OpenMedContractJSONValue` keeps integers, other numbers, booleans, strings,
+arrays, objects and `null` distinct, so free-form `evidence`, `metadata` and
+`parameters` objects survive a decode and encode round trip unchanged.
+
+Decoding is exact and fails closed:
+
+- A missing required key fails with `DecodingError.keyNotFound`, even when its
+  value may be `null`. An explicit `null` is encoded back as `null`.
+- A key the schema does not declare fails, and the error names the record
+  type, not the key or its value.
+- An unknown enum value fails with a message naming the enum type only.
+- `const` values such as `schema_version` are checked on decode and filled in
+  by the initializer, which does not take them as parameters.
+
+```swift
+let span = try JSONDecoder().decode(OpenMedContractSpan.self, from: data)
+if span.policyLabel == .directIdentifier {
+    // ...
+}
+```
+
+These types are a wire format for apps that receive OpenMed JSON, for example
+from a local OpenMed service. They do not replace the existing OpenMedKit
+result types such as `DeidentificationResult` or `EntityPrediction`.
+
 ## Regenerating and drift checks
 
 After changing a core schema, regenerate every committed contract type file:
@@ -89,8 +139,24 @@ exits non-zero when the committed file has drifted. CI runs every
 
 ```bash
 python scripts/codegen/emit_ts_types.py --check
+python scripts/codegen/emit_swift_types.py --check
 python -m pytest tests/unit/release/test_codegen_types.py -q
+python -m pytest tests/unit/release/test_codegen_swift_types.py -q
+cd swift/OpenMedKit && swift test --filter ContractTypesTests
 ```
+
+The generated Swift file is already in `swift format` style, so
+`make format-swift` leaves it unchanged.
+
+## Shared examples
+
+`tests/fixtures/contracts/core_contract_examples.json` holds synthetic example
+records for every core schema. The Python tests validate them against the
+schemas, the TypeScript spec type-checks them against the generated
+interfaces, and `ContractTypesTests` decodes and re-encodes every one of them
+with the generated Swift types. The Swift test also turns each span of the
+Swift-Kotlin parity fixture `fixtures/parity/expected_spans.json` into an
+`OpenMedContractSpan` record and requires the same lossless round trip.
 
 Output is deterministic: no timestamps, and the header records a SHA-256 digest
 of the canonicalized source schemas.
