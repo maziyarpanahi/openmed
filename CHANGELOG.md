@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The TypeScript REST client `@openmed/rest-client` is now a publishable package: it is no longer private, tracks the `openmed` release version (checked by the release preflight and `tests/unit/test_publish_workflow_version.py`), declares its Apache-2.0 license, repository, Node.js 20 engine, ESM `exports` map and public provenance `publishConfig`, ships a lockfile, and packs only `dist/`, `README.md` and `LICENSE` (#5359).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
@@ -81,7 +85,6 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Changed
 
-- The TypeScript REST client `@openmed/rest-client` is now a publishable package: it is no longer private, tracks the `openmed` release version (checked by the release preflight and `tests/unit/test_publish_workflow_version.py`), declares its Apache-2.0 license, repository, Node.js 20 engine, ESM `exports` map and public provenance `publishConfig`, ships a lockfile, and packs only `dist/`, `README.md` and `LICENSE` (#5359).
 - Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).
 - The GraphQL endpoint now executes operations over `POST` only, keeps the
   GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
