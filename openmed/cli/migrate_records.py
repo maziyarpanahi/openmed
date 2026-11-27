@@ -367,10 +367,17 @@ def _scan_file(
     schema_id: str | None,
     seen: set[tuple[int, int]],
 ) -> None:
-    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     try:
         # Non-blocking, no-follow open: a path swapped for a FIFO or a symlink
         # after the walk saw it is refused instead of blocking or escaping.
+        # O_BINARY keeps Windows from translating line endings or stopping at
+        # Ctrl-Z, so sizes and rows match the bytes on disk.
         handle = os.fdopen(os.open(target, flags), "rb")
     except OSError:
         run.files_invalid += 1
