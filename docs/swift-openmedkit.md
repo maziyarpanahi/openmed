@@ -556,6 +556,30 @@ are offset-only. Both results carry the source model id and the pack's
 `openmed.notice.pii.review_required` notice, which the app should show with
 the output.
 
+### `ClinicalEntityPack`
+
+```swift
+let pack = try ClinicalEntityPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let result = try pack.extract(note)           // ClinicalEntityExtraction
+for entity in result.entities {
+    print(entity.category, entity.start, entity.end, entity.confidence)
+}
+print(result.notice.text)
+```
+
+`extract(_:)` runs `OpenMed.analyzeText`, normalizes each model label with the
+portable OpenMed taxonomy (so `B-PATHOLOGY` and `Disease` normalize like Python's
+`normalize_label`), and keeps a mention only when the normalized label is one
+of the pack's canonical labels: `CONDITION`, `DISEASE` and `PATHOLOGY` in pack
+version 1.0.0. Mentions with any other label are dropped, never assigned a
+guessed category. Each `ClinicalEntity` carries the category, the model label,
+Unicode scalar offsets, the confidence and the source model id, but no input
+text; use `entity.range(in:)` to slice the note. The result carries the
+`openmed.notice.clinical_entity.extraction_only` notice: the pack reports
+mentions and offsets only and does not diagnose, rank or recommend care.
+
 ## Offline Tokenizer Assets
 
 OpenMedKit loads tokenizers from local files only, and makes no network request
@@ -935,6 +959,7 @@ Runtime types follow one of these contracts:
 |---|---|---|
 | `OpenMed`, `NERPipeline`, `PlatformModel`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | No | Inference is synchronous and has no internal lock. Use each instance from one isolation domain: create and call it from one task or actor, or keep it inside your own actor. Give concurrent workers separate instances. |
 | `PIIPack` | No | Same single-isolation-domain rule: prepare and run each pack from one task or actor. |
+| `ClinicalEntityPack` | No | Same single-isolation-domain rule as `PIIPack`. |
 | `ExtensionRedactionHandler`, `TranscriptLanguageRouter`, `SpeechEndpointAdapter`, `VoiceEmbeddingSession`, `VoiceEmbeddingBuffer`, `VoiceEmbeddingHandle`, `ConvertedAudioSamples`, `WFDBFileSource` | No | Same single-isolation-domain rule. |
 | `OpenMedMaple`, `CoreMLSpeechEngine` | Actor | Calls are serialized by the actor. |
 | `OpenMedVisionLanguageModel` | Yes | Share one instance. The MLX model container serializes model access. `generate(_:images:)` takes its images as `sending`, so do not keep using them concurrently after the call. |
