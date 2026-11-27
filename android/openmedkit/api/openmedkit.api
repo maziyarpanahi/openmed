@@ -1818,6 +1818,20 @@ public final class com/openmed/openmedkit/catalog/ModelCatalogEntry {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/openmed/openmedkit/clinical/ClinicalAssertion {
+	public final fun getExperiencer ()Ljava/lang/String;
+	public final fun getNegation ()Ljava/lang/String;
+	public final fun getTemporality ()Ljava/lang/String;
+	public final fun getUncertainty ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/clinical/ClinicalContext {
+	public static final field INSTANCE Lcom/openmed/openmedkit/clinical/ClinicalContext;
+	public static final field UNSUPPORTED_LANGUAGE Ljava/lang/String;
+	public final fun assertContext (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun assertContext$default (Lcom/openmed/openmedkit/clinical/ClinicalContext;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+}
+
 public final class com/openmed/openmedkit/decision/DecisionAccess {
 	public fun <init> (ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun getAllowed ()Z
@@ -4227,6 +4241,100 @@ public final class com/openmed/openmedkit/onnx/TokenPrediction {
 	public final fun getStartOffset ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/packs/ClinicalEntity {
+	public final fun getAssertion ()Lcom/openmed/openmedkit/clinical/ClinicalAssertion;
+	public final fun getAssertionReason ()Ljava/lang/String;
+	public final fun getCategory ()Ljava/lang/String;
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getModelId ()Ljava/lang/String;
+	public final fun getStart ()I
+}
+
+public final class com/openmed/openmedkit/packs/ClinicalEntityPack : com/openmed/openmedkit/packs/TaskPack {
+	public fun <init> (Lcom/openmed/openmedkit/catalog/ModelCatalog;Lkotlin/jvm/functions/Function1;[B)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/catalog/ModelCatalog;Lkotlin/jvm/functions/Function1;[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun extract (Ljava/lang/String;FLjava/lang/String;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun extract (Ljava/lang/String;FLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun extract$default (Lcom/openmed/openmedkit/packs/ClinicalEntityPack;Ljava/lang/String;FLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/packs/PiiPack : com/openmed/openmedkit/packs/TaskPack {
+	public fun <init> (Lcom/openmed/openmedkit/catalog/ModelCatalog;ZLkotlin/jvm/functions/Function1;[B)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/catalog/ModelCatalog;ZLkotlin/jvm/functions/Function1;[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun deidentify (Ljava/lang/String;Ljava/lang/String;FLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun deidentify$default (Lcom/openmed/openmedkit/packs/PiiPack;Ljava/lang/String;Ljava/lang/String;FLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun extract (Ljava/lang/String;FLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun extract$default (Lcom/openmed/openmedkit/packs/PiiPack;Ljava/lang/String;FLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public abstract class com/openmed/openmedkit/packs/TaskPack : java/io/Closeable {
+	public fun close ()V
+	public final fun getModelId ()Ljava/lang/String;
+	public final fun getResolution ()Lcom/openmed/openmedkit/packs/TaskPackResolution;
+	public final fun prepare (Lcom/openmed/openmedkit/download/ModelDownloader;Z)Lcom/openmed/openmedkit/packs/TaskPackPreparation;
+	public static synthetic fun prepare$default (Lcom/openmed/openmedkit/packs/TaskPack;Lcom/openmed/openmedkit/download/ModelDownloader;ZILjava/lang/Object;)Lcom/openmed/openmedkit/packs/TaskPackPreparation;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackDetector : java/lang/Enum {
+	public static final field LOCAL_RECOGNIZER Lcom/openmed/openmedkit/packs/TaskPackDetector;
+	public static final field MODEL Lcom/openmed/openmedkit/packs/TaskPackDetector;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/packs/TaskPackDetector;
+	public static fun values ()[Lcom/openmed/openmedkit/packs/TaskPackDetector;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackException : java/lang/IllegalStateException {
+	public fun <init> (Lcom/openmed/openmedkit/packs/TaskPackFailure;)V
+	public final fun getFailure ()Lcom/openmed/openmedkit/packs/TaskPackFailure;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackFailure : java/lang/Enum {
+	public static final field DOWNLOAD_FAILED Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field LOAD_FAILED Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field MANIFEST_INVALID Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field NOT_CACHED Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field NOT_PREPARED Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field NO_CANDIDATE Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static final field UNKNOWN_PACK Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public static fun values ()[Lcom/openmed/openmedkit/packs/TaskPackFailure;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackPreparation {
+	public final fun getFailure ()Lcom/openmed/openmedkit/packs/TaskPackFailure;
+	public final fun getFromCache ()Z
+	public final fun getModelId ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackResolution {
+	public final fun getCanonicalLabels ()Ljava/util/List;
+	public final fun getNotice ()Ljava/lang/String;
+	public final fun getNoticeKey ()Ljava/lang/String;
+	public final fun getPackId ()Ljava/lang/String;
+	public final fun getRepoIds ()Ljava/util/List;
+	public final fun getTask ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPackResult {
+	public final fun getDetector ()Lcom/openmed/openmedkit/packs/TaskPackDetector;
+	public final fun getModelId ()Ljava/lang/String;
+	public final fun getNotice ()Ljava/lang/String;
+	public final fun getNoticeKey ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/packs/TaskPacks {
+	public static final field CLINICAL_ENTITY Ljava/lang/String;
+	public static final field INSTANCE Lcom/openmed/openmedkit/packs/TaskPacks;
+	public static final field MEDICATION Ljava/lang/String;
+	public static final field PII Ljava/lang/String;
+	public final fun resolve (Ljava/lang/String;[B)Lcom/openmed/openmedkit/packs/TaskPackResolution;
+	public static synthetic fun resolve$default (Lcom/openmed/openmedkit/packs/TaskPacks;Ljava/lang/String;[BILjava/lang/Object;)Lcom/openmed/openmedkit/packs/TaskPackResolution;
 }
 
 public final class com/openmed/openmedkit/policy/PolicyAction : java/lang/Enum {
