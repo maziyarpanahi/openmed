@@ -48,6 +48,11 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Added
 
+- Added a private-learning stability page that states the experimental level,
+  names the sealed-evaluation, threat-model and DP utility study GA criteria
+  with their v7.0 tracking issues, separates the stable v2.3-v3.1 metadata
+  contracts from the experimental modules, and records the non-claims that keep
+  the label independent of the version tag (#5319).
 - Add a standard-library synthetic side-view walker fixture for pose and gait
   tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
   double-support truth, asymmetry, far-leg occlusion, joint jitter and a
