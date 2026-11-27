@@ -557,9 +557,12 @@ were sorted. `Rejected.code` is one of the following:
 | Code | Meaning |
 | --- | --- |
 | `hash_mismatch` | No span order reproduces the stored `repro_hash`, so the report content changed. |
-| `signature_mismatch` | The hash matches, but the report is unsigned or its HMAC does not match the key. |
-| `unsupported_algorithm` | The signature names an algorithm other than `HMAC-SHA256`. |
+| `signature_mismatch` | The report is unsigned, or the hash matches but its HMAC does not match the key. |
+| `unsupported_algorithm` | The signature names no algorithm or one other than `HMAC-SHA256`. |
 | `malformed` | The input is not a structurally valid audit report. The input is never echoed. |
+
+The checks run in the order the Swift and web verifiers share: a missing or
+`null` signature, then the algorithm, then the hash, then the HMAC.
 
 The verifier reproduces Python's canonical JSON byte for byte. That covers
 member order by Unicode code point, ASCII escaping and Python float formatting

@@ -89,22 +89,18 @@ object ReceiptVerifier {
             return ReceiptVerification.Rejected(MALFORMED)
         }
         val stored = report.text("repro_hash") ?: return ReceiptVerification.Rejected(MALFORMED)
+        // Python's order, shared with the Swift and web verifiers: a missing or
+        // null signature first, then the algorithm, then the hash, then the HMAC.
         val signature = report["signature"]
-        var expected: ByteArray? = null
-        if (signature is JsonObject) {
-            val algorithm = signature.text("algorithm")
-            val value = signature.text("value")
-            if (algorithm == null || value == null) return ReceiptVerification.Rejected(MALFORMED)
-            if (algorithm != ALGORITHM) return ReceiptVerification.Rejected(UNSUPPORTED_ALGORITHM)
-            expected = value.toByteArray(Charsets.UTF_8)
-        } else if (signature != null && signature != JsonNull) {
-            return ReceiptVerification.Rejected(MALFORMED)
-        }
+        if (signature == null || signature == JsonNull) return ReceiptVerification.Rejected(SIGNATURE_MISMATCH)
+        if (signature !is JsonObject) return ReceiptVerification.Rejected(MALFORMED)
+        val value = signature.text("value") ?: return ReceiptVerification.Rejected(MALFORMED)
+        if (signature.text("algorithm") != ALGORITHM) return ReceiptVerification.Rejected(UNSUPPORTED_ALGORITHM)
+        val expected = value.toByteArray(Charsets.UTF_8)
         var hashMatched = false
         for ((order, repro, signing) in candidates) {
             if (sha256(repro) != stored) continue
             hashMatched = true
-            if (expected == null) break
             val mac = Mac.getInstance("HmacSHA256")
             mac.init(SecretKeySpec(key, "HmacSHA256"))
             if (MessageDigest.isEqual(hex(mac.doFinal(signing)).toByteArray(Charsets.US_ASCII), expected)) {

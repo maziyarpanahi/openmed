@@ -8,6 +8,7 @@ import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -212,6 +213,31 @@ class ReceiptVerificationParityTest {
             baseline.with("extra", JsonPrimitive(1)).toString(),
         )) {
             assertEquals(ReceiptVerifier.HASH_MISMATCH, ReceiptVerifier.verify(changed, key).code)
+        }
+    }
+
+    @Test
+    fun signatureChecksRunBeforeTheHashInTheSharedOrder() {
+        val baseline = report("signed_baseline")
+        val signature = baseline.getValue("signature").jsonObject
+        val tampered = Json.parseToJsonElement(baseline.toString().replace("\"start\":8", "\"start\":9")).jsonObject
+        val key = keys.getValue("test-only")
+
+        // A missing or null signature is signature_mismatch even when the content changed.
+        for (unsigned in listOf(tampered.with("signature", JsonNull), tampered.without("signature"), baseline.without("signature"))) {
+            assertEquals(ReceiptVerifier.SIGNATURE_MISMATCH, ReceiptVerifier.verify(unsigned.toString(), key).code)
+        }
+        // Any algorithm other than HMAC-SHA256, including none, is unsupported_algorithm.
+        for (algorithm in listOf(null, JsonNull, JsonPrimitive(256), JsonPrimitive("hmac-sha256"))) {
+            val changed = if (algorithm == null) signature.without("algorithm") else signature.with("algorithm", algorithm)
+            assertEquals(
+                ReceiptVerifier.UNSUPPORTED_ALGORITHM,
+                ReceiptVerifier.verify(tampered.with("signature", changed).toString(), key).code,
+            )
+        }
+        // A signature without a string value cannot be checked.
+        for (changed in listOf(signature.with("value", JsonPrimitive(7)), JsonObject(emptyMap()))) {
+            assertEquals(ReceiptVerifier.MALFORMED, ReceiptVerifier.verify(baseline.with("signature", changed).toString(), key).code)
         }
     }
 
