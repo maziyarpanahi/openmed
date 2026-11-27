@@ -150,6 +150,14 @@ def add_redact_files_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional PHI-free JSON report path.",
     )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Report whether anything would be redacted, write no output, and "
+            "exit 1 when at least one span is found."
+        ),
+    )
+    parser.add_argument(
         "--format",
         "--input-format",
         dest="input_format",
@@ -234,29 +242,43 @@ def run_from_args(args: argparse.Namespace, *, config: Any | None = None) -> int
 
         config = _load_and_apply_config(args)
 
-    input_path, output_path = _resolve_paths(args)
+    input_path: Path
+    output_path: Path | None
+    check_mode = bool(getattr(args, "check", False))
+    if check_mode:
+        input_path = _resolve_check_paths(args)
+        output_path = None
+    else:
+        input_path, output_path = _resolve_paths(args)
+
     report_path = getattr(args, "report", None)
     if report_path is not None:
         _ensure_distinct_paths(input_path, report_path, "input and report")
-        _ensure_distinct_paths(output_path, report_path, "output and report")
+        if output_path is not None:
+            _ensure_distinct_paths(output_path, report_path, "output and report")
+
+    scan_options: dict[str, Any] = {
+        "format": getattr(args, "input_format", getattr(args, "format", "auto")),
+        "encoding": getattr(args, "encoding", "utf-8"),
+        "policy": getattr(args, "policy", "hipaa_safe_harbor"),
+        "lang": getattr(args, "lang", getattr(args, "language", "en")),
+        "method": getattr(args, "method", "mask"),
+        "model_name": getattr(args, "model_name", DEFAULT_PII_MODEL),
+        "confidence_threshold": getattr(args, "confidence_threshold", 0.7),
+        "keep_year": getattr(args, "keep_year", False),
+        "seed": getattr(args, "seed", 0),
+        "locale": getattr(args, "locale", None),
+        "use_safety_sweep": getattr(args, "use_safety_sweep", True),
+        "config": config,
+    }
 
     try:
-        result = redact_file(
-            input_path,
-            output_path,
-            format=getattr(args, "input_format", getattr(args, "format", "auto")),
-            encoding=getattr(args, "encoding", "utf-8"),
-            policy=getattr(args, "policy", "hipaa_safe_harbor"),
-            lang=getattr(args, "lang", getattr(args, "language", "en")),
-            method=getattr(args, "method", "mask"),
-            model_name=getattr(args, "model_name", DEFAULT_PII_MODEL),
-            confidence_threshold=getattr(args, "confidence_threshold", 0.7),
-            keep_year=getattr(args, "keep_year", False),
-            seed=getattr(args, "seed", 0),
-            locale=getattr(args, "locale", None),
-            use_safety_sweep=getattr(args, "use_safety_sweep", True),
-            config=config,
-        )
+        if check_mode:
+            summary = check_file(input_path, **scan_options)
+        else:
+            assert output_path is not None
+            result = redact_file(input_path, output_path, **scan_options)
+            summary = result.summary
     except FileNotFoundError:
         raise CliError(
             "Input file was not found.",
@@ -288,7 +310,7 @@ def run_from_args(args: argparse.Namespace, *, config: Any | None = None) -> int
             exit_code=EXIT_ERROR,
         ) from None
 
-    payload = result.summary.to_dict()
+    payload = summary.to_dict()
     if report_path is not None:
         try:
             _write_report(report_path, payload)
@@ -300,6 +322,9 @@ def run_from_args(args: argparse.Namespace, *, config: Any | None = None) -> int
             ) from None
 
     human = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
+    if check_mode:
+        outcome = "check_failed" if summary.total_spans else "completed"
+        return emit(args, payload, human=human, outcome=outcome)
     return emit(args, payload, human=human)
 
 
@@ -337,6 +362,90 @@ def redact_file(
     source = Path(input_path)
     target = Path(output_path)
     _ensure_distinct_paths(source, target, "input and output")
+    redacted_text, summary = _scan_file(
+        source,
+        format=format,
+        input_format=input_format,
+        encoding=encoding,
+        policy=policy,
+        lang=lang,
+        method=method,
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        keep_year=keep_year,
+        seed=seed,
+        locale=locale,
+        use_safety_sweep=use_safety_sweep,
+        config=config,
+        deidentify_fn=deidentify_fn,
+    )
+    _write_text(target, redacted_text, encoding)
+    return FileRedactionResult(output_path=target, summary=summary)
+
+
+def check_file(
+    input_path: str | Path,
+    *,
+    format: str = "auto",
+    input_format: str | None = None,
+    encoding: str = "utf-8",
+    policy: str = "hipaa_safe_harbor",
+    lang: str = "en",
+    method: _FileRedactionMethod = "mask",
+    model_name: str = DEFAULT_PII_MODEL,
+    confidence_threshold: float = 0.7,
+    keep_year: bool = False,
+    seed: int = 0,
+    locale: str | None = None,
+    use_safety_sweep: bool = True,
+    config: Any | None = None,
+    deidentify_fn: Callable[..., Any] | None = None,
+) -> FileRedactionSummary:
+    """Report what a redaction run would change without writing any output.
+
+    The summary contains only document and span counts, labels, and offsets,
+    so a caller can gate on ``summary.total_spans`` without exposing source
+    values. The input file is left untouched and no output file is created.
+    """
+    _, summary = _scan_file(
+        Path(input_path),
+        format=format,
+        input_format=input_format,
+        encoding=encoding,
+        policy=policy,
+        lang=lang,
+        method=method,
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        keep_year=keep_year,
+        seed=seed,
+        locale=locale,
+        use_safety_sweep=use_safety_sweep,
+        config=config,
+        deidentify_fn=deidentify_fn,
+    )
+    return summary
+
+
+def _scan_file(
+    source: Path,
+    *,
+    format: str,
+    input_format: str | None,
+    encoding: str,
+    policy: str,
+    lang: str,
+    method: _FileRedactionMethod,
+    model_name: str,
+    confidence_threshold: float,
+    keep_year: bool,
+    seed: int,
+    locale: str | None,
+    use_safety_sweep: bool,
+    config: Any | None,
+    deidentify_fn: Callable[..., Any] | None,
+) -> tuple[str, FileRedactionSummary]:
+    """Redact a file in memory and return its output text and safe summary."""
     if input_format is not None:
         if format != "auto" and format != input_format:
             raise ValueError("format and input_format disagree")
@@ -400,7 +509,6 @@ def redact_file(
     for offset in offsets:
         label_counts[offset.label] += 1
 
-    _write_text(target, redacted_text, encoding)
     summary = FileRedactionSummary(
         input_format=resolved_format,
         documents=documents,
@@ -409,7 +517,7 @@ def redact_file(
         per_label_counts=dict(label_counts),
         offsets=offsets,
     )
-    return FileRedactionResult(output_path=target, summary=summary)
+    return redacted_text, summary
 
 
 def _redact_lines(
@@ -570,6 +678,34 @@ def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     return Path(input_path), Path(output_path)
 
 
+def _resolve_check_paths(args: argparse.Namespace) -> Path:
+    """Resolve the --check input and refuse any output path."""
+    positional_input = getattr(args, "input_path", None)
+    positional_output = getattr(args, "output_path", None)
+    option_input = getattr(args, "input_option", getattr(args, "input", None))
+    option_output = getattr(args, "output_option", getattr(args, "output", None))
+    if positional_output is not None or option_output is not None:
+        raise CliError(
+            "--check does not accept an output path.",
+            code="check_output_conflict",
+            exit_code=EXIT_USAGE,
+        )
+    if positional_input is not None and option_input is not None:
+        raise CliError(
+            "Specify the input path once, either positionally or with --input.",
+            code="duplicate_input",
+            exit_code=EXIT_USAGE,
+        )
+    input_path = option_input or positional_input
+    if input_path is None:
+        raise CliError(
+            "An input path is required.",
+            code="missing_input",
+            exit_code=EXIT_USAGE,
+        )
+    return Path(input_path)
+
+
 def _ensure_distinct_paths(first: Path, second: Path, description: str) -> None:
     try:
         same_path = first.resolve() == second.resolve()
@@ -688,6 +824,7 @@ __all__ = [
     "RedactionOffset",
     "REDACTION_METHODS",
     "add_redact_files_command",
+    "check_file",
     "redact_file",
     "run_from_args",
 ]
