@@ -61,6 +61,26 @@ Reasoning exposes a concise answer, uncertainty, and evidence offsets—not
 hidden chain-of-thought. Do not log or persist prompts when they may contain
 protected information.
 
+A response that fails validation raises `MapleResponseError`. Its `code`
+attribute is one of the stable values in
+`openmed.mlx.maple.MAPLE_RESPONSE_ERROR_CODES`, such as `invalid_json`,
+`invalid_span` or `label_not_allowed`, so callers can branch on the reason
+without parsing the message. The code never contains model output; anything
+unrecognised is reported as `invalid_response`.
+The exception keeps the positional argument behavior of `ValueError`, including
+zero or multiple arguments; `code` is an optional keyword-only argument.
+
+```python
+from openmed import MapleResponseError
+
+try:
+    entities = maple.complete_task(MapleTask.ENTITIES, note)
+except MapleResponseError as error:
+    if error.code == "label_not_allowed":
+        ...  # the model used a label outside the task's label set
+    raise
+```
+
 ## Reproducible 4-bit and 8-bit MLX variants
 
 The official 2-bit artifact is used directly. OpenMed's exporter can produce
