@@ -444,6 +444,18 @@ def test_duplicate_case_ids_fail_verify(mini_repo: Path) -> None:
     assert _mini_codes(mini_repo) == ["case_id_duplicate"]
 
 
+def test_case_id_with_a_trailing_newline_fails_verify(mini_repo: Path) -> None:
+    # Swift, Kotlin and web match the whole id, so Python must not accept the
+    # line break that a ``$`` anchor would let through.
+    path = mini_repo / "fx" / "alpha.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["cases"][2]["id"] = "a3\n"
+    _write_json(path, document)
+    gate.refresh(mini_repo, MINI_MANIFEST)
+
+    assert _mini_codes(mini_repo) == ["case_id_invalid"]
+
+
 def test_required_cell_of_a_pending_runtime_may_wait_for_its_consumer(
     mini_repo: Path,
 ) -> None:

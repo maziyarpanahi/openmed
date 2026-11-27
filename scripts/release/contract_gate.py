@@ -414,7 +414,7 @@ def expected_case_ids(entry: FixtureEntry, document: Any) -> tuple[str, ...]:
                 part = str(index)
             else:
                 raw = item.get(group.id_field) if isinstance(item, Mapping) else None
-                if not isinstance(raw, str) or not _CASE_PART_RE.match(raw):
+                if not isinstance(raw, str) or not _CASE_PART_RE.fullmatch(raw):
                     raise ContractGateError(
                         "case_id_invalid", f"{path}[{index}].{group.id_field}"
                     )
@@ -1019,7 +1019,7 @@ def _runtimes(value: Any) -> dict[str, RuntimeDeclaration]:
     runtimes: dict[str, RuntimeDeclaration] = {}
     for runtime, raw in value.items():
         path = f"$.runtimes.{runtime}"
-        if not isinstance(runtime, str) or not _RUNTIME_RE.match(runtime):
+        if not isinstance(runtime, str) or not _RUNTIME_RE.fullmatch(runtime):
             raise ContractGateError("unknown_runtime", "$.runtimes")
         if not isinstance(raw, Mapping):
             raise ContractGateError("manifest_invalid", path)
@@ -1046,7 +1046,7 @@ def _fixture(
         raise ContractGateError("manifest_invalid", path)
     _closed(value, _FIXTURE_KEYS, path)
     fixture_id = value.get("id")
-    if not isinstance(fixture_id, str) or not _ID_RE.match(fixture_id):
+    if not isinstance(fixture_id, str) or not _ID_RE.fullmatch(fixture_id):
         raise ContractGateError("fixture_id_invalid", f"{path}.id")
     listed = _listed_file(value, path, closed=False)
     version = value.get("version")
@@ -1127,7 +1127,7 @@ def _case_group(value: Any, path: str) -> CaseGroup:
         raise ContractGateError("manifest_invalid", path)
     _closed(value, _GROUP_KEYS, path)
     key = value.get("key")
-    if not isinstance(key, str) or not _ID_RE.match(key):
+    if not isinstance(key, str) or not _ID_RE.fullmatch(key):
         raise ContractGateError("manifest_invalid", f"{path}.key")
     id_field = value.get("id_field")
     if id_field is not None and (not isinstance(id_field, str) or not id_field):
@@ -1142,7 +1142,7 @@ def _listed_file(value: Any, path: str, *, closed: bool = True) -> ListedFile:
         _closed(value, _FILE_KEYS, path)
     file_path = _relative_path(value.get("path"), f"{path}.path")
     digest = value.get("sha256")
-    if not isinstance(digest, str) or not _SHA256_RE.match(digest):
+    if not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest):
         raise ContractGateError("manifest_invalid", f"{path}.sha256")
     return ListedFile(path=file_path, sha256=digest)
 
