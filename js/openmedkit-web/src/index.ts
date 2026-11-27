@@ -5,6 +5,7 @@ import {
   loadTokenClassificationPipeline,
 } from "./model-loader";
 import { resolveOfflineOnly } from "./offline";
+import { createTaskPack, type TaskPack } from "./packs";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
   type DeidentifyOptions,
@@ -132,6 +133,17 @@ export {
   loadTokenClassificationPipeline,
 } from "./model-loader";
 export { OpenMedOfflineError, isOfflineOnly, setOfflineOnly } from "./offline";
+export { TaskPackError } from "./packs";
+export type {
+  LoadedTaskPack,
+  TaskPack,
+  TaskPackCandidate,
+  TaskPackDeidentifyOptions,
+  TaskPackErrorCode,
+  TaskPackExtractOptions,
+  TaskPackLoadOptions,
+  TaskPackResolution,
+} from "./packs";
 export type { OpenMedOfflineErrorCode } from "./offline";
 export {
   DECISION_ADVISORY,
@@ -649,6 +661,22 @@ export async function deidentify(
     spans: redactionSpans,
   };
 }
+
+/**
+ * The portable PII task pack for the web runtime.
+ *
+ * `piiPack.resolve()` returns the pack's ordered web candidates from the
+ * bundled task pack manifest, checked against the bundled ONNX catalog, in the
+ * order the Python resolver returns for runtime `web`. `piiPack.load()` loads
+ * the first available candidate through the OpenMed ONNX loader: from local
+ * files only unless `allowRemoteModels: true` is passed, failing with a coded
+ * `TaskPackError` instead of fetching. Pass `pipeline` to use your own.
+ */
+export const piiPack: TaskPack = /* @__PURE__ */ createTaskPack("pii", {
+  extractPii,
+  deidentify,
+  pinnedRevisions: { [DEFAULT_MODEL_ID]: DEFAULT_MODEL_REVISION },
+});
 
 /**
  * Apply span replacements right to left at UTF-16 offsets.
