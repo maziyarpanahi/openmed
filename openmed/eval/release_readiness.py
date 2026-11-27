@@ -42,6 +42,7 @@ _DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
 _DISCLAIMER_CONSTANT = "OPENMED_CLINICAL_DISCLAIMER"
 _DEFAULT_GATE_SIGNING_KEY = "openmed-release-gate-local-key"
 _DEFAULT_READINESS_SIGNING_KEY = "openmed-release-readiness-local-key"
+_LTS_PATCH_VERSION = re.compile(r"4\.3\.([1-9][0-9]*)")
 _V31_SECURITY_REMOVALS = frozenset(
     f"{namespace}.{field}"
     for namespaces, fields in (
@@ -238,6 +239,7 @@ def _check_api_compat(
     *,
     version: str,
     migration_guide: Path,
+    lts_baseline: str | None = None,
 ) -> GateCheck:
     path = _resolve_path(repo_root, report_path)
     if not path.is_file():
@@ -254,6 +256,8 @@ def _check_api_compat(
         breaking = summary.get("breaking")
         if type(breaking) is not int or breaking < 0:
             raise ValueError("missing breaking-change count")
+        if lts_baseline is not None:
+            return _check_lts_api_compat(path, data, summary, lts_baseline, breaking)
         reviewed_breaking: list[str] = []
         reviewed_security: list[str] = []
         if breaking:
@@ -349,6 +353,88 @@ def _check_api_compat(
             False,
             reason=f"API-compat report is invalid: {exc}",
         )
+
+
+def _check_lts_api_compat(
+    path: Path,
+    data: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    baseline: str,
+    breaking: int,
+) -> GateCheck:
+    evidence = {"report_hash": _file_hash(path), "breaking": breaking}
+    if data.get("before_ref") != baseline:
+        return GateCheck(
+            "api_compat",
+            False,
+            reason="LTS API evidence must compare against the SDK baseline tag",
+            details={**evidence, "reason_code": "lts_api_baseline_mismatch"},
+        )
+    added = summary.get("added")
+    before = summary.get("before_symbols")
+    after = summary.get("after_symbols")
+    if any(type(count) is not int or count < 0 for count in (added, before, after)):
+        raise ValueError("missing LTS API addition or symbol counts")
+    # Newly exported symbols that are already deprecated may only appear in
+    # the deprecations list. The symbol totals still record those additions.
+    added = max(added, after - before)
+    evidence.update(added=added)
+    if added or breaking:
+        return GateCheck(
+            "api_compat",
+            False,
+            reason="LTS patches require zero API additions and breaking changes",
+            details={
+                **evidence,
+                "reason_code": "lts_api_break" if breaking else "lts_api_addition",
+            },
+        )
+    return GateCheck("api_compat", True, details=evidence)
+
+
+def _check_lts_patch(repo_root: Path, version: str, baseline: str | None) -> GateCheck:
+    gate = "lts_patch"
+    match = _LTS_PATCH_VERSION.fullmatch(version)
+    if match is None:
+        return GateCheck(
+            gate,
+            False,
+            reason="LTS readiness requires a 4.3 patch version after 4.3.0",
+            details={"reason_code": "lts_invalid_version"},
+        )
+    expected = f"v4.3.{int(match[1]) - 1}"
+    if baseline != expected:
+        return GateCheck(
+            gate,
+            False,
+            reason=f"LTS readiness requires baseline {expected}",
+            details={"reason_code": "lts_baseline_mismatch", "expected": expected},
+        )
+    changelog = repo_root / "CHANGELOG.md"
+    try:
+        text = changelog.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        text = ""
+    sections = [
+        section
+        for section in re.split(r"^##[ \t]+", text, flags=re.MULTILINE)[1:]
+        if section.startswith(f"[{version}]")
+    ]
+    if len(sections) != 1:
+        return GateCheck(
+            gate,
+            False,
+            reason="CHANGELOG.md needs exactly one entry for the LTS patch candidate",
+            details={"reason_code": "lts_invalid_changelog_section"},
+        )
+    if re.search(r"^###[ \t]+Added(?:[ \t]+#+)?[ \t]*$", sections[0], re.M | re.I):
+        return GateCheck(
+            gate,
+            False,
+            reason="LTS patch changelog contains an Added section",
+            details={"reason_code": "lts_changelog_added"},
+        )
+    return GateCheck(gate, True, details={"baseline": expected})
 
 
 def _check_disclaimer(repo_root: Path) -> GateCheck:
@@ -656,6 +742,7 @@ def evaluate_readiness(
     signing_key: bytes | str | None = None,
     key_id: str | None = None,
     sdk_baseline: str | None = None,
+    lts: bool = False,
 ) -> ReadinessReport:
     """Evaluate all release requirements and return a signed report.
 
@@ -671,6 +758,7 @@ def evaluate_readiness(
         key_id: Identifier recorded with the readiness signature.
         sdk_baseline: Stable tag for an SDK-only release with unchanged model artifacts,
             pointer targets, and retained evidence. Omit for model release gates.
+        lts: Enforce patch-only release rules for the 4.3 SDK line.
 
     Returns:
         A signed, PHI-free readiness report.
@@ -699,10 +787,14 @@ def evaluate_readiness(
             Path(api_compat_report),
             version=version,
             migration_guide=Path(migration_guide),
+            lts_baseline=sdk_baseline if lts else None,
         ),
         _check_disclaimer(root),
         _check_e2e_golden(root, Path(e2e_report)),
     )
+    if lts:
+        baseline = sdk_baseline if gate_report is None else None
+        checks += (_check_lts_patch(root, version, baseline),)
     report = ReadinessReport(
         version=version,
         decision=READY if all(check.passed for check in checks) else NOT_READY,
@@ -723,6 +815,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sdk-baseline",
         help="Stable baseline tag for SDK-only model continuity checks.",
+    )
+    parser.add_argument(
+        "--lts",
+        action="store_true",
+        help="Apply the 4.3 LTS patch release policy.",
     )
     parser.add_argument(
         "--migration-guide",
@@ -771,6 +868,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         signing_key=args.signing_key,
         key_id=args.key_id,
         sdk_baseline=args.sdk_baseline,
+        lts=args.lts,
     )
     rendered = json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
     if args.output is not None:
