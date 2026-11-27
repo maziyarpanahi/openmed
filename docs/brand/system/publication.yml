@@ -115,6 +115,7 @@ classification:
     - cli/machine-contract.md
     - cli/service-recovery.md
     - cli/migrate.md
+    - cli/capabilities.md
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md

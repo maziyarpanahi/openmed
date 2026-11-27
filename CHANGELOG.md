@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   digest included, behind the same `models:read` scope as `GET /v1/capabilities` (#5344).
 - Add a `GetCapabilities` RPC to `OpenMedService` that returns the canonical capability
   descriptor as typed fields with its digest, authorized like `GET /v1/capabilities` (#5345).
+- Add `openmed capabilities`, which prints the canonical capability descriptor and digest
+  in a stable order, or as the standard `--json` envelope, and always exits 0 (#5346).
 
 ### Fixed
 

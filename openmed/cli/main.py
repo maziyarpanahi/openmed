@@ -651,6 +651,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_active_learning_command(subparsers)
     add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
+    from .capabilities import add_capabilities_command
+
+    add_capabilities_command(subparsers)
     from .service_diagnostics import add_service_command
 
     add_service_command(subparsers)
