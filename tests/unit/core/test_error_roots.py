@@ -579,6 +579,10 @@ def package_report(tmp_path_factory) -> dict:
     return report
 
 
+# The package-wide scan imports every public module in a subprocess, so it
+# follows the repository's ``slow`` tier (pushes to master and ``full-ci``).
+# The synthetic negative controls below run on every pull request.
+@pytest.mark.slow
 def test_every_public_exception_is_rooted_or_allowlisted(package_report) -> None:
     report = gate.ScanReport.from_dict(package_report)
     result = gate.evaluate(report, gate.read_allowlist(ALLOWLIST))
@@ -600,6 +604,7 @@ def test_allowlist_only_shrinks_and_names_classes_only() -> None:
         assert qualname and " " not in entry, entry
 
 
+@pytest.mark.slow
 def test_scan_reports_only_qualified_names_and_skips_by_type(package_report) -> None:
     assert set(package_report["unrooted"]) <= set(gate.read_allowlist(ALLOWLIST))
     for module, failure in package_report["import_failures"].items():
