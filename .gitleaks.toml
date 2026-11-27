@@ -205,3 +205,11 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^swift/OpenMedKit/Sources/OpenMedSpeech/VerifiedSpeechArtifact\.swift$''']
 regexes = ['''^87c7102498dcde7456f24cfd30239ca606ed9063$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic sentinels in the Swift date-shift value-free error test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^swift/OpenMedKit/Tests/OpenMedKitTests/DateShiftParityTests\.swift$''']
+regexes = ['''^\s*let (secret|key) = "SYNTHETIC(_PRIVATE_SECRET|-PATIENT-SENTINEL)[-_]5414"\s*$''']
