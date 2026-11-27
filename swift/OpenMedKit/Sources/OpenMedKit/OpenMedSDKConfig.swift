@@ -126,18 +126,23 @@ public struct OpenMedSDKConfig: Codable, Sendable, Equatable {
 
     /// Decodes a configuration document.
     ///
+    /// The document is read as strict RFC 8259 JSON in UTF-8, the way the
+    /// Kotlin and web kits read it, so every runtime resolves the same text to
+    /// the same configuration: the last value of a repeated key wins, and a
+    /// number too small for a `Double` resolves to `0`. A byte-order mark,
+    /// comments, trailing commas, unquoted keys, `NaN`, `Infinity` or text
+    /// after the object fail with `config_not_object`, as does nesting deeper
+    /// than 512 levels.
+    ///
     /// - Parameter data: The JSON document.
     /// - Returns: The configuration, with absent keys set to their defaults.
-    /// - Throws: ``OpenMedSDKConfigError``; data that is not JSON at all fails
+    /// - Throws: ``OpenMedSDKConfigError``; data that is not a JSON object fails
     ///   with `config_not_object`.
     public static func load(_ data: Data) throws -> OpenMedSDKConfig {
-        do {
-            return try JSONDecoder().decode(OpenMedSDKConfig.self, from: data)
-        } catch let error as OpenMedSDKConfigError {
-            throw error
-        } catch {
+        guard let document = SDKConfigDocument.read(data) else {
             throw OpenMedSDKConfigError(issues: [OpenMedSDKConfigIssue(code: .configNotObject, field: nil)])
         }
+        return try OpenMedSDKConfig(resolving: document.values, hasUnknownKeys: document.hasUnknownKeys)
     }
 
     /// Decodes a configuration file, for example one in the app bundle.
@@ -175,6 +180,11 @@ public struct OpenMedSDKConfig: Codable, Sendable, Equatable {
 
     /// Decodes strictly; see the type documentation for the rules.
     ///
+    /// The JSON grammar is the decoder's own. `JSONDecoder` keeps the first
+    /// value of a repeated key and accepts a byte-order mark and trailing
+    /// commas, which the other runtimes refuse, so read configuration text with
+    /// ``load(_:)``.
+    ///
     /// - Throws: ``OpenMedSDKConfigError``.
     public init(from decoder: any Decoder) throws {
         let container: KeyedDecodingContainer<AnyKey>
@@ -192,6 +202,11 @@ public struct OpenMedSDKConfig: Codable, Sendable, Equatable {
             }
             values[field] = (try? container.decode(SDKConfigValue.self, forKey: key)) ?? .other
         }
+        try self.init(resolving: values, hasUnknownKeys: hasUnknownKeys)
+    }
+
+    /// Validates the present keys and fills the absent ones with the defaults.
+    private init(resolving values: [Field: SDKConfigValue], hasUnknownKeys: Bool) throws {
         let issues = Self.issues(values, hasUnknownKeys: hasUnknownKeys)
         guard issues.isEmpty else { throw OpenMedSDKConfigError(issues: issues) }
         func string(_ field: Field) -> String? {
@@ -369,6 +384,240 @@ enum SDKConfigValue: Decodable, Equatable, Sendable {
         } else {
             // Only a number too large for a Double is left, such as 1e400.
             self = .number(nil)
+        }
+    }
+}
+
+/// The portable keys of a configuration document, read as strict RFC 8259 JSON.
+///
+/// Foundation's `JSONDecoder` keeps the first value of a repeated key and
+/// accepts a leading byte-order mark and trailing commas. Python's `json.loads`,
+/// kotlinx.serialization and `JSON.parse` keep the last value, and the Kotlin
+/// and web kits refuse everything outside RFC 8259, so this reader does the
+/// same. Numbers follow the JSON grammar and round like Python's `float()`: a
+/// value too small for a `Double` is `0`, one too large is infinite. The reader
+/// never recurses, never retains rejected input, and reports failure as `nil`.
+struct SDKConfigDocument {
+    /// Deepest accepted nesting, counting the top-level object.
+    static let maximumDepth = 512
+
+    /// The last value of each portable key.
+    private(set) var values: [OpenMedSDKConfig.Field: SDKConfigValue] = [:]
+    /// Whether any other key appears.
+    private(set) var hasUnknownKeys = false
+
+    /// Reads a document whose top-level value is an object.
+    ///
+    /// - Parameter data: The document.
+    /// - Returns: The portable keys, or `nil` when `data` is not a JSON object.
+    static func read(_ data: Data) -> SDKConfigDocument? {
+        var reader = Reader(bytes: [UInt8](data))
+        var document = SDKConfigDocument()
+        reader.skipWhitespace()
+        guard reader.consume(UInt8(ascii: "{")) else { return nil }
+        reader.skipWhitespace()
+        if !reader.consume(UInt8(ascii: "}")) {
+            repeat {
+                guard let name = reader.memberName(), let value = reader.memberValue() else { return nil }
+                // Compare scalars, not canonically equivalent strings.
+                if let field = OpenMedSDKConfig.Field.allCases.first(where: {
+                    $0.rawValue.unicodeScalars.elementsEqual(name.unicodeScalars)
+                }) {
+                    document.values[field] = value
+                } else {
+                    document.hasUnknownKeys = true
+                }
+                reader.skipWhitespace()
+            } while reader.consume(UInt8(ascii: ","))
+            guard reader.consume(UInt8(ascii: "}")) else { return nil }
+        }
+        reader.skipWhitespace()
+        return reader.index == reader.bytes.count ? document : nil
+    }
+
+    private struct Reader {
+        let bytes: [UInt8]
+        var index = 0
+
+        mutating func skipWhitespace() {
+            while index < bytes.count, [0x20, 0x09, 0x0A, 0x0D].contains(bytes[index]) { index += 1 }
+        }
+
+        mutating func consume(_ byte: UInt8) -> Bool {
+            guard index < bytes.count, bytes[index] == byte else { return false }
+            index += 1
+            return true
+        }
+
+        /// An object member's name and the colon after it.
+        mutating func memberName() -> String? {
+            skipWhitespace()
+            guard let name = string() else { return nil }
+            skipWhitespace()
+            return consume(UInt8(ascii: ":")) ? name : nil
+        }
+
+        /// A top-level member's value; arrays and objects are only checked.
+        mutating func memberValue() -> SDKConfigValue? {
+            skipWhitespace()
+            guard index < bytes.count else { return nil }
+            if bytes[index] == UInt8(ascii: "[") || bytes[index] == UInt8(ascii: "{") {
+                return skipContainer() ? .other : nil
+            }
+            return scalar()
+        }
+
+        /// Checks the array or object at `index` with an explicit stack.
+        private mutating func skipContainer() -> Bool {
+            var closers: [UInt8] = []
+            while true {
+                skipWhitespace()
+                guard index < bytes.count else { return false }
+                let opener = bytes[index]
+                if opener == UInt8(ascii: "[") || opener == UInt8(ascii: "{") {
+                    // The top-level object is the first level.
+                    guard closers.count + 1 < SDKConfigDocument.maximumDepth else { return false }
+                    index += 1
+                    let closer = opener == UInt8(ascii: "[") ? UInt8(ascii: "]") : UInt8(ascii: "}")
+                    skipWhitespace()
+                    if !consume(closer) {
+                        closers.append(closer)
+                        if closer == UInt8(ascii: "}"), memberName() == nil { return false }
+                        continue
+                    }
+                } else if scalar() == nil {
+                    return false
+                }
+                // A value ended: close every finished container, then expect
+                // the next element.
+                while let closer = closers.last {
+                    skipWhitespace()
+                    if consume(closer) {
+                        closers.removeLast()
+                        continue
+                    }
+                    guard consume(UInt8(ascii: ",")) else { return false }
+                    if closer == UInt8(ascii: "}"), memberName() == nil { return false }
+                    break
+                }
+                if closers.isEmpty { return true }
+            }
+        }
+
+        private mutating func scalar() -> SDKConfigValue? {
+            guard index < bytes.count else { return nil }
+            switch bytes[index] {
+            case UInt8(ascii: "\""): return string().map(SDKConfigValue.string)
+            case UInt8(ascii: "t"): return literal("true") ? .boolean(true) : nil
+            case UInt8(ascii: "f"): return literal("false") ? .boolean(false) : nil
+            case UInt8(ascii: "n"): return literal("null") ? .null : nil
+            case UInt8(ascii: "-"), UInt8(ascii: "0")...UInt8(ascii: "9"): return number()
+            default: return nil
+            }
+        }
+
+        private mutating func literal(_ text: String) -> Bool {
+            let expected = Array(text.utf8)
+            guard bytes[index...].starts(with: expected) else { return false }
+            index += expected.count
+            return true
+        }
+
+        /// `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`
+        private mutating func number() -> SDKConfigValue? {
+            let start = index
+            _ = consume(UInt8(ascii: "-"))
+            if !consume(UInt8(ascii: "0")) {
+                guard index < bytes.count, (UInt8(ascii: "1")...UInt8(ascii: "9")).contains(bytes[index]) else {
+                    return nil
+                }
+                skipDigits()
+            }
+            if consume(UInt8(ascii: ".")), !skipDigits() { return nil }
+            if consume(UInt8(ascii: "e")) || consume(UInt8(ascii: "E")) {
+                if !consume(UInt8(ascii: "+")) { _ = consume(UInt8(ascii: "-")) }
+                guard skipDigits() else { return nil }
+            }
+            // Swift rounds to zero or infinity outside the Double range.
+            return .number(Double(String(decoding: bytes[start..<index], as: UTF8.self)))
+        }
+
+        @discardableResult
+        private mutating func skipDigits() -> Bool {
+            let start = index
+            while index < bytes.count, (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[index]) { index += 1 }
+            return index > start
+        }
+
+        /// A string token in UTF-8. A lone surrogate escape reads as U+FFFD,
+        /// so the value stays a string as it does in the other runtimes.
+        private mutating func string() -> String? {
+            guard consume(UInt8(ascii: "\"")) else { return nil }
+            var scalars = String.UnicodeScalarView()
+            while index < bytes.count {
+                let byte = bytes[index]
+                switch byte {
+                case UInt8(ascii: "\""):
+                    index += 1
+                    return String(scalars)
+                case UInt8(ascii: "\\"):
+                    index += 1
+                    guard let scalar = escape() else { return nil }
+                    scalars.append(scalar)
+                case 0..<0x20:
+                    return nil
+                case 0..<0x80:
+                    scalars.append(Unicode.Scalar(byte))
+                    index += 1
+                default:
+                    var iterator = bytes[index...].makeIterator()
+                    var decoder = Unicode.UTF8()
+                    guard case .scalarValue(let scalar) = decoder.decode(&iterator) else { return nil }
+                    scalars.append(scalar)
+                    index += UTF8.width(scalar)
+                }
+            }
+            return nil
+        }
+
+        private mutating func escape() -> Unicode.Scalar? {
+            guard index < bytes.count else { return nil }
+            let byte = bytes[index]
+            index += 1
+            switch byte {
+            case UInt8(ascii: "\""), UInt8(ascii: "\\"), UInt8(ascii: "/"): return Unicode.Scalar(byte)
+            case UInt8(ascii: "b"): return "\u{08}"
+            case UInt8(ascii: "f"): return "\u{0C}"
+            case UInt8(ascii: "n"): return "\n"
+            case UInt8(ascii: "r"): return "\r"
+            case UInt8(ascii: "t"): return "\t"
+            case UInt8(ascii: "u"):
+                guard var unit = hexQuad() else { return nil }
+                if (0xD800...0xDBFF).contains(unit), bytes[index...].starts(with: Array(#"\u"#.utf8)) {
+                    let mark = index
+                    index += 2
+                    guard let low = hexQuad() else { return nil }
+                    if (0xDC00...0xDFFF).contains(low) {
+                        unit = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00)
+                    } else {
+                        index = mark
+                    }
+                }
+                return Unicode.Scalar(unit) ?? "\u{FFFD}"
+            default:
+                return nil
+            }
+        }
+
+        private mutating func hexQuad() -> UInt32? {
+            guard index + 4 <= bytes.count else { return nil }
+            var value: UInt32 = 0
+            for byte in bytes[index..<index + 4] {
+                guard let digit = Character(Unicode.Scalar(byte)).hexDigitValue else { return nil }
+                value = value << 4 | UInt32(digit)
+            }
+            index += 4
+            return value
         }
     }
 }

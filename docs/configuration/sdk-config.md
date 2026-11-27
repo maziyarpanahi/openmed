@@ -106,6 +106,15 @@ property per key: `confidenceThreshold`, `localOnly`, `modelID`,
 issues above in the same order, as `OpenMedSDKConfigError.issues`. Data that
 is not JSON at all also fails with `config_not_object`.
 
+`OpenMedSDKConfig.load` reads strict RFC 8259 JSON, like the Kotlin and web
+loaders. As there and in Python's `json.loads`, the last value of a repeated
+key wins and a number too small for a `Double` resolves to `0`. A byte-order
+mark, comments, trailing commas, unquoted keys, `NaN`, `Infinity`, text after
+the object and nesting deeper than 512 levels fail with `config_not_object`.
+Decoding with `JSONDecoder` directly uses Foundation's own grammar, which
+keeps the first value of a repeated key, so read configuration text with
+`load`.
+
 ```swift
 let url = Bundle.main.url(forResource: "openmed", withExtension: "json")!
 let config = try OpenMedSDKConfig.load(contentsOf: url)  // or OpenMedSDKConfig.load(data)

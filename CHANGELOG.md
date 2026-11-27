@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Define the portable SDK configuration subset (`local_only`, `model_id`, `model_revision`, `confidence_threshold`, `policy_profile`, `onnx_variant`) as `sdk_config.schema.json` with a fail-closed Python validator, `OpenMedConfig.to_sdk_config()`, a Swift/Kotlin/TypeScript spelling map and shared value-free vectors in `tests/fixtures/parity/sdk_config_v1.json` (#5342).
-- Load the portable SDK configuration in OpenMedKit Swift: `OpenMedSDKConfig` decodes `sdk_config.schema.json` documents strictly with the shared ordered issue codes, and `OpenMed(backend:config:)` and `OpenMed.load(backend:config:)` map it onto the existing initializers with `allowNetworkAccess = !localOnly`, so the default `local_only: true` makes no network request; every `sdk_config_v1.json` vector passes (#5387).
+- Load the portable SDK configuration in OpenMedKit Swift: `OpenMedSDKConfig` decodes `sdk_config.schema.json` documents strictly with the shared ordered issue codes, reading strict RFC 8259 JSON in which the last value of a repeated key wins, as in Python, Kotlin and the web kit, and `OpenMed(backend:config:)` and `OpenMed.load(backend:config:)` map it onto the existing initializers with `allowNetworkAccess = !localOnly`, so the default `local_only: true` makes no network request; every `sdk_config_v1.json` vector passes (#5387).
 
 ## [4.0.0] - 2026-11-25
 

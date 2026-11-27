@@ -100,6 +100,73 @@ final class SDKConfigParityTests: XCTestCase {
             ])
     }
 
+    /// Text resolves as it does in Python's `json.loads`, the Kotlin kit and
+    /// `JSON.parse`, not as Foundation's more lenient `JSONDecoder` reads it.
+    func testDocumentTextResolvesLikeTheOtherRuntimes() throws {
+        func load(_ text: String) throws -> OpenMedSDKConfig { try OpenMedSDKConfig.load(Data(text.utf8)) }
+        func validate(_ text: String) -> [OpenMedSDKConfigIssue] { OpenMedSDKConfig.validate(Data(text.utf8)) }
+
+        // The last value of a repeated key wins, so this document stays offline.
+        let offline = try load(#"{"local_only": false, "local_only": true}"#)
+        XCTAssertTrue(offline.localOnly)
+        XCTAssertFalse(offline.allowNetworkAccess)
+        XCTAssertTrue(try load(#"{"local_only": true, "local_only": false}"#).allowNetworkAccess)
+        XCTAssertTrue(try load(#"{"local_only": false, "local_only": true}"#).localOnly)
+        XCTAssertEqual(validate(#"{"local_only": "yes", "local_only": true}"#), [])
+        XCTAssertEqual(
+            validate(#"{"local_only": true, "local_only": "yes"}"#),
+            [OpenMedSDKConfigIssue(code: .wrongType, field: .localOnly)])
+        XCTAssertEqual(try load(#"{"onnx_variant": "fp16", "onnx_variant": "int8"}"#).onnxVariant, .int8)
+
+        // A number below the smallest Double is 0, as float() makes it.
+        XCTAssertEqual(validate(#"{"confidence_threshold": 1e-400}"#), [])
+        XCTAssertEqual(try load(#"{"confidence_threshold": 1e-400}"#).confidenceThreshold, 0)
+        XCTAssertEqual(try load(#"{"confidence_threshold": -1E-400}"#).confidenceThreshold, 0)
+        XCTAssertEqual(
+            validate(#"{"confidence_threshold": 2e400}"#),
+            [OpenMedSDKConfigIssue(code: .outOfRange, field: .confidenceThreshold)])
+
+        // Escapes decode; a lone surrogate is still a string.
+        XCTAssertEqual(try load(#"{"policy_profile": "strict_no_leak"}"#).policyProfile, .strictNoLeak)
+        XCTAssertEqual(
+            validate(#"{"model_id": "\ud800", "onnx_variant": "😀"}"#),
+            [
+                OpenMedSDKConfigIssue(code: .invalidFormat, field: .modelID),
+                OpenMedSDKConfigIssue(code: .notAllowedValue, field: .onnxVariant),
+            ])
+
+        // Anything that is not RFC 8259 JSON is not a JSON object.
+        let notObject = [OpenMedSDKConfigIssue(code: .configNotObject, field: nil)]
+        let refused = [
+            "\u{FEFF}{}", "\u{FEFF}{\"local_only\": true}", #"{"local_only": true,}"#, #"{"model_id": [null,]}"#,
+            #"{,}"#, #"{"local_only": true,, "model_id": null}"#, #"{"confidence_threshold": NaN}"#,
+            #"{"confidence_threshold": Infinity}"#, #"{"confidence_threshold": -Infinity}"#, #"{local_only: true}"#,
+            #"{'local_only': true}"#, #"{"local_only": true} // offline"#, #"/* offline */ {}"#,
+            #"{"local_only": true} {}"#, #"{"local_only": true}x"#, #"{"local_only": True}"#,
+            #"{"confidence_threshold": 01}"#, #"{"confidence_threshold": .5}"#, #"{"confidence_threshold": +0.5}"#,
+            #"{"confidence_threshold": 1.}"#, #"{"confidence_threshold": 1e}"#, #"{"confidence_threshold": 0x1}"#,
+            #"{"model_id": "\x"}"#, #"{"model_id": "\u12"}"#, "{\"model_id\": \"a\tb\"}", "{\"local_only\" true}",
+            "{\"local_only\":\u{A0}true}", "",
+        ]
+        for text in refused { XCTAssertEqual(validate(text), notObject, text) }
+        // Invalid UTF-8, an encoded surrogate and an overlong encoding.
+        for bytes: [UInt8] in [[0xFF], [0xED, 0xA0, 0x80], [0xC0, 0xAF]] {
+            let data = Data(#"{"model_id": ""#.utf8) + bytes + Data(#""}"#.utf8)
+            XCTAssertEqual(OpenMedSDKConfig.validate(data), notObject, "\(bytes)")
+        }
+        XCTAssertEqual(
+            validate("\t{\r\n\"model_id\" : \"a\u{00E9}\" }\n"), [OpenMedSDKConfigIssue(code: .invalidFormat, field: .modelID)])
+
+        // Nesting is checked without recursion and refused beyond 512 levels.
+        func nested(_ depth: Int) -> String {
+            #"{"model_id": "# + String(repeating: #"[{"a": "#, count: depth / 2) + String(repeating: "[", count: depth % 2)
+                + "1" + String(repeating: "]", count: depth % 2) + String(repeating: "}]", count: depth / 2) + "}"
+        }
+        XCTAssertEqual(validate(nested(511)), [OpenMedSDKConfigIssue(code: .wrongType, field: .modelID)])
+        XCTAssertEqual(validate(nested(512)), notObject)
+        XCTAssertEqual(validate(nested(100_000)), notObject)
+    }
+
     func testTypedInitializerValidatesLikeADocument() throws {
         let config = try OpenMedSDKConfig(
             confidenceThreshold: 0.25, localOnly: false, modelID: "synthetic-org/synthetic-model",
@@ -215,6 +282,19 @@ final class SDKConfigParityTests: XCTestCase {
             installStub()
             let config = try OpenMedSDKConfig.load(Data("{}".utf8))
             XCTAssertTrue(config.localOnly)
+            try await assertLocalOnlyInitializationMakesZeroRequests(config)
+        }
+
+        func testRepeatedLocalOnlyKeyKeepsTheLastValueAndMakesZeroRequests() async throws {
+            installStub()
+            // Python, Kotlin and the web kit keep the last value; so must Swift.
+            let config = try OpenMedSDKConfig.load(Data(#"{"local_only": false, "local_only": true}"#.utf8))
+            XCTAssertTrue(config.localOnly)
+            try await assertLocalOnlyInitializationMakesZeroRequests(config)
+        }
+
+        /// A pin would allow a download; local_only still refuses it.
+        private func assertLocalOnlyInitializationMakesZeroRequests(_ config: OpenMedSDKConfig) async throws {
             let pin = try OpenMedTokenizerPin(
                 repositoryID: "OpenMed/Synthetic-SDK-Config-Tokenizer",
                 revision: "fedcba9876543210fedcba9876543210fedcba98",
@@ -222,7 +302,6 @@ final class SDKConfigParityTests: XCTestCase {
                     OpenMedTokenizerPin.File(name: $0, sha256: String(repeating: "0", count: 64), byteCount: 2)
                 })
 
-            // A pin would allow a download; local_only still refuses it.
             XCTAssertThrowsError(try OpenMed(backend: backend(), config: config, tokenizerPin: pin)) {
                 XCTAssertEqual($0 as? OpenMedTokenizerError, .missingLocalAssets)
             }
