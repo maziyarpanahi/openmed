@@ -123,15 +123,26 @@ def build_catalog_rows(
     return sorted(catalog_rows, key=lambda item: item["repo_id"].lower())
 
 
-def render_catalog(rows: Iterable[Mapping[str, Any]]) -> str:
+def render_catalog(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    fields: Sequence[str] | None = None,
+) -> str:
     """Return *rows* as deterministic compact JSONL text.
 
-    Each line holds exactly ``ANDROID_CATALOG_FIELDS`` in that order, so the
-    output is byte-stable for a given manifest.
+    Each line holds exactly *fields* in that order, so the output is
+    byte-stable for a given manifest.
+
+    Args:
+        rows: Catalog rows from ``build_catalog_rows``.
+        fields: Fields to write, in order. ``None`` writes
+            ``ANDROID_CATALOG_FIELDS``; the Swift catalog builder passes its
+            own field list.
     """
+    names = ANDROID_CATALOG_FIELDS if fields is None else fields
     lines = []
     for row in rows:
-        ordered = {field: row.get(field) for field in ANDROID_CATALOG_FIELDS}
+        ordered = {field: row.get(field) for field in names}
         lines.append(json.dumps(ordered, separators=(",", ":")) + "\n")
     return "".join(lines)
 

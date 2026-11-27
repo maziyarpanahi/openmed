@@ -4,9 +4,9 @@
 The Swift resource uses the catalog format of the Android asset built by
 ``scripts/android/build_android_catalog.py``:
 
-* one compact JSON object per line, fields in ``ANDROID_CATALOG_FIELDS`` order
+* one compact JSON object per line, fields in ``SWIFT_CATALOG_FIELDS`` order
   (``repo_id``, ``formats``, ``tier``, ``param_count``, ``languages``,
-  ``license``, ``reproducibility_hash``);
+  ``license``, ``reproducibility_hash``), the first seven Android fields;
 * permissively licensed rows only (the same license allowlist);
 * rows sorted case-insensitively by ``repo_id``;
 * ``formats`` narrowed to what the platform can run.
@@ -40,7 +40,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.android.build_android_catalog import (  # noqa: E402
-    ANDROID_CATALOG_FIELDS,
     build_catalog_rows,
     load_manifest_rows,
     normalize_token,
@@ -48,7 +47,18 @@ from scripts.android.build_android_catalog import (  # noqa: E402
 )
 
 SWIFT_CATALOG_FILENAME = "openmed_model_catalog.jsonl"
-SWIFT_CATALOG_FIELDS = ANDROID_CATALOG_FIELDS
+# Pinned rather than shared with ANDROID_CATALOG_FIELDS, so Android-only fields
+# do not reach the Swift resource. #5833 tracks adding family, task and
+# canonical_labels to the Swift catalog.
+SWIFT_CATALOG_FIELDS = (
+    "repo_id",
+    "formats",
+    "tier",
+    "param_count",
+    "languages",
+    "license",
+    "reproducibility_hash",
+)
 DEFAULT_MANIFEST = ROOT / "models.jsonl"
 DEFAULT_OUTPUT = (
     ROOT
@@ -110,7 +120,10 @@ def render_swift_catalog(manifest: Path) -> str:
     Returns:
         Deterministic JSONL text, empty when no row qualifies.
     """
-    return render_catalog(build_swift_catalog_rows(load_manifest_rows(manifest)))
+    return render_catalog(
+        build_swift_catalog_rows(load_manifest_rows(manifest)),
+        fields=SWIFT_CATALOG_FIELDS,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+import scripts.android.build_android_catalog as android_catalog
 from scripts.android.build_android_catalog import (
     ANDROID_CATALOG_FIELDS,
     build_catalog_rows,
@@ -67,8 +68,32 @@ def test_apple_format_filter_keeps_mlx_and_coreml_only() -> None:
         assert not is_apple_runnable_format(name), name
 
 
-def test_swift_catalog_reuses_the_android_row_format() -> None:
-    assert SWIFT_CATALOG_FIELDS == ANDROID_CATALOG_FIELDS
+def test_swift_catalog_pins_the_leading_android_fields() -> None:
+    assert SWIFT_CATALOG_FIELDS == (
+        "repo_id",
+        "formats",
+        "tier",
+        "param_count",
+        "languages",
+        "license",
+        "reproducibility_hash",
+    )
+    assert ANDROID_CATALOG_FIELDS[: len(SWIFT_CATALOG_FIELDS)] == SWIFT_CATALOG_FIELDS
+
+
+def test_android_only_fields_do_not_reach_the_swift_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vectors = _vectors()
+    monkeypatch.setattr(
+        android_catalog,
+        "ANDROID_CATALOG_FIELDS",
+        (*SWIFT_CATALOG_FIELDS, "family"),
+    )
+
+    text = render_swift_catalog(ROOT / vectors["manifest"])
+
+    assert text.encode("utf-8") == (ROOT / vectors["catalog"]).read_bytes()
 
 
 def test_generator_reproduces_the_committed_fixture_catalog() -> None:
