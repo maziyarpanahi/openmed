@@ -60,6 +60,7 @@ final class OpenMedModelCatalogTests: XCTestCase {
     }
 
     static let vectorsPath = "tests/fixtures/model_catalog/catalog_filter_vectors.json"
+    static let sharedFilterVectorsPath = "tests/fixtures/parity/catalog_filters_v1.json"
     static let resourcePath = "swift/OpenMedKit/Sources/OpenMedKit/Resources/openmed_model_catalog.jsonl"
 
     override func setUp() {
@@ -137,6 +138,48 @@ final class OpenMedModelCatalogTests: XCTestCase {
         }
         for lookup in vectors.lookups {
             XCTAssertEqual(catalog.entry(repoID: lookup.repoId) != nil, lookup.found, lookup.repoId)
+        }
+    }
+
+    func testSharedCatalogFilterParityVectors() throws {
+        // The cross-runtime filter contract that Android's CatalogFilterParityTest also runs.
+        struct SharedVectors: Decodable {
+            let schema: String
+            let version: Int
+            let syntheticOnly: Bool
+            let cases: [Vectors.Case]
+            let lookups: [Vectors.Lookup]
+        }
+        let data = try Self.repositoryBytes(Self.sharedFilterVectorsPath)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let vectors = try decoder.decode(SharedVectors.self, from: data)
+        XCTAssertEqual(vectors.schema, "openmed.model_catalog_filters")
+        XCTAssertEqual(vectors.version, 1)
+        XCTAssertTrue(vectors.syntheticOnly)
+
+        // Load the rows through the JSON Lines parser, as Android loads them with fromJsonLines.
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rows = try XCTUnwrap(document["rows"] as? [Any])
+        let lines = try rows.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }
+        let catalog = try OpenMedModelCatalog(jsonLines: Data(lines.joined(separator: "\n").utf8))
+        XCTAssertEqual(catalog.entries.count, rows.count)
+        XCTAssertFalse(vectors.cases.isEmpty)
+
+        for vector in vectors.cases {
+            let query = vector.query
+            let ids = catalog.filter(
+                format: query.format,
+                tier: query.tier,
+                maxParamCount: query.maxParamCount,
+                language: query.language,
+                license: query.license
+            ).map(\.repoID)
+            XCTAssertEqual(ids, vector.expectedRepoIds, vector.id)
+        }
+        XCTAssertFalse(vectors.lookups.isEmpty)
+        for lookup in vectors.lookups {
+            XCTAssertEqual(catalog.entry(repoID: lookup.repoId)?.repoID, lookup.found ? lookup.repoId : nil, lookup.repoId)
         }
     }
 
