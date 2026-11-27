@@ -657,6 +657,7 @@ classification:
     - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md
+    - api/contract-types.md
     - guides/file-redaction.md
     - reidentification-risk.md
     - security/minimum-necessary.md

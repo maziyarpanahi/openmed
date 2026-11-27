@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test test-multimodal sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy ort-browser-lane
+.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test test-multimodal sbom grpc-proto grpc-proto-check contract-types contract-types-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy ort-browser-lane
 
 UV ?= uv
 
@@ -77,6 +77,16 @@ grpc-proto: ## Regenerate committed gRPC protobuf stubs
 grpc-proto-check: ## Verify committed gRPC protobuf stubs are current
 	@echo "🔎 Checking gRPC protobuf stubs..."
 	uv run --extra dev python scripts/generate_grpc_stubs.py --check
+
+contract-types: ## Regenerate contract types from the core JSON Schemas
+	@for emitter in scripts/codegen/emit_*_types.py; do \
+		$(UV) run --no-project python "$$emitter" || exit 1; \
+	done
+
+contract-types-check: ## Verify contract types match the core JSON Schemas
+	@for emitter in scripts/codegen/emit_*_types.py; do \
+		$(UV) run --no-project python "$$emitter" --check || exit 1; \
+	done
 
 docs-serve: ## Run the MkDocs dev server with live reload
 	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."

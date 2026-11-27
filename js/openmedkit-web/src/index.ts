@@ -49,6 +49,9 @@ export type {
   TokenClassificationPipeline,
   TransformersRuntime,
 } from "./types";
+// Generated span.schema.json, entity, action, audit, attestation, relation,
+// code and provenance record types (`OpenMedContract*`).
+export type * from "./generated/contract-types";
 export {
   decodeBioTokenSpans,
   flattenTokenClassificationOutput,
