@@ -1933,7 +1933,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "med": MEDICATION,
     "indiandrug": MEDICATION,
     "indiandrugbrand": MEDICATION,
-    "substance": MEDICATION,
     "labtest": LAB_TEST,
     "test": LAB_TEST,
     "lab": LAB_TEST,
