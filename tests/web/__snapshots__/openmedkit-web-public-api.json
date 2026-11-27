@@ -195,7 +195,19 @@
     "verificationDigest",
     "verifyKitParityResult",
     "verifyPortableBundle",
-    "webDeviceCapabilityProfile"
+    "webDeviceCapabilityProfile",
+    "SDK_CONFIG_DEFAULTS",
+    "SDK_CONFIG_FIELDS",
+    "SDK_CONFIG_ISSUE_CODES",
+    "SDK_CONFIG_ONNX_VARIANTS",
+    "SDK_CONFIG_POLICY_PROFILES",
+    "SDK_CONFIG_SCHEMA_ID",
+    "SDK_CONFIG_VERSION",
+    "SdkConfigError",
+    "parseSdkConfig",
+    "toExtractPiiOptions",
+    "toLoadModelOptions",
+    "validateSdkConfig"
   ],
   "packageExports": {
     ".": {

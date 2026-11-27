@@ -55,6 +55,45 @@ this:
 The defaults that differ today (the web threshold of `0`, the Kotlin variant
 of `int8`) are what the portable defaults replace once each loader lands.
 
+## Web package
+
+The `openmed` web package reads the document with `parseSdkConfig(value)`,
+which takes a parsed JSON value and returns a frozen configuration with all
+six keys. `validateSdkConfig(value)` returns the ordered issues without
+throwing; `parseSdkConfig` throws `SdkConfigError`, whose `issues` are the
+same `{ code, field }` list and whose message names codes and known fields
+only. The existing option types are unchanged; two helpers map onto them:
+
+```ts
+import {
+  deidentify,
+  loadPortablePolicy,
+  parseSdkConfig,
+  toExtractPiiOptions,
+} from "openmed";
+
+const config = parseSdkConfig(JSON.parse(configText));
+const result = await deidentify(note, toExtractPiiOptions(config));
+const policy = loadPortablePolicy(config.policy_profile);
+```
+
+| Key | Web option |
+|---|---|
+| `confidence_threshold` | `ExtractPiiOptions.threshold` |
+| `local_only` | `LoadModelOptions.localFilesOnly: true` and `allowRemoteModels: false`; `false` sets the opposite |
+| `model_id` | `ExtractPiiOptions.model`; `null` keeps `DEFAULT_MODEL_ID` |
+| `model_revision` | `LoadModelOptions.revision`; `null` keeps the loader's revision (`DEFAULT_MODEL_REVISION` for the default model) |
+| `onnx_variant` | `LoadOnnxModelOptions.variant`; `auto` keeps the loader default (`int8`) |
+| `policy_profile` | not an extraction option; pass it to `loadPortablePolicy()` |
+
+`toLoadModelOptions(config)` returns the loader options and
+`toExtractPiiOptions(config)` returns `threshold`, `model` and those
+`loaderOptions`. Both revalidate their input. `local_only: true` never
+downloads from the Hub; a Hub id still resolves against the local model path
+and the Transformers.js cache. The package's stricter `offlineOnly` mode, which
+refuses Hub ids outright, stays a separate opt-in.
+`tests/web/test_sdk_config.spec.ts` runs every shared vector.
+
 ## Validation and error codes
 
 Validation fails closed. Every problem is an issue with a `code` and a

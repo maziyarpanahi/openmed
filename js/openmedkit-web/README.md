@@ -209,6 +209,25 @@ tries them in rank order from local files only and fails with a
 `allowRemoteModels: true` to let it download a candidate. Pass `pipeline` to
 run the pack over your own pipeline.
 
+### Portable SDK Configuration
+
+`parseSdkConfig()` reads the portable configuration document that the Python,
+Swift and Kotlin SDKs share (`confidence_threshold`, `local_only`, `model_id`,
+`model_revision`, `onnx_variant`, `policy_profile`). Unknown keys and bad values
+throw `SdkConfigError` with value-free `{ code, field }` issues. `local_only`
+defaults to `true`, and `toExtractPiiOptions()` maps it to
+`localFilesOnly: true, allowRemoteModels: false`, so a browser app sets one key
+instead of two flags:
+
+```ts
+import { deidentify, parseSdkConfig, toExtractPiiOptions } from "openmed";
+
+const config = parseSdkConfig({ model_id: "OpenMed/your-model-onnx" });
+const result = await deidentify(text, toExtractPiiOptions(config));
+```
+
+See `docs/configuration/sdk-config.md` for the keys, defaults and issue codes.
+
 ### Token Offsets
 
 Transformers.js token-classification output carries no character offsets.

@@ -124,6 +124,28 @@ export {
   PORTABLE_POLICY_RESOURCES,
   PORTABLE_TAXONOMY_LABELS,
 } from "./portable-policy-resources";
+export {
+  SDK_CONFIG_DEFAULTS,
+  SDK_CONFIG_FIELDS,
+  SDK_CONFIG_ISSUE_CODES,
+  SDK_CONFIG_ONNX_VARIANTS,
+  SDK_CONFIG_POLICY_PROFILES,
+  SDK_CONFIG_SCHEMA_ID,
+  SDK_CONFIG_VERSION,
+  SdkConfigError,
+  parseSdkConfig,
+  toExtractPiiOptions,
+  toLoadModelOptions,
+  validateSdkConfig,
+} from "./sdk-config";
+export type {
+  OpenMedSdkConfig,
+  SdkConfigField,
+  SdkConfigIssue,
+  SdkConfigIssueCode,
+  SdkConfigOnnxVariant,
+  SdkConfigPolicyProfile,
+} from "./sdk-config";
 export type {
   KitParityAction,
   KitParityBundleContract,
