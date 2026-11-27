@@ -9,6 +9,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     case httpError(statusCode: Int)
     case missingManifest
     case missingWeights
+    /// A file transfer failed below HTTP (connection, TLS or local staging).
+    case transferFailed
     /// Carries a controlled confinement reason code such as `outside_snapshot`.
     case invalidManifestPath(String)
     /// The Hub snapshot does not match the catalog entry's reproducibility hash.
@@ -24,6 +26,7 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
         case .httpError: return "http_status"
         case .missingManifest: return "missing_manifest"
         case .missingWeights: return "missing_weights"
+        case .transferFailed: return "transfer_failed"
         case .invalidManifestPath: return "invalid_manifest_path"
         case .reproducibilityHashMismatch: return "reproducibility_hash_mismatch"
         case .invalidModelInfo: return "invalid_model_info"
@@ -42,6 +45,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
             return "Downloaded MLX model is missing openmed-mlx.json."
         case .missingWeights:
             return "Downloaded MLX model does not contain any usable weight file."
+        case .transferFailed:
+            return "A model file transfer failed."
         case .invalidManifestPath:
             return "MLX artifact path rejected by snapshot confinement."
         case .reproducibilityHashMismatch:
@@ -204,9 +209,11 @@ public enum OpenMedModelStore {
     }
 
     // Internal transport injection keeps confinement tests fully offline.
+    // Cancelling the calling task stops the transfer and removes the files
+    // this call wrote; `progress` receives byte and file counts.
     static func downloadMLXModel(
         repoID: String, revision: String = "main", cacheDirectory: URL? = nil,
-        session: URLSession
+        session: URLSession, progress: OpenMedDownloadProgressReporter? = nil
     ) async throws -> URL {
         let modelDirectory = try cachedMLXModelDirectory(
             repoID: repoID, revision: revision, cacheDirectory: cacheDirectory)
@@ -224,27 +231,42 @@ public enum OpenMedModelStore {
             return modelDirectory
         }
 
+        let transfers = OpenMedFileTransferSession(configuration: session.configuration)
+        defer { transfers.invalidate() }
         var writtenFiles: [String] = []
         func fetch(_ path: String, optional: Bool = false) async throws -> Bool {
+            try Task.checkCancellation()
             let exists = try boundary.containsFile(path)
+            progress?.fileStarted()
             let result: Bool
-            if optional {
-                result = try await downloadOptionalFile(
-                    repoID: repoID, revision: revision, relativePath: path,
-                    boundary: boundary, session: session)
-            } else {
-                try await downloadFile(
-                    repoID: repoID, revision: revision, relativePath: path,
-                    boundary: boundary, session: session)
-                result = true
+            do {
+                if optional {
+                    result = try await downloadOptionalFile(
+                        repoID: repoID, revision: revision, relativePath: path,
+                        boundary: boundary, transfers: transfers, progress: progress)
+                } else {
+                    try await downloadFile(
+                        repoID: repoID, revision: revision, relativePath: path,
+                        boundary: boundary, transfers: transfers, progress: progress)
+                    result = true
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                progress?.fileFinished(path, sizeBytes: 0, transferredBytes: nil)
+                throw error
             }
             if result && !exists { writtenFiles.append(path) }
+            let size = result ? fileSize(try boundary.fileURL(path)) : 0
+            progress?.fileFinished(path, sizeBytes: size, transferredBytes: result && !exists ? size : nil)
             return result
         }
 
         do {
+            progress?.plan(files: 1)
             let hasManifest = try await fetch("openmed-mlx.json", optional: true)
             guard hasManifest else {
+                progress?.plan(files: 4 + legacyTokenizerFiles.count)
                 _ = try await fetch("config.json")
                 _ = try await fetch("id2label.json", optional: true)
                 var hasWeights = false
@@ -254,6 +276,7 @@ public enum OpenMedModelStore {
                 }
                 guard hasWeights else { throw OpenMedModelStoreError.missingWeights }
                 for name in legacyTokenizerFiles { _ = try await fetch(name, optional: true) }
+                try Task.checkCancellation()
                 try markArtifactReadyIfComplete(boundary: boundary)
                 return modelDirectory
             }
@@ -262,6 +285,10 @@ public enum OpenMedModelStore {
             let manifest = try JSONDecoder().decode(OpenMedMLXManifest.self, from: manifestData)
             // Preflight every declaration, including candidates the loader may use later.
             try boundary.validate(manifest)
+            progress?.plan(
+                files: [manifest.configPath, manifest.labelMapPath].compactMap({ $0 }).count
+                    + manifest.availableWeights.count + manifest.tokenizer.files.count
+                    + (manifest.segmenter?.resourceFiles.count ?? 0))
 
             for path in [manifest.configPath, manifest.labelMapPath].compactMap({ $0 }) {
                 _ = try await fetch(path)
@@ -274,6 +301,8 @@ public enum OpenMedModelStore {
                     downloadedWeights = true
                 } catch OpenMedModelStoreError.invalidManifestPath(let reason) {
                     throw OpenMedModelStoreError.invalidManifestPath(reason)
+                } catch is CancellationError {
+                    throw CancellationError()
                 } catch {
                     continue
                 }
@@ -286,12 +315,17 @@ public enum OpenMedModelStore {
             for resource in manifest.segmenter?.resourceFiles ?? [] { _ = try await fetch(resource.path) }
 
             try boundary.validate(manifest)
+            try Task.checkCancellation()
             try markArtifactReadyIfComplete(boundary: boundary)
             return modelDirectory
         } catch OpenMedModelStoreError.invalidManifestPath(let reason) {
             boundary.removeFileIfConfined(readyMarkerFileName)
             for path in writtenFiles.reversed() { boundary.removeFileIfConfined(path) }
             throw OpenMedModelStoreError.invalidManifestPath(reason)
+        } catch is CancellationError {
+            boundary.removeFileIfConfined(readyMarkerFileName)
+            for path in writtenFiles.reversed() { boundary.removeFileIfConfined(path) }
+            throw CancellationError()
         }
     }
 
@@ -419,7 +453,8 @@ public enum OpenMedModelStore {
         revision: String,
         relativePath: String,
         boundary: OpenMedMLXPathBoundary,
-        session: URLSession
+        transfers: OpenMedFileTransferSession,
+        progress: OpenMedDownloadProgressReporter?
     ) async throws {
         let destinationURL = try boundary.fileURL(relativePath)
         if try boundary.containsFile(relativePath) {
@@ -430,13 +465,14 @@ public enum OpenMedModelStore {
         var request = URLRequest(url: remoteURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw OpenMedModelStoreError.invalidResponse
+        let (staged, httpResponse) = try await transfers.download(request) { bytesDone, bytesTotal in
+            progress?.fileProgress(relativePath, bytesDone: bytesDone, bytesTotal: bytesTotal)
         }
+        defer { try? FileManager.default.removeItem(at: staged) }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw OpenMedModelStoreError.httpError(statusCode: httpResponse.statusCode)
         }
+        try Task.checkCancellation()
 
         // URLSession suspends: check again before creating directories or writing.
         _ = try boundary.fileURL(relativePath)
@@ -445,7 +481,19 @@ public enum OpenMedModelStore {
             withIntermediateDirectories: true
         )
         _ = try boundary.fileURL(relativePath)
-        try data.write(to: destinationURL, options: .atomic)
+        // Replace an existing leaf as an atomic write would, without following it.
+        if (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)) != nil {
+            boundary.removeFileIfConfined(relativePath)
+        }
+        do {
+            try FileManager.default.moveItem(at: staged, to: destinationURL)
+        } catch {
+            throw OpenMedModelStoreError.transferFailed
+        }
+    }
+
+    private static func fileSize(_ url: URL) -> Int64 {
+        ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
     }
 
     @discardableResult
@@ -454,14 +502,15 @@ public enum OpenMedModelStore {
         revision: String,
         relativePath: String,
         boundary: OpenMedMLXPathBoundary,
-        session: URLSession
+        transfers: OpenMedFileTransferSession,
+        progress: OpenMedDownloadProgressReporter?
     ) async throws -> Bool {
         do {
             try await downloadFile(
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                boundary: boundary, session: session
+                boundary: boundary, transfers: transfers, progress: progress
             )
             return try boundary.containsFile(relativePath)
         } catch OpenMedModelStoreError.httpError(statusCode: 404) {

@@ -525,6 +525,43 @@ let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
 )
 ```
 
+To show byte progress or let people cancel, start a download task instead:
+
+```swift
+let download = OpenMedModelStore.startMLXModelDownload(
+    repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx"
+)
+Task {
+    for await event in download.progress {
+        // event.fileName is repository-relative, for example "weights.safetensors".
+        print(event.fileName, event.bytesDone, event.bytesTotal ?? -1, event.filesDone, event.filesTotal)
+    }
+}
+// Call download.cancel() from a Cancel button to stop and clean up.
+let modelDirectory = try await download.value
+```
+
+- Each `OpenMedModelDownloadProgress` carries the repository-relative file
+  name, that file's `bytesDone` and `bytesTotal` (`nil` until the server
+  declares a length), `filesDone` and `filesTotal`, and `totalBytesDone` across
+  the whole download. `totalBytesDone`, `filesDone` and `filesTotal` never
+  decrease. `filesTotal` starts at 1 (`openmed-mlx.json`) and grows once the
+  file list is known. The event that completes a file has
+  `bytesDone == bytesTotal`. After the last file, `filesDone == filesTotal`.
+- Events never contain a URL, token, repository id, revision or absolute path.
+  Transport failures surface as the value-free
+  `OpenMedModelStoreError.transferFailed` rather than a `URLError` that embeds
+  the request URL.
+- `cancel()`, or cancelling the task that awaits `downloadMLXModel`, stops the
+  current transfer, removes the files this download wrote, and never writes the
+  ready marker. The snapshot is left `missing` or `partial`, and `value` throws
+  `CancellationError`.
+- Files are fetched with a delegate-based `URLSessionDownloadTask` and streamed
+  to disk instead of held in memory. The async `URLSession.download(for:delegate:)`
+  API delivers no `didWriteData` callbacks, so it cannot report byte progress.
+  Background `URLSession` transfers and resuming partial files are not
+  supported.
+
 Behavior:
 
 - downloads `openmed-mlx.json` first

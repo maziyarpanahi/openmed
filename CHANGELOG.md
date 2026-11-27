@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Publish `audit_report.schema.json`, a JSON Schema for the signed de-identification `AuditReport` with closed span, context, detector and signature objects (raw-text keys, negative offsets and unknown signature algorithms fail), a `load_audit_report_schema()` loader and an entry in the schema fingerprint snapshot (#5348).
 - Document how OpenMed evidence maps to EHDS (Regulation (EU) 2025/327) secondary-use concepts, with article citations, the Article 105 application dates, and what OpenMed is not: a health data access body, a secure processing environment or a permit issuer (#5408).
 - Add `scripts/release/schema_release_diff.py`, which compares every packaged JSON Schema with the last `v*` release tag straight from Git, classifies it as added, removed, compatible, version bump or breaking, and fails the release gates on breaks or removals that lack a reviewed allowlist entry with a reason and target version (#5333).
+- Report byte progress and support cancellation for OpenMedKit Swift model downloads: `OpenMedModelStore.startMLXModelDownload` returns an `OpenMedModelDownloadTask` with a value-free `progress` stream and `cancel()`, files stream through a delegate-based `URLSessionDownloadTask`, and cancelling removes the files the download wrote without writing the ready marker (#5377).
 
 ### Changed
 
