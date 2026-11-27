@@ -629,6 +629,13 @@ signature digit, an unknown algorithm, the legacy stored span order, non-ASCII
 keys and values, and float edge cases (`0.1`, `1e-07`, `0.30000000000000004`,
 `5e-324`).
 
+The Kotlin verifier is `ReceiptVerifier` in
+`android/openmedkit/src/main/kotlin/com/openmed/openmedkit/receipt/`, and
+`ReceiptVerificationParityTest` checks its bytes, hashes, HMACs and verdicts
+against every case. Its result codes are `valid`, `hash_mismatch`,
+`signature_mismatch` (also used for an unsigned report),
+`unsupported_algorithm` and `malformed`.
+
 Regenerate or check the fixture with
 `python scripts/parity/generate_receipt_vectors.py --write` or `--check`;
 `tests/unit/core/test_receipt_vectors.py` checks that regeneration is
