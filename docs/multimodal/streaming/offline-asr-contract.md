@@ -131,6 +131,32 @@ content, and every failure raises `SpeechProviderError` whose message is a
 category string such as `buffer_limit_exceeded`. A session report names the
 provider, its revision, model fingerprint, lifecycle state and counters. Provider labels must be static asset identifiers, never patient or site identifiers; syntactic validation does not de-identify caller-supplied labels. Fingerprints are linkage metadata and require appropriate access and retention controls.
 
+## Android data contract
+
+The Android OpenMedKit validates transcripts with the same rules in
+`com.openmed.openmedkit.speech`. This package is the data contract only. Android
+has no audio capture or ASR provider yet.
+
+| Kotlin type | Rules |
+| --- | --- |
+| `SpeechTokenTiming` | `tokenIndex` 0 to 4096, millisecond times 0 to 86400000 with end not before start, `confidencePpm` 0 to 1000000, text up to 8192 Unicode scalars. |
+| `SpeechRecognition` | Text up to 8192 scalars, at most 4096 tokens with strictly increasing index and non-decreasing start and end times, optional decoder confidence in parts per million, and tokens only when `alignmentStatus` is `ALIGNED`. |
+| `SpeechEngineProvenance` | `providerId`, `providerRevision`, `modelFingerprint` and `language` follow the grammar in the table above. |
+
+A failure raises `SpeechContractException`. Its `error` is the Swift
+`StreamingSpeechError` code (`speech_hypothesis_invalid` or
+`speech_artifact_unverified`) and its `category` is the Python
+`SpeechProviderError` category, such as `token_start_ms_out_of_range`. Messages
+contain only those codes. `toString()` never includes transcript or token text,
+and the types hold no audio, path or endpoint. `SpeechContractParityTest` runs
+every case in `tests/fixtures/parity/speech_contract_v1.json`, the fixture the
+Python and Swift tests use:
+
+```bash
+cd android
+./gradlew :openmedkit:testDebugUnitTest --tests '*SpeechContractParityTest'
+```
+
 ## See also
 
 - [Streaming audio windows](../audio-windows.md)
