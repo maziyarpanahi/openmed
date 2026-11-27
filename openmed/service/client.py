@@ -9,6 +9,7 @@ from typing import Any, Literal, Mapping, Optional
 
 import httpx
 
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.decision import (
     DecisionRequest as FixedOptionDecisionRequest,
 )
@@ -355,7 +356,7 @@ CLIENT_OPENAPI_EXCLUSIONS: Mapping[str, str] = {
 }
 
 
-class OpenMedAPIError(RuntimeError):
+class OpenMedAPIError(RuntimeError, LegacyRootedError):
     """Raised when the REST service returns a non-2xx error envelope."""
 
     def __init__(

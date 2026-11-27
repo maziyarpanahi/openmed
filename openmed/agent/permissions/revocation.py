@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NoReturn, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 
 class AuthorityKind(str, Enum):
     """Existing authority contracts whose current status must be checked."""
@@ -273,7 +275,7 @@ class AuthorityReceipt:
         }
 
 
-class AuthorityDeniedError(ValueError):
+class AuthorityDeniedError(ValueError, LegacyRootedError):
     """Fail-closed runtime denial carrying only a content-free receipt."""
 
     def __init__(self, receipt: AuthorityReceipt) -> None:

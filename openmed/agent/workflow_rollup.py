@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 from .outcomes import OutcomeClass
 from .run_summary import RunEvent, RunSummary
 
@@ -29,7 +31,7 @@ _MAX_DURATION_SECONDS = 31_536_000.0
 _MAX_ARTIFACT_REFERENCES = 4_096
 
 
-class WorkflowRollupError(ValueError):
+class WorkflowRollupError(ValueError, LegacyRootedError):
     """Raised when workflow-rollup input fails closed validation."""
 
 

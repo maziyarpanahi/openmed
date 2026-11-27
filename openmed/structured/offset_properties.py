@@ -20,6 +20,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 Offset: TypeAlias = tuple[int, int]
 FormatName: TypeAlias = Literal["pdf", "ocr", "rtf", "odt", "presentation"]
 OffsetFailureCategory: TypeAlias = Literal[
@@ -69,7 +71,7 @@ _TOKEN_RE = re.compile(r"\S+", re.UNICODE)
 _SYNTHETIC_MARKERS = ("alpha", "beta", "gamma", "delta")
 
 
-class OffsetProjectionError(ValueError):
+class OffsetProjectionError(ValueError, LegacyRootedError):
     """A safe, categorized failure in an adapter's offset contract.
 
     The exception message contains only the stable category. It never embeds

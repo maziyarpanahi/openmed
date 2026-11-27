@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlsplit
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import is_local_only
 from openmed.mcp.upstream_endpoint_policy import (
     ResolvedAddressClass,
@@ -246,7 +247,7 @@ _CONFIG_REASON_CODES = frozenset(
 )
 
 
-class EgressDenied(PermissionError):
+class EgressDenied(PermissionError, LegacyRootedError):
     """Raised when the egress policy refuses an outbound operation.
 
     The message and attributes contain only a controlled reason code; the
@@ -271,7 +272,7 @@ class EgressDenied(PermissionError):
         return {"code": self.error_code, "reason_code": self.reason_code}
 
 
-class EgressConfigurationError(ValueError):
+class EgressConfigurationError(ValueError, LegacyRootedError):
     """Raised when egress configuration is invalid; never echoes rule values."""
 
     def __init__(self, reason_code: str) -> None:
@@ -282,7 +283,7 @@ class EgressConfigurationError(ValueError):
         self.reason_code = safe_reason
 
 
-class EgressDestinationError(ValueError):
+class EgressDestinationError(ValueError, LegacyRootedError):
     """Raised when an outbound destination cannot be parsed safely."""
 
     def __init__(self, reason_code: str) -> None:

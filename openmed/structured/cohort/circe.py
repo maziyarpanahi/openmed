@@ -17,6 +17,7 @@ from itertools import combinations
 from typing import Any, Final, ParamSpec, TypeVar
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .dsl import (
@@ -52,7 +53,7 @@ CIRCE_DOMAINS: Final = frozenset(
 )
 
 
-class CirceInputError(ValueError):
+class CirceInputError(ValueError, LegacyRootedError):
     """Malformed input, with a controlled code and no source values."""
 
     def __init__(self, code: str = "circe_invalid") -> None:

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 from .egress import (
     EgressAdapter,
     EgressDataClass,
@@ -44,7 +46,7 @@ EntityExtractor = Callable[..., Any]
 ExternalLLMTransport = Callable[..., Any]
 
 
-class PrivacyGatewayError(ValueError):
+class PrivacyGatewayError(ValueError, LegacyRootedError):
     """Base class for privacy-gateway fail-closed errors."""
 
     error_code = "privacy_gateway_error"
@@ -78,7 +80,7 @@ class PrivacyReidentificationError(PrivacyGatewayError):
     audit_status = "rejected"
 
 
-class PrivacyTransportError(RuntimeError):
+class PrivacyTransportError(RuntimeError, LegacyRootedError):
     """Raised when the configured external transport fails safely."""
 
     error_code = "privacy_gateway_transport_error"
@@ -90,7 +92,7 @@ class PrivacyTransportError(RuntimeError):
             self.reason_code = reason_code
 
 
-class PrivacyGatewayConfigurationError(RuntimeError):
+class PrivacyGatewayConfigurationError(RuntimeError, LegacyRootedError):
     """Raised when service egress is not operator-configured."""
 
     error_code = "privacy_gateway_not_configured"

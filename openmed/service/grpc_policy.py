@@ -31,6 +31,7 @@ import grpc
 from cryptography import x509
 from cryptography.x509.verification import Store
 
+from openmed.core.errors import LegacyRootedError
 from openmed.guard.operational_limits import OperationalLimits
 
 from .auth import (
@@ -246,7 +247,7 @@ GRPC_RPC_ROUTES: Mapping[str, tuple[str, str]] = MappingProxyType(
 )
 
 
-class GrpcPolicyError(Exception):
+class GrpcPolicyError(LegacyRootedError):
     """Value-free RPC refusal carrying a stable reason code.
 
     Attributes:

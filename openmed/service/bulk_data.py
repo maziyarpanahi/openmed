@@ -17,6 +17,7 @@ from typing import Any, Callable, ParamSpec, TypeVar
 
 import httpx
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.bulk import (
     BulkDataGateway,
     BulkGatewayConfig,
@@ -59,7 +60,7 @@ BULK_MAX_RETAINED_JOBS_ENV_VAR = "OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS"
 BULK_JOB_TTL_ENV_VAR = "OPENMED_SERVICE_BULK_JOB_TTL_SECONDS"
 
 
-class BulkPathError(ValueError):
+class BulkPathError(ValueError, LegacyRootedError):
     """Controlled rejection of untrusted service-side filesystem authority."""
 
     def __init__(self, code: str) -> None:

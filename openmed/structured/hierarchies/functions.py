@@ -33,6 +33,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Final
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
+from openmed.core.errors import LegacyRootedError
 
 HIERARCHY_SCHEMA_VERSION: Final = "1.1.0"
 
@@ -63,7 +64,7 @@ ZIP_MAX_TRUNCATION: Final = 7
 _ISO_DATE_FORMAT: Final = "%Y-%m-%d"
 
 
-class HierarchyError(ValueError):
+class HierarchyError(ValueError, LegacyRootedError):
     """Raised for an unknown column type, an out-of-range level, or a value
     that is not valid for the requested column type."""
 

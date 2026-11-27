@@ -26,6 +26,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import (
     AllowAllStoragePolicy,
     StoragePolicy,
@@ -51,7 +52,7 @@ _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _OPAQUE_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$")
 
 
-class SavedCohortError(ValueError):
+class SavedCohortError(ValueError, LegacyRootedError):
     """Base error for malformed saved-cohort contracts."""
 
 

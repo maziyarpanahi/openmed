@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass
 from typing import ClassVar, Final, TypeVar, cast
 
+from openmed.core.errors import LegacyRootedError
+
 _MAX_IDENTIFIER_LENGTH: Final = 512
 _MAX_NAMESPACE_LENGTH: Final = 253
 
@@ -36,7 +38,7 @@ _ALLOWED_KINDS: Final = frozenset(
 _GovernanceIdT = TypeVar("_GovernanceIdT", bound="_GovernanceId")
 
 
-class GovernanceIdError(ValueError):
+class GovernanceIdError(ValueError, LegacyRootedError):
     """Raised when a governance identifier fails closed validation.
 
     Args:

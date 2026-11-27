@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 from .outcomes import OutcomeClass
 from .run_summary import RunSummary, _assert_safe_payload
 
@@ -31,7 +33,7 @@ _MAX_TOOL_CALLS = 10_000_000
 _MAX_DURATION_SECONDS = 31_536_000.0
 
 
-class RunDiffError(ValueError):
+class RunDiffError(ValueError, LegacyRootedError):
     """Raised when run-diff input or direct construction is invalid.
 
     Messages name only a stable field and error code, never submitted values.

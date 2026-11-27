@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Final, Mapping
 
 from openmed.agent.correlation import ActionId, RunId
+from openmed.core.errors import LegacyRootedError
 
 ACTION_LEDGER_SCHEMA_VERSION: Final = "openmed.agent.action_ledger.v1"
 MAX_ENTRY_BYTES: Final = 16_384
@@ -41,7 +42,7 @@ _FIELDS = frozenset(
 )
 
 
-class ActionLedgerError(ValueError):
+class ActionLedgerError(ValueError, LegacyRootedError):
     """Value-free ledger failure with a stable code and no submitted values."""
 
     def __init__(self, code: str) -> None:

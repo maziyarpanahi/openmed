@@ -15,6 +15,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Final, TypeVar
 
+from openmed.core.errors import LegacyRootedError
+
 from .outcomes import _bounded_governance_json
 
 CORRELATION_SCHEMA_VERSION: Final = "openmed.agent.correlation.v1"
@@ -39,7 +41,7 @@ _TokenSource = Callable[[int], bytes]
 _IdentifierT = TypeVar("_IdentifierT", bound="_OpaqueCorrelationId")
 
 
-class CorrelationIdError(ValueError):
+class CorrelationIdError(ValueError, LegacyRootedError):
     """Raised when correlation metadata fails closed validation.
 
     Args:

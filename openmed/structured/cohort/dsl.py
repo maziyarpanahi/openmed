@@ -18,6 +18,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Final, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 PHENOTYPE_SCHEMA_VERSION: Final = "openmed.cohort.phenotype.v1"
 
 ExpressionOperator = Literal["criterion", "and", "or", "not"]
@@ -28,7 +30,7 @@ _TEMPORALITY_VALUES = frozenset({"recent", "historical", "hypothetical"})
 _CERTAINTY_VALUES = frozenset({"certain", "uncertain"})
 
 
-class PhenotypeDefinitionError(ValueError):
+class PhenotypeDefinitionError(ValueError, LegacyRootedError):
     """Raised when a phenotype definition violates the stable schema."""
 
 

@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from openmed.core.errors import LegacyRootedError
+
 EVENT_SEQUENCE_SCHEMA_VERSION = "openmed.agent.event_sequence.v1"
 MAX_EVENT_SEQUENCE_LENGTH = 100_000
 MAX_SEQUENCE_NUMBER = 1_000_000_000
@@ -47,7 +49,7 @@ _REPORT_FIELDS = (
 )
 
 
-class EventSequenceError(ValueError):
+class EventSequenceError(ValueError, LegacyRootedError):
     """Raised when event-sequence input fails closed structural validation.
 
     Args:

@@ -22,6 +22,7 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
     canonical_json,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.utils import _verify_windows_output, _windows_output
 
 from .contracts import (
@@ -90,7 +91,7 @@ _LOSSES = frozenset(
 )
 
 
-class NAACCRProjectionError(ValueError):
+class NAACCRProjectionError(ValueError, LegacyRootedError):
     """Fixed diagnostic with controlled code and optional input indices."""
 
     def __init__(

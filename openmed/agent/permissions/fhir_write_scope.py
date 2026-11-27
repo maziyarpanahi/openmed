@@ -10,6 +10,7 @@ from typing import Any, Protocol, TypeVar
 from urllib.parse import urlsplit
 
 from openmed.clinical.exporters.fhir.reference_types import REFERENCE_TARGET_ALLOWLISTS
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.reference_integrity import iter_fhir_elements
 
 from .access_tickets import (
@@ -89,7 +90,7 @@ class FHIRWriteScopeFinding:
         return {"path": self.path, "code": self.code}
 
 
-class FHIRWriteScopeError(ValueError):
+class FHIRWriteScopeError(ValueError, LegacyRootedError):
     """Reject a proposed write with paths and codes only."""
 
     def __init__(self, findings: tuple[FHIRWriteScopeFinding, ...]) -> None:

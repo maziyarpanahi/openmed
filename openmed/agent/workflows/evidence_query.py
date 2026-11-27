@@ -16,6 +16,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.guard.query_safety import (
     DEFAULT_READ_ONLY_VIEWS,
     MAX_QUERY_ROWS,
@@ -47,7 +48,7 @@ _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _VERSION_RE = re.compile(r"^[1-9][0-9]*\.[0-9]+\.[0-9]+$")
 
 
-class EvidenceQueryError(ValueError):
+class EvidenceQueryError(ValueError, LegacyRootedError):
     """Raised when an evidence-query contract fails closed."""
 
 

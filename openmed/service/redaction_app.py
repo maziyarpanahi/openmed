@@ -32,6 +32,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.policy import canonical_policy_name
 from openmed.core.safety_sweep import safety_sweep
@@ -72,7 +73,7 @@ _SAFE_COUNTER_LABELS = frozenset(CANONICAL_LABELS) | frozenset(
 )
 
 
-class RedactionServiceError(Exception):
+class RedactionServiceError(LegacyRootedError):
     """Typed, content-free error raised by the local redaction service."""
 
     def __init__(self, code: str) -> None:

@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .artifact_reference import ArtifactKind
 from .outcomes import _bounded_governance_json
 
@@ -61,7 +63,7 @@ class CompatibilityReason(str, Enum):
     INVALID_RANGE = "invalid_range"
 
 
-class SchemaCompatibilityError(ValueError):
+class SchemaCompatibilityError(ValueError, LegacyRootedError):
     """Raised when schema compatibility inputs fail contract validation.
 
     Args:

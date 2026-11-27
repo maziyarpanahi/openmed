@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Root every public `openmed.multimodal` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling and transport mapping are unchanged, and each class gains a stable `code` (#5395).
 - Root every public `openmed.clinical` and `openmed.interop` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling and transport mapping are unchanged, and each class gains a stable `code` (#5396).
+- Root every public `openmed.service`, `openmed.structured` and `openmed.agent` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling, and REST, MCP and agent error envelopes are unchanged, and each class gains a stable `code` (#5397).
 
 ### Fixed
 

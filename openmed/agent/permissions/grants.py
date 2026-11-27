@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar, cast
 
 from openmed.agent.identifiers import GovernanceIdError, PolicyId, ToolId
+from openmed.core.errors import LegacyRootedError
 
 CAPABILITY_GRANT_SCHEMA_VERSION = "openmed.agent.capability_grant.v1"
 CAPABILITY_GRANT_SIGNATURE_ALGORITHM = "hmac-sha256"
@@ -40,7 +41,7 @@ _CONSTRAINT_FIELDS = frozenset({"tool", "resource", "action", "policy_profile"})
 _T = TypeVar("_T")
 
 
-class CapabilityGrantError(ValueError):
+class CapabilityGrantError(ValueError, LegacyRootedError):
     """Base class for value-free capability-grant failures.
 
     Args:

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Final, Protocol, cast
 
 from openmed.agent.identifiers import GovernanceIdError, PurposeId
+from openmed.core.errors import LegacyRootedError
 
 from .grants import CapabilityGrantConstraint, CapabilityGrantError
 
@@ -52,7 +53,7 @@ _GRANT_FIELDS = frozenset(
 _SCOPE_FIELDS = frozenset({"capabilities", "data_classes", "purposes"})
 
 
-class DelegationError(ValueError):
+class DelegationError(ValueError, LegacyRootedError):
     """Base class for value-free delegation failures."""
 
     def __init__(

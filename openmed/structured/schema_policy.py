@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.hierarchies import (
     SUPPORTED_COLUMN_TYPES,
     HierarchyError,
@@ -117,7 +118,7 @@ _SAFE_FHIR_FULL_URL = re.compile(r"^(?:urn:uuid:[0-9A-Fa-f-]{36}|urn:oid:[0-9.]+
 TextDeidentifier = Callable[..., Any]
 
 
-class SchemaPolicyError(ValueError):
+class SchemaPolicyError(ValueError, LegacyRootedError):
     """Raised when a schema policy or schema-policy application is invalid."""
 
 

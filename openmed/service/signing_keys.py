@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol, Union
 
+from openmed.core.errors import LegacyRootedError
+
 from ._state_files import atomic_write_private, exclusive_lock, read_bounded
 from .signing import normalize_key_id
 
@@ -83,7 +85,7 @@ _ENTRY_FIELDS = frozenset(
 SecretValue = Union[bytes, str]
 
 
-class SigningKeyError(ValueError):
+class SigningKeyError(ValueError, LegacyRootedError):
     """Value-free signing-key failure.
 
     Attributes:

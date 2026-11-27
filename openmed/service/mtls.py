@@ -37,6 +37,7 @@ from fastapi import Request
 from starlette.responses import Response
 
 from openmed.core.config import PROFILE_ENV_VAR
+from openmed.core.errors import LegacyRootedError
 
 from .auth import AuthPrincipal, parse_bool, parse_non_negative_float
 from .logging import set_access_log_identity
@@ -130,7 +131,7 @@ class ServiceMTLSConfig:
     trust_overlap_seconds: float = DEFAULT_TRUST_OVERLAP_SECONDS
 
 
-class MTLSAuthenticationError(ValueError):
+class MTLSAuthenticationError(ValueError, LegacyRootedError):
     """mTLS authentication failure safe to expose through the API envelope.
 
     The code and message are fixed strings. They never contain certificate

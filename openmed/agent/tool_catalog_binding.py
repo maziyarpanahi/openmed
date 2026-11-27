@@ -22,6 +22,7 @@ from openmed.agent.tool_inventory import (
     ToolInventoryError,
     ToolInventoryRecord,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.mcp.tool_registry import ToolRegistry, ToolSpec
 
 TOOL_CATALOG_BINDING_SCHEMA_VERSION: Final = "openmed.agent.tool_catalog_binding.v1"
@@ -43,7 +44,7 @@ _REASONS = frozenset(
 )
 
 
-class ToolCatalogBindingError(ValueError):
+class ToolCatalogBindingError(ValueError, LegacyRootedError):
     """Fail closed with a controlled code and no rejected metadata.
 
     Args:

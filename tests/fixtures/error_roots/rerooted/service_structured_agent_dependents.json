@@ -1,0 +1,481 @@
+{
+  "classes": {
+    "openmed.eval.decision_qualification:DecisionQualificationError": {
+      "code": "decision_qualification_error",
+      "mro": [
+        "openmed.eval.decision_qualification:DecisionQualificationError",
+        "openmed.structured.decision:DecisionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.eval.decision_qualification:DecisionQualificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptBindingError": {
+      "code": "consent_receipt_binding_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptBindingError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptBindingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptBindingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptBindingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptDeniedError": {
+      "code": "consent_receipt_denied_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptDeniedError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptDeniedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptDeniedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptDeniedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptError": {
+      "code": "consent_receipt_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptExpiredError": {
+      "code": "consent_receipt_expired_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptExpiredError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptExpiredError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptExpiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptExpiredError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptKeyError": {
+      "code": "consent_receipt_key_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptKeyError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptKeyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptKeyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptNotYetValidError": {
+      "code": "consent_receipt_not_yet_valid_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptNotYetValidError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptNotYetValidError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptNotYetValidError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptNotYetValidError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptReplayError": {
+      "code": "consent_receipt_replay_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptReplayError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptReplayError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptReplayError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptReplayError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptRequiredError": {
+      "code": "consent_receipt_required_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptRequiredError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptRequiredError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptRequiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptRequiredError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptSignatureError": {
+      "code": "consent_receipt_signature_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptSignatureError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptSignatureError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptSignatureError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptSignatureError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptStoreError": {
+      "code": "consent_receipt_store_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptStoreError",
+        "openmed.agent.approvals.tokens:ApprovalNonceStoreError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptStoreError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptValidationError": {
+      "code": "consent_receipt_validation_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptValidationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptValidationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptValidationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.mcp.consent_receipts:ConsentReceiptVerificationError": {
+      "code": "consent_receipt_verification_error",
+      "mro": [
+        "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+        "openmed.mcp.consent_receipts:ConsentReceiptError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.mcp.consent_receipts:ConsentReceiptVerificationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

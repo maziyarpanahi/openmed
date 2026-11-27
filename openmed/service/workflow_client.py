@@ -25,6 +25,7 @@ from openmed.agent.correlation import RunId
 from openmed.agent.identifiers import WorkflowId
 from openmed.agent.outcomes import WorkflowOutcome
 from openmed.agent.workflows.recovery import EffectRecord
+from openmed.core.errors import LegacyRootedError
 
 from .governed_workflows import (
     MAX_WORKFLOW_EFFECTS,
@@ -83,7 +84,7 @@ _SAFE_REQUEST_ID = re.compile(
 MutationOutcome = Literal["not_applicable", "not_attempted", "refused", "unknown"]
 
 
-class WorkflowClientError(RuntimeError):
+class WorkflowClientError(RuntimeError, LegacyRootedError):
     """Fixed diagnostics that preserve mutation uncertainty without response text.
 
     Args:
