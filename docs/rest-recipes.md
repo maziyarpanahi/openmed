@@ -108,7 +108,7 @@ route instead; send the same credentials as other authenticated calls:
 ```json
 {
   "service": "openmed-rest",
-  "version": "3.3.0",
+  "version": "4.0.0",
   "profile": "prod"
 }
 ```
