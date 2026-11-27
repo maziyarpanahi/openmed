@@ -6,7 +6,7 @@ import OpenMedKit
 ///
 /// Shortcuts can hand an intent's output to any other app or web action, so
 /// the summary never carries the detected values, their offsets, confidences
-/// or replacements. Only canonical label names and counts leave the device
+/// or replacements. Only canonical label names and counts leave the intent
 /// alongside text that is already redacted.
 public struct OpenMedPIISummary: TransientAppEntity, Sendable {
     public static var typeDisplayRepresentation: TypeDisplayRepresentation { "PII Summary" }
@@ -61,7 +61,7 @@ public struct PIISummaryIntent: AppIntent {
 
     public static var description: IntentDescription? {
         IntentDescription(
-            "Counts the personal health information in text on this device and returns the counts by label with the redacted text. Detected values never leave the intent."
+            "Counts the personal health information in text on this device and returns the counts by label with the redacted text. Detected values never leave the intent. Detection is automated and can miss identifiers, so review the redacted text before sharing it."
         )
     }
 

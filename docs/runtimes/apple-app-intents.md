@@ -20,6 +20,10 @@ The policy defaults to `hipaa_safe_harbor`. Any name from
   message asking the person to download it in the app, and it makes no network
   request.
 - **The app stays closed.** Both intents set `openAppWhenRun` to `false`.
+- **Review before sharing.** Detection is automated and can miss
+  identifiers, so the redacted text and the counts are not a guarantee that no
+  PHI remains. The intents show no preview, so a shortcut that forwards the
+  result to another app or web action should let the person review it first.
 - **Nothing is logged.** The intent sources contain no logging or networking
   calls, and a test enforces this.
 - **Errors carry no values.** Every failure surfaces as `OpenMedIntentError`
