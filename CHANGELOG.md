@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DPIA, DPA, GDPR DSAR export, EU AI Act model-card field, and ISO 27701
   evidence pages, says what each is for and what it is not, and states that it
   is an index and not legal advice (#5427).
+- Check the built wheel and sdist metadata against `pyproject.toml`
+  (`Requires-Python`, Python classifiers, `License-Expression` and shipped
+  `License-File` entries) and run `twine check --strict` in the CI build job.
+  The license metadata now uses the PEP 639 SPDX form (#5400).
 
 ## [4.0.0] - 2026-11-25
 
