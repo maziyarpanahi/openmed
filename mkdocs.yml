@@ -357,6 +357,7 @@ nav:
       - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
+      - Portable SDK Configuration: configuration/sdk-config.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
       - Skill Bundle Integrity: skills/bundle-integrity.md

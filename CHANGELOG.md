@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admit `openmed.multimodal.apple.v1` evidence packets in the Android OpenMedKit with the same canonical-form, digest, size, float-hex and refusal rules as Python and Swift, typed visual, transcript and clock projections, and the shared `AssetManifest` and `ProviderResultEnvelope` types, checked against every case in the shared fixture (#5369).
 - Commit API Extractor reports of the `openmed` web package's public declarations under `js/openmedkit-web/api/`, one per `exports` entry; `npm run api:check` fails in CI when the declarations differ from the reviewed baseline and `npm run api:update` refreshes it (#5361).
 - Publish every packaged JSON Schema whose `$id` is on `openmed.life` at its `$id` URL on the docs site, byte-identical to the packaged file, with `schemas/index.json` listing every packaged schema once (`$id`, `schema_version`, sha256, source path); off-host `$id`s fail staging and `openmed.dev` ids are listed as unpublished (#5334).
+- Define the portable SDK configuration subset (`local_only`, `model_id`, `model_revision`, `confidence_threshold`, `policy_profile`, `onnx_variant`) as `sdk_config.schema.json` with a fail-closed Python validator, `OpenMedConfig.to_sdk_config()`, a Swift/Kotlin/TypeScript spelling map and shared value-free vectors in `tests/fixtures/parity/sdk_config_v1.json` (#5342).
 
 ### Fixed
 

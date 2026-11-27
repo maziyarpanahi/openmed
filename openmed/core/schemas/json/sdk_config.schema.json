@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/sdk_config.schema.json",
+  "title": "OpenMed portable SDK configuration",
+  "description": "Version 1 of the configuration subset that Python and every OpenMedKit port read with the same names, types, bounds and defaults. Unknown keys fail closed. docs/configuration/sdk-config.md maps each key to OpenMedConfig and to the Swift, Kotlin and TypeScript spellings; tests/fixtures/parity/sdk_config_v1.json holds the shared vectors.",
+  "type": "object",
+  "additionalProperties": false,
+  "x-sdk-config-version": 1,
+  "properties": {
+    "confidence_threshold": {
+      "description": "Minimum detection confidence. Python takes it per call (extract_pii confidence_threshold); it is not an OpenMedConfig field.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.5
+    },
+    "local_only": {
+      "description": "Cache-only, no-egress mode. Maps to OpenMedConfig.local_only; the portable default is true.",
+      "type": "boolean",
+      "default": true
+    },
+    "model_id": {
+      "description": "Hub repository id of the model. Maps to OpenMedConfig.pii_model; null selects the kit default.",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}(/[A-Za-z0-9][A-Za-z0-9._-]{0,95})?$",
+          "not": {"anyOf": [{"pattern": "\\.\\."}, {"pattern": "[^A-Za-z0-9._/-]"}]}
+        }
+      ],
+      "default": null
+    },
+    "model_revision": {
+      "description": "Pinned revision of model_id. Maps to OpenMedConfig.pii_model_revision. Requires a non-null model_id.",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+          "not": {"anyOf": [{"pattern": "\\.\\."}, {"pattern": "[^A-Za-z0-9._-]"}]}
+        }
+      ],
+      "default": null
+    },
+    "onnx_variant": {
+      "description": "ONNX weight variant. Maps to OpenMedConfig.onnx_variant; runtimes that do not load ONNX ignore it.",
+      "enum": ["auto", "int8", "fp16", "fp32"],
+      "default": "auto"
+    },
+    "policy_profile": {
+      "description": "Portable policy profile name. Python takes it per call (deidentify policy); it is not an OpenMedConfig field.",
+      "enum": [
+        "australia_privacy_act",
+        "canada_pipeda",
+        "clinical_minimal_redaction",
+        "gdpr_art9_health",
+        "gdpr_pseudonymization",
+        "hipaa_expert_review_assist",
+        "hipaa_safe_harbor",
+        "research_limited_dataset",
+        "strict_no_leak"
+      ],
+      "default": "hipaa_safe_harbor"
+    }
+  },
+  "if": {
+    "required": ["model_revision"],
+    "properties": {"model_revision": {"type": "string"}}
+  },
+  "then": {
+    "required": ["model_id"],
+    "properties": {"model_id": {"type": "string"}}
+  }
+}
