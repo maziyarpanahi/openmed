@@ -549,6 +549,7 @@ nav:
           - Audio Resampling Plans: multimodal/audio-resampling-plans.md
           - Streaming Audio Windows: multimodal/audio-windows.md
           - Frame-Sampling Manifests: multimodal/frame-sampling-manifests.md
+          - Pose Keypoint Sequences: multimodal/pose-sequences.md
           - Bounded Speech Endpoints: multimodal/speech-endpoints.md
       - Speech and Ambient:
           - Ambient Consent and Capture State: multimodal/ambient-session-policy.md

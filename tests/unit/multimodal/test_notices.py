@@ -572,6 +572,10 @@ generated_text_guard.AssetIdentifierDigest
 generated_text_guard.GuardPolicy
 generated_text_guard.GuardedTextResult
 generated_text_guard.PHISpan
+pose.sequence.PoseEstimatorProvenance
+pose.sequence.PoseFrame
+pose.sequence.PoseJointObservation
+pose.sequence.PoseSequence
 preprocessing.PreprocessingEvidence
 preprocessing.PreprocessingOutput
 preprocessing.PreprocessingProfile
