@@ -534,6 +534,33 @@ Every pack follows the same steps:
 `.standard` store is the OpenMed MLX cache. Failures are
 `OpenMedTaskPackError` values whose raw value is a fixed reason code.
 
+### `MedicationPack`
+
+```swift
+let pack = try MedicationPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let result = try pack.extract(note)           // MedicationExtraction
+showNotice(result.notice.text)
+for mention in result.mentions {
+    highlight(mention.range(in: note), notice: mention.notice)
+}
+```
+
+`MedicationPack` extracts medication mentions and nothing else. `extract(_:)`
+runs `OpenMed.analyzeText` and keeps a mention only when the model label
+normalizes to one of the pack's canonical labels (`CHEMICAL` in pack version
+1.0.0; the PharmaDetect candidates emit `CHEM`). Labels such as `DRUG` or
+`MEDICATION` normalize to other canonical labels and are dropped. Each
+`MedicationMention` carries the normalized label, the model label, Unicode
+scalar offsets, the confidence, the source model id and the pack's
+`openmed.notice.medication.extraction_only` notice; the extraction result
+carries the notice too. No result type has a dose, frequency, interaction,
+recommendation or action field, no drug terminology is linked, and the pack
+triggers no follow-up action: the mentions are data for the app to show, with
+the notice. Creating the pack fails with `manifest_invalid` when the manifest
+does not attach that notice.
+
 ### `PIIPack`
 
 ```swift
@@ -1002,6 +1029,7 @@ Runtime types follow one of these contracts:
 | Type | `Sendable` | Contract |
 |---|---|---|
 | `OpenMed`, `NERPipeline`, `PlatformModel`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | No | Inference is synchronous and has no internal lock. Use each instance from one isolation domain: create and call it from one task or actor, or keep it inside your own actor. Give concurrent workers separate instances. |
+| `MedicationPack` | No | Same single-isolation-domain rule as `PIIPack`. |
 | `PIIPack` | No | Same single-isolation-domain rule: prepare and run each pack from one task or actor. |
 | `ClinicalEntityPack` | No | Same single-isolation-domain rule as `PIIPack`. |
 | `ExtensionRedactionHandler`, `TranscriptLanguageRouter`, `SpeechEndpointAdapter`, `VoiceEmbeddingSession`, `VoiceEmbeddingBuffer`, `VoiceEmbeddingHandle`, `ConvertedAudioSamples`, `WFDBFileSource` | No | Same single-isolation-domain rule. |
