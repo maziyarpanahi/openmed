@@ -1,0 +1,78 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "intent.error.empty_input": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is no text to redact."
+          }
+        }
+      }
+    },
+    "intent.error.input_too_large": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text is too long to redact in a shortcut."
+          }
+        }
+      }
+    },
+    "intent.error.no_cached_model": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No OpenMed model is downloaded on this device. Open the app and download a model first; shortcuts never download models."
+          }
+        }
+      }
+    },
+    "intent.error.redaction_failed": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenMed could not redact the text on this device."
+          }
+        }
+      }
+    },
+    "intent.error.runtime_unavailable": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The downloaded OpenMed model cannot run on this device."
+          }
+        }
+      }
+    },
+    "intent.error.unknown_policy": {
+      "comment": "Static App Intent error. Never interpolate input text, paths, or model names.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The policy is not one of the bundled OpenMed policies."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

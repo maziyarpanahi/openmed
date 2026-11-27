@@ -85,9 +85,10 @@ code with it on every pull request that touches the kit.
 | Swift, iOS Simulator | `swift/OpenMedKit/api/ios/<Module>.json` | `swift-api-digester -dump-sdk` on an `xcodebuild` iOS Simulator build | `Swift Package (OpenMedKit)` / Check iOS Swift API baseline |
 | Kotlin | `android/openmedkit/api/openmedkit.api` | Kotlin binary-compatibility validator (`apiDump`) | `Android CI (OpenMedKit)` / `apiCheck` |
 
-The Swift baselines cover the five library products of the root
+The Swift baselines cover the six library products of the root
 `Package.swift`: `OpenMedKit`, `OpenMedSpeech`, `OpenMedExtensionSupport`,
-`OpenMedShareExtension` and `OpenMedActionExtension`. The iOS baseline is the
+`OpenMedShareExtension`, `OpenMedActionExtension` and `OpenMedIntents`. The
+Swift-only `OpenMedIntents` App Intents product has no Kotlin counterpart. The iOS baseline is the
 one that records the UIKit-only Share and Action extension classes.
 `scripts/release/swift_api_baseline.py` turns each digester dump into a
 toolchain-neutral list of declarations keyed by module-qualified symbol, such

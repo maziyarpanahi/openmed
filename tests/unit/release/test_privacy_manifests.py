@@ -25,6 +25,7 @@ KIT_TARGETS = {
     "OpenMedExtensionSupport": "OpenMedExtensionSupport",
     "OpenMedShareExtension": "ShareExtension",
     "OpenMedActionExtension": "ActionExtension",
+    "OpenMedIntents": "OpenMedIntents",
 }
 MANIFEST_NAME = privacy_manifests.MANIFEST_NAME
 KIT_SOURCES = ROOT / privacy_manifests.KIT_SOURCES

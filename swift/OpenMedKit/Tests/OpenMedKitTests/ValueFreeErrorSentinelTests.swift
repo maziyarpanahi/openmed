@@ -25,6 +25,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     private static let delegatedTypes: [String: String] = [
         "OpenMedModelStoreError": "model store errors are owned by #3644",
         "ExtensionRedactionError": "swept by ExtensionTests/ExtensionErrorSentinelTests",
+        "OpenMedIntentError": "swept by OpenMedIntentsTests/RedactTextIntentTests",
     ]
 
     /// Private, payload-free markers caught inside their own file. The sweep
