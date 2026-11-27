@@ -33,6 +33,7 @@ from .loinc_loader import (
     LoincParts,
     LOINCVocabularyLoader,
     LoincVocabularyLoader,
+    loinc_check_digit_is_valid,
 )
 from .rxnorm_loader import (
     DEFAULT_TTY_PRIORITY,
@@ -72,6 +73,7 @@ __all__ = [
     "LoincLoaderError",
     "LoincVocabularyLoader",
     "LoincParts",
+    "loinc_check_digit_is_valid",
     "RXNORM_SYSTEM_URI",
     "RxNormLoader",
     "RxNormLoaderError",

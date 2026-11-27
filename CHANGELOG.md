@@ -89,6 +89,7 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Fixed
 
+- Validate LOINC Mod 10 check digits in `LoincLoader`: rows with a wrong check digit are counted in `invalid_check_digit_count`, and `strict_check_digits=True` raises `LoincLoaderError` (#4660).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer

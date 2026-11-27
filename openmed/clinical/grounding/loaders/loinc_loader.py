@@ -17,6 +17,7 @@ import builtins
 import csv
 import io
 import json
+import re
 import zipfile
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -45,6 +46,7 @@ __all__ = [
     "LoincLoaderError",
     "LoincVocabularyLoader",
     "LoincParts",
+    "loinc_check_digit_is_valid",
 ]
 
 LOINC_SYSTEM_URI = "http://loinc.org"
@@ -172,6 +174,31 @@ class LoincLoaderError(VocabLoaderError):
     """Raised when a caller-supplied LOINC release is invalid or unreadable."""
 
 
+_LOINC_CODE_PATTERN = re.compile(r"([0-9]{1,7})-([0-9])")
+
+
+def loinc_check_digit_is_valid(code: object) -> bool:
+    """Return whether ``code`` ends in its LOINC Mod 10 check digit.
+
+    The LOINC Users' Guide algorithm: take the digits in odd positions
+    counting from the right of the base number, double that number, place
+    the even-position digits in front, sum every digit, and subtract the sum
+    from the next multiple of ten.  Codes that are not one to seven ASCII
+    digits, a hyphen and one check digit are not valid.
+    """
+
+    match = _LOINC_CODE_PATTERN.fullmatch(str(code).strip())
+    if match is None:
+        return False
+    base, check = match.groups()
+    reversed_digits = base[::-1]
+    odd = reversed_digits[0::2][::-1]
+    even = reversed_digits[1::2][::-1]
+    digits = even + str(int(odd) * 2)
+    total = sum(int(digit) for digit in digits)
+    return (10 - total % 10) % 10 == int(check)
+
+
 @dataclass(frozen=True)
 class LoincParts:
     """The six axes that define a LOINC observation concept.
@@ -283,6 +310,7 @@ class _ParsedRelease:
     records: tuple[_LoincRecord, ...]
     answer_lists: Mapping[str, LoincAnswerList]
     links: Mapping[str, tuple[str, ...]]
+    invalid_check_digit_count: int = 0
 
 
 class LoincLoader:
@@ -297,6 +325,9 @@ class LoincLoader:
         parts_path: Optional ``Part.csv`` path used to resolve part identifiers.
         answer_list_path: Optional ``AnswerList.csv`` path.
         answer_list_link_path: Optional LOINC-to-answer-list link path.
+        strict_check_digits: Raise :class:`LoincLoaderError` when a table row
+            has a code whose Mod 10 check digit is wrong.  By default such
+            rows are kept and counted in ``invalid_check_digit_count``.
 
     The loader implements :class:`VocabularyLoader`: its source is explicitly
     redistributable, but no LOINC content is bundled.  ``load`` returns terms
@@ -320,6 +351,7 @@ class LoincLoader:
         answer_lists_path: str | Path | None = None,
         answer_list_link_path: str | Path | None = None,
         answer_list_links_path: str | Path | None = None,
+        strict_check_digits: bool = False,
     ) -> None:
         supplied = [value for value in (path, release_path, source_path) if value]
         if len(supplied) > 1:
@@ -353,6 +385,7 @@ class LoincLoader:
         self.answer_list_link_path = _optional_path(
             explicit_link_paths[0] if explicit_link_paths else None
         )
+        self.strict_check_digits = strict_check_digits
         self._release: _ParsedRelease | None = None
         self._terms: VocabularyTerms | None = None
         self._matcher: LexicalMatcher | None = None
@@ -368,6 +401,12 @@ class LoincLoader:
         """Return answer-list identifiers available in the supplied release."""
 
         return tuple(sorted(self._parsed_release().answer_lists))
+
+    @property
+    def invalid_check_digit_count(self) -> int:
+        """Return how many table rows have a code with a wrong check digit."""
+
+        return self._parsed_release().invalid_check_digit_count
 
     def load(self) -> VocabularyTerms:
         """Return long-common-name aliases mapped to LOINC lexical concepts."""
@@ -562,6 +601,7 @@ class LoincLoader:
                 parts_path=self.parts_path,
                 answer_list_path=self.answer_list_path,
                 answer_list_link_path=self.answer_list_link_path,
+                strict_check_digits=self.strict_check_digits,
             )
         return self._release
 
@@ -611,6 +651,7 @@ def _parse_release(
     parts_path: Path | None,
     answer_list_path: Path | None,
     answer_list_link_path: Path | None,
+    strict_check_digits: bool = False,
 ) -> _ParsedRelease:
     if not path.exists():
         raise LoincLoaderError(f"LOINC release path does not exist: {path}")
@@ -633,10 +674,16 @@ def _parse_release(
             answer_list_link_path
             or _find_local_file(path, _LINK_NAMES, _looks_like_links)
         )
-        return _build_release(table_rows, part_rows, answer_rows, link_rows)
+        return _build_release(
+            table_rows,
+            part_rows,
+            answer_rows,
+            link_rows,
+            strict_check_digits=strict_check_digits,
+        )
 
     if zipfile.is_zipfile(path):
-        return _parse_archive(path)
+        return _parse_archive(path, strict_check_digits=strict_check_digits)
 
     table_rows = _read_rows_from_path(table_path or path)
     sibling_root = path.parent
@@ -651,10 +698,16 @@ def _parse_release(
         answer_list_link_path
         or _find_local_file(sibling_root, _LINK_NAMES, _looks_like_links)
     )
-    return _build_release(table_rows, part_rows, answer_rows, link_rows)
+    return _build_release(
+        table_rows,
+        part_rows,
+        answer_rows,
+        link_rows,
+        strict_check_digits=strict_check_digits,
+    )
 
 
-def _parse_archive(path: Path) -> _ParsedRelease:
+def _parse_archive(path: Path, *, strict_check_digits: bool) -> _ParsedRelease:
     try:
         archive = zipfile.ZipFile(path)
     except (OSError, zipfile.BadZipFile) as exc:
@@ -692,7 +745,13 @@ def _parse_archive(path: Path) -> _ParsedRelease:
             if link_name
             else ()
         )
-        return _build_release(table_rows, part_rows, answer_rows, link_rows)
+        return _build_release(
+            table_rows,
+            part_rows,
+            answer_rows,
+            link_rows,
+            strict_check_digits=strict_check_digits,
+        )
 
 
 def _build_release(
@@ -700,11 +759,14 @@ def _build_release(
     part_rows: Iterable[Mapping[str, object]],
     answer_rows: Iterable[Mapping[str, object]],
     link_rows: Iterable[Mapping[str, object]],
+    *,
+    strict_check_digits: bool = False,
 ) -> _ParsedRelease:
     part_labels = _parse_part_labels(part_rows)
     records: list[_LoincRecord] = []
     by_code: dict[str, _LoincRecord] = {}
     inline_links: dict[str, set[str]] = defaultdict(set)
+    invalid_check_digits = 0
 
     for row in table_rows:
         code = _first_value(row, "code")
@@ -715,6 +777,8 @@ def _build_release(
         normalized_name = _text(long_name)
         if not normalized_code or not normalized_name:
             continue
+        if not loinc_check_digit_is_valid(normalized_code):
+            invalid_check_digits += 1
         parts = _parts_from_row(row, part_labels)
         record = by_code.get(normalized_code)
         if record is None:
@@ -744,6 +808,10 @@ def _build_release(
         raise LoincLoaderError(
             "No LOINC concepts could be read from the supplied release"
         )
+    if strict_check_digits and invalid_check_digits:
+        raise LoincLoaderError(
+            f"{invalid_check_digits} LOINC table row(s) have an invalid check digit"
+        )
 
     answer_builders = _parse_answer_rows(answer_rows)
     file_links = _parse_link_rows(link_rows)
@@ -766,7 +834,12 @@ def _build_release(
         for record in records
         if record.answer_list_ids
     }
-    return _ParsedRelease(tuple(records), answer_lists, links)
+    return _ParsedRelease(
+        tuple(records),
+        answer_lists,
+        links,
+        invalid_check_digit_count=invalid_check_digits,
+    )
 
 
 def _parse_part_labels(rows: Iterable[Mapping[str, object]]) -> dict[str, str]:

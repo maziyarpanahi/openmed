@@ -69,6 +69,27 @@ then `MIN`). Dose-form relationships are exposed in
 `match.metadata["dose_form"]`. Loading is local-only and performs no network
 request; no RxNorm rows are stored in the repository.
 
+## Check LOINC check digits
+
+Every LOINC code ends in a Mod 10 check digit (`4548-4`). `LoincLoader` keeps
+rows whose check digit is wrong, so a transposed digit in a projection does not
+drop data silently, and reports how many table rows failed the check. The count
+never includes the codes themselves. Pass `strict_check_digits=True` to raise
+`LoincLoaderError` instead:
+
+```python
+from openmed.clinical.grounding import LoincLoader, loinc_check_digit_is_valid
+
+assert loinc_check_digit_is_valid("4548-4")
+assert not loinc_check_digit_is_valid("4548-5")
+
+loinc = LoincLoader("/srv/vocab/loinc")
+print(loinc.invalid_check_digit_count)
+
+strict = LoincLoader("/srv/vocab/loinc", strict_check_digits=True)
+strict.load()  # raises LoincLoaderError if any row has a wrong check digit
+```
+
 ## Restricted vocabularies
 
 UMLS and SNOMED CT content is never bundled or downloaded. Activating either
