@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.core.result_cache as result_cache
 from openmed.core.baseline import write_baseline_store
 from openmed.core.registry_slots import (
     RegistryGateError,
@@ -125,6 +126,25 @@ def test_promote_and_rollback_are_reproducible_from_local_state(
     assert restored.lineage(_NER_SLOT)[-1]["relation"] == "rolled-back-from"
     assert restored.lineage(_NER_SLOT)[-1]["from"] == _NER_B
     assert restored.lineage(_NER_SLOT)[-1]["to"] == _NER_A
+
+
+def test_promote_and_rollback_invalidate_result_cache(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path)
+    state = tmp_path / "registry_state.json"
+    service = RegistryService(manifest_path=manifest, state_path=state)
+    cache = result_cache.get_result_cache(max_entries=4)
+    params = {"text": "History of asthma.", "model_name": _NER_A}
+
+    for change in (
+        lambda: service.promote(_NER_A, gate_report=_ner_gate(_NER_A)),
+        lambda: service.promote(_NER_B, gate_report=_ner_gate(_NER_B)),
+        lambda: service.rollback(_NER_SLOT, gate_report=_ner_gate(_NER_A)),
+    ):
+        key = result_cache.make_cache_key("analyze_text", params)
+        cache.set(key, "result from the previous weights")
+        change()
+        assert cache.get(key) is None
+        assert result_cache.make_cache_key("analyze_text", params) != key
 
 
 def test_pointer_flip_requires_releasable_gate_without_mutating_state(
