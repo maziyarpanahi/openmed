@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Publish every packaged JSON Schema whose `$id` is on `openmed.life` at its `$id` URL on the docs site, byte-identical to the packaged file, with `schemas/index.json` listing every packaged schema once (`$id`, `schema_version`, sha256, source path); off-host `$id`s fail staging and `openmed.dev` ids are listed as unpublished (#5334).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.

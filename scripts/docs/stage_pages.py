@@ -3,8 +3,9 @@
 
 This is the single staging entrypoint used by both local development and CI.
 It renders committed generated docs, builds MkDocs below ``/docs/``, overlays
-the marketing site at the artifact root, and writes a content-addressed
-manifest for every staged route and asset.
+the marketing site at the artifact root, publishes every packaged JSON Schema
+whose ``$id`` is on the Pages host at its ``$id`` path, and writes a
+content-addressed manifest for every staged route and asset.
 """
 
 from __future__ import annotations
@@ -37,6 +38,17 @@ DEFAULT_LEADERBOARD_DIR = ROOT / "docs" / "eval" / "benchmark-leaderboard"
 MANIFEST_NAME = "pages-manifest.json"
 MANIFEST_SCHEMA_VERSION = 1
 PUBLIC_ORIGIN = "https://openmed.life"
+SCHEMA_SOURCE_DIR = ROOT / "openmed"
+SCHEMA_FILE_SUFFIX = ".schema.json"
+SCHEMA_URL_PREFIX = "schemas/"
+SCHEMA_INDEX_PATH = "schemas/index.json"
+SCHEMA_INDEX_VERSION = 1
+SCHEMA_ID_HOST = urlsplit(PUBLIC_ORIGIN).hostname or ""
+# Packaged ``$id`` hosts that are not served yet. Their schemas are listed in
+# ``schemas/index.json`` as unpublished until every ``$id`` moves to one host;
+# any other host fails staging.
+SCHEMA_PENDING_ID_HOSTS = frozenset({"openmed.dev"})
+SCHEMA_UNPUBLISHED_REASON = "id_host_not_served"
 
 _LOCALE_SOURCE_RE = re.compile(r"^(?P<stem>.+)\.(?P<locale>[a-z]{2,3})\.md$")
 _RELEASE_TAG_RE = re.compile(r"v?[0-9]+(?:\.[0-9]+){2}(?:[-+][0-9A-Za-z.-]+)?")
@@ -45,6 +57,9 @@ _CSS_REFERENCE_RE = re.compile(
     re.IGNORECASE,
 )
 _INTERNAL_HOSTS = frozenset({"openmed.life", "www.openmed.life"})
+_SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_ID_SEMVER_RE = re.compile(r"/((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$")
+_SCHEMA_URL_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class PageStagingError(RuntimeError):
@@ -1335,6 +1350,8 @@ def owner_for_path(path: str) -> str:
 
     if path == MANIFEST_NAME:
         return "staging"
+    if path.startswith(SCHEMA_URL_PREFIX):
+        return "schemas"
     if path.startswith("docs/eval/benchmark-leaderboard/"):
         return "leaderboard"
     if path.startswith("docs/demo/web/"):
@@ -1743,6 +1760,285 @@ def copy_locale_sitemaps(output_dir: Path, publication: Mapping[str, Any]) -> No
         )
 
 
+def packaged_schema_files(source_dir: Path = SCHEMA_SOURCE_DIR) -> list[Path]:
+    """Return every ``*.schema.json`` file bundled in the ``openmed`` package.
+
+    Args:
+        source_dir: The package directory to scan.
+
+    Returns:
+        Schema files in deterministic order.
+
+    Raises:
+        PageStagingError: If a schema file is a symlink.
+    """
+
+    files: list[Path] = []
+    for path in sorted(source_dir.rglob(f"*{SCHEMA_FILE_SUFFIX}")):
+        if "__pycache__" in path.relative_to(source_dir).parts:
+            continue
+        if path.is_symlink():
+            raise PageStagingError(
+                "Packaged schema cannot be a symlink: "
+                + _schema_label(path, source_dir)
+            )
+        if path.is_file():
+            files.append(path)
+    return files
+
+
+def schema_publication_path(schema_id: object, *, label: str) -> str | None:
+    """Return the staged artifact path for one schema ``$id``.
+
+    Args:
+        schema_id: The schema's ``$id`` value.
+        label: Package path of the schema file, the only detail errors name.
+
+    Returns:
+        The artifact path (for example ``schemas/config.schema.json``) when the
+        ``$id`` is on the Pages host, or ``None`` when it uses a host listed in
+        :data:`SCHEMA_PENDING_ID_HOSTS`.
+
+    Raises:
+        PageStagingError: If the ``$id`` is missing, is not an ``https`` URL,
+            uses any other host, or does not name a ``.json`` file below
+            ``/schemas/``.
+    """
+
+    if not isinstance(schema_id, str) or not schema_id:
+        raise PageStagingError(f"Packaged schema has no $id: {label}")
+    try:
+        parts = urlsplit(schema_id)
+        port = parts.port
+    except ValueError as exc:
+        raise PageStagingError(f"Packaged schema $id is not a URL: {label}") from exc
+    if parts.scheme != "https" or parts.username or parts.password or port:
+        raise PageStagingError(f"Packaged schema $id is not an https URL: {label}")
+    host = parts.hostname or ""
+    if host in SCHEMA_PENDING_ID_HOSTS:
+        return None
+    if host != SCHEMA_ID_HOST:
+        raise PageStagingError(
+            f"Packaged schema $id host is not {SCHEMA_ID_HOST}: {label}"
+        )
+    relative = parts.path[1:] if parts.path.startswith("/") else ""
+    if (
+        parts.query
+        or parts.fragment
+        or not relative.startswith(SCHEMA_URL_PREFIX)
+        or not relative.endswith(".json")
+        or relative == SCHEMA_INDEX_PATH
+        or not all(_SCHEMA_URL_SEGMENT_RE.fullmatch(s) for s in relative.split("/"))
+    ):
+        raise PageStagingError(
+            f"Packaged schema $id must name a .json file below "
+            f"/{SCHEMA_URL_PREFIX}: {label}"
+        )
+    return relative
+
+
+def plan_schema_publication(
+    source_dir: Path = SCHEMA_SOURCE_DIR,
+) -> list[dict[str, Any]]:
+    """Describe where every packaged schema is published.
+
+    Args:
+        source_dir: The package directory to scan.
+
+    Returns:
+        One ``schemas/index.json`` entry per packaged schema, sorted by source
+        path. Each entry has ``$id``, ``schema_version``, ``sha256`` of the
+        packaged bytes, ``source`` (the package path), ``published``, the
+        staged ``path`` (``None`` when unpublished) and the unpublished
+        ``reason``.
+
+    Raises:
+        PageStagingError: If a schema is not a JSON object, has an unusable
+            ``$id``, or shares its published path with another schema.
+    """
+
+    entries: list[dict[str, Any]] = []
+    targets: dict[str, str] = {}
+    for path in packaged_schema_files(source_dir):
+        label = _schema_label(path, source_dir)
+        try:
+            payload = path.read_bytes()
+            schema = json.loads(payload)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise PageStagingError(
+                f"Packaged schema is not valid JSON: {label}"
+            ) from exc
+        if not isinstance(schema, dict):
+            raise PageStagingError(f"Packaged schema must be a JSON object: {label}")
+        target = schema_publication_path(schema.get("$id"), label=label)
+        if target is not None:
+            if target in targets:
+                raise PageStagingError(
+                    f"Packaged schemas share one $id path: {targets[target]}, {label}"
+                )
+            targets[target] = label
+        entries.append(
+            {
+                "$id": schema["$id"],
+                "path": target,
+                "published": target is not None,
+                "reason": None if target is not None else SCHEMA_UNPUBLISHED_REASON,
+                "schema_version": _declared_schema_version(schema),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "source": label,
+            }
+        )
+    return entries
+
+
+def stage_schemas(output_dir: Path, *, source_dir: Path = SCHEMA_SOURCE_DIR) -> Path:
+    """Publish packaged schemas at their ``$id`` paths and write the index.
+
+    Every schema whose ``$id`` is on the Pages host is copied byte for byte to
+    the artifact path of its ``$id``. ``schemas/index.json`` lists every
+    packaged schema exactly once, including the ones that are not published.
+
+    Args:
+        output_dir: The staged Pages artifact.
+        source_dir: The package directory to scan.
+
+    Returns:
+        The written index path.
+
+    Raises:
+        PageStagingError: If a schema cannot be planned or would replace a
+            staged file.
+    """
+
+    entries = plan_schema_publication(source_dir)
+    published = [entry for entry in entries if entry["published"]]
+    targets = [SCHEMA_INDEX_PATH, *(str(entry["path"]) for entry in published)]
+    collisions = sorted(
+        target
+        for target in targets
+        if (output_dir / target).exists()
+        or any(
+            (output_dir / parent).is_file()
+            for parent in Path(target).parents
+            if parent != Path(".")
+        )
+    )
+    if collisions:
+        raise PageStagingError(
+            "Schema publication would replace staged output: " + ", ".join(collisions)
+        )
+    for entry in published:
+        destination = output_dir / str(entry["path"])
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_dir.parent / str(entry["source"]), destination)
+    index_path = output_dir / SCHEMA_INDEX_PATH
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index = {
+        "host": SCHEMA_ID_HOST,
+        "schema_version": SCHEMA_INDEX_VERSION,
+        "schemas": entries,
+        "summary": {
+            "published": len(published),
+            "total": len(entries),
+            "unpublished": len(entries) - len(published),
+        },
+    }
+    index_path.write_text(
+        json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"[pages] published {len(published)} JSON Schemas at their $id paths; "
+        f"{len(entries) - len(published)} listed as unpublished"
+    )
+    return index_path
+
+
+def verify_staged_schemas(
+    output_dir: Path, *, source_dir: Path = SCHEMA_SOURCE_DIR
+) -> None:
+    """Require the staged schemas and index to match the packaged files.
+
+    Args:
+        output_dir: The staged Pages artifact.
+        source_dir: The package directory to scan.
+
+    Raises:
+        PageStagingError: If the index does not list every packaged schema
+            exactly once, or a published copy is missing or differs from the
+            packaged bytes.
+    """
+
+    index_path = output_dir / SCHEMA_INDEX_PATH
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        listed = [str(entry["source"]) for entry in index["schemas"]]
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError) as exc:
+        raise PageStagingError("Staged schemas/index.json is unreadable") from exc
+    expected = plan_schema_publication(source_dir)
+    if len(listed) != len(set(listed)) or index["schemas"] != expected:
+        raise PageStagingError(
+            "Staged schemas/index.json does not list every packaged schema once"
+        )
+    errors: list[str] = []
+    for entry in expected:
+        if not entry["published"]:
+            continue
+        staged = output_dir / str(entry["path"])
+        if staged.is_symlink() or not staged.is_file():
+            errors.append(f"missing {entry['source']}")
+        elif sha256_file(staged) != entry["sha256"]:
+            errors.append(f"differs {entry['source']}")
+    if errors:
+        raise PageStagingError(
+            "Staged schemas do not match the packaged files: " + ", ".join(errors)
+        )
+
+
+def _schema_label(path: Path, source_dir: Path) -> str:
+    return f"{source_dir.name}/{path.relative_to(source_dir).as_posix()}"
+
+
+def _declared_schema_version(schema: Mapping[str, Any]) -> int | str | None:
+    """Return the version a schema declares, matching the drift snapshot rules.
+
+    The order is a top-level ``schema_version``, then a ``const`` or the
+    highest ``enum`` value on the ``schema_version`` property, then a trailing
+    semver segment in ``$id``.
+    """
+
+    if "schema_version" in schema:
+        return _version_value(schema["schema_version"])
+    properties = schema.get("properties")
+    declared = (
+        properties.get("schema_version") if isinstance(properties, Mapping) else None
+    )
+    if isinstance(declared, Mapping):
+        if "const" in declared:
+            return _version_value(declared["const"])
+        values = declared.get("enum")
+        if isinstance(values, list) and values:
+            versions = [_version_value(value) for value in values]
+            semver = [
+                (tuple(int(part) for part in match.groups()), value)
+                for value in versions
+                if isinstance(value, str) and (match := _SEMVER_RE.match(value))
+            ]
+            if len(semver) == len(versions):
+                return max(semver)[1]
+            return versions[-1]
+    schema_id = schema.get("$id")
+    if isinstance(schema_id, str) and (match := _ID_SEMVER_RE.search(schema_id)):
+        return match.group(1)
+    return None
+
+
+def _version_value(value: object) -> int | str | None:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    return value
+
+
 def prune_source_maps(output_dir: Path) -> list[str]:
     """Remove non-runtime source maps from the production Pages artifact."""
 
@@ -1809,6 +2105,7 @@ def stage_pages(
     build_docs(output_dir)
     copy_website(DEFAULT_WEBSITE_DIR, output_dir)
     copy_locale_sitemaps(output_dir, publication)
+    stage_schemas(output_dir)
     prune_source_maps(output_dir)
     compact_search_index(output_dir)
 
@@ -1816,8 +2113,11 @@ def stage_pages(
         *normalized_expected_paths(publication),
         *normalized_expected_assets(publication),
         *translated_output_paths(publication),
+        SCHEMA_INDEX_PATH,
     }
     assert_paths_exist(output_dir, required)
+    print("[pages] verifying published JSON Schemas")
+    verify_staged_schemas(output_dir)
     print("[pages] validating LLM feeds")
     validate_llm_feeds(output_dir)
     print("[pages] crawling internal routes and assets")
