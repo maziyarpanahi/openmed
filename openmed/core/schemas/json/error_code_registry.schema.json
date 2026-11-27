@@ -1,0 +1,463 @@
+{
+  "$defs": {
+    "category": {
+      "enum": [
+        "unauthenticated",
+        "permission_denied",
+        "invalid_argument",
+        "resource_exhausted",
+        "deadline_exceeded",
+        "cancelled",
+        "unavailable",
+        "internal"
+      ]
+    },
+    "cli_mapping": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/code"
+        },
+        "exit_code": {
+          "enum": [
+            1,
+            2
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "exit_code"
+      ],
+      "type": "object"
+    },
+    "code": {
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+      "type": "string"
+    },
+    "divergence": {
+      "additionalProperties": false,
+      "properties": {
+        "follow_up": {
+          "$ref": "#/$defs/text"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "enum": [
+            "category",
+            "naming",
+            "status",
+            "documentation"
+          ]
+        },
+        "protocol_map": {
+          "$ref": "#/$defs/identifier"
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        },
+        "surfaces": {
+          "items": {
+            "$ref": "#/$defs/surface"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "follow_up",
+        "id",
+        "kind",
+        "summary",
+        "surfaces"
+      ],
+      "type": "object"
+    },
+    "entry": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/category"
+        },
+        "cli": {
+          "items": {
+            "$ref": "#/$defs/cli_mapping"
+          },
+          "type": "array"
+        },
+        "code": {
+          "$ref": "#/$defs/code"
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "divergences": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "graphql": {
+          "items": {
+            "$ref": "#/$defs/graphql_mapping"
+          },
+          "type": "array"
+        },
+        "grpc": {
+          "items": {
+            "$ref": "#/$defs/grpc_mapping"
+          },
+          "type": "array"
+        },
+        "http": {
+          "items": {
+            "$ref": "#/$defs/http_mapping"
+          },
+          "type": "array"
+        },
+        "mcp": {
+          "items": {
+            "$ref": "#/$defs/mcp_mapping"
+          },
+          "type": "array"
+        },
+        "portable": {
+          "type": "boolean"
+        },
+        "python": {
+          "items": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "retryable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "retryable_basis": {
+          "enum": [
+            "retry_after_header",
+            "retryable_signal",
+            "transient_capacity",
+            "request_must_change",
+            "configuration_must_change",
+            "server_fault",
+            "undetermined"
+          ]
+        }
+      },
+      "required": [
+        "category",
+        "cli",
+        "code",
+        "description",
+        "divergences",
+        "graphql",
+        "grpc",
+        "http",
+        "mcp",
+        "portable",
+        "python",
+        "retryable",
+        "retryable_basis"
+      ],
+      "type": "object"
+    },
+    "graphql_mapping": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "http_status": {
+          "$ref": "#/$defs/http_status"
+        },
+        "note": {
+          "$ref": "#/$defs/text"
+        },
+        "retry_after": {
+          "type": "boolean"
+        },
+        "retryable_extension": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "grpc_mapping": {
+      "additionalProperties": false,
+      "properties": {
+        "details": {
+          "$ref": "#/$defs/code"
+        },
+        "note": {
+          "$ref": "#/$defs/text"
+        },
+        "origin": {
+          "enum": [
+            "server",
+            "transport"
+          ]
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryable_metadata": {
+          "type": "boolean"
+        },
+        "status": {
+          "pattern": "^[A-Z][A-Z_]{1,31}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "status"
+      ],
+      "type": "object"
+    },
+    "http_mapping": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "enum": [
+            "service",
+            "redaction",
+            "privacy_proxy"
+          ]
+        },
+        "code": {
+          "$ref": "#/$defs/code"
+        },
+        "delivery": {
+          "enum": [
+            "response",
+            "stream_event"
+          ]
+        },
+        "note": {
+          "$ref": "#/$defs/text"
+        },
+        "retry_after": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/http_status"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "http_status": {
+      "maximum": 599,
+      "minimum": 100,
+      "type": "integer"
+    },
+    "identifier": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "type": "string"
+    },
+    "mcp_mapping": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/code"
+        },
+        "delivery": {
+          "enum": [
+            "failed_result",
+            "tool_error"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "surface": {
+      "enum": [
+        "python",
+        "http",
+        "grpc",
+        "graphql",
+        "mcp",
+        "cli"
+      ]
+    },
+    "text": {
+      "maxLength": 512,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://openmed.dev/schemas/v1/error_code_registry.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "OpenMed error-code registry: every stable error code with the Python classes that carry it and how each public surface reports it.",
+  "properties": {
+    "categories": {
+      "items": {
+        "$ref": "#/$defs/category"
+      },
+      "minItems": 8,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "codes": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "contract": {
+      "const": "openmed.errors.code-registry"
+    },
+    "contract_version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "type": "string"
+    },
+    "description": {
+      "$ref": "#/$defs/text"
+    },
+    "divergences": {
+      "items": {
+        "$ref": "#/$defs/divergence"
+      },
+      "type": "array"
+    },
+    "retired_codes": {
+      "items": {
+        "$ref": "#/$defs/code"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "retryable_bases": {
+      "additionalProperties": {
+        "$ref": "#/$defs/text"
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "surfaces": {
+      "additionalProperties": false,
+      "properties": {
+        "cli": {
+          "additionalProperties": false,
+          "properties": {
+            "exit_codes": {
+              "additionalProperties": false,
+              "properties": {
+                "0": {
+                  "$ref": "#/$defs/text"
+                },
+                "1": {
+                  "$ref": "#/$defs/text"
+                },
+                "2": {
+                  "$ref": "#/$defs/text"
+                }
+              },
+              "required": [
+                "0",
+                "1",
+                "2"
+              ],
+              "type": "object"
+            },
+            "field": {
+              "$ref": "#/$defs/text"
+            }
+          },
+          "required": [
+            "exit_codes",
+            "field"
+          ],
+          "type": "object"
+        },
+        "graphql": {
+          "additionalProperties": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "object"
+        },
+        "grpc": {
+          "additionalProperties": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "object"
+        },
+        "http": {
+          "type": "object"
+        },
+        "mcp": {
+          "additionalProperties": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "object"
+        },
+        "python": {
+          "additionalProperties": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "cli",
+        "graphql",
+        "grpc",
+        "http",
+        "mcp",
+        "python"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "categories",
+    "codes",
+    "contract",
+    "contract_version",
+    "description",
+    "divergences",
+    "retired_codes",
+    "retryable_bases",
+    "schema_version",
+    "surfaces"
+  ],
+  "schema_version": 1,
+  "title": "OpenMed error-code registry",
+  "type": "object"
+}

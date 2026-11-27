@@ -30,7 +30,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, List, Mapping, Optional, Sequence
 
 from .model_registry import get_model_info
-from .offline import OfflineModeError, is_local_only
+from .offline import OfflineModeError, OfflineModelUnavailableError, is_local_only
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .config import OpenMedConfig
@@ -179,8 +179,10 @@ def prefetch_model(
 
     When offline mode is active (``OPENMED_OFFLINE`` or ``config.local_only``),
     the download runs with ``local_files_only=True``; if the snapshot is not
-    already cached an :class:`~openmed.core.offline.OfflineModeError` is raised
-    instead of attempting a network fetch.
+    already cached an
+    :class:`~openmed.core.offline.OfflineModelUnavailableError` is raised
+    instead of attempting a network fetch. It is an ``OfflineModeError`` that
+    also carries the ``model_load_error`` code.
 
     Args:
         name_or_alias: Registry key, repo id, or bare model name to fetch.
@@ -203,7 +205,9 @@ def prefetch_model(
 
     Raises:
         ImportError: If the optional ``[hf]`` extra is not installed.
-        OfflineModeError: If offline mode is active and the model is not cached.
+        OfflineModelUnavailableError: If offline mode is active and the model is
+            not cached. It is an ``OfflineModeError`` with the
+            ``model_load_error`` code.
         DownloadIntegrityError: If Hub metadata is insufficient for verification
             or a downloaded file remains corrupt after one forced re-fetch.
         ValueError: If *retries* or *max_bandwidth* is invalid.
@@ -250,10 +254,11 @@ def prefetch_model(
         return snapshot_download(**download_kwargs)
     except local_entry_not_found as exc:
         if local_only:
-            raise OfflineModeError(
+            raise OfflineModelUnavailableError(
                 f"{repo_id} is not available in the local cache and offline mode "
                 "blocks the download. Pre-fetch it once with offline mode "
-                "disabled, or point HF_HOME at a cache that already contains it."
+                "disabled, or point HF_HOME at a cache that already contains it.",
+                model_name=repo_id,
             ) from exc
         raise
 

@@ -167,6 +167,10 @@ public final class com/openmed/openmedkit/OpenMedAdmission : java/lang/Enum {
 	public static fun values ()[Lcom/openmed/openmedkit/OpenMedAdmission;
 }
 
+public final class com/openmed/openmedkit/OpenMedArgumentException : java/lang/IllegalArgumentException, com/openmed/openmedkit/OpenMedCodedError {
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
+}
+
 public final class com/openmed/openmedkit/OpenMedBackend {
 	public fun <init> (Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;)V
 	public synthetic fun <init> (Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -189,11 +193,31 @@ public final class com/openmed/openmedkit/OpenMedBackend {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class com/openmed/openmedkit/OpenMedCodedError {
+	public abstract fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
+}
+
 public final class com/openmed/openmedkit/OpenMedComponentCallbacks : android/content/ComponentCallbacks2 {
 	public fun <init> (Lcom/openmed/openmedkit/OpenMedLifecycleObserver;)V
 	public fun onConfigurationChanged (Landroid/content/res/Configuration;)V
 	public fun onLowMemory ()V
 	public fun onTrimMemory (I)V
+}
+
+public final class com/openmed/openmedkit/OpenMedErrorCode : java/lang/Enum {
+	public static final field BUDGET_EXCEEDED Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field CAPABILITY_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field CONFIGURATION_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INFERENCE_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INPUT_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INTERNAL_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field MODEL_LOAD_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field POLICY_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getRetryable ()Z
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static fun values ()[Lcom/openmed/openmedkit/OpenMedErrorCode;
 }
 
 public final class com/openmed/openmedkit/OpenMedHostScope : java/io/Closeable {
@@ -652,6 +676,7 @@ public final class com/openmed/openmedkit/artifact/ArtifactAcquisitionRequest {
 
 public abstract class com/openmed/openmedkit/artifact/ArtifactAcquisitionResult {
 	public fun getArtifact ()Lcom/openmed/openmedkit/artifact/AcquiredArtifact;
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 	public fun getReason ()Lcom/openmed/openmedkit/artifact/ArtifactAcquisitionReason;
 	public abstract fun getRef ()Lcom/openmed/openmedkit/artifact/ArtifactRef;
 	public abstract fun getState ()Lcom/openmed/openmedkit/artifact/ArtifactAcquisitionState;
@@ -679,6 +704,7 @@ public final class com/openmed/openmedkit/artifact/ArtifactAcquisitionResult$Dow
 }
 
 public final class com/openmed/openmedkit/artifact/ArtifactAcquisitionResult$Failed : com/openmed/openmedkit/artifact/ArtifactAcquisitionResult {
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 	public final fun getHttpStatus ()Ljava/lang/Integer;
 	public fun getReason ()Lcom/openmed/openmedkit/artifact/ArtifactAcquisitionReason;
 	public fun getRef ()Lcom/openmed/openmedkit/artifact/ArtifactRef;
@@ -690,6 +716,7 @@ public abstract class com/openmed/openmedkit/artifact/ArtifactAcquisitionResult$
 }
 
 public final class com/openmed/openmedkit/artifact/ArtifactAcquisitionResult$Unsupported : com/openmed/openmedkit/artifact/ArtifactAcquisitionResult {
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 	public fun getReason ()Lcom/openmed/openmedkit/artifact/ArtifactAcquisitionReason;
 	public fun getRef ()Lcom/openmed/openmedkit/artifact/ArtifactRef;
 	public fun getState ()Lcom/openmed/openmedkit/artifact/ArtifactAcquisitionState;
@@ -2312,8 +2339,9 @@ public final class com/openmed/openmedkit/download/ModelDownloadCancelledExcepti
 	public fun <init> ()V
 }
 
-public final class com/openmed/openmedkit/download/ModelDownloadException : java/lang/RuntimeException {
+public final class com/openmed/openmedkit/download/ModelDownloadException : java/lang/RuntimeException, com/openmed/openmedkit/OpenMedCodedError {
 	public fun <init> (Ljava/lang/String;)V
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 }
 
 public final class com/openmed/openmedkit/download/ModelDownloadLogEvent {
@@ -2401,8 +2429,9 @@ public final class com/openmed/openmedkit/download/ModelIntegrity {
 	public final fun reproducibilityHash (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
 }
 
-public final class com/openmed/openmedkit/download/ModelIntegrityException : java/lang/RuntimeException {
+public final class com/openmed/openmedkit/download/ModelIntegrityException : java/lang/RuntimeException, com/openmed/openmedkit/OpenMedCodedError {
 	public fun <init> (Ljava/lang/String;)V
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 }
 
 public abstract interface class com/openmed/openmedkit/download/ModelTransferControl {
@@ -4129,9 +4158,10 @@ public final class com/openmed/openmedkit/onnx/DeviceTierLatencyRecord {
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract class com/openmed/openmedkit/onnx/InferenceError : java/lang/Exception {
+public abstract class com/openmed/openmedkit/onnx/InferenceError : java/lang/Exception, com/openmed/openmedkit/OpenMedCodedError {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 }
 
 public final class com/openmed/openmedkit/onnx/InferenceError$InvalidInput : com/openmed/openmedkit/onnx/InferenceError {
@@ -4409,10 +4439,11 @@ public final class com/openmed/openmedkit/policy/PolicyProfile {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class com/openmed/openmedkit/policy/PolicyProfileException : java/lang/IllegalArgumentException {
+public final class com/openmed/openmedkit/policy/PolicyProfileException : java/lang/IllegalArgumentException, com/openmed/openmedkit/OpenMedCodedError {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCode ()Ljava/lang/String;
+	public fun getErrorCode ()Lcom/openmed/openmedkit/OpenMedErrorCode;
 	public final fun getFieldPath ()Ljava/lang/String;
 }
 

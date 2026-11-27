@@ -1,5 +1,7 @@
 package com.openmed.openmedkit.download
 
+import com.openmed.openmedkit.OpenMedCodedError
+import com.openmed.openmedkit.OpenMedErrorCode
 import android.content.Context
 import com.openmed.openmedkit.cache.CachedArtifactFile
 import com.openmed.openmedkit.cache.ModelCache
@@ -532,15 +534,21 @@ class ModelDownloadException internal constructor(
     message: String,
     internal val failure: ModelFailure,
     internal val httpStatus: Int? = null,
-) : RuntimeException(message) {
+) : RuntimeException(message), OpenMedCodedError {
     constructor(message: String) : this(message, ModelFailure.UNSPECIFIED)
+
+    /** Always `model_load_error`. */
+    override val errorCode: OpenMedErrorCode get() = OpenMedErrorCode.MODEL_LOAD_ERROR
 }
 
 class ModelIntegrityException internal constructor(
     message: String,
     internal val failure: ModelFailure,
-) : RuntimeException(message) {
+) : RuntimeException(message), OpenMedCodedError {
     constructor(message: String) : this(message, ModelFailure.UNSPECIFIED)
+
+    /** Always `model_load_error`. */
+    override val errorCode: OpenMedErrorCode get() = OpenMedErrorCode.MODEL_LOAD_ERROR
 }
 
 /** Typed cause carried by download and integrity exceptions. */
