@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Download Core ML token-classification snapshots through `OpenMedModelStore.downloadCoreMLModel`: the store reads `openmed-coreml.json` and the package's provenance inventory, confines every declared path, compiles the `.mlpackage` into the cache only after every file has downloaded (keeping the source package), and reports `missing`, `partial` or `ready` until the label map and tokenizer are present (#5401).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
