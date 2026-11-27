@@ -256,6 +256,22 @@ def test_dynamic_names_are_unverifiable_until_allowlisted(tmp_path) -> None:
     assert _check(tmp_path, dynamic_allowed={key: "synthetic"}) == []
 
 
+def test_dynamic_names_built_from_a_named_prefix_are_unverifiable(tmp_path) -> None:
+    _synthetic_package(
+        tmp_path,
+        "import os\n"
+        'PREFIX = "OPENMED_SYNTHETIC_"\n'
+        'JOINED = os.environ.get(PREFIX + "JOINED")\n'
+        'FORMATTED = os.getenv(f"{PREFIX}FORMATTED")\n',
+    )
+
+    problems = _check(tmp_path)
+    assert len(problems) == 2
+    assert "openmed/synthetic_gate.py:3" in problems[0]
+    assert "openmed/synthetic_gate.py:4" in problems[1]
+    assert all("cannot be checked" in problem for problem in problems)
+
+
 def test_constant_identifiers_need_a_declaration_or_an_entry(tmp_path) -> None:
     _synthetic_package(
         tmp_path,

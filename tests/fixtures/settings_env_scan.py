@@ -26,8 +26,9 @@ Key expressions resolve through string literals, module constants, imported
 constants, class attributes, module-level tables (``TABLE[...]`` and loops
 over ``TABLE.items()`` or a literal tuple of rows), simple local assignments
 and conditional expressions.  Keys built with f-strings, ``+``, ``%`` or
-``format`` from an ``OPENMED_`` fragment are reported as dynamic because no
-literal name can be checked for them.
+``format`` from an ``OPENMED_`` fragment, written inline or held in a named
+constant, are reported as dynamic because no literal name can be checked for
+them.
 """
 
 from __future__ import annotations
@@ -627,7 +628,7 @@ class _Scanner:
                 if isinstance(inner, _Param):
                     return _Param(inner.name, inner.suffix + suffix)
                 return None
-        if self._is_dynamic(node):
+        if self._is_dynamic(module, node, local):
             return _DYNAMIC
         return None
 
@@ -681,15 +682,23 @@ class _Scanner:
             return frozenset(found) if found else None
         return None
 
-    @staticmethod
-    def _is_dynamic(node: ast.AST) -> bool:
+    def _is_dynamic(
+        self, module: _Module, node: ast.AST, local: dict[str, object]
+    ) -> bool:
+        def fragment(sub: ast.AST) -> bool:
+            if isinstance(sub, ast.Constant):
+                return isinstance(sub.value, str) and _ENV_FRAGMENT in sub.value
+            # A named prefix such as ``PREFIX = "OPENMED_X_"`` hides the
+            # fragment from a literal-only check.
+            if isinstance(sub, (ast.Name, ast.Attribute)):
+                value = self.resolve(module, sub, local)
+                return isinstance(value, frozenset) and any(
+                    _ENV_FRAGMENT in item for item in value
+                )
+            return False
+
         def has_fragment(part: ast.AST) -> bool:
-            return any(
-                isinstance(sub, ast.Constant)
-                and isinstance(sub.value, str)
-                and _ENV_FRAGMENT in sub.value
-                for sub in ast.walk(part)
-            )
+            return any(fragment(sub) for sub in ast.walk(part))
 
         if isinstance(node, ast.JoinedStr):
             return has_fragment(node)
