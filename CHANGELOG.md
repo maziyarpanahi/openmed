@@ -79,6 +79,11 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 - Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
 - Make async `/jobs` work durable: workers claim jobs with expiring leases whose epoch fences every store write, coalesced checkpoints with chained output digests are the resume points, and the terminal state commits together with the final checkpoint and the webhook intent. Retryable failures back off within a bounded budget, poison or damaged work is quarantined until an authorized `DeidentifyJobQueue.replay()`, and a startup and periodic reconcile reclaims expired leases, resumes queued work, re-drives undelivered webhooks through the bounded dispatcher and fails corrupt recovery state closed. `POST /jobs` honours `Idempotency-Key` like the FHIR bulk starts, with keyed, owner-scoped digests (#3574).
 
+- Add deprecation warnings for explicitly supplied parameters, instance
+  attribute aliases, legacy module exports and settings or response formats
+  with stable warning codes. Include Python helper markers in the static API
+  diff (#5260).
+
 ### Changed
 
 - Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).

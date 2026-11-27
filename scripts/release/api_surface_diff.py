@@ -54,12 +54,15 @@ class Symbol:
     deprecated: bool = False
     fingerprint: str = ""
     source_target: str | None = None
+    deprecated_parameters: tuple[str, ...] = ()
 
     def public_dict(self) -> dict[str, object]:
         """Return the stable JSON representation without matching internals."""
 
         payload = asdict(self)
         payload.pop("fingerprint")
+        if not self.deprecated_parameters:
+            payload.pop("deprecated_parameters")
         return payload
 
 
@@ -407,14 +410,48 @@ def _render_signature(
     return signature
 
 
+def _callee_name(expression: ast.expr | None) -> str | None:
+    target = expression.func if isinstance(expression, ast.Call) else expression
+    if isinstance(target, ast.Name):
+        return target.id
+    if isinstance(target, ast.Attribute):
+        return target.attr
+    return None
+
+
 def _is_deprecated(decorators: Iterable[ast.expr]) -> bool:
-    for decorator in decorators:
-        target = decorator.func if isinstance(decorator, ast.Call) else decorator
-        if isinstance(target, ast.Name) and target.id == "deprecated":
-            return True
-        if isinstance(target, ast.Attribute) and target.attr == "deprecated":
-            return True
-    return False
+    return any(_callee_name(decorator) == "deprecated" for decorator in decorators)
+
+
+def _deprecated_parameters(
+    decorators: Iterable[ast.expr], parameters: Sequence[Parameter]
+) -> tuple[str, ...]:
+    marked = {
+        decorator.args[0].value
+        for decorator in decorators
+        if isinstance(decorator, ast.Call)
+        and _callee_name(decorator) == "deprecated_parameter"
+        and decorator.args
+        and isinstance(decorator.args[0], ast.Constant)
+        and isinstance(decorator.args[0].value, str)
+    }
+    return tuple(parameter.name for parameter in parameters if parameter.name in marked)
+
+
+def _deprecated_module_target(expression: ast.expr | None) -> str | None:
+    if (
+        not isinstance(expression, ast.Call)
+        or _callee_name(expression) != "deprecated_module"
+    ):
+        return None
+    for keyword in expression.keywords:
+        if (
+            keyword.arg == "replacement"
+            and isinstance(keyword.value, ast.Constant)
+            and isinstance(keyword.value.value, str)
+        ):
+            return keyword.value.value
+    return None
 
 
 def _fingerprint(node: ast.AST, kind: str) -> str:
@@ -465,6 +502,7 @@ def _function_symbol(
         parameters=parameters,
         deprecated=_is_deprecated(node.decorator_list),
         fingerprint=_fingerprint(node, kind),
+        deprecated_parameters=_deprecated_parameters(node.decorator_list, parameters),
     )
 
 
@@ -528,6 +566,11 @@ def _class_symbols(node: ast.ClassDef, module: str) -> dict[str, Symbol]:
             parameters=parameters,
             deprecated=_is_deprecated(node.decorator_list),
             fingerprint=_fingerprint(node, "class"),
+            deprecated_parameters=(
+                _deprecated_parameters(constructor.decorator_list, parameters)
+                if constructor is not None and parameters is not None
+                else ()
+            ),
         )
     }
     instance_attributes: set[str] = set()
@@ -560,6 +603,8 @@ def _class_symbols(node: ast.ClassDef, module: str) -> dict[str, Symbol]:
                         module=module,
                         qualname=f"{node.name}.{name}",
                         kind="attribute",
+                        deprecated=isinstance(statement.value, ast.Call)
+                        and _callee_name(statement.value) == "deprecated_attribute",
                         fingerprint=_fingerprint(statement, "attribute"),
                     )
     for name in sorted(instance_attributes):
@@ -633,6 +678,7 @@ def _module_symbols(
         )
 
     local: dict[str, Symbol] = {}
+    deprecated_module_target: str | None = None
     for statement in tree.body:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if not selected_root(statement.name):
@@ -685,6 +731,10 @@ def _module_symbols(
             )
             for target in targets:
                 for name in _assigned_names(target):
+                    if name == "__getattr__":
+                        deprecated_module_target = _deprecated_module_target(
+                            statement.value
+                        )
                     if name == "__all__" or not selected_root(name):
                         continue
                     if fingerprint is None:
@@ -714,6 +764,21 @@ def _module_symbols(
             fingerprint=hashlib.sha256(f"import:{target}".encode()).hexdigest(),
             source_target=target,
         )
+
+    if deprecated_module_target is not None:
+        for name in exports or ():
+            if name.startswith("_") or name in local:
+                continue
+            target = f"{deprecated_module_target}.{name}"
+            local[name] = Symbol(
+                name=f"{module}.{name}",
+                module=module,
+                qualname=name,
+                kind="import",
+                deprecated=True,
+                fingerprint=hashlib.sha256(f"import:{target}".encode()).hexdigest(),
+                source_target=target,
+            )
 
     selected: dict[str, Symbol] = {}
     names = (
@@ -791,15 +856,12 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
             target = resolved.get(symbol.source_target)
             if target is None or target.kind == "import":
                 continue
-            enriched = Symbol(
+            enriched = replace(
+                target,
                 name=symbol.name,
                 module=symbol.module,
                 qualname=symbol.qualname,
-                kind=target.kind,
-                signature=target.signature,
-                parameters=target.parameters,
-                deprecated=target.deprecated,
-                fingerprint=target.fingerprint,
+                deprecated=symbol.deprecated or target.deprecated,
                 source_target=symbol.source_target,
             )
             if enriched != symbol:
@@ -813,15 +875,12 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
                 alias_name = alias_prefix + suffix
                 updates.setdefault(
                     alias_name,
-                    Symbol(
+                    replace(
+                        member,
                         name=alias_name,
                         module=symbol.module,
                         qualname=f"{symbol.qualname}.{suffix}",
-                        kind=member.kind,
-                        signature=member.signature,
-                        parameters=member.parameters,
-                        deprecated=member.deprecated,
-                        fingerprint=member.fingerprint,
+                        deprecated=symbol.deprecated or member.deprecated,
                         source_target=member.name,
                     ),
                 )
@@ -967,11 +1026,21 @@ def diff_surfaces(
     for name in sorted(before_names & after_names):
         old = before[name]
         new = after[name]
-        if new.deprecated and not old.deprecated:
+        announced_parameters = tuple(
+            f"parameter {parameter!r} was deprecated"
+            for parameter in new.deprecated_parameters
+            if parameter not in old.deprecated_parameters
+        )
+        if (new.deprecated and not old.deprecated) or announced_parameters:
             deprecated.append(
-                Change(change="deprecated", symbol=name, before=old, after=new)
+                Change(
+                    change="deprecated",
+                    symbol=name,
+                    before=old,
+                    after=new,
+                    details=announced_parameters,
+                )
             )
-            continue
         reasons = _narrowing_reasons(old, new)
         if reasons:
             breaking.append(
@@ -991,6 +1060,10 @@ def diff_surfaces(
             deprecated.append(Change(change="deprecated", symbol=name, after=symbol))
         else:
             added_changes.append(Change(change="added", symbol=name, after=symbol))
+            if symbol.deprecated_parameters:
+                deprecated.append(
+                    Change(change="deprecated", symbol=name, after=symbol)
+                )
 
     return ApiSurfaceDiff(
         before_ref=before_ref,

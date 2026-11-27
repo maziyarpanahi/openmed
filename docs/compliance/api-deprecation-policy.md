@@ -92,6 +92,37 @@ warning. The required cycle is:
    reflects the new surface. Once the removed name is gone from the baseline,
    delete its now-stale allowlist entry in the same or a follow-up PR.
 
+### Choosing a warning helper
+
+Import the helpers from `openmed.utils.deprecation`. Each warning names the
+first warning release and the planned removal release. Supply a replacement
+where one exists.
+
+- Use `@deprecated(...)` for a whole callable or class. Use
+  `@deprecated_parameter("old_flag", since="4.3", remove_in="5.0",
+  replacement="mode")` for an argument. The wrapped function keeps its
+  signature and receives the original arguments. Explicit positional and
+  keyword uses warn, including an explicit `None` or `False`.
+- Assign `old_name = deprecated_attribute("new_name", since="4.3",
+  remove_in="5.0")` in a class body to forward instance reads, writes and
+  deletions to `new_name` with a warning.
+- In an old module, assign `__getattr__ = deprecated_module(__name__,
+  since="4.3", remove_in="5.0", replacement="package.new_module")` and keep a
+  literal `__all__` listing the supported legacy exports. Accessing those
+  names warns and returns the same object as the new module. The replacement
+  is imported on first attribute lookup.
+- Use `warn_deprecated("legacy_setting", "4.3", "5.0",
+  replacement="new_setting")` for an environment setting, response field or
+  other behavior outside the Python symbol inventory. Use a fixed code and
+  keep input values out of it. The warning starts with `[legacy_setting]`.
+
+The release API diff recognizes direct or module-qualified parameter
+decorators, attribute descriptor assignments, and `__getattr__` module aliases
+with a literal replacement path and `__all__`. A parameter warning appears in
+the deprecation report with the `deprecated_parameters` names on the symbol.
+The `deprecated` flag describes a whole symbol. Record non-symbol warnings in
+the corresponding migration documentation.
+
 ## Working with the checker
 
 Run the check locally exactly as CI does:
