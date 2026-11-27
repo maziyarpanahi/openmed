@@ -205,6 +205,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./multimodal": {
+      "import": {
+        "types": "./dist/multimodal/index.d.ts",
+        "default": "./dist/multimodal/index.js"
+      },
+      "require": {
+        "types": "./dist/multimodal/index.d.cts",
+        "default": "./dist/multimodal/index.cjs"
+      }
     }
   }
 }
