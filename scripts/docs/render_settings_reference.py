@@ -26,7 +26,7 @@ import html
 import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -38,12 +38,14 @@ from openmed.core.settings_registry import (  # noqa: E402
     SettingDeclaration,
     SettingsSection,
     load_settings_schema,
+    parse_excluded_identifiers,
     parse_settings_schema,
     settings_schema_path,
 )
 
 DEFAULT_OUTPUT = ROOT / "docs" / "configuration" / "environment-variables.md"
 SECRET_DEFAULT = "secret, no default"
+USER_SUPPLIED_DEFAULT = "user-supplied, no default"
 NO_DEFAULT = "no default"
 UNSET = "unset"
 EMPTY = "empty"
@@ -79,6 +81,9 @@ owns it. Notes on reading the table:
 
 - **Secret** settings never show a default. Prefer the matching `*_FILE`
   setting, which names a mounted secret file, where one is listed.
+- **user-supplied** settings point at data you provide, such as an evaluation
+  dataset. They have no default, and OpenMed never downloads or bundles the
+  data.
 - **unset** means the variable has no value by default and the owning module
   falls back to the behavior described in the row.
 - **comma-separated** values are lists such as `a,b,c`; **JSON** values are a
@@ -93,11 +98,16 @@ reports.
 """
 
 
-def render_reference(sections: Sequence[SettingsSection]) -> str:
+def render_reference(
+    sections: Sequence[SettingsSection],
+    excluded: Mapping[str, str] | None = None,
+) -> str:
     """Render the reference page for ``sections``.
 
     Args:
         sections: Parsed settings sections, in schema order.
+        excluded: ``OPENMED_*`` identifiers that are not settings, with the
+            reason for each; rendered after the sections when present.
 
     Returns:
         The Markdown page, ending with one newline.
@@ -113,7 +123,25 @@ def render_reference(sections: Sequence[SettingsSection]) -> str:
         parts.append(f"{count} {noun}.\n\n")
         parts.append(_TABLE_HEADER)
         parts.extend(_row(setting) for setting in section.settings)
+    if excluded:
+        parts.append(_EXCLUDED_INTRO)
+        parts.extend(
+            f"| {_code(name)} | {_text(reason)} |\n"
+            for name, reason in sorted(excluded.items())
+        )
     return "".join(parts)
+
+
+_EXCLUDED_INTRO = """
+## Identifiers that are not settings
+
+These `OPENMED_*` identifiers appear in the code but are not environment
+settings: constants such as FHIR system names and error codes, or names OpenMed
+exports to a subprocess. Setting them in the environment has no effect.
+
+| Identifier | Reason |
+| --- | --- |
+"""
 
 
 def render_schema(schema_path: Path | None = None) -> str:
@@ -130,7 +158,9 @@ def render_schema(schema_path: Path | None = None) -> str:
         document = load_settings_schema()
     else:
         document = json.loads(schema_path.read_text(encoding="utf-8"))
-    return render_reference(parse_settings_schema(document))
+    return render_reference(
+        parse_settings_schema(document), parse_excluded_identifiers(document)
+    )
 
 
 def check_reference(output: Path, rendered: str) -> list[str]:
@@ -239,6 +269,8 @@ def _default_label(setting: SettingDeclaration) -> str:
     # A secret never shows a default, even if a malformed schema carried one.
     if setting.secret:
         return SECRET_DEFAULT
+    if setting.user_supplied:
+        return USER_SUPPLIED_DEFAULT
     if not setting.has_default:
         return NO_DEFAULT
     return _value(setting.default)

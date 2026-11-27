@@ -13,13 +13,14 @@ The gate has two layers, both static and offline:
 * **Identifiers.** Every whole-string ``OPENMED_*`` literal outside a
   docstring must be declared too, which catches table-driven reads the
   resolver cannot follow.  Constants that only look like environment
-  variables, such as FHIR system names or error codes, carry a reasoned
-  allowlist entry.
+  variables, such as FHIR system names or error codes, are listed with a
+  reason in the schema's ``x-excluded-identifiers``.
 
-The allowlist in ``tests/fixtures/settings_undeclared_allowlist.json`` seeds
-the sections that are not declared yet.  It only shrinks: entries that are no
-longer needed fail the gate, and :data:`ALLOWLIST_CEILING` pins its size.
-Failure messages name variables and source locations only, never values.
+The allowlist in ``tests/fixtures/settings_undeclared_allowlist.json`` seeded
+the sections that were not declared yet; every section is now declared, so it
+is empty.  It only shrinks: entries that are no longer needed fail the gate,
+and :data:`ALLOWLIST_CEILING` pins its size.  Failure messages name variables
+and source locations only, never values.
 """
 
 from __future__ import annotations
@@ -31,7 +32,10 @@ from pathlib import Path
 
 import pytest
 
-from openmed.core.settings_registry import declared_setting_names
+from openmed.core.settings_registry import (
+    declared_setting_names,
+    excluded_identifiers,
+)
 from tests.fixtures.settings_env_scan import (
     PACKAGE_ROOT,
     REPO_ROOT,
@@ -43,7 +47,7 @@ from tests.fixtures.settings_env_scan import (
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "settings_undeclared_allowlist.json"
 # Committed size of the undeclared allowlist.  Lower it with every entry that
 # is removed; it must never grow.
-ALLOWLIST_CEILING = 140
+ALLOWLIST_CEILING = 0
 SCHEMA = "openmed/core/settings.schema.json"
 SENTINEL = "synthetic-undeclared-value-91d2"
 
@@ -54,6 +58,7 @@ def find_undeclared(
     *,
     declared: Collection[str],
     allowed: Collection[str] = (),
+    excluded: Collection[str] = (),
     dynamic_allowed: Collection[str] = (),
 ) -> list[str]:
     """Return one failure message per undeclared name or unverifiable read.
@@ -63,13 +68,14 @@ def find_undeclared(
         identifiers: Whole-string ``OPENMED_*`` literals and their locations.
         declared: Names declared in the settings schema.
         allowed: Names on the reasoned undeclared allowlist.
+        excluded: Identifiers the schema excludes as not being settings.
         dynamic_allowed: ``path::expression`` keys of allowed dynamic reads.
 
     Returns:
         Messages naming each variable and its locations; never a value.
     """
 
-    known = set(declared) | set(allowed)
+    known = set(declared) | set(allowed) | set(excluded)
     problems: list[str] = []
     read_names = scan.names()
     for name in sorted(read_names - known):
@@ -80,8 +86,8 @@ def find_undeclared(
     for name in sorted(set(identifiers) - read_names - known):
         problems.append(
             f"{name} appears at {', '.join(identifiers[name])} but is not declared "
-            f"in {SCHEMA}; declare it, or allowlist it with a reason if it is a "
-            "constant rather than an environment variable"
+            f"in {SCHEMA}; declare it, or list it in x-excluded-identifiers "
+            "with a reason if it is a constant rather than a setting"
         )
     for read in scan.dynamic:
         if dynamic_key(read.path, read.expression) not in dynamic_allowed:
@@ -125,9 +131,25 @@ def test_every_openmed_environment_read_is_declared(
         package_identifiers,
         declared=declared_setting_names(),
         allowed=allowlist["undeclared"],
+        excluded=excluded_identifiers(),
         dynamic_allowed=allowlist["dynamic"],
     )
     assert problems == [], "\n".join(problems)
+
+
+def test_excluded_identifiers_are_constants_that_still_appear(
+    package_scan, package_identifiers
+) -> None:
+    excluded = excluded_identifiers()
+    present = package_scan.names() | set(package_identifiers)
+
+    assert excluded
+    for name, reason in excluded.items():
+        assert len(reason) >= 10, name
+        assert name in present, f"{name} no longer appears; remove its exclusion"
+    # An exclusion must not hide a real setting: only the decoder isolation
+    # probe, which tests plant and the sandbox must strip, is ever read.
+    assert set(excluded) & package_scan.names() == {"OPENMED_HOSTILE_SENTINEL"}
 
 
 def test_scan_sees_the_declared_sections(package_scan) -> None:
@@ -285,3 +307,4 @@ def test_constant_identifiers_need_a_declaration_or_an_entry(tmp_path) -> None:
     )
     allowed = {"OPENMED_SYNTHETIC_SYSTEM_URL": "constant"}
     assert _check(tmp_path, allowed=allowed) == []
+    assert _check(tmp_path, excluded={"OPENMED_SYNTHETIC_SYSTEM_URL"}) == []

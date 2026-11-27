@@ -201,12 +201,14 @@ environment helper wrappers to literal names, and every other whole-string
 variable with its `path:line` and never prints a value.
 
 To add a setting, declare it in the schema with its type, default, bounds,
-`x-secret` flag and owning module. A key built at runtime (f-string,
-concatenation or `format`) cannot be checked and needs a reasoned `dynamic`
-entry in `tests/fixtures/settings_undeclared_allowlist.json`. That allowlist
-also holds the sections that are not declared yet and constants that only look
-like environment variables. It only shrinks: remove an entry once it is
-declared, and lower `ALLOWLIST_CEILING` in the test to match.
+`x-secret` flag and owning module, then regenerate the reference page with
+`python scripts/docs/render_settings_reference.py`. A constant that only looks
+like an environment variable, such as a FHIR system name or an error code,
+goes in the schema's `x-excluded-identifiers` with a reason. A key built at
+runtime (f-string, concatenation or `format`) cannot be checked and needs a
+reasoned `dynamic` entry in `tests/fixtures/settings_undeclared_allowlist.json`.
+Every section is declared now, so the allowlist is empty and
+`ALLOWLIST_CEILING` is `0`; the allowlist only shrinks.
 
 ## Docs & API checks
 

@@ -14,6 +14,9 @@ owns it. Notes on reading the table:
 
 - **Secret** settings never show a default. Prefer the matching `*_FILE`
   setting, which names a mounted secret file, where one is listed.
+- **user-supplied** settings point at data you provide, such as an evaluation
+  dataset. They have no default, and OpenMed never downloads or bundles the
+  data.
 - **unset** means the variable has no value by default and the owning module
   falls back to the behavior described in the row.
 - **comma-separated** values are lists such as `a,b,c`; **JSON** values are a
@@ -206,3 +209,215 @@ REST, gRPC and GraphQL service settings read under openmed/service/.
 | `OPENMED_SERVICE_TRUSTED_HOSTS` | Comma-separated allowed Host header values; the global '&#42;' is rejected. | list (comma-separated) | `localhost,127.0.0.1,[::1]` | - | no | `openmed.service.security_headers` |
 | `OPENMED_SERVICE_TRUSTED_PROXIES` | Comma-separated reverse-proxy addresses or CIDR networks whose X-Forwarded-For entries may identify clients. | list (comma-separated) | empty | - | no | `openmed.service.runtime` |
 | `OPENMED_SERVICE_TRUSTED_PROXY_HOPS` | Trusted proxy hops skipped when reading X-Forwarded-For. | integer | `1` | minimum 1 | no | `openmed.service.runtime` |
+
+## MCP
+
+Model Context Protocol server transport and opt-in remote authorization settings.
+
+11 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_MCP_ALLOW_INSECURE_LOCALHOST` | Allow plain-HTTP MCP authorization URLs on localhost, for local development only. | boolean | `false` | - | no | `openmed.service.security` |
+| `OPENMED_MCP_AUTHORIZATION_SERVER_URL` | OAuth authorization server URL for MCP clients. | string (URL) | unset | - | no | `openmed.service.security` |
+| `OPENMED_MCP_AUTH_ENABLED` | Enable OAuth authorization for remote MCP transports. | boolean | `false` | - | no | `openmed.service.security` |
+| `OPENMED_MCP_HOST` | Bind host for the streamable HTTP transport. | string | `127.0.0.1` | - | no | `openmed.mcp.server` |
+| `OPENMED_MCP_INJECTION_GUARD_MODE` | Prompt-injection guard mode for MCP tool inputs: strict rejects a flagged input, allow quarantines it. | string | `strict` | one of `allow`, `strict` | no | `openmed.mcp.server` |
+| `OPENMED_MCP_PATH` | Path for the streamable HTTP transport. | string | `/mcp` | - | no | `openmed.mcp.server` |
+| `OPENMED_MCP_PORT` | Port for the streamable HTTP transport; a non-integer value falls back to the default. | integer | `8081` | - | no | `openmed.mcp.server` |
+| `OPENMED_MCP_REQUIRED_SCOPES` | Comma- or space-separated scopes every MCP request needs. | list (comma-separated) | empty | - | no | `openmed.service.security` |
+| `OPENMED_MCP_RESOURCE_URL` | Protected-resource URL advertised for MCP authorization. | string (URL) | unset | - | no | `openmed.service.security` |
+| `OPENMED_MCP_STATE_CHANGE_SCOPES` | Comma- or space-separated scopes required for state-changing MCP tools. | list (comma-separated) | `mcp:state:write` | - | no | `openmed.service.security` |
+| `OPENMED_MCP_TRANSPORT` | MCP transport the server uses. | string | `stdio` | one of `stdio`, `streamable-http`, `http` | no | `openmed.mcp.server` |
+
+## OpenHIM
+
+Opt-in OpenHIM mediator registration, heartbeat and de-identification settings.
+
+15 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_OPENHIM_ALLOW_INSECURE_HTTP` | Allow an http:// OpenHIM core URL. | boolean | `false` | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_AUTH_MODE` | OpenHIM API authentication scheme. | string | `basic` | one of `basic`, `token` | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_CONFIG_PATH` | Mediator registration JSON file; unset registers the built-in de-identification mediator. | string (path) | unset | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_CORE_URL` | OpenHIM core API URL; required when the mediator is enabled and https:// unless insecure HTTP is allowed. | string (URL) | unset | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS` | Seconds between mediator heartbeats. | number | `10.0` | above 0; maximum 30 | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_MEDIATOR_ENABLED` | Register the service as an OpenHIM mediator and send heartbeats. | boolean | `false` | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_MEDIATOR_HOST` | Host OpenHIM uses to reach the built-in mediator registration. | string | `openmed-mediator` | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_MEDIATOR_PORT` | Port OpenHIM uses to reach the built-in mediator registration. | integer | `8080` | minimum 1; maximum 65,535 | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_METHOD` | De-identification method the mediator applies. | string | `replace` | one of `aadhaar_mask`, `format_preserve`, `hash`, `mask`, `remove`, `replace`, `shift_dates` | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_PASSWORD` | OpenHIM API password or token; required when the mediator is enabled. | string | secret, no default | - | yes | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_PASSWORD_FILE` | File holding `OPENMED_OPENHIM_PASSWORD`, such as a mounted secret. | string (path) | unset | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_POLICY` | Bundled de-identification policy the mediator applies. | string | `hipaa_safe_harbor` | at least 1 character | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_REQUEST_TIMEOUT_SECONDS` | Timeout in seconds for OpenHIM core requests. | number | `10.0` | above 0 | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_USERNAME` | OpenHIM API user; required when the mediator is enabled. | string | unset | - | no | `openmed.service.openhim_mediator` |
+| `OPENMED_OPENHIM_VERIFY_TLS` | Verify the OpenHIM core TLS certificate. | boolean | `true` | - | no | `openmed.service.openhim_mediator` |
+
+## Journey
+
+Journey store deployment, PostgreSQL connection and store deadline settings.
+
+9 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_JOURNEY_ARTIFACT_ROOT` | Directory the Journey deployment tool writes artifacts under. | string (path) | `/artifacts` | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_POSTGRES_DSN` | PostgreSQL connection string for the Journey store; it can carry credentials. | string | secret, no default | - | yes | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_POSTGRES_DSN_FILE` | File holding `OPENMED_JOURNEY_POSTGRES_DSN`, such as a mounted secret. | string (path) | unset | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_POSTGRES_SSLCERT` | Client certificate file for the Journey PostgreSQL connection. | string (path) | unset | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_POSTGRES_SSLKEY` | Client private-key file for the Journey PostgreSQL connection. | string (path) | unset | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_POSTGRES_SSLROOTCERT` | CA certificate file that verifies the Journey PostgreSQL server. | string (path) | unset | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_SCHEMA` | PostgreSQL schema the Journey deployment tool uses. | string | `openmed_journey` | - | no | `openmed.deploy.journey` |
+| `OPENMED_JOURNEY_STORE_LOCK_WAIT_SECONDS` | Cap in seconds on one Journey store lock wait. | number | `5.0` | above 0; maximum 3600 | no | `openmed.structured.store.deadlines` |
+| `OPENMED_JOURNEY_STORE_TIMEOUT_SECONDS` | Cap in seconds on one Journey store operation. | number | `30.0` | above 0; maximum 3600 | no | `openmed.structured.store.deadlines` |
+
+## Evaluation datasets
+
+Local paths to user-supplied evaluation data. Every path is supplied by the user and has no default; OpenMed never downloads, bundles or commits these corpora, and restricted datasets such as i2b2, n2c2 and MIMIC are evaluation-only.
+
+19 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_BIORED_PATH` | Directory of BioRED relation data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2` |
+| `OPENMED_CBLUE_PATH` | Root directory of user-supplied, access-controlled CBLUE task data. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cblue` |
+| `OPENMED_CEGS_NGRID_PATH` | Directory of CEGS N-GRID de-identification data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cegs_ngrid` |
+| `OPENMED_CHIP_CDN_PATH` | Directory of user-supplied CHIP-CDN data from CBLUE. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cblue` |
+| `OPENMED_CMEEE_PATH` | Directory of user-supplied CMeEE data from CBLUE. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cmeee` |
+| `OPENMED_I2B2_PATH` | Directory of i2b2 2006 or 2014 de-identification data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2` |
+| `OPENMED_I2B2_YEAR` | i2b2 de-identification release the loader reads. | integer | `2014` | one of `2006`, `2014` | no | `openmed.eval.datasets.i2b2` |
+| `OPENMED_IMCS_V2_NER_PATH` | Directory of user-supplied IMCS-V2-NER data from CBLUE. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.cblue` |
+| `OPENMED_MADE_PATH` | Directory of MADE 1.0 medication and ADE data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.made` |
+| `OPENMED_MEDNLI_PATH` | Directory of MedNLI data (PhysioNet credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.mednli` |
+| `OPENMED_MIMIC_IV_BHC_PATH` | Directory of MIMIC-IV brief hospital course data (PhysioNet credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.mimic_iv_bhc` |
+| `OPENMED_N2C2_2018_PATH` | Directory of n2c2 2018 relation data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2` |
+| `OPENMED_N2C2_2018_TRACK2_PATH` | Directory of n2c2 2018 Track 2 medication relation data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.n2c2_2018_track2` |
+| `OPENMED_N2C2_2022_PATH` | Directory of n2c2 2022 relation data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.i2b2` |
+| `OPENMED_N2C2_PATH` | Directory of n2c2 2018 Track 1 de-identification data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.n2c2_2018` |
+| `OPENMED_NAAMAPADAM_PATH` | Directory of user-supplied Naamapadam or IndicGLUE NER packs. | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.naamapadam` |
+| `OPENMED_SHAC_PATH` | Directory of SHAC social-determinants data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.shac` |
+| `OPENMED_THYME_PATH` | Directory of THYME temporal relation data (credentialed corpus under data-use terms). | string (path) | user-supplied, no default | - | no | `openmed.eval.datasets.thyme` |
+| `OPENMED_ZH_CLINICAL_NER_MODEL_DIR` | Local Chinese clinical NER checkpoint directory for the evaluation suite; OpenMed never downloads these weights. | string (path) | user-supplied, no default | - | no | `openmed.eval.suites.chinese_clinical_ner` |
+
+## Integrations
+
+Service-adjacent integrations: egress policy, the privacy proxy, the sidecar, webhook signing, terminology caches and out-of-process bridges.
+
+23 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_ACCEPT_MEDCAT_LICENSE` | Acknowledge the Elastic License 2.0 terms before the out-of-process MedCAT bridge runs. | boolean | `false` | - | no | `openmed.interop.bridges.medcat` |
+| `OPENMED_ACCEPT_SDCMICRO_LICENSE` | Acknowledge the GPL-2.0 terms before the out-of-process sdcMicro bridge runs Rscript. | boolean | `false` | - | no | `openmed.interop.bridges.sdcmicro` |
+| `OPENMED_ARX_COMMAND` | Command that runs a user-installed ARX anonymization tool; unset leaves the ARX bridge unavailable. | string | unset | - | no | `openmed.interop.bridges.arx_bridge` |
+| `OPENMED_EGRESS_MODE` | How outbound operations that no egress rule matches are treated. Default: permissive under the dev and test profiles. | string | `enforce` | one of `deny`, `enforce`, `permissive` | no | `openmed.service.egress` |
+| `OPENMED_EGRESS_RULES` | Inline egress rule document as JSON. | array or object (JSON) | unset | - | no | `openmed.service.egress` |
+| `OPENMED_EGRESS_RULES_FILE` | File holding an egress rule document. | string (path) | unset | - | no | `openmed.service.egress` |
+| `OPENMED_GROUNDING_CACHE_DIR` | Terminology grounding vocabulary cache used by the service and MCP grounding tools. Default: unset uses `OPENMED_CACHE_DIR`/grounding, then ~/.cache/openmed/grounding. | string (path) | unset | - | no | `openmed.service.app` |
+| `OPENMED_ICD11_CACHE_DIR` | Local ICD-11 API response cache directory. | string (path) | `~/.cache/openmed/icd11` | - | no | `openmed.interop.icd11_api` |
+| `OPENMED_ONCOTREE_PATH` | Local OncoTree release JSON file supplied by the user. | string (path) | user-supplied, no default | - | no | `openmed.clinical.oncotree` |
+| `OPENMED_ONCOTREE_VERSION` | Release version of the user-supplied OncoTree file, which does not carry one. | string | unset | - | no | `openmed.clinical.oncotree` |
+| `OPENMED_PRIVACY_PROXY_MAX_MESSAGES` | Largest number of chat messages in one privacy-proxy request. | integer | `256` | minimum 1; maximum 100,000 | no | `openmed.service.privacy_proxy.settings` |
+| `OPENMED_PRIVACY_PROXY_MAX_REQUEST_BYTES` | Largest privacy-proxy request body in bytes. | integer | `16777216` | minimum 1; maximum 268,435,456 | no | `openmed.service.privacy_proxy.settings` |
+| `OPENMED_PRIVACY_PROXY_MAX_STREAM_SECONDS` | Longest privacy-proxy streaming response, in seconds. | number | `300.0` | above 0; maximum 86,400 | no | `openmed.service.privacy_proxy.settings` |
+| `OPENMED_PRIVACY_PROXY_MAX_TEXT_CHARS` | Largest total message text in one privacy-proxy request, in characters. | integer | `1000000` | minimum 1; maximum 67,108,864 | no | `openmed.service.privacy_proxy.settings` |
+| `OPENMED_PRIVACY_PROXY_TRUSTED_HOSTS` | Comma-separated allowed Host header values for the privacy proxy; the global '&#42;' is rejected. | list (comma-separated) | `localhost,127.0.0.1,[::1]` | - | no | `openmed.service.privacy_proxy.settings` |
+| `OPENMED_SIDECAR_HASH_SECRET` | Secret that keys sidecar hashes; unset uses a random per-process secret. | string | secret, no default | - | yes | `openmed.service.sidecar` |
+| `OPENMED_SIDECAR_HASH_SECRET_FILE` | File holding `OPENMED_SIDECAR_HASH_SECRET`, such as a mounted secret. | string (path) | unset | - | no | `openmed.service.sidecar` |
+| `OPENMED_SIDECAR_MODEL` | Model the de-identification sidecar loads. | string | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1` | at most 4096 characters | no | `openmed.service.sidecar` |
+| `OPENMED_TERMINOLOGY_CACHE_DIR` | Terminology snapshot cache directory. Default: unset uses `OPENMED_CACHE_DIR`/grounding/snapshots, then the XDG cache directory. | string (path) | unset | - | no | `openmed.clinical.grounding.snapshot_cache` |
+| `OPENMED_WEBHOOK_SIGNING_KEYRING_FILE` | Webhook signing keyring file with rotating key generations. | string (path) | unset | - | no | `openmed.service.signing_keys` |
+| `OPENMED_WEBHOOK_SIGNING_KEY_ID` | Public identifier of the single webhook signing secret. | string | unset | - | no | `openmed.service.signing_keys` |
+| `OPENMED_WEBHOOK_SIGNING_SECRET` | Webhook signing secret; set it, its file form, or a keyring file, never more than one. | string | secret, no default | - | yes | `openmed.service.signing_keys` |
+| `OPENMED_WEBHOOK_SIGNING_SECRET_FILE` | File holding `OPENMED_WEBHOOK_SIGNING_SECRET`. | string (path) | unset | - | no | `openmed.service.signing_keys` |
+
+## Runtime
+
+Library runtime switches outside OpenMedConfig: caches, model loading and verification, telemetry and guards.
+
+14 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_CACHE_DIR` | Root cache directory for grounding vocabularies, terminology snapshots and public evaluation datasets; not an OpenMedConfig override. Default: unset uses ~/.cache/openmed. | string (path) | unset | - | no | `openmed.clinical.grounding.vocab` |
+| `OPENMED_EVAL_CACHE_DIR` | Evaluation report cache directory. Default: unset uses the XDG cache directory, then ~/.cache/openmed/eval. | string (path) | unset | - | no | `openmed.eval.cache` |
+| `OPENMED_INDIC_NER_MODEL` | Model path or repository for Indic NER when no model is passed. | string | unset | - | no | `openmed.core.pii_i18n` |
+| `OPENMED_INJECTION_GUARD_MODE` | Default prompt-injection guard mode: strict rejects flagged text, allow quarantines it. | string | `strict` | one of `allow`, `strict` | no | `openmed.agent.security.injection_guard` |
+| `OPENMED_MAX_TEXT_BYTES` | Largest UTF-8 text size in bytes accepted by the input gateway; invalid values fall back to the default. | integer | `4000000` | minimum 1 | no | `openmed.utils.gateway` |
+| `OPENMED_MLX_COMPILE` | Compile the MLX forward pass. | boolean | `false` | - | no | `openmed.mlx.inference` |
+| `OPENMED_MLX_MMAP` | Memory-map MLX weights; set 0, false, no or off for eager loading. | boolean | `true` | - | no | `openmed.mlx.models` |
+| `OPENMED_MODEL_VERIFY_STRICT` | Fail closed when a model has no registry integrity metadata. | boolean | `false` | - | no | `openmed.core.model_integrity` |
+| `OPENMED_SECTION_MODEL` | Learned clinical section classifier directory. | string (path) | unset | - | no | `openmed.clinical.sections.learned` |
+| `OPENMED_SKIP_MODEL_VERIFY` | Skip model integrity verification; deployment posture checks flag it. | boolean | `false` | - | no | `openmed.core.model_integrity` |
+| `OPENMED_TELEMETRY_ENABLED` | Opt in to core pipeline telemetry; it stays off unless enabled. | boolean | `false` | - | no | `openmed.core.telemetry` |
+| `OPENMED_TRACE_DISCOVERY` | Discover local trace stores automatically; 0, false, no, off or disabled turns it off. | boolean | `true` | - | no | `openmed.traces.discovery` |
+| `OPENMED_TRACE_ROOTS` | Extra trace stores as store&#95;type=path entries separated by the platform path separator. | string | unset | - | no | `openmed.traces.discovery` |
+| `OPENMED_TRUSTED_REMOTE_CODE_MODELS` | Comma-separated Hugging Face repositories added to the trust&#95;remote&#95;code allowlist. | list (comma-separated) | empty | - | no | `openmed.torch.privacy_filter` |
+
+## Release evidence
+
+Signing keys and thresholds for release, evaluation and audit evidence. Keys are secrets and declare no default.
+
+10 settings.
+
+| Variable | Description | Type | Default | Bounds | Secret | Module |
+| --- | --- | --- | --- | --- | --- | --- |
+| `OPENMED_ANNOTATION_KEY` | HMAC key that hashes surfaces during annotation import. | string | secret, no default | - | yes | `openmed.cli.annotation_interchange` |
+| `OPENMED_AUDIT_KEY` | HMAC key that verifies signed audit reports. | string | secret, no default | - | yes | `openmed.cli.main` |
+| `OPENMED_FEDERATED_EVAL_KEY` | Key that signs federated leakage evaluation reports. | string | secret, no default | - | yes | `openmed.eval.harness` |
+| `OPENMED_JOURNEY_RELEASE_KEY` | HMAC key, at least 32 bytes, that signs Journey release packets. | string | secret, no default | - | yes | `openmed.eval.journey_release` |
+| `OPENMED_KIT_RELEASE_KEY` | HMAC key, at least 32 bytes, that signs kit release packets. | string | secret, no default | - | yes | `openmed.eval.kit_release` |
+| `OPENMED_READINESS_KEY` | Key that signs release-readiness reports; unset uses a local development key that is not secret. | string | secret, no default | - | yes | `openmed.eval.release_readiness` |
+| `OPENMED_REDTEAM_MAX_BYPASS_RATE` | Largest red-team bypass rate the gate accepts; unset applies no threshold. | number | unset | minimum 0; maximum 1 | no | `openmed.eval.redteam` |
+| `OPENMED_RELATION_SCORECARD_KEY` | Key that signs relation-extraction scorecards. | string | secret, no default | - | yes | `openmed.eval.harness` |
+| `OPENMED_RELEASE_GATE_KEY` | Key that signs release-gate reports; unset uses a local development key that is not secret. | string | secret, no default | - | yes | `openmed.eval.release_gates` |
+| `OPENMED_SERVICE_RELEASE_KEY` | HMAC key, at least 32 bytes, that signs service release packets. | string | secret, no default | - | yes | `openmed.eval.service_release` |
+
+## Identifiers that are not settings
+
+These `OPENMED_*` identifiers appear in the code but are not environment
+settings: constants such as FHIR system names and error codes, or names OpenMed
+exports to a subprocess. Setting them in the environment has no effect.
+
+| Identifier | Reason |
+| --- | --- |
+| `OPENMED_ADMISSION_REJECTED` | GraphQL error code returned to clients |
+| `OPENMED_ARX_UNAVAILABLE` | sentinel the ARX runner prints when ARX is missing |
+| `OPENMED_CANONICAL_HASH_SYSTEM` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_CLINICAL_DISCLAIMER` | name of the exported clinical disclaimer constant, checked in &#95;&#95;all&#95;&#95; |
+| `OPENMED_CONFIDENCE_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_DEID` | DICOM implementation version name written to outputs |
+| `OPENMED_DEIDENTIFY` | default Snowflake UDF name |
+| `OPENMED_DEIDENTIFY_DESCRIPTOR` | name of an exported UDF descriptor constant |
+| `OPENMED_DERIVATION_HASH_SYSTEM` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_DETECTOR_INPUT` | variable OpenMed exports to an external detector subprocess; OpenMed never reads it |
+| `OPENMED_DETECTOR_OUTPUT` | variable OpenMed exports to an external detector subprocess; OpenMed never reads it |
+| `OPENMED_DETECTOR_OUTPUT_DIR` | variable OpenMed exports to an external detector subprocess; OpenMed never reads it |
+| `OPENMED_EVIDENCE_ID_SYSTEM` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_FACT_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_FACT_ID_SYSTEM` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_FORBIDDEN` | GraphQL error code returned to clients |
+| `OPENMED_GRAPHQL_BATCH_UNSUPPORTED` | GraphQL error code returned to clients |
+| `OPENMED_GRAPHQL_LIMIT_EXCEEDED` | GraphQL error code returned to clients |
+| `OPENMED_GRAPHQL_TIMEOUT` | GraphQL error code returned to clients |
+| `OPENMED_HOSTILE_SENTINEL` | private fault-injection probe: the decoder isolation tests plant it to prove the sandbox strips the parent environment; not a setting |
+| `OPENMED_JOURNEY_EVENT_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_PROVENANCE_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_REASON_METADATA_KEY` | name of an exported gRPC metadata key constant |
+| `OPENMED_REQUEST_KEYS` | name of an exported request-key tuple constant |
+| `OPENMED_RESOLUTION_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_RESOLVER_ERROR` | GraphQL error code returned to clients |
+| `OPENMED_REVIEW_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_SDCMICRO_UNAVAILABLE` | sentinel the sdcMicro runner prints when the R package is missing |
+| `OPENMED_SNAPSHOT_EXTENSION` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_SUBJECT_ID_SYSTEM` | name of an exported FHIR identifier-system or extension constant |
+| `OPENMED_SYNTH` | name of an exported synthetic-corpus constant |
+| `OPENMED_SYNTH1` | DICOM implementation version name of synthetic overlays |
+| `OPENMED_SYNTHETIC` | synthetic DICOM private creator and OMOP vocabulary id |
+| `OPENMED_SYNTHETIC_PERSON` | synthetic probe surface used by plugin conformance |
+| `OPENMED_SYNTH_DATASET_CARD` | name of an exported synthetic-corpus constant |
+| `OPENMED_SYNTH_DEFAULT_CORPUS_SIZE` | name of an exported synthetic-corpus constant |
+| `OPENMED_SYNTH_DEFAULT_SEED` | name of an exported synthetic-corpus constant |
+| `OPENMED_SYNTH_REFERENCE_MODEL` | name of an exported synthetic-corpus constant |
+| `OPENMED_SYSTEM_NAME` | name of an exported comparator system-name constant |

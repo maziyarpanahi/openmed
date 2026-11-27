@@ -31,8 +31,10 @@ from openmed.core.settings_registry import (
     SECTION_SERVICE,
     SettingsSchemaError,
     declared_setting_names,
+    excluded_identifiers,
     get_setting_declaration,
     load_settings_schema,
+    parse_excluded_identifiers,
     parse_settings_schema,
     secret_setting_names,
     setting_declarations,
@@ -447,3 +449,138 @@ def test_scanner_finds_direct_constant_wrapper_and_table_reads(tmp_path) -> None
         "openmed/synthetic.py:9"
     ]
     assert [item.location for item in scan.dynamic] == ["openmed/synthetic.py:14"]
+
+
+# -- non-service sections ---------------------------------------------------------
+
+NON_SERVICE_SECTIONS = (
+    "mcp",
+    "openhim",
+    "journey",
+    "eval_datasets",
+    "integrations",
+    "runtime",
+    "release",
+)
+# Paths whose environment reads each owned section must declare, keyed by the
+# section they belong to and the name prefix that marks them.
+SECTION_SOURCES = {
+    "mcp": (
+        ("OPENMED_MCP_",),
+        (PACKAGE_ROOT / "mcp", SERVICE_ROOT / "security.py"),
+    ),
+    "openhim": (("OPENMED_OPENHIM_",), (SERVICE_ROOT / "openhim_mediator.py",)),
+    "journey": (
+        ("OPENMED_JOURNEY_",),
+        (
+            PACKAGE_ROOT / "deploy" / "journey.py",
+            PACKAGE_ROOT / "structured" / "store",
+            SERVICE_ROOT / "security_profile.py",
+        ),
+    ),
+    "eval_datasets": (
+        ("OPENMED_",),
+        (PACKAGE_ROOT / "eval" / "datasets",),
+    ),
+}
+
+
+def test_sections_are_declared_in_order() -> None:
+    assert [section.name for section in settings_sections()] == [
+        SECTION_CORE,
+        SECTION_SERVICE,
+        *NON_SERVICE_SECTIONS,
+    ]
+
+
+@pytest.mark.parametrize("section", sorted(SECTION_SOURCES))
+def test_mcp_openhim_journey_and_dataset_reads_are_declared(section) -> None:
+    prefixes, paths = SECTION_SOURCES[section]
+    scan = scan_env_reads(list(paths))
+    literals = literal_env_names(list(paths))
+    names = {
+        name
+        for name in scan.names() | set(literals)
+        if name.startswith(prefixes) and name not in excluded_identifiers()
+    }
+
+    undeclared = {
+        name: scan.locations(name) or literals[name]
+        for name in names - declared_setting_names()
+    }
+    assert undeclared == {}, section
+    # Each subsystem's own names live in its section; shared ones such as the
+    # cache root or the Journey release key are declared elsewhere.
+    own = {
+        name
+        for name in names
+        if name.endswith(("_PATH", "_DIR", "_YEAR")) or section != "eval_datasets"
+    }
+    own -= {"OPENMED_CACHE_DIR", "OPENMED_JOURNEY_RELEASE_KEY"}
+    assert own and own <= declared_setting_names(section), section
+
+
+def test_each_named_prefix_lives_in_its_section() -> None:
+    for declaration in setting_declarations():
+        name = declaration.name
+        if name.startswith("OPENMED_MCP_"):
+            assert declaration.section == "mcp", name
+        elif name.startswith("OPENMED_OPENHIM_"):
+            assert declaration.section == "openhim", name
+        elif name.startswith("OPENMED_JOURNEY_") and not name.endswith("_KEY"):
+            assert declaration.section == "journey", name
+        elif name.startswith("OPENMED_SERVICE_") and not name.endswith("_KEY"):
+            assert declaration.section == SECTION_SERVICE, name
+
+
+def test_dataset_paths_are_user_supplied_without_defaults() -> None:
+    section = next(item for item in settings_sections() if item.name == "eval_datasets")
+    assert "never" in section.description and "bundles" in section.description
+    paths = [item for item in section.settings if item.name.endswith(("_PATH", "_DIR"))]
+    assert len(paths) >= 15
+    for declaration in paths:
+        assert declaration.user_supplied, declaration.name
+        assert not declaration.has_default, declaration.name
+        assert declaration.env_format == "path", declaration.name
+        assert declaration.to_dict()["user_supplied"] is True
+    for declaration in setting_declarations():
+        if declaration.user_supplied:
+            assert not declaration.has_default, declaration.name
+
+
+def test_excluded_identifiers_have_reasons_and_are_not_settings() -> None:
+    excluded = excluded_identifiers()
+    assert "OPENMED_CANONICAL_HASH_SYSTEM" in excluded
+    assert not set(excluded) & declared_setting_names()
+    for name, reason in excluded.items():
+        assert name.startswith("OPENMED_")
+        assert len(reason) >= 10, name
+    with pytest.raises(TypeError):
+        excluded["OPENMED_SYNTHETIC"] = "mutated"  # type: ignore[index]
+
+
+def test_registry_rejects_malformed_exclusions() -> None:
+    document = load_settings_schema()
+    document["x-excluded-identifiers"]["OPENMED_SERVICE_LOG_LEVEL"] = "a constant"
+    with pytest.raises(SettingsSchemaError, match="both declared and excluded"):
+        parse_settings_schema(document)
+
+    document = load_settings_schema()
+    document["x-excluded-identifiers"]["OPENMED_SYNTHETIC_EMPTY_REASON"] = " "
+    with pytest.raises(SettingsSchemaError, match="without a reason"):
+        parse_excluded_identifiers(document)
+
+    document = load_settings_schema()
+    document["x-excluded-identifiers"]["lower_case_name"] = "a constant"
+    with pytest.raises(SettingsSchemaError, match="malformed identifier"):
+        parse_excluded_identifiers(document)
+
+
+def test_registry_rejects_a_user_supplied_default() -> None:
+    document = load_settings_schema()
+    entry = document["properties"]["eval_datasets"]["properties"]["OPENMED_I2B2_PATH"]
+    entry["default"] = "/synthetic/i2b2"
+    with pytest.raises(SettingsSchemaError) as exc_info:
+        parse_settings_schema(document)
+    assert "OPENMED_I2B2_PATH" in str(exc_info.value)
+    assert "/synthetic/i2b2" not in str(exc_info.value)
