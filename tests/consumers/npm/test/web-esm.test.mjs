@@ -271,6 +271,17 @@ test("openmed/speech validates token timings from the installed build", async ()
   assert.equal(Object.hasOwn(openmed, "SpeechTokenTiming"), false, "speech_in_main_entry");
 });
 
+test("openmed/validators checks synthetic identifiers offline", async () => {
+  const validators = await import("openmed/validators");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/validators"));
+  assert.ok(resolved.endsWith("validators.js"), "esm_validators_entry");
+  // Synthetic Luhn and NHS test-range values; never from a person.
+  assert.equal(validators.validateLuhn("4992737877893288"), true);
+  assert.equal(validators.validateLuhn("0992737877893288"), false);
+  assert.equal(validators.validateUkNhsNumber("9990000018"), true);
+  assert.equal(Object.hasOwn(openmed, "validateLuhn"), false, "validators_on_main_entry");
+});
+
 test("installed package made no network requests", () => {
   globalThis.fetch = originalFetch;
   assert.equal(fetchCalls, 0);

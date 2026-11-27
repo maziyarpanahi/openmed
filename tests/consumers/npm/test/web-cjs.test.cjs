@@ -90,3 +90,11 @@ test("CommonJS and ESM speech subpaths expose the same surface", async () => {
   );
   assert.deepEqual(speech.SPEECH_CONTRACT_ERROR_CODES, esm.SPEECH_CONTRACT_ERROR_CODES);
 });
+
+test("CommonJS resolves openmed/validators to its own entry", () => {
+  const resolved = require.resolve("openmed/validators");
+  assert.ok(resolved.endsWith("validators.cjs"), "cjs_validators_entry");
+  const validators = require("openmed/validators");
+  assert.equal(validators.validateDutchBsn("712345681"), true);
+  assert.equal(validators.validateDutchBsn("012345681"), false);
+});
