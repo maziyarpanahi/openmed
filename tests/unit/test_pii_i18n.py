@@ -3370,34 +3370,40 @@ class TestLanguagePIIPatterns:
             Path(__file__).resolve().parents[2]
             / "openmed/eval/golden/fixtures/i18n/th.jsonl"
         )
-        fixture = json.loads(fixture_path.read_text(encoding="utf-8").strip())
-        text = fixture["text"]
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert 3 <= len(rows) <= 5
 
-        expected = {
-            (span["label"], span["start"], span["end"], span["text"])
-            for span in fixture["gold_spans"]
-        }
-        observed = set()
-        for pattern in LANGUAGE_PII_PATTERNS["th"]:
-            for match in re.finditer(pattern.pattern, text, pattern.flags):
-                if pattern.validator and not pattern.validator(match.group(0)):
-                    continue
-                observed.add(
-                    (
-                        {
-                            "date": "DATE",
-                            "phone_number": "PHONE",
-                            "national_id": "ID_NUM",
-                            "street_address": "STREET_ADDRESS",
-                            "postcode": "ZIPCODE",
-                        }[pattern.entity_type],
-                        match.start(),
-                        match.end(),
-                        match.group(0),
+        for fixture in rows:
+            text = fixture["text"]
+            expected = {
+                (span["label"], span["start"], span["end"], span["text"])
+                for span in fixture["gold_spans"]
+            }
+            observed = set()
+            for pattern in LANGUAGE_PII_PATTERNS["th"]:
+                for match in re.finditer(pattern.pattern, text, pattern.flags):
+                    if pattern.validator and not pattern.validator(match.group(0)):
+                        continue
+                    observed.add(
+                        (
+                            {
+                                "date": "DATE",
+                                "phone_number": "PHONE",
+                                "national_id": "ID_NUM",
+                                "street_address": "STREET_ADDRESS",
+                                "postcode": "ZIPCODE",
+                            }[pattern.entity_type],
+                            match.start(),
+                            match.end(),
+                            match.group(0),
+                        )
                     )
-                )
 
-        assert expected <= observed
+            assert expected <= observed, fixture["id"]
 
     def test_arabic_phone_rejects_bare_digit_strings(self):
         # The old pattern would match the 14-digit national-ID and any other
@@ -4005,7 +4011,7 @@ class TestIndonesianLocaleAndFixture:
             if line.strip()
         ]
 
-        assert len(rows) == 1
+        assert 3 <= len(rows) <= 5
         row = rows[0]
         assert row["language"] == "id"
         assert row["metadata"]["synthetic"] is True
@@ -4208,7 +4214,7 @@ class TestVietnameseLanguagePack:
             for line in fixture_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        assert len(rows) == 2
+        assert 3 <= len(rows) <= 5
 
         label_map = {
             "DATE": "date",
@@ -4278,7 +4284,7 @@ class TestVietnameseLanguagePack:
             for line in fixture_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        assert len(fixtures) == 2
+        assert 3 <= len(fixtures) <= 5
         assert {fixture.language for fixture in fixtures} == {"vi"}
 
         for fixture in fixtures:

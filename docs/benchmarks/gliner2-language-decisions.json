@@ -10,10 +10,10 @@
   "calibration": {"calibration_id": "openmed.synthetic.fixed_option.v1", "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c", "method": "deterministic_margin", "minimum_confidence": 0.7, "minimum_margin": 0.15, "multi_label_threshold": 0.7, "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289", "version": "1.0.0"},
   "contains_source_text": false,
   "dataset": {
-    "digest": "sha256:af23c29f96904705fc1e22f506703e96efff33668d5705c882ea27e15f4c95b5",
-    "kinds": {"code_switch": 132, "dialect": 17, "language": 151, "language_in_script": 129, "script": 85},
+    "digest": "sha256:6d7d82e2c17561f85e86d131ae2ca1f09f03b46df59c82d8b89808f9a194b859",
+    "kinds": {"code_switch": 137, "dialect": 17, "language": 156, "language_in_script": 132, "script": 88},
     "languages": {"code_switch": 59, "dialect": 5, "language": 58, "language_in_script": 54, "script": 39},
-    "samples": 514,
+    "samples": 530,
     "sources": ["be.jsonl", "ch.jsonl", "es_mx.jsonl", "fixtures/code_mixed_hinglish.jsonl", "fixtures/i18n/af.jsonl", "fixtures/i18n/all_script_routing.jsonl", "fixtures/i18n/am.jsonl", "fixtures/i18n/ar.jsonl", "fixtures/i18n/as.jsonl", "fixtures/i18n/bg.jsonl", "fixtures/i18n/bn.jsonl", "fixtures/i18n/cs.jsonl", "fixtures/i18n/da.jsonl", "fixtures/i18n/de.jsonl", "fixtures/i18n/el.jsonl", "fixtures/i18n/es.jsonl", "fixtures/i18n/et.jsonl", "fixtures/i18n/fa.jsonl", "fixtures/i18n/fi.jsonl", "fixtures/i18n/fr.jsonl", "fixtures/i18n/gu.jsonl", "fixtures/i18n/he.jsonl", "fixtures/i18n/hi.jsonl", "fixtures/i18n/hr.jsonl", "fixtures/i18n/hu.jsonl", "fixtures/i18n/id.jsonl", "fixtures/i18n/ig.jsonl", "fixtures/i18n/india_clinical.jsonl", "fixtures/i18n/it.jsonl", "fixtures/i18n/ja.jsonl", "fixtures/i18n/kn.jsonl", "fixtures/i18n/ko.jsonl", "fixtures/i18n/lv.jsonl", "fixtures/i18n/ml.jsonl", "fixtures/i18n/mr.jsonl", "fixtures/i18n/ms.jsonl", "fixtures/i18n/ne.jsonl", "fixtures/i18n/nl.jsonl", "fixtures/i18n/no.jsonl", "fixtures/i18n/or.jsonl", "fixtures/i18n/pa.jsonl", "fixtures/i18n/pl.jsonl", "fixtures/i18n/pt.jsonl", "fixtures/i18n/relations_indic.jsonl", "fixtures/i18n/relations_zh.jsonl", "fixtures/i18n/ro.jsonl", "fixtures/i18n/ru.jsonl", "fixtures/i18n/rw.jsonl", "fixtures/i18n/si.jsonl", "fixtures/i18n/sk.jsonl", "fixtures/i18n/sr.jsonl", "fixtures/i18n/sv.jsonl", "fixtures/i18n/sw.jsonl", "fixtures/i18n/ta.jsonl", "fixtures/i18n/te.jsonl", "fixtures/i18n/th.jsonl", "fixtures/i18n/tl.jsonl", "fixtures/i18n/tr.jsonl", "fixtures/i18n/uk.jsonl", "fixtures/i18n/ur.jsonl", "fixtures/i18n/vi.jsonl", "fixtures/i18n/xh.jsonl", "fixtures/i18n/yo.jsonl", "fixtures/i18n/zu.jsonl", "ie.jsonl"],
     "synthetic": true
   },
@@ -23,22 +23,22 @@
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
           "declared": [28, 16, 0, 3, 20, 1, 8, 1, 20, 1],
-          "none": [104, 104, 22, 89, 66, 64, 64, 64, 72, 70]
+          "none": [109, 109, 24, 93, 69, 67, 67, 67, 75, 73]
         }
       },
       "by_tier": {
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
-          "dedicated_model": [58, 53, 4, 34, 28, 22, 23, 22, 30, 24],
+          "dedicated_model": [59, 54, 4, 35, 29, 23, 24, 23, 31, 25],
           "multiple": [1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
           "no_pack": [30, 26, 1, 25, 21, 16, 20, 16, 22, 17],
-          "shared_model": [43, 40, 17, 33, 36, 27, 29, 27, 39, 30]
+          "shared_model": [47, 44, 19, 36, 38, 29, 31, 29, 41, 32]
         }
       },
       "confidence_sweep": [
-        {"correct": 92, "coverage": 1.0, "covered": 132, "min_confidence": 0.5, "selective_accuracy": 0.697},
-        {"correct": 65, "coverage": 0.6515, "covered": 86, "min_confidence": 0.7, "selective_accuracy": 0.7558},
-        {"correct": 0, "coverage": 0.0, "covered": 0, "min_confidence": 0.9, "selective_accuracy": null}
+        {"correct": 96, "coverage": 1.0, "covered": 137, "min_confidence": 0.5, "selective_accuracy": 0.7007},
+        {"correct": 68, "coverage": 0.6496, "covered": 89, "min_confidence": 0.7, "selective_accuracy": 0.764},
+        {"correct": 1, "coverage": 0.0073, "covered": 1, "min_confidence": 0.9, "selective_accuracy": 1.0}
       ],
       "languages": {
         "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
@@ -64,7 +64,7 @@
           "hi": ["dedicated_model", 13, 8, 0, 4, 5, 2, 3, 2, 5, 2],
           "hr": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
           "hu": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
-          "id": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "id": ["shared_model", 3, 3, 0, 2, 1, 1, 1, 1, 1, 1],
           "ig": ["no_pack", 4, 2, 0, 2, 3, 1, 3, 1, 3, 1],
           "it": ["dedicated_model", 3, 3, 0, 2, 1, 1, 1, 1, 1, 1],
           "ja": ["dedicated_model", 3, 3, 1, 1, 2, 1, 1, 1, 2, 1],
@@ -92,12 +92,12 @@
           "sw": ["shared_model", 3, 1, 0, 2, 2, 1, 2, 1, 2, 1],
           "ta": ["shared_model", 4, 4, 2, 2, 2, 1, 1, 1, 3, 2],
           "te": ["dedicated_model", 2, 2, 1, 0, 1, 0, 0, 0, 2, 1],
-          "th": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+          "th": ["shared_model", 3, 3, 3, 3, 2, 2, 2, 2, 3, 3],
           "tl": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
           "tr": ["dedicated_model", 3, 3, 0, 1, 1, 1, 1, 1, 1, 1],
           "uk": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
           "ur": ["shared_model", 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-          "vi": ["dedicated_model", 2, 2, 0, 2, 2, 2, 2, 2, 2, 2],
+          "vi": ["dedicated_model", 3, 3, 0, 3, 3, 3, 3, 3, 3, 3],
           "xh": ["shared_model", 2, 1, 0, 1, 1, 0, 1, 0, 1, 0],
           "yo": ["no_pack", 5, 5, 0, 5, 0, 0, 0, 0, 0, 0],
           "zh": ["dedicated_model", 3, 3, 0, 3, 3, 3, 3, 3, 3, 3],
@@ -105,56 +105,56 @@
         }
       },
       "low_resource": {
-        "model": {"abstained": 16, "agrees_with_router": 63, "covered": 57, "covered_correct": 43, "failed": 0, "top1_correct": 58},
+        "model": {"abstained": 18, "agrees_with_router": 66, "covered": 59, "covered_correct": 45, "failed": 0, "top1_correct": 61},
         "policies": {
-          "model_agreement": {"accepted": 49, "correct": 43},
-          "model_fallback": {"accepted": 61, "correct": 47},
-          "model_only": {"accepted": 57, "correct": 43},
-          "router_always": {"accepted": 73, "correct": 66},
-          "router_evidence": {"accepted": 18, "correct": 18}
+          "model_agreement": {"accepted": 51, "correct": 45},
+          "model_fallback": {"accepted": 63, "correct": 49},
+          "model_only": {"accepted": 59, "correct": 45},
+          "router_always": {"accepted": 77, "correct": 70},
+          "router_evidence": {"accepted": 20, "correct": 20}
         },
         "rates": {
-          "model_coverage": 0.7808,
-          "model_selective_accuracy": 0.7544,
-          "model_top1_accuracy": 0.7945,
+          "model_coverage": 0.7662,
+          "model_selective_accuracy": 0.7627,
+          "model_top1_accuracy": 0.7922,
           "policies": {
-            "model_agreement": {"coverage": 0.6712, "selective_accuracy": 0.8776, "silent_error_rate": 0.0822},
-            "model_fallback": {"coverage": 0.8356, "selective_accuracy": 0.7705, "silent_error_rate": 0.1918},
-            "model_only": {"coverage": 0.7808, "selective_accuracy": 0.7544, "silent_error_rate": 0.1918},
-            "router_always": {"coverage": 1.0, "selective_accuracy": 0.9041, "silent_error_rate": 0.0959},
-            "router_evidence": {"coverage": 0.2466, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
-          },
-          "router_accuracy": 0.9041,
-          "router_decisive_accuracy": 1.0
-        },
-        "router": {"correct": 66, "decisive": 18, "decisive_correct": 18},
-        "samples": 73
-      },
-      "summary": {
-        "model": {"abstained": 46, "agrees_with_router": 102, "covered": 86, "covered_correct": 65, "failed": 0, "top1_correct": 92},
-        "policies": {
-          "model_agreement": {"accepted": 72, "correct": 65},
-          "model_fallback": {"accepted": 92, "correct": 71},
-          "model_only": {"accepted": 86, "correct": 65},
-          "router_always": {"accepted": 132, "correct": 120},
-          "router_evidence": {"accepted": 22, "correct": 22}
-        },
-        "rates": {
-          "model_coverage": 0.6515,
-          "model_selective_accuracy": 0.7558,
-          "model_top1_accuracy": 0.697,
-          "policies": {
-            "model_agreement": {"coverage": 0.5455, "selective_accuracy": 0.9028, "silent_error_rate": 0.053},
-            "model_fallback": {"coverage": 0.697, "selective_accuracy": 0.7717, "silent_error_rate": 0.1591},
-            "model_only": {"coverage": 0.6515, "selective_accuracy": 0.7558, "silent_error_rate": 0.1591},
+            "model_agreement": {"coverage": 0.6623, "selective_accuracy": 0.8824, "silent_error_rate": 0.0779},
+            "model_fallback": {"coverage": 0.8182, "selective_accuracy": 0.7778, "silent_error_rate": 0.1818},
+            "model_only": {"coverage": 0.7662, "selective_accuracy": 0.7627, "silent_error_rate": 0.1818},
             "router_always": {"coverage": 1.0, "selective_accuracy": 0.9091, "silent_error_rate": 0.0909},
-            "router_evidence": {"coverage": 0.1667, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+            "router_evidence": {"coverage": 0.2597, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
           "router_accuracy": 0.9091,
           "router_decisive_accuracy": 1.0
         },
-        "router": {"correct": 120, "decisive": 22, "decisive_correct": 22},
-        "samples": 132
+        "router": {"correct": 70, "decisive": 20, "decisive_correct": 20},
+        "samples": 77
+      },
+      "summary": {
+        "model": {"abstained": 48, "agrees_with_router": 106, "covered": 89, "covered_correct": 68, "failed": 0, "top1_correct": 96},
+        "policies": {
+          "model_agreement": {"accepted": 75, "correct": 68},
+          "model_fallback": {"accepted": 95, "correct": 74},
+          "model_only": {"accepted": 89, "correct": 68},
+          "router_always": {"accepted": 137, "correct": 125},
+          "router_evidence": {"accepted": 24, "correct": 24}
+        },
+        "rates": {
+          "model_coverage": 0.6496,
+          "model_selective_accuracy": 0.764,
+          "model_top1_accuracy": 0.7007,
+          "policies": {
+            "model_agreement": {"coverage": 0.5474, "selective_accuracy": 0.9067, "silent_error_rate": 0.0511},
+            "model_fallback": {"coverage": 0.6934, "selective_accuracy": 0.7789, "silent_error_rate": 0.1533},
+            "model_only": {"coverage": 0.6496, "selective_accuracy": 0.764, "silent_error_rate": 0.1533},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.9124, "silent_error_rate": 0.0876},
+            "router_evidence": {"coverage": 0.1752, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.9124,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 125, "decisive": 24, "decisive_correct": 24},
+        "samples": 137
       }
     },
     "dialect": {
@@ -243,22 +243,22 @@
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
           "declared": [22, 4, 3, 2, 2, 1, 0, 0, 5, 4],
-          "none": [115, 51, 30, 31, 10, 7, 0, 0, 39, 37],
+          "none": [120, 53, 32, 32, 10, 7, 0, 0, 41, 39],
           "undeclared": [14, 10, 8, 1, 0, 0, 0, 0, 8, 8]
         }
       },
       "by_tier": {
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
-          "dedicated_model": [62, 27, 6, 20, 5, 5, 0, 0, 11, 11],
+          "dedicated_model": [63, 27, 6, 21, 5, 5, 0, 0, 11, 11],
           "no_pack": [33, 4, 4, 6, 5, 3, 0, 0, 9, 7],
-          "shared_model": [56, 34, 31, 8, 2, 0, 0, 0, 32, 31]
+          "shared_model": [60, 36, 33, 8, 2, 0, 0, 0, 34, 33]
         }
       },
       "confidence_sweep": [
-        {"correct": 16, "coverage": 0.1921, "covered": 29, "min_confidence": 0.5, "selective_accuracy": 0.5517},
-        {"correct": 8, "coverage": 0.0795, "covered": 12, "min_confidence": 0.7, "selective_accuracy": 0.6667},
-        {"correct": 2, "coverage": 0.0199, "covered": 3, "min_confidence": 0.9, "selective_accuracy": 0.6667}
+        {"correct": 16, "coverage": 0.1859, "covered": 29, "min_confidence": 0.5, "selective_accuracy": 0.5517},
+        {"correct": 8, "coverage": 0.0769, "covered": 12, "min_confidence": 0.7, "selective_accuracy": 0.6667},
+        {"correct": 2, "coverage": 0.0192, "covered": 3, "min_confidence": 0.9, "selective_accuracy": 0.6667}
       ],
       "languages": {
         "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
@@ -284,7 +284,7 @@
           "hi": ["dedicated_model", 11, 7, 0, 2, 1, 1, 0, 0, 1, 1],
           "hr": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "hu": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
-          "id": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "id": ["shared_model", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "ig": ["no_pack", 4, 0, 0, 1, 0, 0, 0, 0, 0, 0],
           "it": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
           "ja": ["dedicated_model", 3, 1, 1, 0, 0, 0, 0, 0, 1, 1],
@@ -311,12 +311,12 @@
           "sw": ["shared_model", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "ta": ["shared_model", 5, 4, 4, 0, 2, 0, 0, 0, 5, 4],
           "te": ["dedicated_model", 5, 3, 3, 0, 0, 0, 0, 0, 3, 3],
-          "th": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "th": ["shared_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
           "tl": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "tr": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
           "uk": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
           "ur": ["shared_model", 4, 3, 3, 0, 0, 0, 0, 0, 3, 3],
-          "vi": ["dedicated_model", 2, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "vi": ["dedicated_model", 3, 0, 0, 2, 0, 0, 0, 0, 0, 0],
           "xh": ["shared_model", 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "yo": ["no_pack", 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "zh": ["dedicated_model", 4, 4, 0, 2, 0, 0, 0, 0, 0, 0],
@@ -324,56 +324,56 @@
         }
       },
       "low_resource": {
-        "model": {"abstained": 82, "agrees_with_router": 4, "covered": 7, "covered_correct": 3, "failed": 0, "top1_correct": 14},
+        "model": {"abstained": 86, "agrees_with_router": 4, "covered": 7, "covered_correct": 3, "failed": 0, "top1_correct": 14},
         "policies": {
           "model_agreement": {"accepted": 0, "correct": 0},
-          "model_fallback": {"accepted": 41, "correct": 38},
+          "model_fallback": {"accepted": 43, "correct": 40},
           "model_only": {"accepted": 7, "correct": 3},
-          "router_always": {"accepted": 89, "correct": 38},
-          "router_evidence": {"accepted": 35, "correct": 35}
+          "router_always": {"accepted": 93, "correct": 40},
+          "router_evidence": {"accepted": 37, "correct": 37}
         },
         "rates": {
-          "model_coverage": 0.0787,
+          "model_coverage": 0.0753,
           "model_selective_accuracy": 0.4286,
-          "model_top1_accuracy": 0.1573,
+          "model_top1_accuracy": 0.1505,
           "policies": {
             "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
-            "model_fallback": {"coverage": 0.4607, "selective_accuracy": 0.9268, "silent_error_rate": 0.0337},
-            "model_only": {"coverage": 0.0787, "selective_accuracy": 0.4286, "silent_error_rate": 0.0449},
-            "router_always": {"coverage": 1.0, "selective_accuracy": 0.427, "silent_error_rate": 0.573},
-            "router_evidence": {"coverage": 0.3933, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+            "model_fallback": {"coverage": 0.4624, "selective_accuracy": 0.9302, "silent_error_rate": 0.0323},
+            "model_only": {"coverage": 0.0753, "selective_accuracy": 0.4286, "silent_error_rate": 0.043},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.4301, "silent_error_rate": 0.5699},
+            "router_evidence": {"coverage": 0.3978, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
-          "router_accuracy": 0.427,
+          "router_accuracy": 0.4301,
           "router_decisive_accuracy": 1.0
         },
-        "router": {"correct": 38, "decisive": 35, "decisive_correct": 35},
-        "samples": 89
+        "router": {"correct": 40, "decisive": 37, "decisive_correct": 37},
+        "samples": 93
       },
       "summary": {
-        "model": {"abstained": 139, "agrees_with_router": 11, "covered": 12, "covered_correct": 8, "failed": 0, "top1_correct": 34},
+        "model": {"abstained": 144, "agrees_with_router": 11, "covered": 12, "covered_correct": 8, "failed": 0, "top1_correct": 35},
         "policies": {
           "model_agreement": {"accepted": 0, "correct": 0},
-          "model_fallback": {"accepted": 52, "correct": 49},
+          "model_fallback": {"accepted": 54, "correct": 51},
           "model_only": {"accepted": 12, "correct": 8},
-          "router_always": {"accepted": 151, "correct": 65},
-          "router_evidence": {"accepted": 41, "correct": 41}
+          "router_always": {"accepted": 156, "correct": 67},
+          "router_evidence": {"accepted": 43, "correct": 43}
         },
         "rates": {
-          "model_coverage": 0.0795,
+          "model_coverage": 0.0769,
           "model_selective_accuracy": 0.6667,
-          "model_top1_accuracy": 0.2252,
+          "model_top1_accuracy": 0.2244,
           "policies": {
             "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
-            "model_fallback": {"coverage": 0.3444, "selective_accuracy": 0.9423, "silent_error_rate": 0.0199},
-            "model_only": {"coverage": 0.0795, "selective_accuracy": 0.6667, "silent_error_rate": 0.0265},
-            "router_always": {"coverage": 1.0, "selective_accuracy": 0.4305, "silent_error_rate": 0.5695},
-            "router_evidence": {"coverage": 0.2715, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+            "model_fallback": {"coverage": 0.3462, "selective_accuracy": 0.9444, "silent_error_rate": 0.0192},
+            "model_only": {"coverage": 0.0769, "selective_accuracy": 0.6667, "silent_error_rate": 0.0256},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.4295, "silent_error_rate": 0.5705},
+            "router_evidence": {"coverage": 0.2756, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
-          "router_accuracy": 0.4305,
+          "router_accuracy": 0.4295,
           "router_decisive_accuracy": 1.0
         },
-        "router": {"correct": 65, "decisive": 41, "decisive_correct": 41},
-        "samples": 151
+        "router": {"correct": 67, "decisive": 43, "decisive_correct": 43},
+        "samples": 156
       }
     },
     "language_in_script": {
@@ -381,22 +381,22 @@
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
           "declared": [21, 4, 3, 2, 1, 0, 0, 0, 4, 3],
-          "none": [94, 30, 10, 50, 46, 34, 15, 15, 50, 40],
+          "none": [97, 30, 10, 52, 46, 34, 15, 15, 50, 40],
           "undeclared": [14, 10, 8, 2, 0, 0, 0, 0, 8, 8]
         }
       },
       "by_tier": {
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
-          "dedicated_model": [57, 23, 2, 28, 29, 20, 10, 10, 30, 21],
+          "dedicated_model": [58, 23, 2, 29, 29, 20, 10, 10, 30, 21],
           "no_pack": [32, 3, 3, 9, 8, 6, 0, 0, 11, 9],
-          "shared_model": [40, 18, 16, 17, 10, 8, 5, 5, 21, 21]
+          "shared_model": [42, 18, 16, 18, 10, 8, 5, 5, 21, 21]
         }
       },
       "confidence_sweep": [
-        {"correct": 40, "coverage": 0.4264, "covered": 55, "min_confidence": 0.5, "selective_accuracy": 0.7273},
-        {"correct": 34, "coverage": 0.3643, "covered": 47, "min_confidence": 0.7, "selective_accuracy": 0.7234},
-        {"correct": 26, "coverage": 0.2481, "covered": 32, "min_confidence": 0.9, "selective_accuracy": 0.8125}
+        {"correct": 40, "coverage": 0.4167, "covered": 55, "min_confidence": 0.5, "selective_accuracy": 0.7273},
+        {"correct": 34, "coverage": 0.3561, "covered": 47, "min_confidence": 0.7, "selective_accuracy": 0.7234},
+        {"correct": 26, "coverage": 0.2424, "covered": 32, "min_confidence": 0.9, "selective_accuracy": 0.8125}
       ],
       "languages": {
         "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
@@ -420,7 +420,7 @@
           "hi": ["dedicated_model", 10, 7, 0, 0, 6, 0, 0, 0, 6, 0],
           "hr": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "hu": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
-          "id": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "id": ["shared_model", 3, 0, 0, 1, 0, 0, 0, 0, 0, 0],
           "ig": ["no_pack", 4, 0, 0, 1, 0, 0, 0, 0, 0, 0],
           "it": ["dedicated_model", 3, 0, 0, 2, 2, 1, 0, 0, 2, 1],
           "ja": ["dedicated_model", 3, 1, 1, 3, 2, 2, 1, 1, 2, 2],
@@ -450,7 +450,7 @@
           "tr": ["dedicated_model", 3, 0, 0, 2, 2, 2, 0, 0, 2, 2],
           "uk": ["shared_model", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
           "ur": ["shared_model", 4, 3, 3, 3, 2, 2, 2, 2, 3, 3],
-          "vi": ["dedicated_model", 2, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "vi": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
           "xh": ["shared_model", 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "yo": ["no_pack", 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           "zh": ["dedicated_model", 4, 4, 0, 4, 3, 3, 3, 3, 3, 3],
@@ -458,76 +458,76 @@
         }
       },
       "low_resource": {
-        "model": {"abstained": 54, "agrees_with_router": 15, "covered": 18, "covered_correct": 14, "failed": 0, "top1_correct": 26},
+        "model": {"abstained": 56, "agrees_with_router": 15, "covered": 18, "covered_correct": 14, "failed": 0, "top1_correct": 27},
         "policies": {
           "model_agreement": {"accepted": 5, "correct": 5},
           "model_fallback": {"accepted": 32, "correct": 30},
           "model_only": {"accepted": 18, "correct": 14},
-          "router_always": {"accepted": 72, "correct": 21},
+          "router_always": {"accepted": 74, "correct": 21},
           "router_evidence": {"accepted": 19, "correct": 19}
         },
         "rates": {
-          "model_coverage": 0.25,
+          "model_coverage": 0.2432,
           "model_selective_accuracy": 0.7778,
-          "model_top1_accuracy": 0.3611,
+          "model_top1_accuracy": 0.3649,
           "policies": {
-            "model_agreement": {"coverage": 0.0694, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
-            "model_fallback": {"coverage": 0.4444, "selective_accuracy": 0.9375, "silent_error_rate": 0.0278},
-            "model_only": {"coverage": 0.25, "selective_accuracy": 0.7778, "silent_error_rate": 0.0556},
-            "router_always": {"coverage": 1.0, "selective_accuracy": 0.2917, "silent_error_rate": 0.7083},
-            "router_evidence": {"coverage": 0.2639, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+            "model_agreement": {"coverage": 0.0676, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.4324, "selective_accuracy": 0.9375, "silent_error_rate": 0.027},
+            "model_only": {"coverage": 0.2432, "selective_accuracy": 0.7778, "silent_error_rate": 0.0541},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.2838, "silent_error_rate": 0.7162},
+            "router_evidence": {"coverage": 0.2568, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
-          "router_accuracy": 0.2917,
+          "router_accuracy": 0.2838,
           "router_decisive_accuracy": 1.0
         },
         "router": {"correct": 21, "decisive": 19, "decisive_correct": 19},
-        "samples": 72
+        "samples": 74
       },
       "summary": {
-        "model": {"abstained": 82, "agrees_with_router": 32, "covered": 47, "covered_correct": 34, "failed": 0, "top1_correct": 54},
+        "model": {"abstained": 85, "agrees_with_router": 32, "covered": 47, "covered_correct": 34, "failed": 0, "top1_correct": 56},
         "policies": {
           "model_agreement": {"accepted": 15, "correct": 15},
           "model_fallback": {"accepted": 62, "correct": 51},
           "model_only": {"accepted": 47, "correct": 34},
-          "router_always": {"accepted": 129, "correct": 44},
+          "router_always": {"accepted": 132, "correct": 44},
           "router_evidence": {"accepted": 21, "correct": 21}
         },
         "rates": {
-          "model_coverage": 0.3643,
+          "model_coverage": 0.3561,
           "model_selective_accuracy": 0.7234,
-          "model_top1_accuracy": 0.4186,
+          "model_top1_accuracy": 0.4242,
           "policies": {
-            "model_agreement": {"coverage": 0.1163, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
-            "model_fallback": {"coverage": 0.4806, "selective_accuracy": 0.8226, "silent_error_rate": 0.0853},
-            "model_only": {"coverage": 0.3643, "selective_accuracy": 0.7234, "silent_error_rate": 0.1008},
-            "router_always": {"coverage": 1.0, "selective_accuracy": 0.3411, "silent_error_rate": 0.6589},
-            "router_evidence": {"coverage": 0.1628, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+            "model_agreement": {"coverage": 0.1136, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.4697, "selective_accuracy": 0.8226, "silent_error_rate": 0.0833},
+            "model_only": {"coverage": 0.3561, "selective_accuracy": 0.7234, "silent_error_rate": 0.0985},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.3333, "silent_error_rate": 0.6667},
+            "router_evidence": {"coverage": 0.1591, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
-          "router_accuracy": 0.3411,
+          "router_accuracy": 0.3333,
           "router_decisive_accuracy": 1.0
         },
         "router": {"correct": 44, "decisive": 21, "decisive_correct": 21},
-        "samples": 129
+        "samples": 132
       }
     },
     "script": {
       "by_mix": {
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
-          "none": [85, 85, 85, 10, 1, 0, 0, 0, 85, 85]
+          "none": [88, 88, 88, 10, 1, 0, 0, 0, 88, 88]
         }
       },
       "by_tier": {
         "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
         "rows": {
-          "dedicated_model": [48, 48, 48, 2, 0, 0, 0, 0, 48, 48],
+          "dedicated_model": [49, 49, 49, 2, 0, 0, 0, 0, 49, 49],
           "no_pack": [2, 2, 2, 1, 0, 0, 0, 0, 2, 2],
-          "shared_model": [35, 35, 35, 7, 1, 0, 0, 0, 35, 35]
+          "shared_model": [37, 37, 37, 7, 1, 0, 0, 0, 37, 37]
         }
       },
       "confidence_sweep": [
-        {"correct": 1, "coverage": 0.0824, "covered": 7, "min_confidence": 0.5, "selective_accuracy": 0.1429},
-        {"correct": 0, "coverage": 0.0118, "covered": 1, "min_confidence": 0.7, "selective_accuracy": 0.0},
+        {"correct": 1, "coverage": 0.0795, "covered": 7, "min_confidence": 0.5, "selective_accuracy": 0.1429},
+        {"correct": 0, "coverage": 0.0114, "covered": 1, "min_confidence": 0.7, "selective_accuracy": 0.0},
         {"correct": 0, "coverage": 0.0, "covered": 0, "min_confidence": 0.9, "selective_accuracy": null}
       ],
       "languages": {
@@ -564,67 +564,67 @@
           "sw": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
           "ta": ["shared_model", 3, 3, 3, 2, 0, 0, 0, 0, 3, 3],
           "te": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
-          "th": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "th": ["shared_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
           "tr": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
           "uk": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
           "ur": ["shared_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
-          "vi": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "vi": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
           "xh": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
           "zh": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
           "zu": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1]
         }
       },
       "low_resource": {
-        "model": {"abstained": 36, "agrees_with_router": 8, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 8},
+        "model": {"abstained": 38, "agrees_with_router": 8, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 8},
         "policies": {
           "model_agreement": {"accepted": 0, "correct": 0},
-          "model_fallback": {"accepted": 37, "correct": 37},
+          "model_fallback": {"accepted": 39, "correct": 39},
           "model_only": {"accepted": 1, "correct": 0},
-          "router_always": {"accepted": 37, "correct": 37},
-          "router_evidence": {"accepted": 37, "correct": 37}
+          "router_always": {"accepted": 39, "correct": 39},
+          "router_evidence": {"accepted": 39, "correct": 39}
         },
         "rates": {
-          "model_coverage": 0.027,
+          "model_coverage": 0.0256,
           "model_selective_accuracy": 0.0,
-          "model_top1_accuracy": 0.2162,
+          "model_top1_accuracy": 0.2051,
           "policies": {
             "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
             "model_fallback": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
-            "model_only": {"coverage": 0.027, "selective_accuracy": 0.0, "silent_error_rate": 0.027},
+            "model_only": {"coverage": 0.0256, "selective_accuracy": 0.0, "silent_error_rate": 0.0256},
             "router_always": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
             "router_evidence": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
           "router_accuracy": 1.0,
           "router_decisive_accuracy": 1.0
         },
-        "router": {"correct": 37, "decisive": 37, "decisive_correct": 37},
-        "samples": 37
+        "router": {"correct": 39, "decisive": 39, "decisive_correct": 39},
+        "samples": 39
       },
       "summary": {
-        "model": {"abstained": 84, "agrees_with_router": 10, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 10},
+        "model": {"abstained": 87, "agrees_with_router": 10, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 10},
         "policies": {
           "model_agreement": {"accepted": 0, "correct": 0},
-          "model_fallback": {"accepted": 85, "correct": 85},
+          "model_fallback": {"accepted": 88, "correct": 88},
           "model_only": {"accepted": 1, "correct": 0},
-          "router_always": {"accepted": 85, "correct": 85},
-          "router_evidence": {"accepted": 85, "correct": 85}
+          "router_always": {"accepted": 88, "correct": 88},
+          "router_evidence": {"accepted": 88, "correct": 88}
         },
         "rates": {
-          "model_coverage": 0.0118,
+          "model_coverage": 0.0114,
           "model_selective_accuracy": 0.0,
-          "model_top1_accuracy": 0.1176,
+          "model_top1_accuracy": 0.1136,
           "policies": {
             "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
             "model_fallback": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
-            "model_only": {"coverage": 0.0118, "selective_accuracy": 0.0, "silent_error_rate": 0.0118},
+            "model_only": {"coverage": 0.0114, "selective_accuracy": 0.0, "silent_error_rate": 0.0114},
             "router_always": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
             "router_evidence": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
           },
           "router_accuracy": 1.0,
           "router_decisive_accuracy": 1.0
         },
-        "router": {"correct": 85, "decisive": 85, "decisive_correct": 85},
-        "samples": 85
+        "router": {"correct": 88, "decisive": 88, "decisive_correct": 88},
+        "samples": 88
       }
     }
   },

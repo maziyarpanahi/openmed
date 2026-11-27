@@ -1162,7 +1162,7 @@ def test_vietnamese_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
         if line.strip()
     ]
 
-    assert len(fixtures) == 2
+    assert 3 <= len(fixtures) <= 5
     assert {fixture.language for fixture in fixtures} == {"vi"}
     assert {fixture.metadata["locale"] for fixture in fixtures} == {"vi_VN"}
     assert all(fixture.metadata["synthetic"] is True for fixture in fixtures)
@@ -1188,7 +1188,7 @@ def test_vietnamese_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
     assert all(validate_vietnamese_cccd(value) for value in cccd_values)
     assert all(value.startswith(("+84", "0")) for value in phone_values)
     # Acceptance coverage: a native "ngay D thang M nam YYYY" date, a 0xx
-    # mobile, and a diacritic-bearing address all appear across the two rows.
+    # mobile, and a diacritic-bearing address all appear across the rows.
     all_spans = [span for fixture in fixtures for span in fixture.gold_spans]
     assert any(
         span.label == "DATE" and span.text.startswith("ngày ") for span in all_spans
