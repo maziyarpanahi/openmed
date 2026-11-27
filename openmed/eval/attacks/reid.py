@@ -9,7 +9,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1335,3 +1335,40 @@ __all__ = [
     "run_reid_benchmark",
     "shadow_membership_inference_attack",
 ]
+
+
+def assess_fixture_preservation(
+    *,
+    date_pairs: Sequence[tuple[date, date]] = (),
+    surrogate_pairs: Sequence[tuple[str, str]] = (),
+    prefix_length: int = 2,
+) -> dict[str, int]:
+    """Count unchanged dates and preserved ID structure in paired reference fixtures.
+
+    Supply aligned original and transformed values from a controlled evaluation.
+    Surrogate pairs must belong to a format with a terminal check digit. The
+    result contains only denominators and counts for release-gate evaluation.
+    """
+    if type(prefix_length) is not int or prefix_length < 1:
+        raise ValueError("invalid prefix length")
+    unchanged_dates = 0
+    for original, transformed in date_pairs:
+        if type(original) is not date or type(transformed) is not date:
+            raise ValueError("invalid fixture date pair")
+        unchanged_dates += original == transformed
+    same_prefix = same_check_digit = 0
+    for source, surrogate in surrogate_pairs:
+        if not all(
+            isinstance(v, str) and len(v) > prefix_length and v[-1] in "0123456789"
+            for v in (source, surrogate)
+        ):
+            raise ValueError("invalid fixture surrogate pair")
+        same_prefix += source[:prefix_length] == surrogate[:prefix_length]
+        same_check_digit += source[-1] == surrogate[-1]
+    return {
+        "date_pairs": len(date_pairs),
+        "unchanged_dates": unchanged_dates,
+        "surrogate_pairs": len(surrogate_pairs),
+        "preserved_prefixes": same_prefix,
+        "preserved_check_digits": same_check_digit,
+    }
