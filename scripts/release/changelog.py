@@ -290,6 +290,24 @@ def default_range_and_version(repo: Path) -> tuple[str, str]:
     return "HEAD", read_package_version()
 
 
+def lts_range_and_version(repo: Path, line: str) -> tuple[str, str]:
+    """Select the highest reachable stable patch tag in an LTS line."""
+    if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)", line):
+        raise ValueError("--lts-line must be MAJOR.MINOR")
+    result = run_git(repo, ["tag", "--merged", "HEAD", "--list", f"v{line}.*"])
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or "git tag failed")
+    versions = [
+        tag.removeprefix("v")
+        for tag in result.stdout.splitlines()
+        if SEMVER_PATTERN.fullmatch(tag.removeprefix("v"))
+    ]
+    if not versions:
+        raise ValueError(f"No reachable stable tag for LTS line {line}")
+    version = max(versions, key=parse_semver)
+    return f"v{version}..HEAD", version
+
+
 def write_github_output(outputs: dict[str, str], output_file: Path) -> None:
     """Append outputs using GitHub Actions' multiline output syntax."""
     with output_file.open("a", encoding="utf-8") as handle:
@@ -308,6 +326,11 @@ def write_github_output(outputs: dict[str, str], output_file: Path) -> None:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--lts-line",
+        metavar="MAJOR.MINOR",
+        help="Use the latest stable tag in this line and allow only patch releases.",
+    )
     parser.add_argument(
         "--range",
         dest="range_spec",
@@ -353,11 +376,40 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
     args = parse_args(argv or sys.argv[1:])
     repo = args.repo.resolve()
-    range_spec, inferred_version = default_range_and_version(repo)
+    if args.lts_line is not None:
+        if args.range_spec or args.current_version:
+            print(
+                "--lts-line cannot be combined with --range or --current-version",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            range_spec, inferred_version = lts_range_and_version(repo, args.lts_line)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        range_spec, inferred_version = default_range_and_version(repo)
     range_spec = args.range_spec or range_spec
     current_version = args.current_version or inferred_version
 
     commits = read_commits(repo, range_spec)
+    if args.lts_line is not None:
+        offending = [c.subject for c in commits if commit_bump(c) in ("minor", "major")]
+        if offending:
+            print(
+                "LTS releases allow patch bumps only:\n" + "\n".join(offending),
+                file=sys.stderr,
+            )
+            return 2
+        if args.release_version and not args.release_version.startswith(
+            f"{args.lts_line}."
+        ):
+            print(
+                f"Release version must stay on LTS line {args.lts_line}",
+                file=sys.stderr,
+            )
+            return 2
     notes = build_release_notes(current_version, commits, args.date)
     if args.release_version:
         try:
