@@ -912,6 +912,7 @@ classification:
     - compliance/gdpr-dsar-export.md
     - compliance/ke-dpa-identifier-checklist.md
     - compliance/model-card-eu-ai-act-fields.md
+    - compliance/eu-ai-act-technical-documentation.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
     - compliance/waiver-ledger.md

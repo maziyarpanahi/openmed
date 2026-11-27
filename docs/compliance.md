@@ -68,6 +68,9 @@ and supervisory-authority guidance:
 - [EU AI Act and GDPR model-card field specification](compliance/model-card-eu-ai-act-fields.md)
   defines intended-purpose, limitation, accuracy/leakage, human-oversight,
   robustness, and GDPR fields for manifest- and `BenchmarkReport`-backed cards.
+- [AI Act technical-documentation evidence map](compliance/eu-ai-act-technical-documentation.md)
+  maps every Annex IV section to the OpenMed artifact that can support it and
+  names the sections that remain entirely the provider's own.
 
 ## Regional implementation checklists
 
