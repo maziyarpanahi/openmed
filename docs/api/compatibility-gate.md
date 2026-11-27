@@ -123,6 +123,66 @@ The writer refuses to overwrite a baseline when the current schema breaks it.
 Pass `--allow-breaking` together with `--write-baselines` only for an approved
 break, so the removal stays visible in the baseline diff under review.
 
+## Packaged JSON Schemas across releases
+
+The checks above compare the code with baselines committed in the same tree,
+so a schema property can be deleted and `schema-fingerprints.json` regenerated
+in one commit without any of them failing. `scripts/release/schema_release_diff.py`
+compares every packaged `*.schema.json` file with the last release instead:
+
+```bash
+python scripts/release/schema_release_diff.py
+python scripts/release/schema_release_diff.py --base-ref v3.3.0 --json report.json
+```
+
+The base defaults to the newest `v*` tag reachable from `HEAD`, found with
+`git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD`, and the candidate
+defaults to the working tree (`--head-ref` accepts any Git ref). The script
+reads both sides straight from Git and never imports `openmed`, so it runs
+offline. A shallow clone without tags fails with exit code 2 and asks for the
+history; release workflows check out with `fetch-depth: 0`.
+
+Each schema is classified by file name:
+
+| Status | Meaning |
+| --- | --- |
+| `added` | Present only in the candidate. |
+| `removed` | Present at the release and missing from the candidate. |
+| `unchanged` | Byte-for-byte the same canonical document. |
+| `compatible` | Changed without narrowing and without a version change. |
+| `version_bump` | A declared version changed: top-level `schema_version`, the record `schema_version` `const` or `enum`, or the version in `$id`. |
+| `breaking` | Narrowed without a version change. |
+
+A change is narrowing when a record the older schema described may no longer
+validate, or a field a reader relied on may be gone. That covers removed
+properties or definitions, newly required fields, narrowed types, removed enum
+values, changed constants, closed `additionalProperties`, new `allOf`
+constraints, removed `anyOf` or `oneOf` branches, and tightened bounds,
+patterns or formats. Each finding carries a JSON Pointer into the schema.
+
+`breaking` and `removed` schemas fail the check (exit code 1) unless
+`scripts/release/schema_break_allowlist.json` has a reviewed entry for them:
+
+```json
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "schema": "decision_result",
+      "reason": "Why the break is acceptable and who reviewed it.",
+      "target_version": "4.1.0"
+    }
+  ]
+}
+```
+
+Every entry needs a schema name, a non-empty `reason` and a semantic
+`target_version` naming the OpenMed release that ships the break. Allowed
+breaks stay in the report with their reason, and entries that no longer match
+a break are listed as unused so they can be removed. The
+`Model Release Gates` workflow runs the comparison on every manual release
+run.
+
 ## Python API
 
 For an in-process check, callers can use

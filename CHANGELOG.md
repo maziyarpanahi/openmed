@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admit `openmed.multimodal.apple.v1` evidence packets in the `openmed` web package from the `openmed/multimodal` subpath: strict canonical parsing, the 64 KiB limit, WebCrypto SHA-256 evidence and clock-result digests, the shared refusal codes and typed, frozen asset, visual, transcript, provider and clock projections that keep values above 2^53 as `bigint`; validated against every case of the shared `multimodal_contract_v1.json` fixture (#5370).
 - Publish `audit_report.schema.json`, a JSON Schema for the signed de-identification `AuditReport` with closed span, context, detector and signature objects (raw-text keys, negative offsets and unknown signature algorithms fail), a `load_audit_report_schema()` loader and an entry in the schema fingerprint snapshot (#5348).
 - Document how OpenMed evidence maps to EHDS (Regulation (EU) 2025/327) secondary-use concepts, with article citations, the Article 105 application dates, and what OpenMed is not: a health data access body, a secure processing environment or a permit issuer (#5408).
+- Add `scripts/release/schema_release_diff.py`, which compares every packaged JSON Schema with the last `v*` release tag straight from Git, classifies it as added, removed, compatible, version bump or breaking, and fails the release gates on breaks or removals that lack a reviewed allowlist entry with a reason and target version (#5333).
 
 ### Changed
 
