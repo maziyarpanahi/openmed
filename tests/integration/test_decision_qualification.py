@@ -239,3 +239,35 @@ def test_backend_selection_is_required():
     with pytest.raises(SystemExit) as raised:
         build_parser().parse_args(arguments)
     assert raised.value.code == 2
+
+
+def test_markdown_output_is_written_to_a_new_file(tmp_path, capsys):
+    output = tmp_path / "report.md"
+
+    status = main(
+        command(
+            "--min-examples-per-option",
+            "2",
+            "--markdown-output",
+            str(output),
+            "--json",
+        )
+    )
+
+    assert status == 0
+    payload = json.loads(capsys.readouterr().out)["data"]
+    text = output.read_text("utf-8")
+    assert text.startswith("# Decision qualification report")
+    assert payload["report_digest"] in text
+
+
+def test_existing_markdown_output_is_never_overwritten(tmp_path, capsys):
+    output = tmp_path / "report.md"
+    output.write_text("caller-owned", "utf-8")
+
+    status = main(command("--markdown-output", str(output)))
+
+    assert status == 1
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert error["message"] == "Decision qualification failed: markdown_output_exists."
+    assert output.read_text("utf-8") == "caller-owned"
