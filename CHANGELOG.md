@@ -10,10 +10,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add the portable identifier validator subset to the openmed web package on the `openmed/validators` subpath: Luhn, SSN, NPI, IBAN, Canadian SIN, UK NHS number, Aadhaar, Chinese resident ID, Dutch BSN, French NIR and Spanish DNI ports that match the Python references on every shared vector, never throw, and leave the main entry's bundle unchanged (#5421).
+
+## [4.0.0] - 2026-11-25
+
+OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
+
+### Service deployment and recovery
+
+Async de-identification jobs can resume from checkpoints after a restart. Clients can send an `Idempotency-Key` when retrying job submissions and FHIR bulk or SMART ingestion starts. Workers acquire expiring leases, and terminal jobs record their webhook intent with their final checkpoint. If an input is damaged or cannot be authenticated, the job can enter `quarantined`. Treat that status as pending operator action. Drain in-flight 3.3 jobs before upgrading because older in-flight records cannot resume under the new format. [Async jobs](https://github.com/maziyarpanahi/openmed/blob/master/docs/serving/async-jobs.md)
+
+The production profile checks authentication, storage, outbound access, and replica configuration. Remote gRPC binds require TLS. PostgreSQL Journey stores require certificate and hostname verification in production. GraphQL clients must use POST. Move version probes from `/health` to the authenticated `/service/metadata` endpoint. Operators can rehearse schema migrations, back up and restore encrypted service state, and inspect or plan recovery before applying it. [Security profile](https://github.com/maziyarpanahi/openmed/blob/master/docs/serving/security-profile.md) · [Recovery CLI](https://github.com/maziyarpanahi/openmed/blob/master/docs/cli/service-recovery.md)
+
+### Portable inference and document redaction
+
+Signed bundle manifests bind model assets, tokenizer inputs, and optional decision calibration profiles. Mobile and browser runtimes can verify assets before loading them. Swift and Android document intake share evidence coordinates for reviewing redactions before an explicit export. The browser kit adds cancellable workers with bounded queues. Packaged-consumer tests exercise native SDKs and bridges outside the source checkout.
+
+Platform coverage varies by model family, runtime, and device. The frozen matrix identifies the Python reference contract and Apple Silicon macOS Swift cells with supporting CI evidence. Android, browser, and bridge users should check their specific combination. Physical-device qualification and signed release evidence are recorded separately. [OpenMedKit support matrix](https://github.com/maziyarpanahi/openmed/blob/master/docs/openmedkit-support-matrix.md)
+
+### Upgrade from 3.3
+
+| If you use | Action for 4.0 |
+| --- | --- |
+| Python | Use Python 3.11.5 or newer. Update imports that previously came from service implementation modules. Supply a signing key when running relation or federated leakage evaluations. Load biomedical NER corpora from pinned, script-free data or a local export. |
+| Decisions API | Send either the OpenMed or OpenAI-compatible request shape to `/v1/decisions`. For OpenMed requests with local media, declare schema `1.2.0` or omit the version. Existing text-only 1.0 and 1.1 requests retain their result version. |
+| Swift | Bundle tokenizer assets locally or opt into acquisition with an explicit tokenizer pin. Update switches over policy and model-loading errors to use the documented codes or asset roles. |
+| Android | Supply a secret provider for keyed hashing. Add `openmedkit-mlkit` if using ML Kit OCR, pass an OCR adapter explicitly to document intake, and rebuild consumers against the new API. |
+
+The migration guide includes replacement imports, Swift case changes, and Kotlin and Java signatures. The changelog also covers model-cache invalidation, stable Maple response error codes, and synthetic gait fixtures. [3.3-to-4.0 migration guide](https://github.com/maziyarpanahi/openmed/blob/master/docs/migration/3.3-to-4.0.md)
+
+### Installation after publication
+
+| Surface | Coordinate |
+| --- | --- |
+| Python | `pip install "openmed==4.0.0"` |
+| JavaScript | `npm install openmed@4.0.0` |
+| Swift Package Manager | `.package(url: "https://github.com/maziyarpanahi/openmed.git", from: "4.0.0")` |
+| Android / JitPack | `com.github.maziyarpanahi:openmed:v4.0.0` |
+| Service image | `ghcr.io/maziyarpanahi/openmed:v4.0.0` |
+
+This candidate concerns the library and SDKs. Clinical use requires independent validation for the intended population, device, and workflow, with qualified human review.
+
+### Added
+
+- Add a standard-library synthetic side-view walker fixture for pose and gait
+  tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
+  double-support truth, asymmetry, far-leg occlusion, joint jitter and a
+  second walker, plus seven curated scenarios with literature-grounded
+  parameters and pinned digests. The truth is checked against the generated
+  contact geometry and an independent pelvis-relative event detector (#4760).
+- Added a body-signal model license provenance page listing code, weight and
+  training-data licenses, intended use and check dates for candidate pose,
+  audio, sleep and chest X-ray models, and marking models with unstated weight
+  licenses as user-supplied only (#4759).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Give `MapleResponseError` a stable `code` attribute drawn from the closed set
+  `MAPLE_RESPONSE_ERROR_CODES` (for example `invalid_json`, `invalid_span`,
+  `label_not_allowed`), so callers can branch on why a Maple response was
+  rejected without parsing the message. Messages and parsing behaviour are
+  unchanged, and unknown codes fall back to `invalid_response` (#5086).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
@@ -36,6 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Key opt-in result-cache entries on the model revision and a model generation
+  counter, and clear the cache when a registry promotion, pointer flip or
+  rollback changes the served weights, so a model that keeps its name no longer
+  returns the previous weights' cached results (#4538).
+- Reject challengers that omit a critical recall measurement or a gate the
+  champion passed, preserving the missing-axis reason across signed comparison
+  record round trips (#4544).
 - Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
   `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
   links against it and no dependency ships it, so the tokenizer failed to load
