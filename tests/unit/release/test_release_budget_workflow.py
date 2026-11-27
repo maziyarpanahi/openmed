@@ -245,14 +245,23 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
     lane = jobs["sdk-compatibility"]
     full, pull_request = _tiered_matrices(lane)
-    versions = ["3.11", "3.12", "3.13"]
+    versions = ["3.11", "3.12", "3.13", "3.14"]
     systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
     assert sorted((row["os"], row["python-version"]) for row in full) == sorted(
         (system, version) for system in systems for version in versions
     )
-    # Pull requests keep both ends of the range and every operating system.
+    # Pull requests keep both ends of the range and every operating system,
+    # and Windows and macOS run the newest interpreter.
     assert {row["os"] for row in pull_request} == set(systems)
-    assert {row["python-version"] for row in pull_request} >= {"3.11", "3.13"}
+    assert {row["python-version"] for row in pull_request} >= {
+        versions[0],
+        versions[-1],
+    }
+    assert {
+        row["python-version"]
+        for row in pull_request
+        if row["os"] in {"windows-latest", "macos-latest"}
+    } == {versions[-1]}
     assert lane["strategy"]["fail-fast"] == "false"
     assert int(lane["timeout-minutes"]) <= 30
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
@@ -277,7 +286,9 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     } <= set(project["classifiers"])
     docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
     assert all(version in docs for version in versions)
-    assert "9 jobs" in docs and "sdk-compatibility-gate" in docs
+    combinations = len(versions) * len(systems)
+    assert f"{combinations} jobs" in docs and "sdk-compatibility-gate" in docs
+    assert f"all {combinations} combinations" in CI_WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
