@@ -20,6 +20,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 import openmed
+from openmed.core.capabilities import (
+    capability_descriptor,
+    load_capability_descriptor_schema,
+)
 from openmed.core.errors import (
     BudgetExceededError,
     CapabilityError,
@@ -353,6 +357,7 @@ _MANIFEST_HEADER = "X-OpenMed-Manifest"
 _MAX_MANIFEST_HEADER_BYTES = 8192
 _SYSTEM_ONE_PATH = "/v1/systemone"
 _COMPATIBILITY_PATH = "/v1/compatibility"
+CAPABILITIES_PATH = "/v1/capabilities"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -2393,6 +2398,31 @@ def create_app(
     async def loaded_models(request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
         return runtime.loaded_models()
+
+    @app.get(
+        CAPABILITIES_PATH,
+        response_model=None,
+        tags=["capabilities"],
+        responses={
+            200: {
+                "description": (
+                    "The canonical, value-free capability descriptor of this "
+                    "server: installed backends and surfaces, served public "
+                    "model ids, canonical schema versions, policy profiles and "
+                    "a digest of the descriptor."
+                ),
+                "content": {
+                    "application/json": {"schema": load_capability_descriptor_schema()}
+                },
+            }
+        },
+    )
+    async def capabilities(request: Request) -> Dict[str, Any]:
+        """Return the capability descriptor without paths or settings."""
+        runtime = _get_service_runtime(request)
+        return await run_in_threadpool(
+            capability_descriptor, served_models=runtime.served_model_ids()
+        )
 
     @app.post("/models/unload")
     async def unload_models(
