@@ -42,6 +42,7 @@ repositories.
 | `metadata_invalid_filename`, `metadata_missing_size`, `metadata_missing_digest`, `no_matching_files` | `failed` | Hub metadata cannot support verification |
 | `corrupt_file_unremovable`, `revision_name_unsafe` | `failed` | A cache write was refused |
 | `offline_cache_miss` | `failed` | Offline mode and nothing cached |
+| `integrity_unverifiable` | `failed` | Any other integrity failure (the default `DownloadIntegrityError` code) |
 | `download_error` | `failed` | Any other download failure |
 | `artifact_absent` | `evicted` | The artifact was already gone when eviction ran |
 

@@ -274,8 +274,18 @@ def emit_model_activated(
 
     This is the hook a transactional activation path calls after commit.
 
+    Args:
+        sink: Event sink; ``None`` drops the event.
+        repo_id: Repository of the generation that became active.
+        revision_sha: Commit hash of the generation that became active.
+        digest: Optional artifact digest of that generation.
+
     Returns:
         The emitted event.
+
+    Raises:
+        ModelLifecycleEventError: If a value does not match its value-free
+            shape.
     """
 
     event = ModelLifecycleEvent(
@@ -307,6 +317,10 @@ def emit_model_rolled_back(
 
     Returns:
         The emitted event.
+
+    Raises:
+        ModelLifecycleEventError: If a value does not match its value-free
+            shape.
     """
 
     event = ModelLifecycleEvent(
