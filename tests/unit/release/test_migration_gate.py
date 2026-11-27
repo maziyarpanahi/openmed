@@ -359,6 +359,17 @@ def test_unreadable_exemption_file_and_missing_tag_exit_two(
     assert "fetch-depth: 0" in capsys.readouterr().err
 
 
+def test_two_packaged_schemas_with_the_same_name_exit_two(
+    bumped_repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write(bumped_repo / "pkg/other/synthetic_note.schema.json", _schema("1.0.0"))
+
+    assert _run(bumped_repo, _exemptions(tmp_path), MigratorRegistry()) == 2
+    assert "more than one packaged schema is named synthetic_note" in (
+        capsys.readouterr().err
+    )
+
+
 @pytest.mark.parametrize(
     ("schema", "version"),
     [

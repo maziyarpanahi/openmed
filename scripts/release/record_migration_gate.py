@@ -260,7 +260,8 @@ def packaged_versions(
         Record versions keyed by schema name.
 
     Raises:
-        GateError: When the ref cannot be read or a schema is not JSON.
+        GateError: When the ref cannot be read, a schema is not JSON, or two
+            packaged schemas share a file name.
     """
 
     raw: dict[str, bytes] = {}
@@ -291,6 +292,10 @@ def packaged_versions(
     versions: dict[str, str | None] = {}
     for path, content in sorted(raw.items()):
         name = PurePosixPath(path).name[: -len(SCHEMA_SUFFIX)]
+        if name in versions:
+            # Schemas are keyed by file name, so a second file with the same
+            # name would hide the first one's bump.
+            raise GateError(f"more than one packaged schema is named {name} at {ref}")
         try:
             document = json.loads(content.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
