@@ -13,6 +13,8 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: MacOS",
@@ -62,10 +64,13 @@ dev = [
   "jinja2>=3.1.6",
   "mcp>=1.30,<2",
   "mypy==2.3.0",
-  "opencc>=1.4.1,<2",
+  # OpenCC publishes no CPython 3.15 wheel yet; see docs/testing.md.
+  "opencc>=1.4.1,<2; python_version < '3.15'",
   # Pillow 13 fixes the image-parser advisories.
   "Pillow==13.0.0",
-  "duckdb>=1.0,<2",
+  # DuckDB first publishes CPython 3.15 wheels in 2.0.
+  "duckdb>=1.0,<2; python_version < '3.15'",
+  "duckdb>=2.0,<3; python_version >= '3.15'",
   "numpy>=1.26",
   # Exercise real synthetic DICOM parsing in the offline CI suite.
   "pydicom>=3.0",
@@ -84,7 +89,9 @@ dev = [
   "fonttools[woff]==4.61.1",
   "grpcio>=1.64",
   "grpcio-health-checking==1.81.1",
-  "grpcio-tools>=1.64",
+  # grpcio-tools' first CPython 3.15 release needs protobuf 7; see
+  # docs/testing.md.
+  "grpcio-tools>=1.64; python_version < '3.15'",
   "protobuf>=5.26,<7",
   "ruff==0.15.22",
   "strawberry-graphql[fastapi]>=0.327.2,<1",
@@ -181,7 +188,8 @@ spacy = [
 
 zh = [
   "jieba>=0.42",
-  "opencc>=1.4.1,<2",
+  # OpenCC publishes no CPython 3.15 wheel yet; see docs/testing.md.
+  "opencc>=1.4.1,<2; python_version < '3.15'",
   "pypinyin>=0.51",
 ]
 
@@ -191,7 +199,8 @@ indic = [
 
 scispacy = [
   "setuptools>=84.1.0",
-  "scispacy>=0.5.4,<1",
+  # scispacy requires NumPy 1, which has no CPython 3.15 wheels.
+  "scispacy>=0.5.4,<1; python_version < '3.15'",
 ]
 
 quickumls = [
@@ -336,7 +345,8 @@ beam = [
   "setuptools>=84.1.0",
   "Pillow>=13.0.0",
   "multidict>=6.9.1",
-  "apache-beam>=2.73,<3",
+  # Beam caps NumPy below 2.5, which has no CPython 3.15 wheels.
+  "apache-beam>=2.73,<3; python_version < '3.15'",
   "pymongo>=4.18.3",
   "h2>=4.4.1",
 ]
@@ -349,7 +359,9 @@ airflow = [
 ]
 
 duckdb = [
-  "duckdb>=1.0,<2",
+  # DuckDB first publishes CPython 3.15 wheels in 2.0.
+  "duckdb>=1.0,<2; python_version < '3.15'",
+  "duckdb>=2.0,<3; python_version >= '3.15'",
   "numpy>=1.26",
 ]
 
@@ -588,7 +600,8 @@ openvino = [
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "openvino>=2024.0",
-  "nncf>=2.10",
+  # NNCF caps NumPy below 2.5, which has no CPython 3.15 wheels.
+  "nncf>=2.10; python_version < '3.15'",
   "onnxruntime>=1.16",
   "transformers>=4.50",
 ]
@@ -653,6 +666,22 @@ constraint-dependencies = [
   "gitpython>=3.2.1",
   "betterproto==2.0.0b6",
   "pyjwt>=2.14.0",
+  # CPython 3.15: the versions locked for 3.11-3.14 publish no cp315 wheels.
+  # These bounds apply only to the 3.15 resolution fork, so the 3.11-3.14
+  # resolutions in uv.lock stay unchanged.
+  "rpds-py>=2026.5.1; python_version >= '3.15'",
+  "pydantic-core>=2.48.0; python_version >= '3.15'",
+  "cffi>=2.1.0; python_version >= '3.15'",
+  "markupsafe>=3.0.4; python_version >= '3.15'",
+  "grpcio>=1.84.0; python_version >= '3.15'",
+  "numpy>=2.5.2; python_version >= '3.15'",
+  "pandas>=3.0.6; python_version >= '3.15'",
+  "librt>=0.14.0; python_version >= '3.15'",
+  "hypothesis>=6.156.4; python_version >= '3.15'",
+  "pyarrow>=26.0.0; python_version >= '3.15'",
+  "httptools>=0.9.0; python_version >= '3.15'",
+  "uvloop>=0.23.0; python_version >= '3.15'",
+  "watchfiles>=1.3.0; python_version >= '3.15'",
 ]
 override-dependencies = [
   # Beam 2.75 caps these below their patched releases even though its

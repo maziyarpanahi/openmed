@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from packaging.requirements import Requirement
 
 try:
     import tomllib
@@ -245,14 +246,23 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
     lane = jobs["sdk-compatibility"]
     full, pull_request = _tiered_matrices(lane)
-    versions = ["3.11", "3.12", "3.13"]
+    versions = ["3.11", "3.12", "3.13", "3.14", "3.15"]
     systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
     assert sorted((row["os"], row["python-version"]) for row in full) == sorted(
         (system, version) for system in systems for version in versions
     )
-    # Pull requests keep both ends of the range and every operating system.
+    # Pull requests keep both ends of the range and every operating system,
+    # and Windows and macOS run the newest interpreter.
     assert {row["os"] for row in pull_request} == set(systems)
-    assert {row["python-version"] for row in pull_request} >= {"3.11", "3.13"}
+    assert {row["python-version"] for row in pull_request} >= {
+        versions[0],
+        versions[-1],
+    }
+    assert {
+        row["python-version"]
+        for row in pull_request
+        if row["os"] in {"windows-latest", "macos-latest"}
+    } == {versions[-1]}
     assert lane["strategy"]["fail-fast"] == "false"
     assert int(lane["timeout-minutes"]) <= 30
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
@@ -277,7 +287,113 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     } <= set(project["classifiers"])
     docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
     assert all(version in docs for version in versions)
-    assert "9 jobs" in docs and "sdk-compatibility-gate" in docs
+    combinations = len(versions) * len(systems)
+    assert f"{combinations} jobs" in docs and "sdk-compatibility-gate" in docs
+    assert f"all {combinations} combinations" in CI_WORKFLOW.read_text(encoding="utf-8")
+
+
+# Requirements that no release can satisfy on CPython 3.15, by extra. Each one
+# must carry a marker that drops it on 3.15 only, and docs/testing.md must
+# explain it; nothing else in the claimed installs may be dropped there.
+EXCLUDED_ON_PY315 = {
+    ("dev", "opencc"),
+    ("zh", "opencc"),
+    ("dev", "grpcio-tools"),
+    ("beam", "apache-beam"),
+    ("openvino", "nncf"),
+    ("scispacy", "scispacy"),
+}
+
+
+def _marker_environment(python_version: str) -> dict[str, str]:
+    return {
+        "python_version": python_version,
+        "python_full_version": f"{python_version}.0",
+        "sys_platform": "linux",
+        "platform_system": "Linux",
+        "platform_machine": "x86_64",
+        "os_name": "posix",
+        "implementation_name": "cpython",
+        "platform_python_implementation": "CPython",
+        "extra": "",
+    }
+
+
+def _applies(requirement: Requirement, python_version: str) -> bool:
+    marker = requirement.marker
+    return marker is None or marker.evaluate(_marker_environment(python_version))
+
+
+def test_python_315_support_is_scoped_to_its_own_resolution_fork():
+    """3.15 is claimed only for installs whose dependencies resolve there.
+
+    The 3.15-only lower bounds and exclusions must not touch 3.11 to 3.14,
+    the claimed installs (core, ``cli``, ``service``, ``mcp`` and ``dev``) must
+    lose nothing on 3.15 beyond the documented exclusions, and the docs must
+    explain every exclusion with an upstream reference.
+    """
+
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = pyproject["project"]
+    assert "Programming Language :: Python :: 3.15" in project["classifiers"]
+    assert "sdk-compatibility-next" not in _load_ci()["jobs"]
+
+    # 3.15-only lower bounds live in the uv resolver configuration and never
+    # apply to older interpreters, so their resolutions stay as locked.
+    py315_bounds = {}
+    for entry in pyproject["tool"]["uv"]["constraint-dependencies"]:
+        requirement = Requirement(entry)
+        if requirement.marker is None:
+            continue
+        assert str(requirement.marker) == 'python_version >= "3.15"', entry
+        assert not _applies(requirement, "3.14") and _applies(requirement, "3.15")
+        assert any(spec.operator == ">=" for spec in requirement.specifier), entry
+        py315_bounds[requirement.name] = requirement
+    assert {"rpds-py", "pydantic-core", "cffi", "grpcio", "hypothesis"} <= set(
+        py315_bounds
+    )
+
+    extras = project["optional-dependencies"]
+    for extra, name in EXCLUDED_ON_PY315:
+        matches = [
+            Requirement(entry)
+            for entry in extras[extra]
+            if Requirement(entry).name.lower() == name
+        ]
+        assert matches, (extra, name)
+        for requirement in matches:
+            assert _applies(requirement, "3.14"), (extra, name)
+            assert not _applies(requirement, "3.15"), (extra, name)
+
+    claimed = {"core": project["dependencies"]} | {
+        extra: extras[extra] for extra in ("cli", "service", "mcp", "dev")
+    }
+    for install, entries in claimed.items():
+        names = {}
+        for version in ("3.14", "3.15"):
+            names[version] = {
+                Requirement(entry).name.lower()
+                for entry in entries
+                if _applies(Requirement(entry), version)
+            }
+        dropped = names["3.14"] - names["3.15"]
+        assert dropped == {
+            name for extra, name in EXCLUDED_ON_PY315 if extra == install
+        }, install
+
+    docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
+    section = docs.split("### Python 3.15", 1)[1].split("\n## ", 1)[0]
+    assert "not supported yet" not in section
+    for extra, name in EXCLUDED_ON_PY315:
+        assert f"`{name}`" in section and f"`{extra}`" in section, (extra, name)
+    for reference in (
+        "https://github.com/yaml/pyyaml/issues/981",
+        "https://pypi.org/project/OpenCC/",
+        "https://github.com/apache/beam/issues/40249",
+        "https://pypi.org/project/nncf/",
+        "https://github.com/allenai/scispacy/issues/536",
+    ):
+        assert reference in section, reference
 
 
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
