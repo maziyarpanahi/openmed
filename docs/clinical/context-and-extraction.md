@@ -355,6 +355,11 @@ python scripts/parity/export_context_cues.py --check
 checks the gap rule, compares the cue table with the live lexicon and checks
 the digest. A cue edit that is not regenerated fails it.
 
+The Android OpenMedKit port, `com.openmed.openmedkit.clinical.ClinicalContext`,
+bundles a byte-identical copy of the cue table and replays every case in
+`ClinicalAssertionParityTest`; see
+[Android task packs](../android-integration.md#clinical-entities).
+
 ## Axis To FHIR Mapping
 
 The context layer emits axis values. A FHIR exporter decides whether and how to
