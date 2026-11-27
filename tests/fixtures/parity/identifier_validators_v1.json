@@ -105,7 +105,7 @@
     {
       "validator": "Dutch BSN",
       "reference": "openmed.core.pii_i18n.validate_dutch_bsn",
-      "provenance": "constructed from the elfproef rule (weights 9 down to 2, check digit is the weighted total mod 11) over the bodies 71234567, 82345678 and 93456789; no generator",
+      "provenance": "constructed from the elfproef rule (weights 9 down to 2, check digit is the weighted total mod 11) over the bodies 71234568, 82345679 and 93456790; no generator",
       "valid": [
         "712345681",
         "823456791",
