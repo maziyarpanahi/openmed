@@ -40,7 +40,12 @@ string passed to the scan.
 - parameterized AWS Signature Version 4, Digest, and Signature authorization
   values;
 - secret-looking values assigned to names such as `API_KEY`, `ACCESS_TOKEN`,
-  `PASSWORD`, `DATABASE_URL`, `PRIVATE_KEY`, and `CLIENT_SECRET`.
+  `PASSWORD`, `DATABASE_URL`, `PRIVATE_KEY`, and `CLIENT_SECRET`;
+- home-directory paths such as `/Users/<name>/...`, `/home/<name>/...`, and
+  `C:\Users\<name>\...`. Only the account-name segment is reported, so the
+  rest of the path stays readable; generic or placeholder names such as
+  `user`, `runner`, `shared`, `$USER`, and `%USERNAME%` are ignored, as are
+  host-like segments inside URLs.
 
 Explicit placeholders such as `<TOKEN>`, `your-api-key`, `replace-me`, and
 runtime references such as `${TOKEN}` are ignored to keep documentation and
