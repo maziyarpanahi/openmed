@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v1/intended-use.schema.json",
+  "title": "Capability intended use",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "regulatory_tier": {
+      "type": "string",
+      "enum": [
+        "non_clinical",
+        "informational",
+        "assistive_review",
+        "restricted"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "privacy",
+        "extraction",
+        "summarization",
+        "grounding",
+        "generation",
+        "decision_support",
+        "verification",
+        "measurement",
+        "transcription",
+        "research",
+        "information",
+        "visual_qa",
+        "crisis_routing"
+      ]
+    },
+    "intended_users": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "developer",
+          "researcher",
+          "reviewer",
+          "clinician",
+          "operator",
+          "patient",
+          "caregiver"
+        ]
+      }
+    },
+    "excluded_uses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "diagnosis",
+          "treatment_selection",
+          "triage_without_review",
+          "autonomous_action",
+          "emergency_detection"
+        ]
+      }
+    },
+    "input_modalities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "text",
+          "document",
+          "image",
+          "audio",
+          "video",
+          "waveform",
+          "sensor",
+          "structured"
+        ]
+      }
+    },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "am",
+          "ar",
+          "as",
+          "bn",
+          "cs",
+          "da",
+          "de",
+          "el",
+          "en",
+          "es",
+          "fa",
+          "fr",
+          "gu",
+          "he",
+          "hi",
+          "id",
+          "it",
+          "ja",
+          "kn",
+          "ko",
+          "ml",
+          "mr",
+          "nl",
+          "no",
+          "or",
+          "pa",
+          "pl",
+          "pt",
+          "ro",
+          "ru",
+          "sv",
+          "sw",
+          "ta",
+          "te",
+          "th",
+          "tr",
+          "uk",
+          "ur",
+          "vi",
+          "xh",
+          "zh",
+          "zu",
+          "und",
+          "zxx"
+        ]
+      }
+    },
+    "human_oversight": {
+      "type": "string",
+      "enum": [
+        "operator_review",
+        "human_review",
+        "clinician_review"
+      ]
+    },
+    "autonomous_clinical_action": {
+      "const": false
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[^.!?\\r\\n]+[.!?]?$",
+      "not": {
+        "pattern": "[fF][dD][aA][- ‐‑–][cC][lL][eE][aA][rR][eE][dD]|[fF][dD][aA][- ‐‑–][aA][pP][pP][rR][oO][vV][eE][dD]|[cC][eE][- ‐‑–][mM][aA][rR][kK][eE][dD]|[cC][lL][iI][nN][iI][cC][aA][lL][lL][yY][- ‐‑–][vV][aA][lL][iI][dD][aA][tT][eE][dD]|[cC][eE][rR][tT][iI][fF][iI][eE][dD][- ‐‑–][fF][oO][rR][- ‐‑–][cC][lL][iI][nN][iI][cC][aA][lL][- ‐‑–][uU][sS][eE]|[dD][iI][aA][gG][nN][oO][sS][eE][sS]|[dD][iI][aA][gG][nN][oO][sS][tT][iI][cC][- ‐‑–][aA][cC][cC][uU][rR][aA][cC][yY]"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "regulatory_tier",
+    "purpose",
+    "intended_users",
+    "excluded_uses",
+    "input_modalities",
+    "languages",
+    "human_oversight",
+    "autonomous_clinical_action"
+  ]
+}
