@@ -1,0 +1,7 @@
+{
+  "synthetic": true,
+  "request": {
+    "model": "local-fixture",
+    "messages": [{"role": "user", "content": "Call Avery Example at 555-0100."}]
+  }
+}
