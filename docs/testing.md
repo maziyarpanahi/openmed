@@ -59,6 +59,10 @@ Configure these markers via `pytest.ini` entries in `pyproject.toml`.
 
 ## Running the suite
 
+Git preserves LF line endings for text files on every platform through
+`.gitattributes`. This keeps digest-pinned assets and generated test fixtures
+byte-identical in Windows source checkouts.
+
 ```bash
 uv pip install ".[dev,hf]"
 make lint
