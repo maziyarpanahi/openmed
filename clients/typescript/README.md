@@ -4,7 +4,25 @@ Dependency-light TypeScript client for the OpenMed REST service. It uses the
 global `fetch` implementation by default and also accepts an injected fetch for
 Node runtimes and tests.
 
+This client is written by hand against the service's OpenAPI contract, apart
+from the generated Journey workflow types in
+`src/journey-workflows.generated.ts`. A client generated from the OpenAPI
+contract replaces it in a later major release; until then, this package is the
+supported TypeScript client.
+
 ## Install
+
+The package is published to npm as `@openmed/rest-client`, with the same
+version as the `openmed` Python package:
+
+```bash
+npm install @openmed/rest-client
+```
+
+It is an ES module with bundled type declarations, has no runtime
+dependencies, and needs Node.js 20 or later (or a browser) for the global
+`fetch` and Web Crypto APIs. The published tarball contains only
+`package.json`, `dist/`, this README and the Apache-2.0 `LICENSE`.
 
 Workflow methods (`workflowPreflight`, `workflowPreview`, `workflowStatus`,
 `workflowSubmitReceipt`, `workflowCancel`) validate the existing HTTP contract
@@ -32,7 +50,10 @@ For local SDK development:
 
 ```bash
 cd clients/typescript
+npm ci
 npm run typecheck
+npm run build
+npm run test:workflow
 ```
 
 ## Usage
