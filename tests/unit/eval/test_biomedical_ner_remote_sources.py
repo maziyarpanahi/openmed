@@ -14,6 +14,7 @@ from openmed.eval.datasets import (
     BC2GM,
     BC5CDR,
     BIOMEDICAL_NER_CORPORA,
+    LINNAEUS,
     NCBI_DISEASE,
     SPECIES_800,
     biomedical_ner_suite_metadata,
@@ -84,6 +85,28 @@ def test_pinned_source_loads_parquet_at_its_commit(
     }
     assert "trust_remote_code" not in kwargs
     assert [span.text for span in corpus.records[0].spans] == ["BRCA1"]
+
+
+def test_linnaeus_loads_pinned_parquet_without_dataset_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_datasets(
+        monkeypatch,
+        [{"id": "synthetic", "tokens": ["Inventus", "testii"], "ner_tags": [1, 2]}],
+    )
+
+    corpus = load_biomedical_ner_corpus(LINNAEUS)
+
+    ((args, kwargs),) = calls
+    assert args == ("parquet",)
+    assert kwargs == {
+        "data_files": {
+            "test": "hf://datasets/cambridgeltl/linnaeus@"
+            "6e684a3864e90f00a56c2f7650d73cec85c964db/linnaeus/test/*.parquet"
+        },
+        "split": "test",
+    }
+    assert [span.text for span in corpus.records[0].spans] == ["Inventus testii"]
 
 
 def test_data_dir_overrides_the_config_name(monkeypatch: pytest.MonkeyPatch) -> None:

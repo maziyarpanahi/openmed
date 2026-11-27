@@ -16,6 +16,7 @@ from openmed.eval.datasets import (
     BIOMEDICAL_NER,
     BIOMEDICAL_NER_CORPORA,
     JNLPBA,
+    LINNAEUS,
     NCBI_DISEASE,
     SPECIES_800,
     biomedical_ner_suite_metadata,
@@ -35,6 +36,7 @@ def test_biomedical_ner_label_mapping_is_canonical() -> None:
     assert map_biomedical_ner_label(JNLPBA, "protein") == OTHER
     assert map_biomedical_ner_label(SPECIES_800, "Species") == MICROORGANISM
     assert map_biomedical_ner_label(BC2GM, "GENE") == OTHER
+    assert map_biomedical_ner_label(LINNAEUS, "Species") == MICROORGANISM
 
 
 def test_biomedical_ner_loader_builds_fixtures_from_synthetic_sources(
@@ -59,6 +61,7 @@ def test_biomedical_ner_loader_builds_fixtures_from_synthetic_sources(
     assert labels_by_dataset[JNLPBA] == [OTHER]
     assert labels_by_dataset[SPECIES_800] == [MICROORGANISM]
     assert labels_by_dataset[BC2GM] == [OTHER, OTHER]
+    assert labels_by_dataset[LINNAEUS] == [MICROORGANISM]
     assert text_by_dataset[SPECIES_800] == "Escherichia coli grows"
     assert text_by_dataset[BC2GM] == "TP53 regulates EGFR"
 
@@ -82,6 +85,49 @@ def test_biomedical_ner_loader_uses_rows_loader_and_cache_dir(tmp_path: Path) ->
     assert corpus.records[0].spans[0].canonical_label == MEDICATION
 
 
+@pytest.mark.parametrize("tag_names", [(), ("O", "B", "I")])
+def test_linnaeus_injected_token_tags_preserve_offsets(
+    tmp_path: Path, tag_names
+) -> None:
+    def rows_loader(source, split, cache_dir):
+        assert source.corpus == LINNAEUS
+        assert source.repository == "cambridgeltl/linnaeus"
+        assert source.config == "linnaeus"
+        assert (split, cache_dir) == ("validation", tmp_path)
+        return [
+            {
+                "id": "synthetic-species",
+                "tokens": ["Samples", "of", "Inventus", "testii", "grew", "."],
+                "ner_tags": [0, 0, 1, 2, 0, 0],
+                "_ner_tag_names": tag_names,
+            },
+            {"id": "negative", "tokens": ["No", "mentions"], "ner_tags": [0, 0]},
+        ]
+
+    corpus = load_biomedical_ner_corpus(
+        LINNAEUS, rows_loader=rows_loader, split="validation", cache_dir=tmp_path
+    )
+
+    record, negative = corpus.records
+    (span,) = record.spans
+    assert (span.start, span.end, span.text) == (11, 26, "Inventus testii")
+    assert record.text[span.start : span.end] == span.text
+    assert span.source_label == "Species"
+    assert span.canonical_label == MICROORGANISM
+    assert record.split == "validation"
+    assert negative.spans == ()
+
+
+def test_linnaeus_rejects_misaligned_token_tags() -> None:
+    with pytest.raises(ValueError, match="2 tokens and 1 tags"):
+        load_biomedical_ner_corpus(
+            LINNAEUS,
+            rows_loader=lambda *_: [
+                {"tokens": ["Inventus", "testii"], "ner_tags": [1]}
+            ],
+        )
+
+
 def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
     tmp_path: Path,
 ) -> None:
@@ -102,7 +148,7 @@ def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
 
     data = report.to_dict()
     assert data["suite"] == BIOMEDICAL_NER
-    assert data["fixture_count"] == 5
+    assert data["fixture_count"] == len(BIOMEDICAL_NER_CORPORA)
     assert data["metrics"]["exact_span_f1"]["f1"] == 1.0
     assert set(data["metrics"]["per_corpus"]) == set(BIOMEDICAL_NER_CORPORA)
     for corpus in BIOMEDICAL_NER_CORPORA:
@@ -118,7 +164,7 @@ def test_biomedical_ner_suite_registry_and_metadata(tmp_path: Path) -> None:
     fixtures = load_suite_fixtures(BIOMEDICAL_NER, path=tmp_path, task="ner")
     metadata = suite_metadata(BIOMEDICAL_NER)
 
-    assert len(fixtures) == 5
+    assert len(fixtures) == len(BIOMEDICAL_NER_CORPORA)
     assert metadata["suite"] == BIOMEDICAL_NER
     assert metadata["licenses"][BC5CDR] == license_for(BC5CDR).to_dict()
     assert metadata["sources"][BC2GM]["repository"] == "bigbio/blurb"
@@ -171,11 +217,20 @@ def test_biomedical_ner_licenses_are_registered() -> None:
     for corpus in BIOMEDICAL_NER_CORPORA:
         dataset_license = license_for(corpus)
         assert dataset_license.dataset == corpus
-        assert dataset_license.redistribution == "download-on-demand"
+        expected = (
+            "not redistributed by OpenMed"
+            if corpus == LINNAEUS
+            else "download-on-demand"
+        )
+        assert dataset_license.redistribution == expected
         assert dataset_license.source_url
+    assert license_for(LINNAEUS).license_id == "CC-BY-4.0"
 
 
 def _write_synthetic_suite(root: Path) -> None:
+    (root / f"{LINNAEUS}.conll").write_text(
+        "Inventus B-Species\ntestii I-Species\ngrows O\n", encoding="utf-8"
+    )
     _write_json(
         root / f"{BC5CDR}.json",
         [
