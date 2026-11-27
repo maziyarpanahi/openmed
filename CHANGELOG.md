@@ -144,6 +144,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add the portable identifier validator subset to the Android OpenMedKit: `PiiValidators` gains IBAN, Aadhaar, UK NHS number, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN checks that match the Python references on every vector in `identifier_validators_v1.json`, next to the existing SSN, Luhn, NPI and US phone validators (#5420).
 - Add the portable identifier validator subset to the openmed web package on the `openmed/validators` subpath: Luhn, SSN, NPI, IBAN, Canadian SIN, UK NHS number, Aadhaar, Chinese resident ID, Dutch BSN, French NIR and Spanish DNI ports that match the Python references on every shared vector, never throw, and leave the main entry's bundle unchanged (#5421).
 - Add the portable identifier validator subset to OpenMedKit Swift: `OpenMedIdentifierValidators` ports the Luhn, SSN, NPI, IBAN, Aadhaar, UK NHS, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN validators from Python, returns value-free `Bool` verdicts, and `IdentifierValidatorParityTests` matches every `identifier_validators_v1.json` vector; detection patterns are unchanged (#5419).
+- Add runnable Go client examples for `New`, `Deidentify`, `DeidentifyStream`
+  and `AsAPIError` that run against an in-process test server with synthetic
+  responses and are checked by `go test` (#5428).
 
 ### Changed
 
