@@ -716,6 +716,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
             .cancelled, .detectorFailure, .detectorResetFailure,
         ])
         add([MultimodalThermalError.invalidBudget])
+        add([OpenMedModelCatalogError.resourceMissing, .invalidEncoding, .invalidEntry(line: 2)])
         add([MultimodalNoticeError.invalidNotice, .invalidResult, .reviewerConfirmationRequired])
         add(OpenMedRuntimeError.allCases)
         add([
