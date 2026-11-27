@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -27,6 +28,11 @@ ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 PYPROJECT = ROOT / "pyproject.toml"
 WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
+REST_CLIENT_DIR = ROOT / "clients" / "typescript"
+REST_CLIENT_PACKAGE = REST_CLIENT_DIR / "package.json"
+REST_CLIENT_LOCK = REST_CLIENT_DIR / "package-lock.json"
+REST_CLIENT_README = REST_CLIENT_DIR / "README.md"
+REST_CLIENT_PACK_FILES = frozenset({"package.json", "README.md", "LICENSE"})
 BRAND_CLAIMS = ROOT / "docs" / "brand" / "system" / "claims.yml"
 SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
 ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
@@ -95,6 +101,8 @@ def release_preflight():
         "docs/index.hi.md",
         "docs/feature-map.md",
         "js/openmedkit-web/package-lock.json",
+        "clients/typescript/package.json",
+        "clients/typescript/package-lock.json",
         "deploy/operator/deployment.yaml",
     ],
 )
@@ -197,6 +205,124 @@ def test_npm_package_readme_uses_public_unpinned_package_name():
     assert 'from "openmed"' in readme
     assert "npm install openmed@" not in readme
     assert "@openmed/openmedkit-web" not in readme
+
+
+def _rest_client_metadata_failures(
+    package: dict[str, object], version: str
+) -> list[str]:
+    """Return the publishable-metadata fields that do not match the release."""
+    expected: dict[str, object] = {
+        "name": "@openmed/rest-client",
+        "version": version,
+        "type": "module",
+        "license": "Apache-2.0",
+        "repository": {
+            "type": "git",
+            "url": "git+https://github.com/maziyarpanahi/openmed.git",
+            "directory": "clients/typescript",
+        },
+        "engines": {"node": ">=20"},
+        "exports": {
+            ".": {
+                "types": "./dist/index.d.ts",
+                "import": "./dist/index.js",
+                "default": "./dist/index.js",
+            },
+            "./package.json": "./package.json",
+        },
+        "files": ["dist", "README.md", "LICENSE"],
+        "publishConfig": {"access": "public", "provenance": True},
+        "dependencies": {},
+    }
+    failures = [key for key, value in expected.items() if package.get(key) != value]
+    if "private" in package:
+        failures.append("private")
+    return failures
+
+
+def test_rest_client_package_tracks_openmed_release_version():
+    version = _release_version()
+    package = json.loads(REST_CLIENT_PACKAGE.read_text(encoding="utf-8"))
+    lock = json.loads(REST_CLIENT_LOCK.read_text(encoding="utf-8"))
+
+    assert _rest_client_metadata_failures(package, version) == []
+    assert lock["name"] == package["name"]
+    assert lock["version"] == version
+    assert lock["packages"][""]["version"] == version
+    assert (REST_CLIENT_DIR / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("change", "field"),
+    [
+        ({"version": "0.0.0"}, "version"),
+        ({"private": True}, "private"),
+        ({"files": ["dist", "src", "README.md", "LICENSE"]}, "files"),
+        ({"publishConfig": {"access": "public"}}, "publishConfig"),
+        ({"license": None}, "license"),
+    ],
+)
+def test_rest_client_metadata_check_rejects_unpublishable_changes(change, field):
+    package = json.loads(REST_CLIENT_PACKAGE.read_text(encoding="utf-8"))
+    package.update(change)
+
+    assert _rest_client_metadata_failures(package, _release_version()) == [field]
+
+
+def test_rest_client_readme_documents_the_published_hand_written_client():
+    readme = REST_CLIENT_README.read_text(encoding="utf-8")
+
+    assert "npm install @openmed/rest-client" in readme
+    assert "npm install @openmed/rest-client@" not in readme
+    assert "written by hand" in readme
+    assert "replaces it in a later major release" in readme
+
+
+def _npm_pack_files(package_dir: Path) -> list[str]:
+    npm = shutil.which("npm")
+    assert npm is not None
+    result = subprocess.run(
+        [npm, "pack", "--dry-run", "--json", "--ignore-scripts"],
+        cwd=package_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "npm_config_update_notifier": "false"},
+    )
+    assert result.returncode == 0, result.stderr
+    return sorted(entry["path"] for entry in json.loads(result.stdout)[0]["files"])
+
+
+@pytest.mark.skipif(shutil.which("npm") is None, reason="npm is not installed")
+def test_rest_client_npm_pack_lists_only_dist_readme_and_license(tmp_path):
+    package_dir = tmp_path / "rest-client"
+    shutil.copytree(
+        REST_CLIENT_DIR,
+        package_dir,
+        ignore=shutil.ignore_patterns("node_modules", "dist", "*.tgz"),
+    )
+    dist = package_dir / "dist"
+    dist.mkdir()
+    (dist / "index.js").write_text("export {};\n", encoding="utf-8")
+    (dist / "index.d.ts").write_text("export {};\n", encoding="utf-8")
+
+    files = _npm_pack_files(package_dir)
+
+    assert REST_CLIENT_PACK_FILES <= set(files)
+    assert {"dist/index.js", "dist/index.d.ts"} <= set(files)
+    assert [
+        path
+        for path in files
+        if path not in REST_CLIENT_PACK_FILES and not path.startswith("dist/")
+    ] == []
+
+    # Negative control: widening `files` would publish the sources and tests.
+    package = json.loads((package_dir / "package.json").read_text(encoding="utf-8"))
+    package["files"] = [*package["files"], "src", "tests"]
+    (package_dir / "package.json").write_text(json.dumps(package), encoding="utf-8")
+    widened = _npm_pack_files(package_dir)
+    assert any(path.startswith("src/") for path in widened)
+    assert any(path.startswith("tests/") for path in widened)
 
 
 def test_only_publish_workflow_uses_pypi_publish_action():
