@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Check the built wheel and sdist metadata against `pyproject.toml`
+  (`Requires-Python`, Python classifiers, `License-Expression` and shipped
+  `License-File` entries) and run `twine check --strict` in the CI build job.
+  The license metadata now uses the PEP 639 SPDX form (#5400).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
@@ -243,11 +250,6 @@ See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration 
 - Ship privacy manifests with OpenMedKit and its extension products, declare the scan demo's user-defaults access, and check Swift sources for undeclared required-reason APIs in CI (#3946, #4248).
 - Localize OpenMedKit share-extension controls, messages, policy names, and accessibility labels in English, Chinese, and Hindi. Update fonts and picker rows when Dynamic Type changes, preserve the selected policy, and keep controls and the scrollable text preview usable at accessibility sizes (#3955, #4229).
 - Add a metadata-only federated round walkthrough (#4130) and enforce native Tauri checks when relevant (#4129).
-
-- Check the built wheel and sdist metadata against `pyproject.toml`
-  (`Requires-Python`, Python classifiers, `License-Expression` and shipped
-  `License-File` entries) and run `twine check --strict` in the CI build job.
-  The license metadata now uses the PEP 639 SPDX form (#5400).
 
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with

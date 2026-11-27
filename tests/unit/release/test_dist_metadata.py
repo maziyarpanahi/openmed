@@ -256,3 +256,21 @@ def test_repository_declares_pep_639_contract():
     assert contract.license_files == ("LICENSE", "NOTICE")
     assert all((ROOT / path).is_file() for path in contract.license_files)
     assert "hatchling>=1.27" in build_system["requires"]
+
+
+def test_ci_build_job_checks_metadata_after_building():
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    runs = [step.get("run", "") for step in workflow["jobs"]["build"]["steps"]]
+    build = next(i for i, run in enumerate(runs) if "uv build" in run)
+    check = next(
+        i
+        for i, run in enumerate(runs)
+        if "scripts/release/check_dist_metadata.py --dist-dir dist" in run
+    )
+
+    assert build < check
+    assert "twine check --strict dist/*" in runs[check]
