@@ -782,6 +782,7 @@ nav:
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - OpenMedKit Apple Platforms: runtimes/apple-platforms.md
       - iOS Share and Action Extensions: runtimes/ios-share-extension.md
+      - OpenMedKit App Intents: runtimes/apple-app-intents.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
       - Tokenizer Conformance: tokenizer-conformance.md
       - Device Capability Resolution: runtimes/device-capabilities.md
