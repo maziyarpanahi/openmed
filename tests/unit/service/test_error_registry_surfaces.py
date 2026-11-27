@@ -786,9 +786,12 @@ def test_graphql_resolvers_report_taxonomy_errors_as_registered(
     assert SENTINEL not in response.text
 
 
-def test_graphql_batch_refusal_answers_as_registered(registry) -> None:
+def test_graphql_batch_refusal_answers_as_registered(
+    registry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from openmed.service.app import create_app
 
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
     with TestClient(create_app(), base_url=LOOPBACK) as client:
         response = client.post(
             "/graphql", json=[{"query": "{ entityTypes { label } }"}]
