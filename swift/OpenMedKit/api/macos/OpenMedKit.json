@@ -7796,6 +7796,12 @@
     "OpenMedKit.OpenMedModelCatalogError.resourceMissing": [
       "case OpenMedKit.OpenMedModelCatalogError.resourceMissing"
     ],
+    "OpenMedKit.OpenMedModelIntegrity": [
+      "enum OpenMedKit.OpenMedModelIntegrity"
+    ],
+    "OpenMedKit.OpenMedModelIntegrity.reproducibilityHash": [
+      "static func OpenMedKit.OpenMedModelIntegrity.reproducibilityHash(repoID: Swift.String, revisionSHA: Swift.String?, released: Swift.String?, siblings: [Swift.String]) -> Swift.String"
+    ],
     "OpenMedKit.OpenMedModelStore": [
       "enum OpenMedKit.OpenMedModelStore"
     ],
@@ -7803,9 +7809,14 @@
       "static func OpenMedKit.OpenMedModelStore.bundleCache(cacheDirectory: Foundation.URL? = default, options: OpenMedKit.OpenMedBundleCacheOptions = default) throws -> OpenMedKit.OpenMedBundleCache"
     ],
     "OpenMedKit.OpenMedModelStore.cachedMLXModelDirectory": [
+      "static func OpenMedKit.OpenMedModelStore.cachedMLXModelDirectory(entry: OpenMedKit.OpenMedModelCatalogEntry, cacheDirectory: Foundation.URL? = default) throws -> Foundation.URL?",
       "static func OpenMedKit.OpenMedModelStore.cachedMLXModelDirectory(repoID: Swift.String, revision: Swift.String = default, cacheDirectory: Foundation.URL? = default) throws -> Foundation.URL"
     ],
+    "OpenMedKit.OpenMedModelStore.cachedMLXModelRevisionSHA": [
+      "static func OpenMedKit.OpenMedModelStore.cachedMLXModelRevisionSHA(repoID: Swift.String, revision: Swift.String = default, cacheDirectory: Foundation.URL? = default) throws -> Swift.String?"
+    ],
     "OpenMedKit.OpenMedModelStore.downloadMLXModel": [
+      "static func OpenMedKit.OpenMedModelStore.downloadMLXModel(entry: OpenMedKit.OpenMedModelCatalogEntry, revision: Swift.String = default, cacheDirectory: Foundation.URL? = default) async throws -> Foundation.URL",
       "static func OpenMedKit.OpenMedModelStore.downloadMLXModel(repoID: Swift.String, revision: Swift.String = default, cacheDirectory: Foundation.URL? = default) async throws -> Foundation.URL"
     ],
     "OpenMedKit.OpenMedModelStore.isMLXModelCached": [
@@ -7830,6 +7841,9 @@
     "OpenMedKit.OpenMedModelStoreError.invalidManifestPath": [
       "case OpenMedKit.OpenMedModelStoreError.invalidManifestPath: (Swift.String) -> OpenMedKit.OpenMedModelStoreError"
     ],
+    "OpenMedKit.OpenMedModelStoreError.invalidModelInfo": [
+      "case OpenMedKit.OpenMedModelStoreError.invalidModelInfo"
+    ],
     "OpenMedKit.OpenMedModelStoreError.invalidResponse": [
       "case OpenMedKit.OpenMedModelStoreError.invalidResponse"
     ],
@@ -7841,6 +7855,9 @@
     ],
     "OpenMedKit.OpenMedModelStoreError.reason": [
       "var OpenMedKit.OpenMedModelStoreError.reason: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedModelStoreError.reproducibilityHashMismatch": [
+      "case OpenMedKit.OpenMedModelStoreError.reproducibilityHashMismatch"
     ],
     "OpenMedKit.OpenMedNoBackgroundExecution": [
       "conformance OpenMedKit.OpenMedNoBackgroundExecution: OpenMedBackgroundExecutionProvider",
