@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 OPENAPI_PATH = ROOT / "docs/api/openapi.json"
 SDK_ROOT = ROOT / "clients/typescript"
@@ -107,6 +109,33 @@ def test_typescript_client_package_is_dependency_light_and_strict() -> None:
     assert package["scripts"]["typecheck"] == "tsc -p tsconfig.json --noEmit"
     assert tsconfig["compilerOptions"]["strict"] is True
     assert "src/**/*.ts" in tsconfig["include"]
+
+
+def test_typescript_client_api_baseline_is_committed_and_gated_in_ci() -> None:
+    package = json.loads(SDK_PACKAGE_PATH.read_text(encoding="utf-8"))
+    baseline = (SDK_ROOT / "api" / "rest-client.api.d.ts").read_text(encoding="utf-8")
+    ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8"))
+    job = ci["jobs"]["typescript-rest-client"]
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+
+    assert package["scripts"]["api:check"] == "node scripts/api-baseline.mjs --check"
+    assert package["scripts"]["api:update"] == "node scripts/api-baseline.mjs --update"
+    assert package["scripts"]["test:api"] == "node --test tests/api-baseline.test.mjs"
+    assert "api" not in package["files"] and "scripts" not in package["files"]
+    assert baseline.startswith("// Public API baseline of @openmed/rest-client.\n")
+    for declaration_file in (
+        "index.d.ts",
+        "journey-workflows.generated.d.ts",
+        "workflow-client.d.ts",
+    ):
+        assert f"\n// {declaration_file}\n" in baseline, declaration_file
+    for method_name in set(CLIENT_METHOD_BY_PATH.values()):
+        assert re.search(rf"^ {{4}}{method_name}\(", baseline, re.MULTILINE), (
+            method_name
+        )
+    for script in ("typecheck", "build", "test:workflow", "test:api", "api:check"):
+        assert f"npm --prefix clients/typescript run {script}" in commands, script
+    assert "npm ci --prefix clients/typescript" in commands
 
 
 def test_typescript_pii_languages_match_core_and_openapi() -> None:

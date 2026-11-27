@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Commit a normalized `.d.ts` API baseline for the TypeScript REST client at `clients/typescript/api/rest-client.api.d.ts`, covering every emitted declaration file including the generated Journey workflow types; `npm run api:check` fails when an exported name or a request or response field type changes without `npm run api:update`, and a new CI job runs it with the client's typecheck, build and offline tests (#5392).
+
+### Changed
+
+- The TypeScript REST client `@openmed/rest-client` is now a publishable package: it is no longer private, tracks the `openmed` release version (checked by the release preflight and `tests/unit/test_publish_workflow_version.py`), declares its Apache-2.0 license, repository, Node.js 20 engine, ESM `exports` map and public provenance `publishConfig`, ships a lockfile, and packs only `dist/`, `README.md` and `LICENSE` (#5359).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
