@@ -5,9 +5,9 @@ summarizes what already exists so you can extend it confidently.
 
 ## Actively tested Python and desktop matrix
 
-The core SDK supports **CPython 3.11, 3.12 and 3.13** on Linux, Windows
-and macOS. These versions and OS families are declared in `pyproject.toml`'s
-classifiers. CI selects current hosted-runner patch releases within each minor.
+The core SDK supports **CPython 3.11, 3.12, 3.13 and 3.14** on Linux,
+Windows and macOS. These versions and OS families are declared in
+`pyproject.toml`'s classifiers. CI selects current hosted-runner patch releases within each minor.
 `requires-python >=3.11.5` is an installation floor, not a promise
 that an unlisted future interpreter or alternative Python implementation is
 qualified. Adding one requires a reviewed metadata, CI and documentation change.
@@ -17,11 +17,20 @@ TOML backport dependency.
 
 | Lane | Required combinations | What it proves |
 | --- | --- | --- |
-| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all three versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (9 jobs). Other pull requests: Linux 3.11 and 3.13, Windows 3.12 and macOS 3.12 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
+| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all four versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (12 jobs). Other pull requests: Linux 3.11 and 3.14, Windows 3.14 and macOS 3.14 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
 | `sdk-compatibility` installed artifacts | The same jobs; both wheel and sdist; core and `[cli,service,mcp]` installs separately | Installed CLI and brief API/adapters, packaged resources, missing-resource rejection and source-tree isolation |
 | Optional-runtime absence | Both install profiles in every compatibility job | Typed missing-MLX error and fail-closed brief; no cloud fallback, weights or model downloads |
 | `test` full regression | Pushes and `full-ci` pull requests: Linux, Windows and macOS 3.11–3.12 | The complete Python regression suite, including the `slow` and `fuzz` tiers |
 | `test` pull-request tier | Linux 3.11 and 3.12 (fast tier); Windows and macOS 3.12 (portability checks) | Every test except `slow` and `fuzz` on Linux, plus the platform-sensitive portability list on Windows and macOS |
+
+Python 3.14 support covers what this lane installs: the core package and the
+`dev`, `cli`, `service` and `mcp` extras. Every package `uv.lock` pins for
+those installs ships a CPython 3.14 or pure-Python wheel for Linux x86-64,
+Windows x64 and macOS arm64. The one exception is `jieba`, which is published
+only as a pure-Python source distribution for every interpreter. So
+`uv sync --frozen --python 3.14` needs no compiled source build there.
+Other optional extras, such as model runtimes, OCR engines, MLX and Core ML,
+are not exercised on 3.14 by this lane and are not claimed as qualified on it.
 
 Adding the `full-ci` label starts a new full CI run. Other label additions do
 not start CI jobs or cancel the active PR run. Those skipped label events use
