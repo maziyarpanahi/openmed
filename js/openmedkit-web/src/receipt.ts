@@ -255,7 +255,9 @@ function parseReport(json: string | Uint8Array): JsonValue {
     text = json;
   } else if (json instanceof Uint8Array) {
     try {
-      text = new TextDecoder("utf-8", { fatal: true }).decode(json);
+      // Keep a byte order mark so it fails to parse, as it does for text input
+      // and in Python's json.loads.
+      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(json);
     } catch {
       throw new Malformed();
     }
@@ -619,16 +621,15 @@ export async function verifyAuditReport(
     if (signature === undefined || signature === null) {
       return rejected("signature_mismatch");
     }
-    if (!(signature instanceof Map)) {
+    const value = signature instanceof Map ? signature.get("value") : undefined;
+    if (!(signature instanceof Map) || typeof value !== "string") {
+      // Not an object, or no string value: there is nothing to check.
       return rejected("malformed");
     }
     if (signature.get("algorithm") !== AUDIT_REPORT_SIGNATURE_ALGORITHM) {
       return rejected("unsupported_algorithm");
     }
-    const value = signature.get("value");
-    const expected = typeof value === "string" && SIGNATURE_VALUE.test(value)
-      ? hexBytes(value)
-      : null;
+    const expected = SIGNATURE_VALUE.test(value) ? hexBytes(value) : null;
     let cryptoKey: CryptoKey | undefined;
     let hashMatched = false;
     for (const candidate of candidates) {

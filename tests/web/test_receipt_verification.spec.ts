@@ -270,6 +270,10 @@ test("tampering after signing fails with the specific reason code", async () => 
     [raw.replace(report.signature.value, report.signature.value.slice(0, 63)), "signature_mismatch"],
     [raw.replace(/"signature": \{[^}]*\}/, '"signature": null'), "signature_mismatch"],
     [raw.replace(/"signature": \{[^}]*\}/, '"signature": "HMAC-SHA256"'), "malformed"],
+    // A signature without a string value is malformed, as in Swift and Kotlin.
+    [raw.replace(/"signature": \{[^}]*\}/, '"signature": {}'), "malformed"],
+    [raw.replace(`"${report.signature.value}"`, "7"), "malformed"],
+    [raw.replace(/"value": "[0-9a-f]{64}"/, '"other": "x"'), "malformed"],
   ];
   for (const [variant, reason] of variants) {
     assert.notEqual(variant, raw);
@@ -298,6 +302,9 @@ test("malformed input returns malformed without echoing it", async () => {
     `${raw} trailing`,
     "[".repeat(10_000),
     Uint8Array.of(0x7b, 0xff, 0x7d),
+    // A byte order mark is not JSON, as text or as bytes.
+    `﻿${raw}`,
+    new TextEncoder().encode(`﻿${raw}`),
   ];
   for (const input of inputs) {
     const outcome = await verifyAuditReport(input, key);
