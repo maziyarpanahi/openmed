@@ -166,6 +166,35 @@ test("every seeded vector matches, including seeds beyond 2^53", async () => {
   assert.ok(beyondSafe > 0, "vectors include seeds beyond the safe-integer range");
 });
 
+test("the largest safe maxDays follows the formula on every fixture digest", async () => {
+  const fixture = await vectors();
+  const mismatches: string[] = [];
+  for (const maxDays of [2 ** 52 + 3, Number.MAX_SAFE_INTEGER]) {
+    const limit = BigInt(maxDays);
+    const expected = (digestHex: string): number => {
+      const bucket = BigInt(`0x${digestHex}`) % (limit * 2n);
+      return Number(bucket < limit ? bucket - limit : bucket - limit + 1n);
+    };
+    for (const vector of fixture.patient_key_offsets) {
+      const offset = await stableDateShiftOffset({
+        patientKey: vector.patient_key,
+        secret: secretBytes(fixture, vector.secret_id),
+        maxDays,
+      });
+      if (offset !== expected(vector.digest_sha256_hex)) {
+        mismatches.push(vector.id);
+      }
+    }
+    for (const vector of fixture.seed_offsets) {
+      const offset = await stableDateShiftOffsetFromSeed(vector.seed_decimal, maxDays);
+      if (offset !== expected(vector.digest_sha256_hex)) {
+        mismatches.push(vector.id);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(mismatches)], []);
+});
+
 test("every date vector shifts by its patient or seed offset to the expected ISO date", async () => {
   const fixture = await vectors();
   const mismatches: string[] = [];

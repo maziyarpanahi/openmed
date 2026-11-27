@@ -90,8 +90,10 @@ function offsetFromDigest(digest: ArrayBuffer, maxDays: number): number {
   for (const byte of new Uint8Array(digest)) {
     value = (value << 8n) | BigInt(byte);
   }
-  const bucket = Number(value % BigInt(maxDays * 2));
-  return bucket < maxDays ? bucket - maxDays : bucket - maxDays + 1;
+  // Map the bucket in BigInt: above 2^52 days it is no longer exact as a number.
+  const limit = BigInt(maxDays);
+  const bucket = value % (limit * 2n);
+  return Number(bucket < limit ? bucket - limit : bucket - limit + 1n);
 }
 
 async function guarded<T>(operation: () => Promise<T>): Promise<T> {
