@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ import pytest
 from openmed.eval.drift_monitor import (
     DRIFT_TRIGGER_SCHEMA_VERSION,
     VERDICT_DRIFT,
+    VERDICT_INSUFFICIENT_DATA,
     VERDICT_STABLE,
     DriftPrivacyError,
     DriftTriggerSignal,
@@ -192,6 +194,21 @@ def test_drift_and_configurable_weights_produce_auditable_score() -> None:
     assert decision.queued
     assert decision.dominant_signal == SIGNAL_DRIFT
     assert decision.weighted_components[SIGNAL_DRIFT] == 0.75
+
+
+def test_insufficient_data_drift_signal_adds_no_drift_score() -> None:
+    signal = replace(
+        _drift_signal(divergence=12.0),
+        drift_detected=False,
+        verdict=VERDICT_INSUFFICIENT_DATA,
+    )
+
+    candidate = candidate_signals_from_artifacts("pii", "tiny", drift_signal=signal)
+    decision = score_retrain_candidates([candidate]).decisions[0]
+
+    assert candidate.drift_ratio == 0.0
+    assert decision.weighted_components.get(SIGNAL_DRIFT, 0.0) == 0.0
+    assert not decision.queued
 
 
 def test_fleet_freshness_is_isolated_by_family_and_tier() -> None:

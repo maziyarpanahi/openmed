@@ -35,6 +35,7 @@ DRIFT_TRIGGER_SCHEMA_VERSION = "openmed.drift_monitor.trigger.v1"
 VERDICT_STABLE = "stable"
 VERDICT_WARNING = "drift_warning"
 VERDICT_DRIFT = "drift"
+VERDICT_INSUFFICIENT_DATA = "insufficient_data"
 
 LABEL_RATE_FAMILY = "label_rate"
 SCORE_HISTOGRAM_FAMILY = "score_histogram"
@@ -53,6 +54,9 @@ DRIFT_FAMILIES = (
 DEFAULT_SCORE_BINS = 10
 DEFAULT_WARNING_THRESHOLD = 0.1
 DEFAULT_DRIFT_THRESHOLD = 0.25
+# Observation windows smaller than this get ``insufficient_data`` instead of a
+# PSI verdict. 0 keeps every window scored.
+DEFAULT_MINIMUM_SAMPLE_COUNT = 0
 
 _PSI_EPSILON = 1e-6
 
@@ -217,6 +221,11 @@ class DriftAggregateWindow:
             sample_count = _coerce_count(declared, "sample_count")
         if sample_count < 0:
             raise DriftInputError("sample_count must be non-negative")
+        if sample_count < derived:
+            raise DriftInputError(
+                f"sample_count {sample_count} is smaller than the label_counts "
+                f"total {derived}"
+            )
 
         generated_at = payload.get("generated_at")
         if generated_at is not None:
@@ -340,6 +349,7 @@ class DriftReport:
     observation_sample_count: int
     generated_at: str
     schema_version: str = DRIFT_MONITOR_SCHEMA_VERSION
+    minimum_sample_count: int = DEFAULT_MINIMUM_SAMPLE_COUNT
 
     @property
     def per_family_divergence(self) -> dict[str, float]:
@@ -367,8 +377,15 @@ class DriftReport:
 
     @property
     def verdict(self) -> str:
-        """Return the overall drift verdict from the max divergence."""
+        """Return the overall drift verdict from the max divergence.
 
+        An observation window with fewer than ``minimum_sample_count`` samples
+        returns ``insufficient_data`` whatever its divergence, because a few
+        documents can move proportions past any threshold.
+        """
+
+        if self.observation_sample_count < self.minimum_sample_count:
+            return VERDICT_INSUFFICIENT_DATA
         return _verdict_for(
             self.max_divergence,
             threshold=self.threshold,
@@ -420,6 +437,7 @@ class DriftReport:
             "observation_window_id": self.observation_window_id,
             "reference_sample_count": self.reference_sample_count,
             "observation_sample_count": self.observation_sample_count,
+            "minimum_sample_count": self.minimum_sample_count,
             "threshold": self.threshold,
             "warning_threshold": self.warning_threshold,
             "generated_at": self.generated_at,
@@ -455,6 +473,7 @@ def compute_drift_report(
     *,
     threshold: float = DEFAULT_DRIFT_THRESHOLD,
     warning_threshold: float = DEFAULT_WARNING_THRESHOLD,
+    minimum_sample_count: int = DEFAULT_MINIMUM_SAMPLE_COUNT,
     generated_at: str | None = None,
     local_only: bool | None = None,
 ) -> DriftReport:
@@ -465,12 +484,22 @@ def compute_drift_report(
     wrapped in the offline network guard so that under ``OPENMED_OFFLINE`` (or an
     explicit ``local_only``) any accidental outbound call fails instead of
     silently phoning home.
+
+    When the observation window holds fewer than ``minimum_sample_count``
+    samples, the report verdict is ``insufficient_data`` and
+    ``drift_detected`` is false; per-family divergence is still reported.
     """
 
     if threshold <= 0.0 or warning_threshold <= 0.0:
         raise DriftInputError("thresholds must be positive")
     if warning_threshold > threshold:
         raise DriftInputError("warning_threshold must not exceed threshold")
+    if (
+        isinstance(minimum_sample_count, bool)
+        or not isinstance(minimum_sample_count, int)
+        or minimum_sample_count < 0
+    ):
+        raise DriftInputError("minimum_sample_count must be a non-negative integer")
 
     offline = is_local_only() if local_only is None else bool(local_only)
     with network_blocked_if_offline(local_only=offline):
@@ -497,6 +526,7 @@ def compute_drift_report(
         reference_sample_count=reference_window.sample_count,
         observation_sample_count=observation_window.sample_count,
         generated_at=generated_at or _utc_now(),
+        minimum_sample_count=minimum_sample_count,
     )
 
 
@@ -744,6 +774,7 @@ def _utc_now() -> str:
 
 __all__ = [
     "DEFAULT_DRIFT_THRESHOLD",
+    "DEFAULT_MINIMUM_SAMPLE_COUNT",
     "DEFAULT_REFERENCE_PATH",
     "DEFAULT_SCORE_BINS",
     "DEFAULT_WARNING_THRESHOLD",
@@ -756,6 +787,7 @@ __all__ = [
     "SCORE_HISTOGRAM_FAMILY",
     "SCRIPT_HISTOGRAM_FAMILY",
     "VERDICT_DRIFT",
+    "VERDICT_INSUFFICIENT_DATA",
     "VERDICT_STABLE",
     "VERDICT_WARNING",
     "DriftAggregateWindow",

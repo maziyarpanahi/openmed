@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.audit import stable_hash
-from openmed.eval.drift_monitor import DriftTriggerSignal, assert_no_raw_text
+from openmed.eval.drift_monitor import (
+    VERDICT_INSUFFICIENT_DATA,
+    DriftTriggerSignal,
+    assert_no_raw_text,
+)
 from openmed.eval.error_analysis import (
     RetrainingSliceArtifact,
     RetrainingSlicePriority,
@@ -410,6 +414,10 @@ def candidate_signals_from_artifacts(
             / threshold
         )
         dominant_label = drift_signal.dominant_drifting_label
+        if drift_signal.verdict == VERDICT_INSUFFICIENT_DATA:
+            # Too few observed samples to score; the divergence stays evidence only.
+            drift_ratio = 0.0
+            dominant_label = None
         source_hashes["drift"] = stable_hash(drift_signal.to_dict())
 
     gate_ratio = 0.0
