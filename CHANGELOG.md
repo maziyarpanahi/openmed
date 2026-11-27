@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verifies a received copy and shows verification failing after one span offset
   changes; the key comes from `OPENMED_AUDIT_KEY` or is generated and is never
   printed (#5424).
+- Document the shared parity fixtures in `tests/fixtures/parity/`: each
+  fixture's version, its Python, Swift and Android consumers, the workflow
+  path filters that run them and how to add a synthetic case, with a test that
+  every fixture has a README row (#5425).
 
 ## [4.0.0] - 2026-11-25
 
