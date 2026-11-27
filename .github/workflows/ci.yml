@@ -640,6 +640,12 @@ jobs:
         npm --prefix js/openmedkit-react-native test
         npm --prefix js/openmedkit-electron test
 
+    - name: Check the openmed web package API report
+      run: |
+        # Fails when the public declarations differ from js/openmedkit-web/api/.
+        # After reviewing the change, run `npm run api:update` in that package.
+        npm --prefix js/openmedkit-web run api:check
+
   browser-extension:
     needs: repo-policy
     runs-on: ubuntu-latest

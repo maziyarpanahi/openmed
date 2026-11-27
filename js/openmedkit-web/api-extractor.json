@@ -1,0 +1,69 @@
+{
+  "projectFolder": ".",
+  "mainEntryPointFilePath": "<projectFolder>/dist/index.d.ts",
+  "bundledPackages": [],
+  "newlineKind": "lf",
+  "compiler": {
+    "tsconfigFilePath": "<projectFolder>/tsconfig.json"
+  },
+  "apiReport": {
+    "enabled": true,
+    "reportFileName": "<unscopedPackageName>",
+    "reportFolder": "<projectFolder>/api/",
+    "reportTempFolder": "<projectFolder>/temp/api/"
+  },
+  "docModel": {
+    "enabled": false
+  },
+  "dtsRollup": {
+    "enabled": false
+  },
+  "tsdocMetadata": {
+    "enabled": false
+  },
+  "messages": {
+    "compilerMessageReporting": {
+      "default": {
+        "logLevel": "warning"
+      }
+    },
+    "extractorMessageReporting": {
+      "default": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-forgotten-export": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-incompatible-release-tags": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-internal-missing-underscore": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-internal-mixed-release-tag": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-unresolved-inheritdoc-reference": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-unresolved-inheritdoc-base": {
+        "logLevel": "none",
+        "addToApiReportFile": false
+      },
+      "ae-wrong-input-file-type": {
+        "logLevel": "error"
+      }
+    },
+    "tsdocMessageReporting": {
+      "default": {
+        "logLevel": "none"
+      }
+    }
+  }
+}
