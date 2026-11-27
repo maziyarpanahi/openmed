@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import MAX_MANIFEST_BYTE_SIZE, MAX_MANIFEST_COUNT
 
 __all__ = [
@@ -35,7 +37,7 @@ IMAGE_GEOMETRY_SCHEMA_VERSION: Final = 1
 _MAX_BYTES_PER_PIXEL: Final[int] = 1024
 
 
-class ImageGeometryError(ValueError):
+class ImageGeometryError(ValueError, LegacyRootedError):
     """Value-free failure for invalid dimensions or geometry arithmetic."""
 
     def __init__(self, category: str) -> None:

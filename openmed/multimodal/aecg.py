@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "AECG_NOTICE",
     "AecgError",
@@ -65,7 +67,7 @@ _DEMOGRAPHICS = frozenset(
 )
 
 
-class AecgError(ValueError):
+class AecgError(ValueError, LegacyRootedError):
     """A controlled reason code that never includes submitted XML or paths."""
 
     def __init__(self, reason_code: str) -> None:

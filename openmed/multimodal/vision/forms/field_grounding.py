@@ -14,6 +14,7 @@ from openmed.clinical.review_packet import (
     ReviewGateResult,
     ReviewPacket,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.box_normalization import BoxNormalizationError, normalize_box
 from openmed.multimodal.evidence import EvidenceNode, NodeKind, PageGeometry
 from openmed.multimodal.vision.handwriting.uncertainty import (
@@ -35,7 +36,7 @@ _MAX_TEXT = 4096
 _MAX_TOTAL_TEXT = 262_144
 
 
-class FormGroundingError(ValueError):
+class FormGroundingError(ValueError, LegacyRootedError):
     """Controlled invalid-input or blocked-export reason without source values."""
 
 

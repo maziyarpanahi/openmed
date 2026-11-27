@@ -14,6 +14,7 @@ from enum import Enum
 from io import BytesIO
 from typing import Any, ClassVar, Iterator
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.image_header import (
     ImageHeaderError,
     read_image_header,
@@ -38,7 +39,7 @@ _DECODER_LOCK = threading.RLock()
 _FORMATS = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}
 
 
-class ImageQualityError(ValueError):
+class ImageQualityError(ValueError, LegacyRootedError):
     """Value-free error for invalid quality policy or caller contract."""
 
 

@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .apple_contract import AppleContractError, MultimodalPacket, project_visual
 from .evidence.fused_graph import (
     EvidenceNode,
@@ -74,7 +76,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 Box = tuple[float, float, float, float]
 
 
-class NativeIntakeError(ValueError):
+class NativeIntakeError(ValueError, LegacyRootedError):
     """Invalid reference-mapper input, with no rejected values attached.
 
     Attributes:

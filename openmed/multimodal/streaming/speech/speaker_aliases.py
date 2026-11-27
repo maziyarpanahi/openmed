@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "ALIAS_SCHEMA_VERSION",
     "ClinicalRole",
@@ -31,7 +33,7 @@ _REF = re.compile(r"[0-9a-f]{32}\Z")
 _ALIAS = re.compile(r"speaker_[0-9]{4}\Z")
 
 
-class SpeakerAliasError(ValueError):
+class SpeakerAliasError(ValueError, LegacyRootedError):
     """Value-free failure for invalid or stale session lineage."""
 
 

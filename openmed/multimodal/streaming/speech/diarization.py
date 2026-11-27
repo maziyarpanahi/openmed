@@ -10,6 +10,8 @@ from enum import Enum
 from threading import Event
 from typing import Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 from .speaker_aliases import LineageEvent, SpeakerAliasError, SpeakerAliases
 
 MAX_AUDIO_BYTES = 60 * 16000 * 2
@@ -19,7 +21,7 @@ _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _REF = re.compile(r"[0-9a-f]{32}\Z")
 
 
-class DiarizationError(ValueError):
+class DiarizationError(ValueError, LegacyRootedError):
     """Controlled failure with no audio, model path or provider exception text."""
 
 

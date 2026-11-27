@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final, Sequence
 
+from openmed.core.errors import LegacyRootedError
+
 ORIENTATION_PREFLIGHT_SCHEMA_VERSION: Final[str] = (
     "openmed.multimodal.orientation_preflight.v1"
 )
@@ -85,7 +87,7 @@ _REASON_STATUS: Final[dict[str, OrientationStatus]] = {
 }
 
 
-class OrientationPreflightError(ValueError):
+class OrientationPreflightError(ValueError, LegacyRootedError):
     """Value-free failure raised for unusable arguments."""
 
     def __init__(self, category: str) -> None:

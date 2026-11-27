@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "NON_DIAGNOSTIC_NOTICE",
     "ChannelKind",
@@ -31,7 +33,7 @@ MAX_CHANNELS = 64
 MAX_SAMPLES = 1_000_000
 
 
-class WaveformContractError(ValueError):
+class WaveformContractError(ValueError, LegacyRootedError):
     """Controlled, payload-free rejection at the acquisition boundary."""
 
 

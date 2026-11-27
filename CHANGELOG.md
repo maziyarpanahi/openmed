@@ -86,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `family`, `task` and `canonical_labels` to the bundled Android model catalog, expose them as optional `ModelCatalogEntry.family`, `task` and `canonicalLabels` (older assets still load), and add a `family` predicate to `ModelCatalog.filter`, keeping the previous constructor, `copy` and `filter` signatures binary-compatible (#5422).
 - Add `LegacyRootedError`, a compatibility root that lets existing builtin-based exceptions join `OpenMedError` with unchanged `args`, `str()`, MRO and transport mapping, plus a shrink-only gate for unrooted public exceptions (#5365).
 
+### Changed
+
+- Root every public `openmed.multimodal` exception under `OpenMedError` through `LegacyRootedError`; builtin bases, `args`, `str()`, pickling and transport mapping are unchanged, and each class gains a stable `code` (#5395).
+
 ### Fixed
 
 - Make the Android `ModelIntegrity.reproducibilityHash` match Python and Swift byte for byte: escape every character outside printable ASCII as `\uXXXX` like Python's `json.dumps` and sort siblings by code point. Hashes change only for repository ids or file names outside printable ASCII. Move the shared vectors to `tests/fixtures/parity/model_repro_hash_v1.json`, add non-ASCII repository-id and supplementary-character ordering vectors, and recompute every vector in Python and Kotlin (#5398).

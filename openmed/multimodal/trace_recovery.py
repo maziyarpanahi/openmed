@@ -24,6 +24,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Literal, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 TRACE_RECOVERY_SCHEMA_VERSION = 1
 DEFAULT_MAX_RECOVERY_ATTEMPTS = 3
 DEFAULT_MAX_TRACE_BYTES = 64 * 1024 * 1024
@@ -66,7 +68,7 @@ _DECISIONS = frozenset(
 )
 
 
-class TraceRecoveryError(RuntimeError):
+class TraceRecoveryError(RuntimeError, LegacyRootedError):
     """Raised when a trace transaction cannot be recovered safely.
 
     ``reason`` is deliberately a short constant-like code.  The exception

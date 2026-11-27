@@ -10,6 +10,7 @@ from enum import Enum
 from statistics import median
 from typing import ClassVar
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from .signal_quality import (
@@ -28,7 +29,7 @@ REVIEW_NOTICE = (
 )
 
 
-class IntervalCandidateError(ValueError):
+class IntervalCandidateError(ValueError, LegacyRootedError):
     """Fixed, value-free declaration error."""
 
 

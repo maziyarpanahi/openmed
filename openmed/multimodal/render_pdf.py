@@ -35,6 +35,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from openmed.core.errors import LegacyRootedError
+
 from .code_regions import (
     CodeCoverageReport,
     CodeDetectionError,
@@ -74,7 +76,7 @@ _MASK_PADDING_POINTS = 1.0
 _WINANSI_FONT_RESOURCE = "/OpenMedSafeText"
 
 
-class PdfLayoutFidelityError(RuntimeError):
+class PdfLayoutFidelityError(RuntimeError, LegacyRootedError):
     """Raised when non-redacted page layout exceeds a fidelity threshold."""
 
     def __init__(self, report: "PdfLayoutFidelityReport") -> None:
@@ -82,7 +84,7 @@ class PdfLayoutFidelityError(RuntimeError):
         super().__init__(report.summary())
 
 
-class PdfRenderVerificationError(RuntimeError):
+class PdfRenderVerificationError(RuntimeError, LegacyRootedError):
     """Raised when a rendered PDF fails any mandatory safety verification."""
 
     def __init__(self, result: "PdfRedactionResult") -> None:

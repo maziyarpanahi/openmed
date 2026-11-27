@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from xml.etree import ElementTree as ET
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.archive_safety import ArchiveSafetyPolicy
 
 from .archive import admitted_zip
@@ -67,7 +68,7 @@ class OoxmlResidualFinding:
         return {"category": self.category, "count": self.count, "digest": self.digest}
 
 
-class OoxmlResidualError(ValueError):
+class OoxmlResidualError(ValueError, LegacyRootedError):
     """Typed refusal with no source text, member names, or filesystem paths."""
 
     def __init__(self, findings: tuple[OoxmlResidualFinding, ...]) -> None:

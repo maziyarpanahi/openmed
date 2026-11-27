@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from openmed.core.errors import LegacyRootedError
+
 from .documents_pdf import extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError
 
@@ -44,7 +46,7 @@ _BOX_COVER_FRACTION = 0.6
 Rasterizer = Callable[[str | Path, int, "tuple[float, float, float, float]"], bytes]
 
 
-class RedactionFidelityError(RuntimeError):
+class RedactionFidelityError(RuntimeError, LegacyRootedError):
     """Raised when a redacted PDF fails the leakage / visual-fidelity check."""
 
     def __init__(self, report: "PdfFidelityReport") -> None:
@@ -52,7 +54,7 @@ class RedactionFidelityError(RuntimeError):
         super().__init__(report.summary())
 
 
-class RedactedTextRemovalError(RuntimeError):
+class RedactedTextRemovalError(RuntimeError, LegacyRootedError):
     """Raised when source text selected for redaction remains extractable."""
 
     def __init__(self, report: "PdfTextRemovalReport") -> None:

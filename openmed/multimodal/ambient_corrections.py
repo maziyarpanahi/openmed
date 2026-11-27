@@ -12,6 +12,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
 
+from openmed.core.errors import LegacyRootedError
+
 ADVISORY = "For clinician review; not a diagnosis or treatment recommendation."
 SCHEMA_VERSION = 1
 _UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
@@ -32,7 +34,7 @@ class ConflictCode(str, Enum):
     CONFIRMATION_REQUIRED = "confirmation_required"
 
 
-class ReviewConflict(ValueError):
+class ReviewConflict(ValueError, LegacyRootedError):
     """A typed, content-free rejection of an edit, review, or export."""
 
     def __init__(self, code: ConflictCode) -> None:

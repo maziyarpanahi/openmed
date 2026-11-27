@@ -10,6 +10,8 @@ from enum import Enum
 from fractions import Fraction
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 from ..evidence.fused_graph import EvidenceNode, NodeKind, PageGeometry, SpatialUnit
 from ..page_rotation import PageRotation, PageSize, PageTransform
 
@@ -27,7 +29,7 @@ _REF = re.compile(r"[0-9a-f]{32}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class MaskLineageError(ValueError):
+class MaskLineageError(ValueError, LegacyRootedError):
     """Fixed-message invalid geometry contract; never includes caller values."""
 
 

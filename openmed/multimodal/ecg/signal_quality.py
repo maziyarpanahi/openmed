@@ -14,6 +14,7 @@ from enum import Enum
 from statistics import median
 from typing import ClassVar, Generic, TypeVar
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from .lead_layout import (
@@ -31,7 +32,7 @@ _NUMERIC_BOUND = 1e12  # Arithmetic resource bound, not a physiological threshol
 _T = TypeVar("_T")
 
 
-class SignalQualityError(ValueError):
+class SignalQualityError(ValueError, LegacyRootedError):
     """Controlled error with no samples, source labels, paths or callback details."""
 
 

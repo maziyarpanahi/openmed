@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "ECG_SCHEMA_VERSION",
     "NON_DIAGNOSTIC_NOTICE",
@@ -30,7 +32,7 @@ _MAX_SAMPLES = 1_000_000
 _MAX_DURATION_SECONDS = 86_400
 
 
-class WaveformValidationError(ValueError):
+class WaveformValidationError(ValueError, LegacyRootedError):
     """Static actionable reason and non-diagnostic boundary; no input values."""
 
 

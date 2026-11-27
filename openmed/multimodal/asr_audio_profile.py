@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .wav_metadata import WAVE_FORMAT_IEEE_FLOAT, WAVE_FORMAT_PCM, WavMetadata
 
 ASR_AUDIO_PROFILE_SCHEMA_VERSION: Final[str] = "openmed.multimodal.asr_audio_profile.v1"
@@ -82,7 +84,7 @@ _VERDICT_RANK: Final[dict[AsrCompatibility, int]] = {
 }
 
 
-class AsrAudioProfileError(ValueError):
+class AsrAudioProfileError(ValueError, LegacyRootedError):
     """Value-free failure raised for an unusable profile or comparison."""
 
     def __init__(self, category: str) -> None:

@@ -24,6 +24,8 @@ from enum import Enum
 from fractions import Fraction
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_batch import MAX_BATCH_ASSETS
 from .asset_manifest import MAX_MANIFEST_BYTE_SIZE, AssetManifest
 from .manifest_profiles import WAVEFORM_V1, validate_manifest_metadata
@@ -68,7 +70,7 @@ BATCH_MEMORY_REASON_CODES: Final = frozenset(
 )
 
 
-class BatchMemoryError(ValueError):
+class BatchMemoryError(ValueError, LegacyRootedError):
     """Raised when a policy, budget, or batch input is invalid."""
 
 

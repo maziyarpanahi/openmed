@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import MAX_MANIFEST_DURATION_SECONDS
 
 __all__ = [
@@ -47,7 +49,7 @@ _DURATION_BUCKET_EDGES: Final = (
 )
 
 
-class AudioFormatSummaryError(ValueError):
+class AudioFormatSummaryError(ValueError, LegacyRootedError):
     """Value-free failure for invalid audio records or summary arguments."""
 
     def __init__(self, category: str) -> None:

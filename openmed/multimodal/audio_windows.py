@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 AUDIO_WINDOW_SCHEMA_VERSION: Final[str] = "openmed.multimodal.audio_windows.v1"
 MAX_AUDIO_DURATION_MS: Final[int] = 86_400_000
 MAX_AUDIO_WINDOW_MS: Final[int] = 3_600_000
@@ -45,7 +47,7 @@ class TailPolicy(str, Enum):
     DROP = "drop"
 
 
-class AudioWindowError(ValueError):
+class AudioWindowError(ValueError, LegacyRootedError):
     """Value-free failure raised for unusable audio window parameters."""
 
     def __init__(self, category: str) -> None:

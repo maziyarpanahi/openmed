@@ -28,6 +28,7 @@ from openmed.clinical.reviewed_local_evidence import (
     admit_reviewed_local_evidence,
     reviewed_source_digest,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from ..privacy.withholding_buffer import (
@@ -54,7 +55,7 @@ _REF = re.compile(r"[0-9a-f]{32}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class NoteEvidenceError(ValueError):
+class NoteEvidenceError(ValueError, LegacyRootedError):
     """Fixed-message refusal, without source text, note text or model errors."""
 
 

@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import MAX_MANIFEST_COUNT
 
 __all__ = [
@@ -33,7 +35,7 @@ FRAME_SAMPLING_SCHEMA_VERSION: Final = 1
 _HEX64_LENGTH: Final = 64
 
 
-class FrameSamplingManifestError(ValueError):
+class FrameSamplingManifestError(ValueError, LegacyRootedError):
     """Value-free failure for an invalid frame-sampling manifest."""
 
     def __init__(self, category: str) -> None:

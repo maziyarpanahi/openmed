@@ -22,6 +22,8 @@ from itertools import islice
 from math import isfinite
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 from .base import ExtractedDocument, SourceSpan
 from .ocr import OcrResult, OcrWord
 
@@ -29,7 +31,7 @@ Point: TypeAlias = tuple[float, float]
 BBox: TypeAlias = tuple[float, float, float, float]
 
 
-class PageRotationError(ValueError):
+class PageRotationError(ValueError, LegacyRootedError):
     """Base error for invalid page-rotation input."""
 
     def __init__(self, reason: str, *, field_name: str | None = None) -> None:

@@ -9,6 +9,8 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import BinaryIO, Sequence
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "WFDB_NOTICE",
     "WfdbAnnotations",
@@ -54,7 +56,7 @@ _LEADS = frozenset(
 _UNITS = frozenset(("mV", "uV", "µV", "μV", "V"))
 
 
-class WfdbError(ValueError):
+class WfdbError(ValueError, LegacyRootedError):
     """A controlled reason code with no input values or transport exception."""
 
     def __init__(self, reason_code: str) -> None:

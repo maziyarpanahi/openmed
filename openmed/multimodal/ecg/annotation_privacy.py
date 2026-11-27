@@ -17,6 +17,7 @@ from openmed.core.custom_recognizer import (
     CustomRecognizer,
     CustomRecognizerLimitError,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.safety_sweep import SAFETY_SWEEP_PATTERNS_VERSION, safety_sweep
 from openmed.core.schemas.span import OpenMedSpan
 from openmed.core.script_detect import normalize_for_pii_detection
@@ -59,7 +60,7 @@ class PrivacyReason(str, Enum):
     OFFLINE = "local-provider-required"
 
 
-class AnnotationPrivacyError(ValueError):
+class AnnotationPrivacyError(ValueError, LegacyRootedError):
     """Fixed value-free error with a controlled reason."""
 
     def __init__(self, reason: PrivacyReason) -> None:

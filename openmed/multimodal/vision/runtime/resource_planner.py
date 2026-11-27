@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "CLOUD_FALLBACK_ALLOWED",
     "MAX_ACTIVATION_BYTES_PER_PIXEL",
@@ -85,7 +87,7 @@ _TIER_NAME = re.compile(r"[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*\Z")
 _MAX_TIER_NAME_CHARS = 64
 
 
-class VLMResourcePlannerError(ValueError):
+class VLMResourcePlannerError(ValueError, LegacyRootedError):
     """Raised when a policy, tier, or preprocessing plan is invalid."""
 
 

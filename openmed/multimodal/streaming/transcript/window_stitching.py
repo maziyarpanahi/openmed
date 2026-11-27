@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.audio_windows import AudioWindowPlan, plan_audio_windows
 from openmed.multimodal.streaming.privacy.withholding_buffer import (
     LocalPhiScreener,
@@ -35,7 +36,7 @@ _REF = re.compile(r"[0-9a-f]{32}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-class StitchingError(ValueError):
+class StitchingError(ValueError, LegacyRootedError):
     """Fixed contract refusal without protected source or transcript values."""
 
 

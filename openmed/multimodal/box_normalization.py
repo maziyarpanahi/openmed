@@ -22,12 +22,14 @@ from enum import Enum
 from functools import wraps
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 BBox: TypeAlias = tuple[float, float, float, float]
 BoxLike: TypeAlias = Sequence[Any] | Mapping[str, Any]
 PageSizeLike: TypeAlias = "PageSize | Sequence[Any] | Mapping[str, Any]"
 
 
-class BoxNormalizationError(ValueError):
+class BoxNormalizationError(ValueError, LegacyRootedError):
     """Base error for malformed or ambiguous OCR box input.
 
     Error messages contain only stable field names and reason codes.  They do

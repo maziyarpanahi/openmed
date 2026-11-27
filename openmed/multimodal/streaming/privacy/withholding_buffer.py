@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Protocol, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from ..transcript.revision_ledger import RevisionKind, RevisionLedger, TranscriptToken
 
 WITHHOLDING_SCHEMA_VERSION = "openmed.speech.withholding.v1"
@@ -20,7 +22,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _REDACTION = "[REDACTED]"
 
 
-class WithholdingError(ValueError):
+class WithholdingError(ValueError, LegacyRootedError):
     """A fixed-message caller-contract failure, without transcript values."""
 
 
