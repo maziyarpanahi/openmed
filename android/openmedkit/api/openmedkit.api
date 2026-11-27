@@ -1832,6 +1832,603 @@ public final class com/openmed/openmedkit/clinical/ClinicalContext {
 	public static synthetic fun assertContext$default (Lcom/openmed/openmedkit/clinical/ClinicalContext;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
 }
 
+public final class com/openmed/openmedkit/contract/OpenMedContractAction {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractAction$Companion;
+	public fun <init> (Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun component2 ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun copy (Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractAction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractAction;Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getPolicyLabel ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getReversibleId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractAction$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractAction;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractAction;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractAuditEvent {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActor ()Ljava/lang/String;
+	public final fun getDocId ()Ljava/lang/String;
+	public final fun getEventId ()Ljava/lang/String;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getProvenanceId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getSpanId ()Ljava/lang/String;
+	public final fun getTimestamp ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractAuditEvent$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractAuditEvent;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractCanonicalLabel : java/lang/Enum {
+	public static final field ACCOUNT_NUMBER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field AGE Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field AMOUNT Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field API_KEY Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field BIC Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field BITCOIN_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field BUILDING_NUMBER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field CREDIT_CARD Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field CREDIT_CARD_ISSUER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field CURRENCY Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field CVV Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel$Companion;
+	public static final field DATE Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field DATE_OF_BIRTH Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field EMAIL Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field ETHEREUM_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field EYE_COLOR Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field FIRST_NAME Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field GENDER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field GPS_COORDINATES Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field HEIGHT Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field IBAN Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field ID_NUM Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field IMEI Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field IP_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field JOB_DEPARTMENT Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field JOB_TITLE Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field LAST_NAME Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field LITECOIN_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field LOCATION Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field MAC_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field MASKED_NUMBER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field MIDDLE_NAME Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field OCCUPATION Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field ORDINAL_DIRECTION Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field ORGANIZATION Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field OTHER Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field PASSWORD Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field PERSON Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field PHONE Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field PIN Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field PREFIX Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field SSN Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field STREET_ADDRESS Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field TIME Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field URL Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field USERNAME Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field USER_AGENT Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field VEHICLE_REGISTRATION Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field VIN Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static final field ZIPCODE Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public static fun values ()[Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractCanonicalLabel$Companion {
+	public final fun fromValue (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractCode {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractCode$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Double;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractCode;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractCode;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractCode;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getConfidence ()Ljava/lang/Double;
+	public final fun getDisplay ()Ljava/lang/String;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getProvenanceId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getSystem ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractCode$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractCode;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractCode;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation$Companion;
+	public fun <init> (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;Ljava/util/List;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+	public final fun component6 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+	public final fun component7 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+	public final fun copy (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;Ljava/util/List;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;Ljava/util/List;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDisclaimer ()Ljava/lang/String;
+	public final fun getExecution ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+	public final fun getGeneratedAt ()Ljava/lang/String;
+	public final fun getIntegrityHash ()Ljava/lang/String;
+	public final fun getJurisdiction ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+	public final fun getModels ()Ljava/util/List;
+	public final fun getPolicy ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+	public final fun getProfileId ()Ljava/lang/String;
+	public final fun getReproHash ()Ljava/lang/String;
+	public final fun getRun ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+	public final fun getSchemaVersion ()I
+	public final fun getTemplate ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestation;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHostLocal ()Z
+	public final fun getHostLocalStatement ()Ljava/lang/String;
+	public final fun getOfflineAssertion ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+	public final fun getOfflineStatement ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecution;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion$Companion;
+	public fun <init> (ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+	public final fun copy (ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;ZZLcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAsserted ()Z
+	public final fun getDependencyFlagsEnabled ()Z
+	public final fun getEnvironmentFlags ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+	public final fun getLocalOnly ()Z
+	public final fun getNetworkGuardRequested ()Z
+	public final fun getSource ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertion;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags$Companion;
+	public fun <init> (ZZZZ)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun copy (ZZZZ)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;ZZZZILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHfDatasetsOffline ()Z
+	public final fun getHfHubOffline ()Z
+	public final fun getOpenmedOffline ()Z
+	public final fun getTransformersOffline ()Z
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionEnvironmentFlags;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource : java/lang/Enum {
+	public static final field CONFIG Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public static final field CONFIG_ENVIRONMENT Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource$Companion;
+	public static final field ENVIRONMENT Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public static final field NONE Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+	public static fun values ()[Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource$Companion {
+	public final fun fromValue (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationExecutionOfflineAssertionSource;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttestationTitle ()Ljava/lang/String;
+	public final fun getCountryCode ()Ljava/lang/String;
+	public final fun getGuideField ()Ljava/lang/String;
+	public final fun getLegalReference ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getResidencyStatement ()Ljava/lang/String;
+	public final fun getSourceUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationJurisdiction;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;I)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;IILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChecksum ()Ljava/lang/String;
+	public final fun getFileCount ()I
+	public final fun getKind ()Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItem;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind : java/lang/Enum {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind$Companion;
+	public static final field DIRECTORY Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+	public static final field FILE Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+	public static fun values ()[Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind$Companion {
+	public final fun fromValue (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationModelsItemKind;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILcom/openmed/openmedkit/contract/OpenMedContractSpanAction;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILcom/openmed/openmedkit/contract/OpenMedContractSpanAction;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;Ljava/lang/String;Ljava/lang/String;ILcom/openmed/openmedkit/contract/OpenMedContractSpanAction;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDefaultAction ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPosture ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationPolicy;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun$Companion;
+	public fun <init> (IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAuditReproHash ()Ljava/lang/String;
+	public final fun getDeidentifiedTextHash ()Ljava/lang/String;
+	public final fun getDocumentLength ()I
+	public final fun getInputHash ()Ljava/lang/String;
+	public final fun getManifestHash ()Ljava/lang/String;
+	public final fun getOpenmedVersion ()Ljava/lang/String;
+	public final fun getSpanCount ()I
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationRun;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate$Companion;
+	public fun <init> (Ljava/lang/String;ILjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;ILjava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHash ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getVersion ()I
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractDataResidencyAttestationTemplate;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractEntity {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractEntity$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;)Lcom/openmed/openmedkit/contract/OpenMedContractEntity;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractEntity;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractEntity;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCanonicalLabel ()Ljava/lang/String;
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getPolicyLabel ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun getRegulatoryTags ()Ljava/util/List;
+	public final fun getSchemaVersion ()I
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractEntity$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractEntity;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractEntity;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractPolicyLabel : java/lang/Enum {
+	public static final field CLINICAL_CONCEPT Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel$Companion;
+	public static final field DIRECT_IDENTIFIER Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public static final field QUASI_IDENTIFIER Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public static final field SENSITIVE_ATTRIBUTE Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public static fun values ()[Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractPolicyLabel$Companion {
+	public final fun fromValue (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractProvenance {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractProvenance$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun component7 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractProvenance;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractProvenance;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractProvenance;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArtifactHash ()Ljava/lang/String;
+	public final fun getDetector ()Ljava/lang/String;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getModel ()Ljava/lang/String;
+	public final fun getParameters ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getProvenanceId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractProvenance$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractProvenance;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractProvenance;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractRelation {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractRelation$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Double;
+	public final fun component5 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun component6 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractRelation;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractRelation;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Double;Lkotlinx/serialization/json/JsonObject;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractRelation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvidence ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getRelationType ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getScore ()Ljava/lang/Double;
+	public final fun getSourceSpanId ()Ljava/lang/String;
+	public final fun getTargetSpanId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractRelation$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractRelation;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractRelation;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractSpan {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractSpan$Companion;
+	public fun <init> (Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun component12 ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun component13 ()Ljava/lang/String;
+	public final fun component14 ()Ljava/lang/String;
+	public final fun component15 ()Ljava/lang/String;
+	public final fun component16 ()Lkotlinx/serialization/json/JsonObject;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public final fun component7 ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Ljava/lang/Double;
+	public final fun copy (Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractSpan;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/contract/OpenMedContractSpan;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;Ljava/util/List;Ljava/lang/Double;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlinx/serialization/json/JsonObject;ILjava/lang/Object;)Lcom/openmed/openmedkit/contract/OpenMedContractSpan;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public final fun getCanonicalLabel ()Lcom/openmed/openmedkit/contract/OpenMedContractCanonicalLabel;
+	public final fun getDetector ()Ljava/lang/String;
+	public final fun getDocId ()Ljava/lang/String;
+	public final fun getEnd ()I
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getEvidence ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getMetadata ()Lkotlinx/serialization/json/JsonObject;
+	public final fun getPolicyLabel ()Lcom/openmed/openmedkit/contract/OpenMedContractPolicyLabel;
+	public final fun getRegulatoryTags ()Ljava/util/List;
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getReversibleId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getScore ()Ljava/lang/Double;
+	public final fun getSection ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getTextHash ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toJson ()Lkotlinx/serialization/json/JsonObject;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractSpan$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractSpan;
+	public final fun fromJson (Lkotlinx/serialization/json/JsonObject;)Lcom/openmed/openmedkit/contract/OpenMedContractSpan;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractSpanAction : java/lang/Enum {
+	public static final field Companion Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction$Companion;
+	public static final field FORMAT_PRESERVE Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static final field HASH Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static final field KEEP Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static final field MASK Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static final field REDACT Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static final field REPLACE Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+	public static fun values ()[Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+}
+
+public final class com/openmed/openmedkit/contract/OpenMedContractSpanAction$Companion {
+	public final fun fromValue (Ljava/lang/String;)Lcom/openmed/openmedkit/contract/OpenMedContractSpanAction;
+}
+
 public final class com/openmed/openmedkit/decision/DecisionAccess {
 	public fun <init> (ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun getAllowed ()Z

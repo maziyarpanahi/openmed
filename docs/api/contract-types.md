@@ -124,6 +124,60 @@ These types are a wire format for apps that receive OpenMed JSON, for example
 from a local OpenMed service. They do not replace the existing OpenMedKit
 result types such as `DeidentificationResult` or `EntityPrediction`.
 
+## Kotlin
+
+`scripts/codegen/emit_kotlin_types.py` writes
+`android/openmedkit/src/main/kotlin/com/openmed/openmedkit/contract/ContractTypes.kt`.
+The generated types live in their own package, `com.openmed.openmedkit.contract`,
+so the existing `OpenMedSpan`, `EntityPrediction` and `DeidentificationResult`
+types are untouched. Every record is a `data class` with `camelCase`
+properties, a `toJson()` method and `fromJson(JsonObject)` and
+`fromJson(String)` companion functions built on kotlinx `JsonObject`, in the
+same manual-parsing style as `ModelCatalog`. The build applies no serialization
+compiler plugin, and the generated code needs none.
+
+| JSON Schema | Kotlin |
+| --- | --- |
+| `string` | `String` |
+| `integer` | `Int` |
+| `number` | `Double` |
+| `boolean` | `Boolean` |
+| `enum` | a generated `enum class` with a `value` property and `fromValue` |
+| `["T", "null"]` | `T?` |
+| object with `properties` | a generated `data class` |
+| object without `properties` | `JsonObject` |
+| `array` | `List<T>` |
+| property not in `required` | `T? = null`, omitted when `null` |
+
+Decoding fails closed with `OpenMedContractException`, an
+`IllegalArgumentException` whose message holds the record, the schema key and
+a reason code, never a value:
+
+| Failure | Message |
+| --- | --- |
+| A required key is missing, even if its value may be `null` | `OpenMedContractSpan.score: missing_required_key` |
+| A value has the wrong JSON type, or an integer has a fraction | `OpenMedContractSpan.start: expected_integer` |
+| An enum value is not in the schema | `OpenMedContractSpan.canonical_label: unknown_enum_value` |
+| A `const` value differs | `OpenMedContractSpan.schema_version: constant_mismatch` |
+| A key is not declared by the schema | `OpenMedContractSpan has an undeclared property` |
+| The text is not JSON | `OpenMedContractSpan: malformed_json` |
+
+`const` values such as `schema_version` are read-only properties, not
+constructor parameters, and an explicit `null` is encoded back as `JsonNull`.
+
+```kotlin
+val span = OpenMedContractSpan.fromJson(body)
+if (span.policyLabel == OpenMedContractPolicyLabel.DIRECT_IDENTIFIER) {
+    // ...
+}
+val json: JsonObject = span.toJson()
+```
+
+`ContractTypesTest` decodes and re-encodes every record in
+`tests/fixtures/contracts/core_contract_examples.json` and every span of the
+Swift-Kotlin parity fixture `fixtures/parity/expected_spans.json` (turned into
+an `OpenMedContractSpan` record) and requires equivalent JSON back.
+
 ## Regenerating and drift checks
 
 After changing a core schema, regenerate every committed contract type file:
@@ -140,9 +194,12 @@ exits non-zero when the committed file has drifted. CI runs every
 ```bash
 python scripts/codegen/emit_ts_types.py --check
 python scripts/codegen/emit_swift_types.py --check
+python scripts/codegen/emit_kotlin_types.py --check
 python -m pytest tests/unit/release/test_codegen_types.py -q
 python -m pytest tests/unit/release/test_codegen_swift_types.py -q
 cd swift/OpenMedKit && swift test --filter ContractTypesTests
+python -m pytest tests/unit/release/test_codegen_kotlin_types.py -q
+cd android && ./gradlew :openmedkit:testDebugUnitTest --tests '*ContractTypesTest'
 ```
 
 The generated Swift file is already in `swift format` style, so
@@ -157,6 +214,9 @@ interfaces, and `ContractTypesTests` decodes and re-encodes every one of them
 with the generated Swift types. The Swift test also turns each span of the
 Swift-Kotlin parity fixture `fixtures/parity/expected_spans.json` into an
 `OpenMedContractSpan` record and requires the same lossless round trip.
+
+New generated Kotlin API also needs `./gradlew :openmedkit:apiDump` so
+`android/openmedkit/api/openmedkit.api` records it.
 
 Output is deterministic: no timestamps, and the header records a SHA-256 digest
 of the canonicalized source schemas.
