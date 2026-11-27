@@ -702,6 +702,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         try addRawCases(OpenMedDecisionEncoderError.self)
         try addRawCases(OpenMedSecretProviderError.self)
         try addRawCases(OpenMedTaskPackError.self)
+        try addRawCases(OpenMedSessionLifecycleError.self)
         try addRawCases(PHISentinelSweepError.self)
         try addRawCases(PhysiologicalWaveformError.self)
         try addRawCases(PreprocessingConformanceError.self)
