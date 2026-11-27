@@ -263,6 +263,54 @@ directory that already carries the legacy ready marker and otherwise throws
 outside the cache root, including through a symlink, now raise
 `IllegalArgumentException`, and the state queries report them as `missing`.
 
+## Task packs
+
+A task pack picks a model for a job instead of a repository. The Kotlin packs
+read `packs/task_packs.json`, a byte-identical copy of the shared
+[task pack manifest](models/task-packs.md), and take its Android `onnx`
+candidates in rank order. Resolution reads only that file; it never downloads,
+opens a socket or loads a model.
+
+`prepare(downloader, allowDownload)` is blocking, so call it off the main
+thread. It opens the first cached candidate that matches its catalog
+integrity hash. When none is cached it returns
+`TaskPackPreparation(failure = NOT_CACHED)` and the downloader's client is
+never called, unless `allowDownload` is `true`; then it downloads candidates
+in rank order until one passes the manifest and file checks. The prepared
+model holds a cache lease until `close()`. Other failures are typed too:
+`NO_CANDIDATE`, `DOWNLOAD_FAILED` and `LOAD_FAILED`.
+
+```kotlin
+import android.content.Context
+import com.openmed.openmedkit.catalog.ModelCatalog
+import com.openmed.openmedkit.download.ModelDownloader
+import com.openmed.openmedkit.packs.PiiPack
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+suspend fun redact(context: Context, note: String, userApprovedDownload: Boolean): String? {
+    PiiPack(ModelCatalog.load(context)).use { pack ->
+        val preparation = withContext(Dispatchers.IO) {
+            pack.prepare(ModelDownloader(context), allowDownload = userApprovedDownload)
+        }
+        if (preparation.failure != null) return null // Show preparation.failure.
+        val result = pack.deidentify(note)
+        // result.detector, result.modelId and result.notice label the output.
+        return result.value.redactedText
+    }
+}
+```
+
+`PiiPack.extract` runs `extractPii` and `PiiPack.deidentify` runs the
+policy-driven `deidentify` of `OpenMedKit` on the prepared model. Without a
+prepared model both throw `TaskPackException(NOT_PREPARED)`. Pass
+`allowLocalFallback = true` to run the deterministic local recognizer of
+`OpenMed` instead; the result then reports
+`TaskPackDetector.LOCAL_RECOGNIZER` and a `null` model id. Every
+`TaskPackResult` carries the pack's notice key and default English text:
+detected identifiers are redaction candidates that still need review.
+Diagnostics go through `SafeLog` only and never contain input text.
+
 ## Offline-first deployment
 
 Separate model preparation from document processing. There are two supported
