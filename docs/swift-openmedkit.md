@@ -507,6 +507,123 @@ The downloader repeats the check after each response and before writing. This
 does not provide synchronization against another process concurrently replacing
 filesystem entries; applications should keep their cache private to the app.
 
+## Task Packs
+
+A task pack picks the model for a job so the app does not name a repository.
+OpenMedKit bundles `Resources/task_packs/task_packs.json`, a byte-identical
+copy of the shared [task pack manifest](models/task-packs.md), and reads its
+`apple` runtime entry: apache-2.0 MLX candidates in rank order.
+`OpenMedTaskPackManifest.bundled()` decodes it and fails closed on another
+schema or major version, an undeclared field, or a broken rank, license or
+notice rule.
+
+Every pack follows the same steps:
+
+- `resolve()` reads the manifest only and returns the candidates this device
+  can run, plus the skipped ones with a reason. MLX cannot run on the iOS
+  Simulator, so there every candidate is skipped with
+  `unsupported_on_simulator` and the status is `unsupportedOnSimulator`.
+- `prepare(store:allowDownload:)` loads the best cached candidate through
+  `OpenMedModelStore`, falling back in rank order. It downloads only when
+  `allowDownload` is `true`; the default `false` throws `not_cached` without
+  any network request when nothing is cached.
+- Inference runs on device through the existing `OpenMed` APIs. There is no
+  cloud fallback, and the packs do not log input text.
+
+`OpenMedTaskPackStore(cacheDirectory:revision:)` selects the cache; the default
+`.standard` store is the OpenMed MLX cache. Failures are
+`OpenMedTaskPackError` values whose raw value is a fixed reason code.
+
+### `PIIPack`
+
+```swift
+let pack = try PIIPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let found = try pack.extract(note)            // PIIPackExtraction
+let redacted = try pack.deidentify(note)      // PIIPackDeidentification
+print(redacted.redactedText)
+print(found.notice.text)
+```
+
+`extract(_:)` runs `OpenMed.extractPII` and returns `PIIPackSpan` values with
+the model label, the portable canonical label, Unicode scalar offsets and the
+confidence. Spans carry no input text; slice the source with
+`span.range(in:)` when you need it. `deidentify(_:policy:)` runs
+`OpenMed.deidentify(_:policy:)` under a bundled policy profile
+(`hipaa_safe_harbor` by default) and returns the policy result, whose actions
+are offset-only. Both results carry the source model id and the pack's
+`openmed.notice.pii.review_required` notice, which the app should show with
+the output.
+
+### `ClinicalEntityPack`
+
+```swift
+let pack = try ClinicalEntityPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let result = try pack.extract(note)           // ClinicalEntityExtraction
+for entity in result.entities {
+    print(entity.category, entity.start, entity.end, entity.confidence)
+}
+print(result.notice.text)
+```
+
+`extract(_:)` runs `OpenMed.analyzeText`, normalizes each model label with the
+portable OpenMed taxonomy (so `B-PATHOLOGY` and `Disease` normalize like Python's
+`normalize_label`), and keeps a mention only when the normalized label is one
+of the pack's canonical labels: `CONDITION`, `DISEASE` and `PATHOLOGY` in pack
+version 1.0.0. Mentions with any other label are dropped, never assigned a
+guessed category. Each `ClinicalEntity` carries the category, the model label,
+Unicode scalar offsets, the confidence and the source model id, but no input
+text; use `entity.range(in:)` to slice the note. The result carries the
+`openmed.notice.clinical_entity.extraction_only` notice: the pack reports
+mentions and offsets only and does not diagnose, rank or recommend care.
+
+Each `ClinicalEntity` also carries an advisory `assertion` with four axes, using
+the Python `assert_context` codes:
+
+| Axis | Values |
+|---|---|
+| `negation` | `affirmed`, `negated` |
+| `uncertainty` | `certain`, `uncertain` |
+| `temporality` | `recent`, `historical`, `hypothetical` |
+| `experiencer` | `patient`, `family`, `other` |
+
+`Patient denies chest pain.` returns `chest pain` with negation `negated`, and
+`Mother had breast cancer.` returns `breast cancer` with experiencer `family`.
+Negated, uncertain, hypothetical and non-patient mentions are flagged, never
+dropped. The axes are annotations for review: they trigger no action and are
+not a diagnosis.
+
+```swift
+let result = try pack.extract(note, sentences: sentenceSpans, language: "en")
+for entity in result.entities where entity.assertion?.negation == .negated {
+    print(entity.category, entity.start, entity.end)
+}
+```
+
+The assertion comes from `OpenMedClinicalContext`, an offline, deterministic
+port of the English path that Python's `assert_context` takes without
+sections. It reads its cues from the bundled
+`Resources/clinical/context_cues_en_v1.json`, a byte-identical copy of the
+shared cue table. Cue matching is case-insensitive on token boundaries,
+longest cue first. Pseudo-negations such as `cannot be excluded` are masked
+before negation cues are counted, so an odd count negates. Cues are scoped to
+the mention's clause, and the experiencer comes from the nearest family or
+other subject cue in that clause. Pass `sentences` in Unicode scalar offsets
+to bound modifier cues. Without them a regex sentence split is used; Python
+uses pySBD there when it is installed. The port keeps Python's known gaps for
+parity: a negation does not reach past `and` or `or`, so `cough` in
+`Denies fever and cough.` stays affirmed. `ClinicalAssertionParityTests`
+replays `tests/fixtures/parity/clinical_assertion_v1.json`, gaps included.
+
+When the caller declares a language other than English, for example
+`language: "es"`, the entities come back without an assertion and the
+extraction reports `assertionUnavailableReason == .unsupportedLanguage`; English
+cues are never applied to other languages. Section priors, multilingual cue
+packs and the document assertion graph stay Python-only.
+
 ## Offline Tokenizer Assets
 
 OpenMedKit loads tokenizers from local files only, and makes no network request
@@ -885,6 +1002,8 @@ Runtime types follow one of these contracts:
 | Type | `Sendable` | Contract |
 |---|---|---|
 | `OpenMed`, `NERPipeline`, `PlatformModel`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | No | Inference is synchronous and has no internal lock. Use each instance from one isolation domain: create and call it from one task or actor, or keep it inside your own actor. Give concurrent workers separate instances. |
+| `PIIPack` | No | Same single-isolation-domain rule: prepare and run each pack from one task or actor. |
+| `ClinicalEntityPack` | No | Same single-isolation-domain rule as `PIIPack`. |
 | `ExtensionRedactionHandler`, `TranscriptLanguageRouter`, `SpeechEndpointAdapter`, `VoiceEmbeddingSession`, `VoiceEmbeddingBuffer`, `VoiceEmbeddingHandle`, `ConvertedAudioSamples`, `WFDBFileSource` | No | Same single-isolation-domain rule. |
 | `OpenMedMaple`, `CoreMLSpeechEngine` | Actor | Calls are serialized by the actor. |
 | `OpenMedVisionLanguageModel` | Yes | Share one instance. The MLX model container serializes model access. `generate(_:images:)` takes its images as `sending`, so do not keep using them concurrently after the call. |
@@ -925,7 +1044,7 @@ path, to a role-based case.
 | `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
 | `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
 | `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
-| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
+| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `OpenMedClinicalContextError`, `OpenMedTaskPackError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
 
 Internal MLX errors follow the same rule and surface through the public
 loaders: a Privacy Filter unknown token reports `unknownToken(index:)`, the
