@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
 - Add an on-device `PIISummaryIntent` that returns per-label identifier counts with the redacted text and never the detected values or offsets, register both OpenMed intents as App Shortcuts in the Swift demo app, and document the App Intents boundary in `docs/runtimes/apple-app-intents.md` (#5403).
 - Add an experimental, core-only `free-threading-smoke` CI job and `scripts/release/free_threading_smoke.py`. On free-threaded CPython 3.14t the script reports GIL re-enablement at import and fails on a crash or on concurrent `safety_sweep()` results that differ from the single-threaded baseline (#5399).
+- Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 
 ### Changed
 

@@ -197,6 +197,22 @@ public final class com/openmed/openmedkit/OpenMedComponentCallbacks : android/co
 	public fun onTrimMemory (I)V
 }
 
+public final class com/openmed/openmedkit/OpenMedErrorCode : java/lang/Enum {
+	public static final field BUDGET_EXCEEDED Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field CAPABILITY_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field CONFIGURATION_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INFERENCE_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INPUT_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field INTERNAL_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field MODEL_LOAD_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static final field POLICY_ERROR Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getRetryable ()Z
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedErrorCode;
+	public static fun values ()[Lcom/openmed/openmedkit/OpenMedErrorCode;
+}
+
 public final class com/openmed/openmedkit/OpenMedHostScope : java/io/Closeable {
 	public fun <init> ()V
 	public fun <init> (Lcom/openmed/openmedkit/OpenMedRuntimePolicy;Ljava/util/List;Lkotlinx/coroutines/CoroutineDispatcher;Lcom/openmed/openmedkit/OpenMedRuntimeClock;)V

@@ -32,6 +32,7 @@ SCHEMA_NAMES = (
     "service_webhook_payload",
     "service_error_envelope",
     "settings",
+    "error_code_registry",
 )
 _SCHEMA_ALIASES: dict[str, str] = {
     # ``audit`` stays the bundled name; ``audit_event`` is the unambiguous

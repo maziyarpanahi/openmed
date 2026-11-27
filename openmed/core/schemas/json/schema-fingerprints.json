@@ -153,6 +153,34 @@
     ],
     "schema_version": 1
   },
+  "error_code_registry": {
+    "schema_version": 1,
+    "fingerprint": "sha256:778a495e0a1987ec2943d09d51399105143d69eca3e12f76e5e0ce26bc873a47",
+    "required": [
+      "categories",
+      "codes",
+      "contract",
+      "contract_version",
+      "description",
+      "divergences",
+      "retired_codes",
+      "retryable_bases",
+      "schema_version",
+      "surfaces"
+    ],
+    "properties": [
+      "categories",
+      "codes",
+      "contract",
+      "contract_version",
+      "description",
+      "divergences",
+      "retired_codes",
+      "retryable_bases",
+      "schema_version",
+      "surfaces"
+    ]
+  },
   "provenance": {
     "fingerprint": "sha256:56bd3334a6f3d8263e1c7f4e20d81746c931bef11aba9d10a4c2add92062b4fe",
     "properties": [

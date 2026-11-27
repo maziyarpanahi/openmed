@@ -187,6 +187,8 @@ export type {
   TaskPackResolution,
 } from "./packs";
 export type { OpenMedOfflineErrorCode } from "./offline";
+export { OPENMED_ERROR_CODES, OPENMED_ERROR_CODE_RETRYABLE } from "./error-codes";
+export type { OpenMedErrorCode } from "./error-codes";
 export {
   DECISION_ADVISORY,
   DECISION_COMPATIBILITY_POLICY,
