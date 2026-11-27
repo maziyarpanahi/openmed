@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixture's version, its Python, Swift and Android consumers, the workflow
   path filters that run them and how to add a synthetic case, with a test that
   every fixture has a README row (#5425).
+- Load the per-span audit event schema as `audit_event` and list schema-name
+  aliases with `schema_aliases()`; `audit` keeps working and
+  `load_all_schemas()` and the fingerprint snapshot are unchanged (#5390).
 
 ## [4.0.0] - 2026-11-25
 
