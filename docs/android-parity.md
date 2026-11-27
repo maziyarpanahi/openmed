@@ -151,3 +151,18 @@ ANDROID_HOME="$HOME/Library/Android/sdk" ./android/gradlew -p android --offline 
 These tests need no model, network, microphone, camera, or Android device.
 The Gradle toolchain, SDK, and build dependencies must already be installed
 and cached for `--offline` execution.
+
+### Evidence packets
+
+`MultimodalPacket.fromJson(wire)` admits the `openmed.multimodal.apple.v1`
+evidence packets that Python and Swift produce, as described in
+[OpenMedKit multimodal evidence contracts](multimodal/openmedkit-contracts.md).
+It requires the exact canonical bytes, at most 64 KiB, and refuses anything
+else with one of five codes: `unsupported_multimodal_schema`,
+`unsupported_multimodal_capability`, `invalid_multimodal_transform`,
+`incomplete_multimodal_provenance` or `invalid_multimodal_contract`. The asset
+projection reuses `AssetManifest` and the provider projection reuses
+`ProviderResultEnvelope`. Visual, transcript and clock projections are typed
+values. `MultimodalContractParityTest` runs every positive and negative case of
+`tests/fixtures/parity/multimodal_contract_v1.json` and checks each
+`evidence_digest` and refusal code against the fixture.
