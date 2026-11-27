@@ -537,6 +537,40 @@ never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
 
+## Verify signed audit reports
+
+`ReceiptVerifier` checks an `AuditReport` that Python signed with
+`AuditReport.sign()`, using only JDK and Android platform crypto. The kit never
+signs. The caller supplies the HMAC key, for example from the Android
+Keystore, and remains responsible for it:
+
+```kotlin
+when (val result = ReceiptVerifier.verify(reportJson, key)) {
+    is ReceiptVerification.Valid -> showVerified(result.spanOrder)
+    is ReceiptVerification.Rejected -> showRejected(result.code)
+}
+```
+
+`Valid.spanOrder` is `sorted`, or `stored` for a report signed before spans
+were sorted. `Rejected.code` is one of the following:
+
+| Code | Meaning |
+| --- | --- |
+| `hash_mismatch` | No span order reproduces the stored `repro_hash`, so the report content changed. |
+| `signature_mismatch` | The report is unsigned, or the hash matches but its HMAC does not match the key. |
+| `unsupported_algorithm` | The signature names no algorithm or one other than `HMAC-SHA256`. |
+| `malformed` | The input is not a structurally valid audit report. The input is never echoed. |
+
+The checks run in the order the Swift and web verifiers share: a missing or
+`null` signature, then the algorithm, then the hash, then the HMAC.
+
+The verifier reproduces Python's canonical JSON byte for byte. That covers
+member order by Unicode code point, ASCII escaping and Python float formatting
+(`1e-07`, not `1.0E-7`). The HMAC is compared in constant time. An empty key
+throws `IllegalArgumentException`; neither results nor errors contain the key.
+`ReceiptVerificationParityTest` replays the shared vectors in
+`tests/fixtures/parity/receipt_verification_v1.json`.
+
 ## Shared C++ runtime (libc++_shared.so)
 
 `libdjl_tokenizer.so` from `ai.djl.android:tokenizer-native` 0.33.0 links

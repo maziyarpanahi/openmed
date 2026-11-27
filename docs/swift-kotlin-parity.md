@@ -533,3 +533,61 @@ are for tests only. The expected blocks are derived from the Python reference by
 To change a profile, edit `openmed/core/policies/`, run
 `python scripts/parity/generate_portable_policies.py --write`, review the
 regenerated resources and vectors, and run every consumer above.
+
+## Audit Receipt Verification Vectors
+
+`AuditReport.sign()` and `verify()` (`openmed/core/audit.py`) protect a
+de-identification report with a `repro_hash` and an HMAC-SHA256 `signature`
+over canonical JSON. Canonical bytes are easy to get wrong in another language,
+so `tests/fixtures/parity/receipt_verification_v1.json` (schema
+`openmed.receipt_verification_vectors`, version 1) lets the Swift, Kotlin and
+web verifiers check their bytes, hashes and verdicts against the Python
+reference.
+
+The vectors are synthetic. Every report is signed with the published material
+in `test_keys`, which is marked `test_only` and must never sign a real report.
+Reports carry offsets, labels, actions and SHA-256 hashes of synthetic
+placeholders only; they contain no identifiers or source text.
+
+Canonical JSON is UTF-8 with object members sorted by Unicode code point, `,`
+and `:` separators with no whitespace, every non-ASCII character escaped as
+lowercase `\uXXXX` (astral characters as UTF-16 surrogate pairs), no `NaN` or
+infinities, and floats in the shortest round-trip form Python prints: `1e-07`,
+`5e-324`, `1e+16` and `1.0`, not `1e-7`, `1.0E-7` or `1`. Swift's default
+`String` ordering and JavaScript's UTF-16 ordering both differ from code-point
+order for some keys; the vectors include such keys and labels.
+
+For each case the fixture records the received `report`, one candidate per span
+order a verifier must try (`sorted` by `(start, end, canonical_label, action,
+canonical JSON of the span)`, then `stored`, listed only when it differs), and
+the expected verdict:
+
+| Field | Meaning |
+| --- | --- |
+| `repro_payload_b64` | Canonical bytes of the report without `repro_hash` and `signature` |
+| `expected_repro_hash` | `sha256:` plus the hex SHA-256 of those bytes |
+| `signing_payload_b64` | Canonical bytes of the report without `signature`, keeping the stored `repro_hash` |
+| `expected_hmac` | Hex HMAC-SHA256 of the signing bytes under the test material |
+| `expected.verifies` | Whether `AuditReport.verify()` accepts the report |
+| `expected.matched_span_order` | The span order that verified, or `null` |
+
+A report verifies when `signature` is an object with algorithm `HMAC-SHA256`
+and some span order, tried sorted first, has a repro hash equal to the stored
+`repro_hash` and an HMAC equal to `signature.value`. The cases cover a signed
+baseline, an unsigned report, tampered offset, label and action, a flipped
+signature digit, an unknown algorithm, the legacy stored span order, non-ASCII
+keys and values, and float edge cases (`0.1`, `1e-07`, `0.30000000000000004`,
+`5e-324`).
+
+The Kotlin verifier is `ReceiptVerifier` in
+`android/openmedkit/src/main/kotlin/com/openmed/openmedkit/receipt/`, and
+`ReceiptVerificationParityTest` checks its bytes, hashes, HMACs and verdicts
+against every case. Its result codes are `valid`, `hash_mismatch`,
+`signature_mismatch` (also used for an unsigned report),
+`unsupported_algorithm` and `malformed`.
+
+Regenerate or check the fixture with
+`python scripts/parity/generate_receipt_vectors.py --write` or `--check`;
+`tests/unit/core/test_receipt_vectors.py` checks that regeneration is
+byte-stable, that every case verifies in Python with the expected result, and
+that the bytes, hashes and HMACs recompute without OpenMed code.
