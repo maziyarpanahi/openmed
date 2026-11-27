@@ -1155,7 +1155,7 @@ if verification.isValid {
 | `hash_mismatch` | No span order reproduces the stored `repro_hash`: the report changed |
 | `signature_mismatch` | The report is unsigned, or its HMAC does not match the key |
 | `unsupported_algorithm` | The signature algorithm is not `HMAC-SHA256` |
-| `malformed` | Invalid JSON or UTF-8, duplicate members, non-finite numbers, more than 8 MiB, or a missing or mistyped `spans`, `repro_hash` or `signature` |
+| `malformed` | Invalid JSON or UTF-8, a byte order mark, duplicate members, lone surrogates, non-finite numbers, nesting deeper than 64 levels, more than 8 MiB, or a missing or mistyped `spans`, `repro_hash` or `signature` |
 
 Like Python's `verify()`, the verifier tries the spans sorted by `(start, end,
 canonical_label, action, canonical span JSON)` and then in their stored order,
