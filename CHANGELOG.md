@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Load the per-span audit event schema as `audit_event` and list schema-name
   aliases with `schema_aliases()`; `audit` keeps working and
   `load_all_schemas()` and the fingerprint snapshot are unchanged (#5390).
+- Add an EU evidence index page to the Compliance docs that links the existing
+  DPIA, DPA, GDPR DSAR export, EU AI Act model-card field, and ISO 27701
+  evidence pages, says what each is for and what it is not, and states that it
+  is an index and not legal advice (#5427).
 
 ## [4.0.0] - 2026-11-25
 
