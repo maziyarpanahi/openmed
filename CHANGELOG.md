@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Port the streaming speech contract to the `openmed` web package under the `openmed/speech` subpath: token timings, recognition results, partial hypotheses, finalized segments and engine provenance with the Swift and Python bounds, code-point text lengths, coded `SpeechContractError`s that name the field but never the value, and text kept out of JSON, strings and inspection; checked against the shared `speech_contract_v1.json` fixture (#5372).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.

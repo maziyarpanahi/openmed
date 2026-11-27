@@ -356,6 +356,40 @@ const result = await deidentify(clinicalNote, {
 - **Teardown.** `dispose()` rejects outstanding work with `disposed`, asks the
   worker to release its runtime and terminates it.
 
+## Streaming Speech Contract
+
+The `openmed/speech` subpath validates speech provider output with the same
+rules as Python and OpenMedKit Swift: token timings, recognition results,
+partial hypotheses, finalized segments and engine provenance. Times are
+integer milliseconds, confidences are parts per million, and text lengths
+count Unicode code points:
+
+```ts
+import { SpeechFinalizedSegment, SpeechTokenTiming } from "openmed/speech";
+
+const token = new SpeechTokenTiming({
+  tokenIndex: 0,
+  startMilliseconds: 500,
+  endMilliseconds: 650,
+  confidencePPM: 750_000,
+  text: tokenText,
+});
+const segment = new SpeechFinalizedSegment({
+  segmentIndex: 0,
+  text: segmentText,
+  startMilliseconds: 500,
+  endMilliseconds: 900,
+  tokenTimes: [token],
+});
+```
+
+Invalid values throw `SpeechContractError` with a stable `code` and the
+offending `field`, and never the value or any transcript text. `JSON.stringify`,
+`String()` and `util.inspect` show lengths and counts instead of text. The
+subpath captures no audio and runs no recognizer. Decoder confidence is
+uncalibrated and is not clinical certainty. See the
+[offline ASR provider contract](../../docs/multimodal/streaming/offline-asr-contract.md).
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.
