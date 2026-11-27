@@ -816,3 +816,128 @@ def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() ->
             "purpose": "rtl_layout_and_accessibility",
         }
     ]
+
+
+SETTINGS_REFERENCE = DOCS / "configuration" / "environment-variables.md"
+SETTINGS_RENDERER = ROOT / "scripts" / "docs" / "render_settings_reference.py"
+
+
+def _settings_renderer() -> Any:
+    spec = importlib.util.spec_from_file_location(
+        "openmed_render_settings_reference", SETTINGS_RENDERER
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _settings_reference_rows(markdown: str) -> dict[str, list[str]]:
+    rows: dict[str, list[str]] = {}
+    for line in markdown.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split(" | ")]
+        assert len(cells) == 7, line
+        name = cells[0].strip("`")
+        assert name not in rows, f"{name} is listed twice"
+        rows[name] = cells
+    return rows
+
+
+def test_settings_reference_page_is_current_with_the_schema(capsys) -> None:
+    renderer = _settings_renderer()
+
+    assert renderer.main(["--check"]) == 0
+    assert "is current" in capsys.readouterr().out
+
+
+def test_settings_reference_check_fails_after_an_unrendered_schema_edit(
+    tmp_path: Path, capsys
+) -> None:
+    from openmed.core.settings_registry import load_settings_schema
+
+    renderer = _settings_renderer()
+    schema = load_settings_schema()
+    service = schema["properties"]["service"]["properties"]
+    service["OPENMED_SERVICE_LOG_LEVEL"]["description"] = "Edited description."
+    edited = tmp_path / "settings.schema.json"
+    edited.write_text(json.dumps(schema), encoding="utf-8")
+
+    assert renderer.main(["--check", "--schema", str(edited)]) == 1
+    error = capsys.readouterr().err
+    assert "environment-variables.md is stale" in error
+    assert "render_settings_reference.py" in error
+
+    page = tmp_path / "environment-variables.md"
+    assert renderer.main(["--schema", str(edited), "--output", str(page)]) == 0
+    assert (
+        renderer.main(["--check", "--schema", str(edited), "--output", str(page)]) == 0
+    )
+    assert "Edited description." in page.read_text(encoding="utf-8")
+
+
+def test_settings_reference_lists_every_setting_and_hides_secret_defaults() -> None:
+    from openmed.core.settings_registry import setting_declarations
+
+    renderer = _settings_renderer()
+    rows = _settings_reference_rows(SETTINGS_REFERENCE.read_text(encoding="utf-8"))
+    declarations = setting_declarations()
+
+    assert set(rows) == {declaration.name for declaration in declarations}
+    secrets = [declaration for declaration in declarations if declaration.secret]
+    assert secrets
+    for declaration in declarations:
+        cells = rows[declaration.name]
+        assert cells[5] == ("yes" if declaration.secret else "no")
+        assert cells[6] == f"`{declaration.module}`"
+        if declaration.secret:
+            assert cells[3] == renderer.SECRET_DEFAULT
+        else:
+            assert cells[3] != renderer.SECRET_DEFAULT
+
+
+def test_settings_reference_never_renders_a_secret_default() -> None:
+    from types import MappingProxyType
+
+    from openmed.core.settings_registry import SettingDeclaration
+
+    renderer = _settings_renderer()
+    sentinel = "synthetic-secret-default-4c1e"
+    planted = SettingDeclaration(
+        name="OPENMED_SERVICE_SYNTHETIC_TOKEN",
+        section="service",
+        description="Synthetic secret used as a negative control.",
+        types=("string",),
+        module="openmed.service.auth",
+        secret=True,
+        has_default=True,
+        default=sentinel,
+        bounds=MappingProxyType({}),
+        default_note=sentinel,
+    )
+
+    row = renderer._row(planted)
+    assert sentinel not in row
+    assert renderer.SECRET_DEFAULT in row
+
+
+def test_settings_reference_escapes_table_breaking_bounds() -> None:
+    renderer = _settings_renderer()
+    rows = _settings_reference_rows(SETTINGS_REFERENCE.read_text(encoding="utf-8"))
+
+    header_bounds = rows["OPENMED_SERVICE_MTLS_CLIENT_CERT_HEADER"][4]
+    assert "&#124;" in header_bounds and "|" not in header_bounds
+    assert renderer._code("a|b`c") == "<code>a&#124;b&#96;c</code>"
+    assert renderer._code("plain") == "`plain`"
+
+
+def test_settings_reference_is_in_the_nav_and_linked_from_configuration() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    publication = _load_yaml(PUBLICATION)
+    page = "configuration/environment-variables.md"
+
+    assert page in _nav_paths(config["nav"])
+    assert page in publication["classification"]["navigated"]
+    configuration = (DOCS / "configuration.md").read_text(encoding="utf-8")
+    assert "(configuration/environment-variables.md)" in configuration
