@@ -165,6 +165,17 @@ class IdentifierValidatorParityTest {
             Triple("Canadian SIN", "\u0669\u0667\u0665886706", false),
             Triple("French NIR", "185052A00123435", true),
             Triple("French NIR", "285052b00123412", true),
+            // Supplementary-plane digits (U+1D7CE MATHEMATICAL BOLD DIGIT ZERO onward)
+            // are one character to Python's len(), \d and int().
+            Triple("Spanish DNI", "${bold("12345678")}Z", true),
+            Triple("IBAN", "DE${bold("46")}YVOKYS9RYAPB2JJUKQ", true),
+            Triple("French NIR", "18505750012347${bold("5")}", true),
+            Triple("French NIR", bold("185057500123475"), false),
+            Triple("Canadian SIN", bold("975886706"), false),
         )
+
+        private fun bold(digits: String): String = buildString {
+            for (digit in digits) appendCodePoint(0x1D7CE + (digit - '0'))
+        }
     }
 }

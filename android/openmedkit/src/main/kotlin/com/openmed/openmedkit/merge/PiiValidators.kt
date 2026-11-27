@@ -1,6 +1,5 @@
 package com.openmed.openmedkit.merge
 
-import java.math.BigInteger
 import java.time.DateTimeException
 import java.time.LocalDate
 
@@ -89,13 +88,15 @@ object PiiValidators {
     fun validateIBAN(text: String): Boolean {
         val cleaned = text.filterNot { isPythonSpace(it) || it == '-' }.uppercase()
         if (!IBAN_SHAPE.matches(cleaned)) return false
+        // Python counts code points; a supplementary-plane digit is one character.
+        val points = cleaned.codePoints().toArray()
         val length = tableValue(IBAN_LENGTHS, cleaned.substring(0, 2))
-        if (length != null && cleaned.length != length) return false
-        if (length == null && cleaned.length !in 15..34) return false
+        if (length != null && points.size != length) return false
+        if (length == null && points.size !in 15..34) return false
         var remainder = 0
-        for (character in cleaned.substring(4) + cleaned.substring(0, 4)) {
-            val digit = Character.digit(character, 10)
-            for (value in if (digit >= 0) digit.toString() else (character.code - 55).toString()) {
+        for (point in points.copyOfRange(4, points.size) + points.copyOfRange(0, 4)) {
+            val digit = Character.digit(point, 10)
+            for (value in if (digit >= 0) digit.toString() else (point - 55).toString()) {
                 remainder = (remainder * 10 + (value - '0')) % 97
             }
         }
@@ -157,7 +158,8 @@ object PiiValidators {
     fun validateSpanishDNI(text: String): Boolean {
         val cleaned = text.filterNot(::isPythonSpace).uppercase()
         val match = DNI_SHAPE.matchEntire(cleaned) ?: return false
-        return cleaned[8] == DNI_LETTERS[match.groupValues[1].toInt() % 23]
+        val number = decimalValue(match.groupValues[1]) ?: return false
+        return match.groupValues[2][0] == DNI_LETTERS[(number % 23).toInt()]
     }
 
     /**
@@ -168,16 +170,18 @@ object PiiValidators {
     @JvmStatic
     fun validateFrenchNIR(text: String): Boolean {
         val cleaned = text.filterNot { isPythonSpace(it) || it == '.' || it == '-' }.uppercase()
-        if (cleaned.length != 15 || (cleaned[0] != '1' && cleaned[0] != '2')) return false
-        val key = cleaned.substring(13).toIntOrNull() ?: return false
-        var body = cleaned.substring(0, 13)
+        if (cleaned.codePointCount(0, cleaned.length) != 15 || (cleaned[0] != '1' && cleaned[0] != '2')) return false
+        val split = cleaned.offsetByCodePoints(0, 13)
+        // Python's int() reads the two-character key, which may carry a "+".
+        val keyText = cleaned.substring(split)
+        val key = decimalValue(if (keyText.startsWith('+')) keyText.substring(1) else keyText) ?: return false
+        var body = cleaned.substring(0, split)
         if ('A' in body || 'B' in body) {
             if (!NIR_CORSICA.matches(body)) return false
             body = body.replace("2A", "19").replace("2B", "18")
-        } else if (!body.all(Character::isDigit)) {
-            return false
         }
-        return key == 97 - BigInteger(body).mod(BigInteger.valueOf(97)).toInt()
+        val number = decimalValue(body) ?: return false
+        return key == 97 - number % 97
     }
 
     /**
@@ -224,6 +228,21 @@ object PiiValidators {
             Character.isSpaceChar(character)
 
     private fun asciiDigits(text: String): String = text.filter { it in '0'..'9' }
+
+    /**
+     * Python `int()` of a run of Unicode decimal digits, read by code point so
+     * supplementary-plane digits count; `null` when empty or not all digits.
+     */
+    private fun decimalValue(text: String): Long? {
+        if (text.isEmpty()) return null
+        var value = 0L
+        for (point in text.codePoints()) {
+            val digit = Character.digit(point, 10)
+            if (digit < 0) return null
+            value = value * 10 + digit
+        }
+        return value
+    }
 
     /** Value for a 2-letter [code] in a packed table of codes each followed by [valueWidth] digits. */
     private fun tableValue(table: String, code: String, valueWidth: Int = 2): Int? {
