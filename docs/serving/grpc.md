@@ -415,8 +415,20 @@ make grpc-proto
 make grpc-proto-check
 ```
 
-The unit test suite also runs the same drift check, so CI fails when
-`openmed.proto` and the committed generated stubs disagree. Stub freshness does
+The `OpenMedSpan` message is generated from the canonical span schema,
+`openmed/core/schemas/json/span.schema.json`, by
+`scripts/codegen/span_proto.py`. Do not edit that block of `openmed.proto` by
+hand: change the schema, then run `make grpc-proto`, which renders the block
+before it regenerates the stubs. Wire numbers stay stable through the committed
+field map `scripts/codegen/openmed_span_fields.json`. A new schema property
+takes the next free number, and a removed one becomes a `reserved` number and
+name that is never reused. `make grpc-proto-check` runs
+`scripts/codegen/span_proto.py --check` first, so a schema change that was not
+regenerated fails the gate.
+
+The unit test suite also runs the same drift checks, so CI fails when
+`span.schema.json`, the `OpenMedSpan` block, `openmed.proto` and the committed
+generated stubs disagree. Stub freshness does
 not judge compatibility: the [API compatibility gate](../api/compatibility-gate.md)
 compiles `openmed.proto` to a descriptor set and fails on removed, renumbered
 or retyped fields, reused reserved numbers or names, and removed messages,

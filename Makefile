@@ -70,12 +70,14 @@ sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependenc
 	uv sync --frozen
 	uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
 
-grpc-proto: ## Regenerate committed gRPC protobuf stubs
+grpc-proto: ## Regenerate the OpenMedSpan proto block and committed gRPC stubs
 	@echo "🔁 Generating gRPC protobuf stubs..."
+	uv run --extra dev python scripts/codegen/span_proto.py
 	uv run --extra dev python scripts/generate_grpc_stubs.py
 
-grpc-proto-check: ## Verify committed gRPC protobuf stubs are current
+grpc-proto-check: ## Verify the OpenMedSpan proto block and gRPC stubs are current
 	@echo "🔎 Checking gRPC protobuf stubs..."
+	uv run --extra dev python scripts/codegen/span_proto.py --check
 	uv run --extra dev python scripts/generate_grpc_stubs.py --check
 
 contract-types: ## Regenerate contract types from the core JSON Schemas

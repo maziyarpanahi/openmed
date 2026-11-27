@@ -40,6 +40,8 @@ message PIIEntity {
   google.protobuf.Struct metadata = 15;
 }
 
+// Generated from openmed/core/schemas/json/span.schema.json by
+// scripts/codegen/span_proto.py; edit the schema, not this block.
 message OpenMedSpan {
   int32 schema_version = 1;
   string doc_id = 2;

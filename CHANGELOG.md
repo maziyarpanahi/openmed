@@ -106,6 +106,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verify signed audit reports in the Android OpenMedKit: `ReceiptVerifier` reproduces Python canonical JSON (code-point member order, ASCII escaping, Python float formatting), checks `repro_hash` and HMAC-SHA256 with platform crypto and a constant-time compare, accepts the legacy stored span order, and returns a sealed `ReceiptVerification` with the `valid`, `hash_mismatch`, `signature_mismatch`, `unsupported_algorithm` and `malformed` codes, replayed against `receipt_verification_v1.json` (#5351).
 - Verify Python-signed audit reports in the openmed web package: `verifyAuditReport(json, key)` recomputes the `repro_hash` with a canonical encoder that matches Python (code-point key order, `\uXXXX` escaping, Python float formatting), checks the HMAC-SHA256 signature with `crypto.subtle.verify`, accepts the legacy span order, and returns `{ result, reason, spanOrder }` with the native verifiers' reason codes; every shared receipt vector passes byte for byte (#5352).
 - Verify Python-signed audit reports in OpenMedKit Swift: `OpenMedReceiptVerifier` recomputes `repro_hash` and the HMAC-SHA256 signature offline with a Python-compatible canonical JSON encoder (code-point key order, `\uXXXX` escapes, Python `repr` floats), accepts the legacy stored span order, compares in constant time with CryptoKit, refuses other algorithms and returns value-free reason codes (`valid`, `hash_mismatch`, `signature_mismatch`, `unsupported_algorithm`, `malformed`) checked against every shared vector (#5350).
+- Generate the protobuf `OpenMedSpan` message from `span.schema.json` with
+  `scripts/codegen/span_proto.py`, keep wire numbers stable through a committed field map
+  that reserves removed fields, and run its `--check` mode in `make grpc-proto-check` (#5335).
 
 ### Changed
 

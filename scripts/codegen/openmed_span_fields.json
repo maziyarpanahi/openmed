@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "message": "OpenMedSpan",
+  "fields": {
+    "schema_version": 1,
+    "doc_id": 2,
+    "start": 3,
+    "end": 4,
+    "text_hash": 5,
+    "entity_type": 6,
+    "canonical_label": 7,
+    "policy_label": 8,
+    "regulatory_tags": 9,
+    "score": 10,
+    "detector": 11,
+    "evidence": 12,
+    "action": 13,
+    "replacement": 14,
+    "reversible_id": 15,
+    "section": 16,
+    "metadata": 17
+  },
+  "reserved": [],
+  "explicit_presence": [
+    "policy_label"
+  ]
+}
