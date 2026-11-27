@@ -116,15 +116,17 @@ Privacy-impacting defects are never rated below **High**.
 
 ## Supported versions
 
-Security fixes target the **latest released minor version**; we do not backport
-to end-of-life lines. See [CHANGELOG.md](CHANGELOG.md) for the release history.
+Security fixes target the **latest released minor version** and supported LTS
+lines. See the [4.3 backport policy](docs/release/lts-backport-policy.md) for
+eligibility and [CHANGELOG.md](CHANGELOG.md) for the release history.
 Unreleased entries and release candidates do not establish a supported stable
 release. Reproduce on a supported released version before reporting.
 
 | Version | Supported |
 |---|---|
-| Latest released minor | Yes |
-| Older releases | Upgrade first |
+| Latest released minor | Security fixes |
+| 4.3 LTS | From the first stable 4.3 release through February 2028, security and recall-backstop fixes |
+| Older releases outside their support window | Upgrade first |
 
 ## Response targets
 
