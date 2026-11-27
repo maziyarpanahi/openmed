@@ -1346,6 +1346,21 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     compliance_sub = compliance_parser.add_subparsers(dest="compliance_command")
 
+    ehds = compliance_sub.add_parser(
+        "ehds-spe", help="Check secure processing environment controls."
+    )
+    ehds_check = ehds.add_subparsers(dest="ehds_spe_command", required=True).add_parser(
+        "check", help="Check the controls declared in a local deployment profile."
+    )
+    ehds_check.add_argument(
+        "--profile",
+        required=True,
+        type=Path,
+        dest="deployment_profile",
+        help="Local JSON deployment profile.",
+    )
+    ehds_check.set_defaults(handler=_handle_ehds_spe_check)
+
     safe_harbor_parser = compliance_sub.add_parser(
         "safe-harbor",
         help="Generate a HIPAA Safe Harbor attestation from an audit report.",
@@ -4118,6 +4133,25 @@ def _audit_summary_payload(report: Any) -> dict[str, Any]:
         "action_counts": dict(sorted(action_counts.items())),
         "residual_risk": dict(report.residual_risk) if report.residual_risk else {},
     }
+
+
+def _handle_ehds_spe_check(args: argparse.Namespace) -> int:
+    from ..compliance.ehds_spe import check_ehds_spe, load_deployment_profile
+
+    try:
+        report = check_ehds_spe(load_deployment_profile(args.deployment_profile))
+    except ValueError:
+        raise CliError(
+            "Unable to read the deployment profile.",
+            code="invalid_deployment_profile",
+            exit_code=EXIT_ERROR,
+        ) from None
+    return emit(
+        args,
+        report,
+        human=json.dumps(report, indent=2),
+        outcome="completed" if report["status"] == "pass" else "check_failed",
+    )
 
 
 def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
