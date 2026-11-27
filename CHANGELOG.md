@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
@@ -69,7 +73,6 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
   unchanged, and unknown codes fall back to `invalid_response` (#5086).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
-- Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
 - Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
 - Add post-restore authorization reconciliation that opens a new recovery epoch, burns pre-restore approval nonces, rechecks recorded authority against current status, and holds or requires fresh review instead of reviving spent or revoked authority (#3707).
