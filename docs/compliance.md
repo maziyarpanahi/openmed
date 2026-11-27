@@ -58,6 +58,10 @@ and supervisory-authority guidance:
 - [Data Protection Impact Assessment template](compliance/dpia-template.md)
   connects a deployment's processing description, policy profile, audit
   residual-risk score, validation evidence, safeguards, and approval decision.
+- [EHDS secondary-use evidence map](compliance/eu-ehds-secondary-use.md)
+  maps OpenMed artifacts to European Health Data Space Regulation concepts for
+  data holders preparing pseudonymised or anonymised data, and lists what
+  OpenMed does not do.
 - [Data Processing Agreement template](compliance/dpa-template.md) covers the
   local/on-device baseline, no-telemetry posture, sub-processor inventory, data
   return or deletion, and reversible-pseudonymization key custody.
