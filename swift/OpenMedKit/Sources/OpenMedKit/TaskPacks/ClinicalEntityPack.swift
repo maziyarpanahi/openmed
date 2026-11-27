@@ -20,6 +20,12 @@
         public let confidence: Float
         /// Repository id of the model that produced the mention.
         public let sourceModelID: String
+        /// Advisory ConText assertion axes (negation, uncertainty,
+        /// temporality, experiencer) for review, or `nil` when the extraction
+        /// reports an ``ClinicalEntityExtraction/assertionUnavailableReason``.
+        /// Negated, uncertain, hypothetical and non-patient mentions are
+        /// flagged here, never dropped, and the axes trigger no action.
+        public let assertion: OpenMedClinicalAssertion?
 
         /// The Swift range these scalar offsets cover in `source`.
         public func range(in source: String) -> Range<String.Index>? {
@@ -27,10 +33,15 @@
         }
     }
 
-    /// Mentions found by ``ClinicalEntityPack/extract(_:confidenceThreshold:)``.
+    /// Mentions found by
+    /// ``ClinicalEntityPack/extract(_:confidenceThreshold:sentences:language:)``.
     public struct ClinicalEntityExtraction: Equatable, Sendable {
         /// Mapped mentions ordered by offset.
         public let entities: [ClinicalEntity]
+        /// Why the entities carry no assertion, or `nil` when every entity has
+        /// one. A declared language other than English yields
+        /// ``OpenMedClinicalAssertionUnavailableReason/unsupportedLanguage``.
+        public let assertionUnavailableReason: OpenMedClinicalAssertionUnavailableReason?
         /// Repository id of the model that produced the mentions.
         public let sourceModelID: String
         /// The pack's extraction-only notice; show it with the output.
@@ -43,12 +54,15 @@
     ///
     /// Candidates come from the bundled `task_packs.json`, in the manifest's
     /// rank order, and ``prepare(store:allowDownload:)`` follows the same
-    /// cache-first, consent-gated rules as ``PIIPack``. ``extract(_:confidenceThreshold:)``
-    /// runs `OpenMed.analyzeText`, normalizes each model label with the
-    /// portable OpenMed taxonomy, and keeps a mention only when that label is
-    /// one of the pack's canonical labels. Other labels are dropped rather
-    /// than guessed. The output reports mentions and offsets only; it does
-    /// not diagnose, rank or recommend care.
+    /// cache-first, consent-gated rules as ``PIIPack``.
+    /// ``extract(_:confidenceThreshold:sentences:language:)`` runs
+    /// `OpenMed.analyzeText`, normalizes each model label with the portable
+    /// OpenMed taxonomy, and keeps a mention only when that label is one of
+    /// the pack's canonical labels. Other labels are dropped rather than
+    /// guessed. Each kept mention then gets advisory assertion axes from
+    /// ``OpenMedClinicalContext``. The output reports mentions, offsets and
+    /// assertion annotations only; it does not diagnose, rank or recommend
+    /// care.
     ///
     /// Not `Sendable`: like `OpenMed`, use one instance from one isolation
     /// domain.
@@ -58,11 +72,13 @@
 
         private let runner: OpenMedTaskPackRunner
         private let categories: Set<String>
+        private let context: OpenMedClinicalContext
 
         /// Create the pack from the bundled manifest.
         ///
         /// - Throws: ``OpenMedTaskPackError`` when the manifest is missing,
-        ///   invalid or does not declare the pack.
+        ///   invalid or does not declare the pack, or
+        ///   ``OpenMedClinicalContextError`` when the bundled cue table is.
         public convenience init() throws {
             try self.init(manifest: OpenMedTaskPackManifest.bundled())
         }
@@ -76,6 +92,7 @@
         init(manifest: OpenMedTaskPackManifest, loader: @escaping OpenMedTaskPackLoader) throws {
             runner = try OpenMedTaskPackRunner(packID: Self.packID, manifest: manifest, loader: loader)
             categories = Set(runner.pack.canonicalLabels)
+            context = try OpenMedClinicalContext.bundled()
         }
 
         /// The pack declaration from the manifest.
@@ -118,29 +135,59 @@
             return categories.contains(canonical) ? canonical : nil
         }
 
-        /// Extract clinical mentions through `OpenMed.analyzeText`.
+        /// Extract clinical mentions through `OpenMed.analyzeText` and attach
+        /// advisory assertion axes.
         ///
+        /// Assertion runs after label mapping, on the mapped mentions' Unicode
+        /// scalar offsets, offline and deterministically.
+        ///
+        /// - Parameters:
+        ///   - text: Input clinical text.
+        ///   - confidenceThreshold: Minimum mention confidence.
+        ///   - sentences: Optional sentence bounds in Unicode scalar offsets;
+        ///     a regex sentence split is used when `nil`.
+        ///   - language: Declared language of `text`. `nil` means English.
+        ///     Another language returns the mentions without assertions and
+        ///     with ``OpenMedClinicalAssertionUnavailableReason/unsupportedLanguage``.
         /// - Throws: ``OpenMedTaskPackError/notPrepared`` before a successful
-        ///   prepare, or the runtime's inference error.
-        public func extract(_ text: String, confidenceThreshold: Float = 0.5) throws -> ClinicalEntityExtraction {
+        ///   prepare, an ``OpenMedClinicalContextError`` for out-of-range
+        ///   sentences, or the runtime's inference error.
+        public func extract(
+            _ text: String,
+            confidenceThreshold: Float = 0.5,
+            sentences: [OpenMedClinicalContext.Span]? = nil,
+            language: String? = nil
+        ) throws -> ClinicalEntityExtraction {
             let (candidate, runtime) = try runner.runtime()
             let predictions = try runtime.analyzeText(text, confidenceThreshold: confidenceThreshold)
-            let entities =
+            let mapped =
                 predictions
-                .compactMap { prediction -> ClinicalEntity? in
+                .compactMap { prediction -> (category: String, prediction: EntityPrediction)? in
                     guard let category = category(forModelLabel: prediction.label) else { return nil }
-                    return ClinicalEntity(
-                        category: category,
-                        label: prediction.label,
-                        start: prediction.start,
-                        end: prediction.end,
-                        confidence: prediction.confidence,
-                        sourceModelID: candidate.repoID
-                    )
+                    return (category, prediction)
                 }
-                .sorted { ($0.start, $0.end) < ($1.start, $1.end) }
+                .sorted { ($0.prediction.start, $0.prediction.end) < ($1.prediction.start, $1.prediction.end) }
+            let result = try context.assertions(
+                in: text,
+                spans: mapped.map { OpenMedClinicalContext.Span(start: $0.prediction.start, end: $0.prediction.end) },
+                sentences: sentences,
+                language: language
+            )
+            let assertions = result.assertions
+            let entities = mapped.enumerated().map { index, item in
+                ClinicalEntity(
+                    category: item.category,
+                    label: item.prediction.label,
+                    start: item.prediction.start,
+                    end: item.prediction.end,
+                    confidence: item.prediction.confidence,
+                    sourceModelID: candidate.repoID,
+                    assertion: assertions?[index]
+                )
+            }
             return ClinicalEntityExtraction(
                 entities: entities,
+                assertionUnavailableReason: result.unavailableReason,
                 sourceModelID: candidate.repoID,
                 notice: runner.pack.notice
             )

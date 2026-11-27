@@ -28,6 +28,8 @@ on:
       - 'tests/fixtures/parity/document_intake_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
+      - 'tests/fixtures/parity/clinical_assertion_v1.json'
+      - 'tests/fixtures/parity/context_cues_en_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -62,6 +64,8 @@ on:
       - 'tests/fixtures/parity/document_intake_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
+      - 'tests/fixtures/parity/clinical_assertion_v1.json'
+      - 'tests/fixtures/parity/context_cues_en_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -127,6 +131,9 @@ jobs:
 
     - name: Test portable tokenizer conformance vectors
       run: swift test --filter TokenizerConformanceTests
+
+    - name: Test clinical assertion parity vectors
+      run: swift test --filter ClinicalAssertionParityTests
 
     - name: Build versioned root-package consumer for macOS
       run: scripts/check_swift_root_consumer.sh macos

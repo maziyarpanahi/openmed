@@ -580,6 +580,50 @@ text; use `entity.range(in:)` to slice the note. The result carries the
 `openmed.notice.clinical_entity.extraction_only` notice: the pack reports
 mentions and offsets only and does not diagnose, rank or recommend care.
 
+Each `ClinicalEntity` also carries an advisory `assertion` with four axes, using
+the Python `assert_context` codes:
+
+| Axis | Values |
+|---|---|
+| `negation` | `affirmed`, `negated` |
+| `uncertainty` | `certain`, `uncertain` |
+| `temporality` | `recent`, `historical`, `hypothetical` |
+| `experiencer` | `patient`, `family`, `other` |
+
+`Patient denies chest pain.` returns `chest pain` with negation `negated`, and
+`Mother had breast cancer.` returns `breast cancer` with experiencer `family`.
+Negated, uncertain, hypothetical and non-patient mentions are flagged, never
+dropped. The axes are annotations for review: they trigger no action and are
+not a diagnosis.
+
+```swift
+let result = try pack.extract(note, sentences: sentenceSpans, language: "en")
+for entity in result.entities where entity.assertion?.negation == .negated {
+    print(entity.category, entity.start, entity.end)
+}
+```
+
+The assertion comes from `OpenMedClinicalContext`, an offline, deterministic
+port of the English path that Python's `assert_context` takes without
+sections. It reads its cues from the bundled
+`Resources/clinical/context_cues_en_v1.json`, a byte-identical copy of the
+shared cue table. Cue matching is case-insensitive on token boundaries,
+longest cue first. Pseudo-negations such as `cannot be excluded` are masked
+before negation cues are counted, so an odd count negates. Cues are scoped to
+the mention's clause, and the experiencer comes from the nearest family or
+other subject cue in that clause. Pass `sentences` in Unicode scalar offsets
+to bound modifier cues. Without them a regex sentence split is used; Python
+uses pySBD there when it is installed. The port keeps Python's known gaps for
+parity: a negation does not reach past `and` or `or`, so `cough` in
+`Denies fever and cough.` stays affirmed. `ClinicalAssertionParityTests`
+replays `tests/fixtures/parity/clinical_assertion_v1.json`, gaps included.
+
+When the caller declares a language other than English, for example
+`language: "es"`, the entities come back without an assertion and the
+extraction reports `assertionUnavailableReason == .unsupportedLanguage`; English
+cues are never applied to other languages. Section priors, multilingual cue
+packs and the document assertion graph stay Python-only.
+
 ## Offline Tokenizer Assets
 
 OpenMedKit loads tokenizers from local files only, and makes no network request
@@ -1000,7 +1044,7 @@ path, to a role-based case.
 | `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
 | `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
 | `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
-| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `OpenMedTaskPackError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
+| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `OpenMedClinicalContextError`, `OpenMedTaskPackError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
 
 Internal MLX errors follow the same rule and surface through the public
 loaders: a Privacy Filter unknown token reports `unknownToken(index:)`, the

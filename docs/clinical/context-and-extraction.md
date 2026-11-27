@@ -360,6 +360,13 @@ bundles a byte-identical copy of the cue table and replays every case in
 `ClinicalAssertionParityTest`; see
 [Android task packs](../android-integration.md#clinical-entities).
 
+OpenMedKit for Swift ships a byte-identical copy of the cue table as
+`swift/OpenMedKit/Sources/OpenMedKit/Resources/clinical/context_cues_en_v1.json`
+and replays every case, gaps included, in `ClinicalAssertionParityTests`. Copy
+the regenerated table there too;
+`tests/unit/clinical/test_swift_context_cue_resource.py` fails while the Swift
+copy is stale.
+
 ## Axis To FHIR Mapping
 
 The context layer emits axis values. A FHIR exporter decides whether and how to
