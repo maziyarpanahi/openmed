@@ -50,3 +50,14 @@ test("CommonJS deidentify redacts the synthetic session", async () => {
   });
   assert.equal(result.deidentifiedText, divergence.expected_redacted, redactionCase.id);
 });
+
+test("CommonJS and ESM catalog subpaths list the same rows", async () => {
+  const catalog = require("openmed/catalog");
+  assert.ok(require.resolve("openmed/catalog").endsWith("catalog.cjs"), "cjs_catalog_entry");
+  const esm = await import("openmed/catalog");
+  assert.deepEqual(
+    catalog.listModels().map((entry) => entry.repo_id),
+    esm.listModels().map((entry) => entry.repo_id),
+  );
+  assert.equal(catalog.MODEL_CATALOG_DIGEST, esm.MODEL_CATALOG_DIGEST);
+});

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dates, with a Python test that recomputes every vector and reports
   mismatches by vector id only (#5413).
 - Export synthetic clinical assertion vectors (`tests/fixtures/parity/clinical_assertion_v1.json`) and the English ConText cue table (`context_cues_en_v1.json`) from the Python `assert_context` pipeline, with recorded sentence offsets, `reference_gap` codes for the missing conditional axis and the `and`/`or` negation-scope breaks, and `scripts/parity/export_context_cues.py --check` (#5448).
+- Ship a typed ONNX model catalog in the `openmed` web package under the `openmed/catalog` subpath: `listModels()` filters the bundled permissive ONNX rows by format, tier, parameter count, language and license with the Android catalog semantics, `getModel()` looks one up by repo id, and `scripts/web/build_web_catalog.py --check` keeps the generated rows in step with `models.jsonl` (#5384).
 
 ## [4.0.0] - 2026-11-25
 

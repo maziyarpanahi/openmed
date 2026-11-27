@@ -58,6 +58,10 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/index.cjs",
     "dist/index.d.ts",
     "dist/index.d.cts",
+    "dist/catalog.js",
+    "dist/catalog.cjs",
+    "dist/catalog.d.ts",
+    "dist/catalog.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -193,6 +197,25 @@ test("local model references load with local files only", async () => {
   assert.equal(spans.length, hipaaCase.entities.length);
   assert.equal(openmed.isLocalModelReference("./models/installed-consumer"), true);
   assert.equal(openmed.isLocalModelReference(openmed.DEFAULT_MODEL_ID), false);
+});
+
+test("openmed/catalog lists bundled ONNX models offline", async () => {
+  const catalog = await import("openmed/catalog");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/catalog"));
+  assert.ok(resolved.endsWith("catalog.js"), "esm_catalog_entry");
+  const entries = catalog.listModels();
+  assert.ok(entries.length > 0, "catalog_empty");
+  for (const entry of entries) {
+    assert.ok(entry.formats.length > 0, "catalog_formats");
+    assert.ok(
+      entry.formats.every((format) => format.toLowerCase().startsWith("onnx")),
+      "catalog_non_onnx",
+    );
+  }
+  const first = entries[0];
+  assert.equal(catalog.getModel(first.repo_id), first);
+  assert.equal(catalog.getModel("OpenMed/not-in-the-catalog"), undefined);
+  assert.equal(Object.hasOwn(openmed, "listModels"), false, "catalog_in_main_entry");
 });
 
 test("installed package made no network requests", () => {
