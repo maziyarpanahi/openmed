@@ -1,0 +1,35 @@
+{
+  "compositions": {
+    "release-a": {
+      "composition": "basic",
+      "delta": 1e-06,
+      "epsilon": 0.5,
+      "max_delta": 1e-05,
+      "max_epsilon": 2.0,
+      "query_count": 1,
+      "remaining_delta": 9e-06,
+      "remaining_epsilon": 1.5,
+      "scope": "release-a"
+    }
+  },
+  "ledger": [
+    {
+      "delta": 1e-06,
+      "epsilon": 0.5,
+      "family": "default",
+      "mechanism": "gaussian",
+      "scope": "release-a",
+      "sequence": 1,
+      "spend_hash": "1eaec511e40affebbfd1a6ed6d286e0b513f8355ce0d5c1d765faa2e71fa6268"
+    }
+  ],
+  "policies": {
+    "release-a": {
+      "composition": "basic",
+      "delta_prime": 0.0,
+      "max_delta": 1e-05,
+      "max_epsilon": 2.0,
+      "scope": "release-a"
+    }
+  }
+}

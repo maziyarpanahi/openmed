@@ -94,7 +94,7 @@ _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _FIXTURE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}$")
 _FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
 _MAX_DIFF_DEPTH = 48
-_BUILTIN_REGISTRATIONS: tuple[str, ...] = ()
+_BUILTIN_REGISTRATIONS: tuple[str, ...] = ("openmed.core.record_migration_catalog",)
 
 
 class MigratorRegistrationError(ConfigurationError):

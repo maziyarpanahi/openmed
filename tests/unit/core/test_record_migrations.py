@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import doctest
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from openmed.core import record_migrations
+from openmed.core import record_migration_catalog, record_migrations
 from openmed.core.errors import ConfigurationError, InputError
 from openmed.core.record_migrations import (
     MIGRATION_FIXTURE_ROOT,
@@ -680,3 +684,269 @@ def test_module_docstring_example_runs() -> None:
 
     assert result.attempted > 0
     assert result.failed == 0
+
+
+# Built-in registrations -----------------------------------------------------
+
+BUILTIN_EDGES = {
+    ("clinical_review_packet", "1.0.0", "1.1.0"),
+    ("clinical_review_packet_mapping", "1", "2"),
+    ("decision_result", "1.0.0", "1.1.0"),
+    ("decision_result", "1.1.0", "1.2.0"),
+    ("dp_budget_ledger", "unversioned", "openmed.dp_budget_ledger.v1"),
+}
+EXPECTED_BUILTIN_FIELDS = {
+    "clinical_review_packet/1.0.0-to-1.1.0": {
+        "added": [
+            "/compatibility_policy",
+            "/extensions",
+            "/transition_ids",
+            "/transitions/*/compatibility_policy",
+        ],
+        "changed": ["/schema_version", "/transitions/*/schema_version"],
+        "dropped": [],
+        "moved": [],
+    },
+    "clinical_review_packet_mapping/1-to-2": {
+        "added": ["/safety/privacy_scan_required"],
+        "changed": ["/schema_version"],
+        "dropped": [],
+        "moved": [],
+    },
+    "decision_result/1.0.0-to-1.1.0": {
+        "added": ["/questions"],
+        "changed": ["/schema_version"],
+        "dropped": [],
+        "moved": [
+            {"from": "/extensions/expected_level", "to": "/expected_level"},
+            {"from": "/extensions/level_scores", "to": "/level_scores"},
+        ],
+    },
+    "decision_result/1.1.0-to-1.2.0": {
+        "added": [],
+        "changed": ["/schema_version"],
+        "dropped": [],
+        "moved": [],
+    },
+    "dp_budget_ledger/unversioned-to-v1": {
+        "added": ["/entries", "/schema_version"],
+        "changed": [],
+        "dropped": ["/compositions", "/ledger", "/policies"],
+        "moved": [],
+    },
+}
+# Values present in the built-in fixtures that must never reach a report.
+BUILTIN_VALUE_CANARIES = (
+    "reviewpacket_aaaaaaaaaaaaaaaa",
+    "fact_aaaaaaaaaaaaaaaa",
+    "reviewer_assigned",
+    "release-a",
+    "Synthetic urgency",
+    "assistive review evidence",
+    "NAME",
+    "2026-09-21",
+)
+
+
+def _builtin_registry() -> MigratorRegistry:
+    registry = MigratorRegistry()
+    record_migration_catalog.register_record_migrations(registry)
+    return registry
+
+
+def _builtin_edges() -> list[record_migrations.MigrationEdge]:
+    return list(_builtin_registry().edges())
+
+
+def _load_pair(edge: record_migrations.MigrationEdge) -> tuple[Any, Any]:
+    before_path, after_path = edge.fixture_pair(ROOT)
+    return (
+        json.loads(before_path.read_text(encoding="utf-8")),
+        json.loads(after_path.read_text(encoding="utf-8")),
+    )
+
+
+def test_default_registry_holds_exactly_the_builtin_edges() -> None:
+    edges = record_migrations.default_registry().edges()
+
+    assert {(edge.schema_id, edge.from_version, edge.to_version) for edge in edges} == (
+        BUILTIN_EDGES
+    )
+    assert {edge.fixture for edge in edges} == set(EXPECTED_BUILTIN_FIELDS)
+
+
+@pytest.mark.parametrize(
+    "edge", _builtin_edges(), ids=lambda edge: edge.fixture.replace("/", ":")
+)
+def test_each_builtin_edge_migrates_its_before_fixture_to_exactly_its_after_fixture(
+    edge: record_migrations.MigrationEdge,
+) -> None:
+    registry = _builtin_registry()
+    before, after = _load_pair(edge)
+    original = copy.deepcopy(before)
+
+    result = registry.migrate_record(
+        before, schema_id=edge.schema_id, to_version=edge.to_version
+    )
+
+    assert before == original
+    assert result.record == after
+    assert result.report.source_version == edge.from_version
+    assert result.report.target_version == edge.to_version
+    assert [step.fixture for step in result.report.steps] == [edge.fixture]
+    payload = result.report.to_dict()
+    assert {
+        key: payload[key] for key in ("added", "changed", "dropped", "moved")
+    } == EXPECTED_BUILTIN_FIELDS[edge.fixture]
+    rendered = json.dumps(payload, sort_keys=True) + repr(result)
+    for canary in BUILTIN_VALUE_CANARIES:
+        assert canary not in rendered
+    current = registry.migrate_record(
+        after, schema_id=edge.schema_id, to_version=edge.to_version
+    )
+    assert current.report.status == "current"
+
+
+def test_lossy_builtin_edges_are_marked_lossy_and_list_dropped_paths() -> None:
+    registry = _builtin_registry()
+
+    for edge in registry.edges():
+        before, _ = _load_pair(edge)
+        report = registry.migrate_record(
+            before, schema_id=edge.schema_id, to_version=edge.to_version
+        ).report
+        assert report.lossy is (not edge.lossless)
+        if edge.lossless:
+            assert report.dropped == ()
+        else:
+            assert report.dropped
+            assert report.steps[0].fields.dropped == report.dropped
+    assert [edge.schema_id for edge in registry.edges() if not edge.lossless] == [
+        "dp_budget_ledger"
+    ]
+
+
+def test_builtin_chains_reach_the_current_version_of_every_supported_version() -> None:
+    from openmed.clinical.review_packet_mapping_migrations import (
+        REVIEW_PACKET_SCHEMA_VERSION,
+        SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS,
+    )
+    from openmed.clinical.review_packet_migrations import (
+        SUPPORTED_REVIEW_PACKET_VERSIONS,
+    )
+    from openmed.clinical.review_transitions import (
+        CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
+    )
+    from openmed.risk.budget_migration import BudgetLedgerSnapshot
+    from openmed.structured.decision import (
+        DECISION_SCHEMA_VERSION,
+        decision_result_schema,
+    )
+
+    registry = _builtin_registry()
+    ledger_version = {
+        item.name: item.default for item in dataclasses.fields(BudgetLedgerSnapshot)
+    }["schema_version"]
+    current = {
+        "clinical_review_packet": (
+            CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
+            SUPPORTED_REVIEW_PACKET_VERSIONS,
+        ),
+        "clinical_review_packet_mapping": (
+            str(REVIEW_PACKET_SCHEMA_VERSION),
+            tuple(str(item) for item in SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS),
+        ),
+        "decision_result": (
+            DECISION_SCHEMA_VERSION,
+            tuple(decision_result_schema()["properties"]["schema_version"]["enum"]),
+        ),
+        "dp_budget_ledger": (ledger_version, ("unversioned", ledger_version)),
+    }
+
+    assert {schema.schema_id for schema in registry.schemas()} == set(current)
+    for schema_id, (version, supported) in current.items():
+        assert registry.schema(schema_id).current_version == version
+        for source in supported:
+            chain = registry.migration_path(schema_id, source)
+            assert (chain[-1].to_version if chain else source) == version
+
+
+def test_builtin_matchers_identify_their_fixtures() -> None:
+    registry = _builtin_registry()
+
+    for edge in registry.edges():
+        if registry.schema(edge.schema_id).matcher is None:
+            continue
+        for record in _load_pair(edge):
+            assert registry.identify(record).schema_id == edge.schema_id
+    mapping_edge = registry.edges("clinical_review_packet_mapping")[0]
+    with pytest.raises(RecordMigrationRefused) as caught:
+        registry.identify(_load_pair(mapping_edge)[0])
+    assert caught.value.refusal.reason == "unknown_schema"
+    with pytest.raises(RecordMigrationRefused):
+        registry.identify(_fixture(f"{SCHEMA}/1.0.0-to-1.1.0", "before"))
+
+
+def test_builtin_migration_failures_are_value_free_refusals() -> None:
+    registry = _builtin_registry()
+    edge = registry.edges("clinical_review_packet")[0]
+    before, _ = _load_pair(edge)
+    before["fact_ids"] = ["SYNTHETIC-PRIVATE-CANARY"]
+
+    with pytest.raises(RecordMigrationRefused) as caught:
+        registry.migrate_record(before, schema_id="clinical_review_packet")
+
+    assert caught.value.refusal.to_dict() == {
+        "reason": "migrator_failed",
+        "schema_id": "clinical_review_packet",
+        "from_version": "1.0.0",
+        "to_version": "1.1.0",
+        "error_type": "BuiltinMigrationError",
+    }
+    assert "CANARY" not in str(caught.value) + repr(caught.value.details)
+
+
+def test_builtin_budget_migration_is_checked_by_the_budget_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openmed.risk import budget_migration
+
+    registry = _builtin_registry()
+    edge = registry.edges("dp_budget_ledger")[0]
+    before, _ = _load_pair(edge)
+    calls: list[str] = []
+    original = budget_migration.enforce_budget_migration
+
+    def spy(previous: Any, current: Any) -> Any:
+        calls.append(current["schema_version"])
+        return original(previous, current)
+
+    monkeypatch.setattr(budget_migration, "enforce_budget_migration", spy)
+
+    registry.migrate_record(before, schema_id="dp_budget_ledger")
+
+    assert calls == ["openmed.dp_budget_ledger.v1"]
+
+
+def test_builtin_registrations_do_not_import_the_owning_packages() -> None:
+    script = (
+        "import sys\n"
+        "from openmed.core.record_migrations import default_registry\n"
+        "registry = default_registry()\n"
+        "assert len(registry.edges()) == 5\n"
+        "owners = ('openmed.clinical', 'openmed.structured', 'openmed.risk')\n"
+        "print(sorted(name for name in sys.modules if name.startswith(owners)))\n"
+    )
+    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    env.pop("HF_TOKEN", None)
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=True,
+        cwd=ROOT,
+        env=env,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == "[]"
