@@ -96,6 +96,7 @@
     "SPAN_ACTIONS",
     "SUPPORTED_DECISION_SCHEMA_VERSIONS",
     "Sha256",
+    "TaskPackError",
     "WEBGPU_BENCHMARK_SUITE",
     "WebGpuClassificationHead",
     "WebGpuTokenClassificationSession",
@@ -160,6 +161,7 @@
     "parseKitParityResult",
     "parsePortableBundleManifest",
     "parsePortableBundleTrustPolicy",
+    "piiPack",
     "policyLabelFor",
     "portableBundleContentId",
     "portableBundleSigningInput",
@@ -204,6 +206,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./catalog": {
+      "import": {
+        "types": "./dist/catalog.d.ts",
+        "default": "./dist/catalog.js"
+      },
+      "require": {
+        "types": "./dist/catalog.d.cts",
+        "default": "./dist/catalog.cjs"
       }
     }
   }
