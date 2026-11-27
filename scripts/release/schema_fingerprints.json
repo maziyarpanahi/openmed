@@ -256,6 +256,68 @@
     ],
     "schema_version": 1
   },
+  "openmed/core/schemas/json/audit_report.schema.json": {
+    "fingerprint": "sha256:ace004c36ea6e6945dfc94ec5cddda8e9e5f354aa363d09dd6625c604d807b08",
+    "properties": [
+      "deidentified_text_hash",
+      "detectors",
+      "document_length",
+      "grounding",
+      "input_hash",
+      "manifest_hash",
+      "openmed_version",
+      "policy",
+      "repro_hash",
+      "residual_risk",
+      "resolved_profile",
+      "safety_sweep",
+      "schema_version",
+      "signature",
+      "spans",
+      "thresholds"
+    ],
+    "required": [
+      "deidentified_text_hash",
+      "detectors",
+      "document_length",
+      "input_hash",
+      "manifest_hash",
+      "openmed_version",
+      "policy",
+      "repro_hash",
+      "residual_risk",
+      "resolved_profile",
+      "safety_sweep",
+      "signature",
+      "spans",
+      "thresholds"
+    ],
+    "schema_version": 1
+  },
+  "openmed/core/schemas/json/capability_descriptor.schema.json": {
+    "fingerprint": "sha256:27273a51baf3d07d9dc7d3f3a1282c9c8130a59c39dfc1fa6c4a119c5e5f6bc8",
+    "properties": [
+      "backends",
+      "digest",
+      "policy_profiles",
+      "schema",
+      "schema_version",
+      "schema_versions",
+      "served_models",
+      "surfaces"
+    ],
+    "required": [
+      "backends",
+      "digest",
+      "policy_profiles",
+      "schema",
+      "schema_version",
+      "schema_versions",
+      "served_models",
+      "surfaces"
+    ],
+    "schema_version": 1
+  },
   "openmed/core/schemas/json/care_gap.schema.json": {
     "fingerprint": "sha256:5c5882f581ae9704c06221e347336d5a4b9058dc53f183268dfe4b952d4dc7ac",
     "properties": [
@@ -1104,6 +1166,34 @@
       "policy_label",
       "regulatory_tags",
       "schema_version"
+    ],
+    "schema_version": 1
+  },
+  "openmed/core/schemas/json/error_code_registry.schema.json": {
+    "fingerprint": "sha256:778a495e0a1987ec2943d09d51399105143d69eca3e12f76e5e0ce26bc873a47",
+    "properties": [
+      "categories",
+      "codes",
+      "contract",
+      "contract_version",
+      "description",
+      "divergences",
+      "retired_codes",
+      "retryable_bases",
+      "schema_version",
+      "surfaces"
+    ],
+    "required": [
+      "categories",
+      "codes",
+      "contract",
+      "contract_version",
+      "description",
+      "divergences",
+      "retired_codes",
+      "retryable_bases",
+      "schema_version",
+      "surfaces"
     ],
     "schema_version": 1
   },
@@ -2369,6 +2459,30 @@
     ],
     "schema_version": "1.0.0"
   },
+  "openmed/core/schemas/json/model_lifecycle_event.schema.json": {
+    "fingerprint": "sha256:f2741f3e35902d8cbbc08473ba3a940dfe648332f2a94aaa7f64553a4cb82bf3",
+    "properties": [
+      "byte_count",
+      "digest",
+      "event",
+      "file_count",
+      "reason",
+      "repo_id",
+      "revision_sha",
+      "schema_version"
+    ],
+    "required": [
+      "byte_count",
+      "digest",
+      "event",
+      "file_count",
+      "reason",
+      "repo_id",
+      "revision_sha",
+      "schema_version"
+    ],
+    "schema_version": "openmed.model.lifecycle.v1"
+  },
   "openmed/core/schemas/json/multimodal_coordinate.schema.json": {
     "fingerprint": "sha256:41ba7fb2323da0687f75ef722df775309ee6f46b180fb88058da9abf1949c53a",
     "properties": [
@@ -2923,6 +3037,19 @@
     ],
     "schema_version": "1.1.0"
   },
+  "openmed/core/schemas/json/sdk_config.schema.json": {
+    "fingerprint": "sha256:dd93f561b3d63370c081789406a2dd8e1c80ab475d6233039993d1d8443d697c",
+    "properties": [
+      "confidence_threshold",
+      "local_only",
+      "model_id",
+      "model_revision",
+      "onnx_variant",
+      "policy_profile"
+    ],
+    "required": [],
+    "schema_version": null
+  },
   "openmed/core/schemas/json/service_error_envelope.schema.json": {
     "fingerprint": "sha256:044ca6a83cc8fa74082c171c58e3b20fccd4f43b88d94c63ea8d14a22c74e114",
     "properties": [
@@ -3144,6 +3271,20 @@
     ],
     "schema_version": 1
   },
+  "openmed/core/schemas/json/session_lifecycle.schema.json": {
+    "fingerprint": "sha256:36ca3061132d4f47ca8abfcb9e48046adb4f98742eb79c12856f762a68040464",
+    "properties": [
+      "from",
+      "schema_version",
+      "to"
+    ],
+    "required": [
+      "from",
+      "schema_version",
+      "to"
+    ],
+    "schema_version": "openmed.session.lifecycle.v1"
+  },
   "openmed/core/schemas/json/span.schema.json": {
     "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",
     "properties": [
@@ -3185,6 +3326,24 @@
       "text_hash"
     ],
     "schema_version": 1
+  },
+  "openmed/core/schemas/json/task_pack.schema.json": {
+    "fingerprint": "sha256:8e5c30b113c228b3d628f2badd8bad7e8ac7770f7e065d2df07d3185c4080db3",
+    "properties": [
+      "notices",
+      "packs",
+      "schema",
+      "schema_version",
+      "source"
+    ],
+    "required": [
+      "notices",
+      "packs",
+      "schema",
+      "schema_version",
+      "source"
+    ],
+    "schema_version": null
   },
   "openmed/core/schemas/json/terminology_coverage_summary.schema.json": {
     "fingerprint": "sha256:e64b42ad9f696bca1ba5196d14237d21de2cae6afd6b9dfe4aee74287c5c7562",
@@ -3321,5 +3480,22 @@
       "state"
     ],
     "schema_version": "1.0.0"
+  },
+  "openmed/core/settings.schema.json": {
+    "fingerprint": "sha256:d9d13645f50057066a5a5a62d23c38c7be3d12df1f9b41ccc837ed5e104719fd",
+    "properties": [
+      "core",
+      "eval_datasets",
+      "integrations",
+      "journey",
+      "mcp",
+      "openhim",
+      "release",
+      "runtime",
+      "schema_version",
+      "service"
+    ],
+    "required": [],
+    "schema_version": 1
   }
 }

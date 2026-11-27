@@ -32,6 +32,7 @@ from openmed.core.schemas import (
     packaged_schema_paths,
     schema_version_bumped,
     schema_version_of,
+    span,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -136,7 +137,12 @@ def test_packaged_snapshot_reuses_core_and_clinical_entries() -> None:
     snapshot = build_packaged_schema_snapshot()
 
     for name, state in load_schema_snapshot().items():
-        assert snapshot[f"openmed/core/schemas/json/{name}.schema.json"] == state
+        # Most core schemas sit in the schemas package; settings sits next to
+        # config.schema.json in openmed.core.
+        package, filename = span._SCHEMA_RESOURCES.get(
+            name, (span.SCHEMA_PACKAGE, f"{name}.schema.json")
+        )
+        assert snapshot[f"{package.replace('.', '/')}/{filename}"] == state
     for name, state in load_clinical_record_snapshot().items():
         filename = clinical_record_schema_filename(name)
         assert snapshot[f"openmed/core/schemas/json/{filename}"] == state

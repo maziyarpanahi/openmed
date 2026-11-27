@@ -363,7 +363,7 @@
     "schema_version": 1
   },
   "settings": {
-    "fingerprint": "sha256:37c7151f56fbd97158d2179cfd3c7b34c66486594031d0419c0f188ad995fa0f",
+    "fingerprint": "sha256:d9d13645f50057066a5a5a62d23c38c7be3d12df1f9b41ccc837ed5e104719fd",
     "properties": [
       "core",
       "eval_datasets",
