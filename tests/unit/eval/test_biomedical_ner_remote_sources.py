@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from openmed.eval.datasets import (
+    ANATEM,
     BC2GM,
     BC5CDR,
     BIOMEDICAL_NER_CORPORA,
@@ -84,6 +85,41 @@ def test_pinned_source_loads_parquet_at_its_commit(
     }
     assert "trust_remote_code" not in kwargs
     assert [span.text for span in corpus.records[0].spans] == ["BRCA1"]
+
+
+def test_anatem_loads_pinned_source_parquet_without_dataset_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_datasets(
+        monkeypatch,
+        [
+            {
+                "document_id": "synthetic",
+                "text": "An invented structure.",
+                "entities": [
+                    {
+                        "entity_id": "T1",
+                        "type": "Organ",
+                        "offsets": [[3, 21]],
+                        "text": ["invented structure"],
+                    }
+                ],
+            }
+        ],
+    )
+
+    corpus = load_biomedical_ner_corpus(ANATEM)
+
+    ((args, kwargs),) = calls
+    assert args == ("parquet",)
+    assert kwargs == {
+        "data_files": {
+            "test": "hf://datasets/bigbio/anat_em@"
+            "4859b1a00c4ba64aec6325a9eb398bf4e6533b20/anat_em_source/test/*.parquet"
+        },
+        "split": "test",
+    }
+    assert [span.text for span in corpus.records[0].spans] == ["invented structure"]
 
 
 def test_data_dir_overrides_the_config_name(monkeypatch: pytest.MonkeyPatch) -> None:

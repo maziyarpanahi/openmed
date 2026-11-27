@@ -59,6 +59,25 @@ The default inspection exit status is 0 even when a regression is reported.
 `--fail-on-regression` returns 1 for regression or missing evidence; invalid,
 empty, mismatched or over-8-MiB reports return 2. All commands support `--json`.
 
+## AnatEM biomedical NER
+
+The `biomedical-ner` suite includes `ANATEM` (`anat_em`), also exported from
+`openmed.eval.datasets`. All twelve anatomical mention types map to the
+existing `ANATOMY` label, including `Cancer` and `Pathological_formation` in
+this corpus's anatomy-oriented annotation scheme. The original type remains
+available as `source_label`; this mapping adds no canonical labels.
+
+`load_biomedical_ner_corpus(ANATEM)` reads the commit-pinned
+`bigbio/anat_em` Parquet export with the `anat_em_source` schema. The shared
+loader preserves its character offsets without executing dataset code.
+Pass `path=` for a local JSON/CoNLL export or `rows_loader=` for offline tests.
+
+The [dataset card](https://huggingface.co/datasets/bigbio/anat_em) declares
+CC-BY-SA-3.0. The [upstream corpus](https://www.nactem.ac.uk/anatomytagger/#AnatEM)
+applies this to annotations; abstracts and full-text extracts retain their
+NLM or article-specific terms. OpenMed caches rows only on demand and
+redistributes no corpus rows.
+
 ## Chinese clinical NER
 
 The `chinese-clinical-ner` suite ships a tiny synthetic CMeEE-shaped fixture

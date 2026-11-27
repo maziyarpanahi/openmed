@@ -1,6 +1,7 @@
 """Dataset adapters for public and data-use-gated eval corpora."""
 
 from .biomedical_ner import (
+    ANATEM,
     BC2GM,
     BC5CDR,
     BIOMEDICAL_NER,
@@ -361,6 +362,7 @@ from .thyme import (
 )
 
 __all__ = [
+    "ANATEM",
     "BIORED",
     "BIORED_ENTITY_TO_CANONICAL",
     "BIORED_PATH_ENV",

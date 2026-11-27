@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 
 from openmed.cli import main_module
-from openmed.core.labels import CONDITION, MEDICATION, MICROORGANISM, OTHER
+from openmed.core.labels import ANATOMY, CONDITION, MEDICATION, MICROORGANISM, OTHER
 from openmed.eval.datasets import (
+    ANATEM,
     BC2GM,
     BC5CDR,
     BIOMEDICAL_NER,
@@ -35,6 +36,7 @@ def test_biomedical_ner_label_mapping_is_canonical() -> None:
     assert map_biomedical_ner_label(JNLPBA, "protein") == OTHER
     assert map_biomedical_ner_label(SPECIES_800, "Species") == MICROORGANISM
     assert map_biomedical_ner_label(BC2GM, "GENE") == OTHER
+    assert map_biomedical_ner_label(ANATEM, "Organ") == ANATOMY
 
 
 def test_biomedical_ner_loader_builds_fixtures_from_synthetic_sources(
@@ -59,6 +61,7 @@ def test_biomedical_ner_loader_builds_fixtures_from_synthetic_sources(
     assert labels_by_dataset[JNLPBA] == [OTHER]
     assert labels_by_dataset[SPECIES_800] == [MICROORGANISM]
     assert labels_by_dataset[BC2GM] == [OTHER, OTHER]
+    assert labels_by_dataset[ANATEM] == [ANATOMY]
     assert text_by_dataset[SPECIES_800] == "Escherichia coli grows"
     assert text_by_dataset[BC2GM] == "TP53 regulates EGFR"
 
@@ -82,6 +85,79 @@ def test_biomedical_ner_loader_uses_rows_loader_and_cache_dir(tmp_path: Path) ->
     assert corpus.records[0].spans[0].canonical_label == MEDICATION
 
 
+@pytest.mark.parametrize(
+    "source_label",
+    [
+        "Anatomical_system",
+        "Cancer",
+        "Cell",
+        "Cellular_component",
+        "Developing_anatomical_structure",
+        "Immaterial_anatomical_entity",
+        "Multi-tissue_structure",
+        "Organ",
+        "Organism_subdivision",
+        "Organism_substance",
+        "Pathological_formation",
+        "Tissue",
+    ],
+)
+def test_anatem_injected_source_rows_preserve_offsets(
+    tmp_path: Path, source_label: str
+) -> None:
+    text = "The invented structure is visible."
+
+    def rows_loader(source, split, cache_dir):
+        assert source.corpus == ANATEM
+        assert source.repository == "bigbio/anat_em"
+        assert source.config == "anat_em_source"
+        assert (split, cache_dir) == ("validation", tmp_path)
+        return [
+            {
+                "document_id": "synthetic-anatomy",
+                "document_type": "PM",
+                "text_type": "abstract",
+                "text": text,
+                "entities": [
+                    {
+                        "entity_id": "T1",
+                        "type": source_label,
+                        "offsets": [[4, 22]],
+                        "text": ["invented structure"],
+                    }
+                ],
+            },
+            {"document_id": "negative", "text": "No mentions.", "entities": []},
+        ]
+
+    corpus = load_biomedical_ner_corpus(
+        ANATEM, rows_loader=rows_loader, split="validation", cache_dir=tmp_path
+    )
+
+    record, negative = corpus.records
+    (span,) = record.spans
+    assert record.text == text
+    assert record.split == "validation"
+    assert (span.start, span.end, span.text) == (4, 22, "invented structure")
+    assert record.text[span.start : span.end] == span.text
+    assert span.source_label == source_label
+    assert span.canonical_label == ANATOMY
+    assert negative.spans == ()
+
+
+def test_anatem_rejects_out_of_bounds_offsets() -> None:
+    with pytest.raises(ValueError, match="invalid anat_em span offsets"):
+        load_biomedical_ner_corpus(
+            ANATEM,
+            rows_loader=lambda *_: [
+                {
+                    "text": "Synthetic anatomy.",
+                    "entities": [{"type": "Organ", "offsets": [[0, 100]]}],
+                }
+            ],
+        )
+
+
 def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
     tmp_path: Path,
 ) -> None:
@@ -102,7 +178,7 @@ def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
 
     data = report.to_dict()
     assert data["suite"] == BIOMEDICAL_NER
-    assert data["fixture_count"] == 5
+    assert data["fixture_count"] == len(BIOMEDICAL_NER_CORPORA)
     assert data["metrics"]["exact_span_f1"]["f1"] == 1.0
     assert set(data["metrics"]["per_corpus"]) == set(BIOMEDICAL_NER_CORPORA)
     for corpus in BIOMEDICAL_NER_CORPORA:
@@ -118,7 +194,7 @@ def test_biomedical_ner_suite_registry_and_metadata(tmp_path: Path) -> None:
     fixtures = load_suite_fixtures(BIOMEDICAL_NER, path=tmp_path, task="ner")
     metadata = suite_metadata(BIOMEDICAL_NER)
 
-    assert len(fixtures) == 5
+    assert len(fixtures) == len(BIOMEDICAL_NER_CORPORA)
     assert metadata["suite"] == BIOMEDICAL_NER
     assert metadata["licenses"][BC5CDR] == license_for(BC5CDR).to_dict()
     assert metadata["sources"][BC2GM]["repository"] == "bigbio/blurb"
@@ -171,11 +247,25 @@ def test_biomedical_ner_licenses_are_registered() -> None:
     for corpus in BIOMEDICAL_NER_CORPORA:
         dataset_license = license_for(corpus)
         assert dataset_license.dataset == corpus
-        assert dataset_license.redistribution == "download-on-demand"
+        expected = (
+            "not redistributed by OpenMed" if corpus == ANATEM else "download-on-demand"
+        )
+        assert dataset_license.redistribution == expected
         assert dataset_license.source_url
+    assert license_for(ANATEM).license_id == "CC-BY-SA-3.0"
 
 
 def _write_synthetic_suite(root: Path) -> None:
+    _write_json(
+        root / f"{ANATEM}.json",
+        [
+            {
+                "document_id": "synthetic-anatomy",
+                "text": "The invented structure is visible.",
+                "entities": [_bigbio_entity_row("Organ", 4, 22, "invented structure")],
+            }
+        ],
+    )
     _write_json(
         root / f"{BC5CDR}.json",
         [
