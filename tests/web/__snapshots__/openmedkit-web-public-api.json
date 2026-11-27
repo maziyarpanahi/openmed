@@ -65,6 +65,8 @@
     "MODEL_TIERS",
     "MemoryBundleCacheStorage",
     "NETWORK_STATES",
+    "OPENMED_ERROR_CODES",
+    "OPENMED_ERROR_CODE_RETRYABLE",
     "OPENMED_SPAN_SCHEMA_VERSION",
     "OpenMedOfflineError",
     "OpfsBundleCacheStorage",

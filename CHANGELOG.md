@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
+- Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
+
+### Changed
+
+- Three Python failures now carry a stable error code. They keep their builtin base and message: an empty `hmac_secret` raises `ConfigurationError` (a `ValueError`), invalid `OpenMedSpan` offsets raise `InputError` (a `ValueError`), and a model missing from the cache in offline mode raises `OfflineModelUnavailableError`, an `OfflineModeError` that is also a `ModelLoadError`. They also gain the taxonomy's extra builtin bases (`TypeError`; `KeyError` for `ConfigurationError`; `ImportError` and `ValueError` for the offline error), and REST, MCP and agent error envelopes now report their taxonomy codes (REST `400 configuration_error`/`input_error` instead of `400 bad_request`, and `503 model_load_error` instead of a generic 500 for the offline miss) (#5331).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
