@@ -656,6 +656,7 @@ classification:
     - api/record-migrations.md
     - api/compatibility-gate.md
     - api/protocol-parity.md
+    - api/capabilities.md
     - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md

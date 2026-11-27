@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `openmed migrate check <file>`, a read-only dry run that identifies one stored JSON record's schema id and version, runs its registered migration chain in memory, and prints only the field paths, versions, counts and digests, with a usage exit code when no path exists (#5364).
 - Add a release gate that fails when a packaged JSON Schema version bump since the last release tag has neither a registered record migration chain nor a `no_record_migration` exemption with a reason, and when a registered migrator names a missing fixture pair (#5363).
 - Add `openmed.core.record_migrations`, a registry of stored-record migrators keyed by schema id and version that resolves unique chains, refuses duplicate, cyclic and ambiguous edges, and reports only the field paths a migration adds, moves, changes or drops (#5362).
+- Serve the canonical, value-free capability descriptor (backends, surfaces, served
+  models, schema versions, policy profiles and a digest) at `GET /v1/capabilities`,
+  built by `openmed.core.capabilities.capability_descriptor()` and typed in OpenAPI
+  by the bundled descriptor schema (#5343).
 
 ### Fixed
 
