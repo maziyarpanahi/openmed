@@ -1,0 +1,340 @@
+{
+  "notices": {
+    "openmed.notice.clinical_entity.extraction_only": "Reports condition mentions and their offsets only. It does not diagnose, rank or recommend care.",
+    "openmed.notice.medication.extraction_only": "Reports medication mentions and their offsets only. It never gives dosing advice and never triggers an action.",
+    "openmed.notice.pii.review_required": "Detected identifiers are redaction candidates. Automated detection can miss identifiers, so review output before it leaves the device."
+  },
+  "packs": [
+    {
+      "canonical_labels": [
+        "CONDITION",
+        "DISEASE",
+        "PATHOLOGY"
+      ],
+      "notice_key": "openmed.notice.clinical_entity.extraction_only",
+      "pack_id": "clinical_entity",
+      "runtimes": {
+        "android": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-ElectraMed-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-65M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        },
+        "apple": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-ElectraMed-33M-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-65M-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-66M-mlx"
+            }
+          ],
+          "format": "mlx-fp",
+          "status": "resolved"
+        },
+        "web": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-ElectraMed-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-65M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        }
+      },
+      "selection": {
+        "family": "NER",
+        "family_token": "DiseaseDetect",
+        "label_coverage": "all",
+        "languages": [
+          "en"
+        ],
+        "licenses": [
+          "apache-2.0",
+          "bsd-2-clause",
+          "bsd-3-clause",
+          "cc-by-4.0",
+          "cc0-1.0",
+          "isc",
+          "mit",
+          "unlicense"
+        ],
+        "manifest_task": "token-classification",
+        "max_candidates": 3,
+        "max_param_count": 150000000,
+        "order": "param_count_asc_repo_id_asc"
+      },
+      "task": "clinical_entity_extraction",
+      "version": "1.0.0"
+    },
+    {
+      "canonical_labels": [
+        "CHEMICAL"
+      ],
+      "notice_key": "openmed.notice.medication.extraction_only",
+      "pack_id": "medication",
+      "runtimes": {
+        "android": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-ElectraMed-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-65M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        },
+        "apple": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-ElectraMed-33M-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-65M-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-66M-mlx"
+            }
+          ],
+          "format": "mlx-fp",
+          "status": "resolved"
+        },
+        "web": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-ElectraMed-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 65000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-65M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-NER-PharmaDetect-TinyMed-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        }
+      },
+      "selection": {
+        "family": "NER",
+        "family_token": "PharmaDetect",
+        "label_coverage": "all",
+        "languages": [
+          "en"
+        ],
+        "licenses": [
+          "apache-2.0",
+          "bsd-2-clause",
+          "bsd-3-clause",
+          "cc-by-4.0",
+          "cc0-1.0",
+          "isc",
+          "mit",
+          "unlicense"
+        ],
+        "manifest_task": "token-classification",
+        "max_candidates": 3,
+        "max_param_count": 150000000,
+        "order": "param_count_asc_repo_id_asc"
+      },
+      "task": "medication_mention_extraction",
+      "version": "1.0.0"
+    },
+    {
+      "canonical_labels": [
+        "ACCOUNT_NUMBER",
+        "DATE_OF_BIRTH",
+        "EMAIL",
+        "FIRST_NAME",
+        "ID_NUM",
+        "IP_ADDRESS",
+        "LAST_NAME",
+        "PERSON",
+        "PHONE",
+        "SSN",
+        "STREET_ADDRESS",
+        "URL"
+      ],
+      "notice_key": "openmed.notice.pii.review_required",
+      "pack_id": "pii",
+      "runtimes": {
+        "android": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 44000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        },
+        "apple": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 44000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
+            }
+          ],
+          "format": "mlx-fp",
+          "status": "resolved"
+        },
+        "web": {
+          "candidates": [
+            {
+              "license": "apache-2.0",
+              "param_count": 33000000,
+              "rank": 1,
+              "repo_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 44000000,
+              "rank": 2,
+              "repo_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android"
+            },
+            {
+              "license": "apache-2.0",
+              "param_count": 66000000,
+              "rank": 3,
+              "repo_id": "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-onnx-android"
+            }
+          ],
+          "format": "onnx",
+          "status": "resolved"
+        }
+      },
+      "selection": {
+        "family": "PII",
+        "family_token": null,
+        "label_coverage": "all",
+        "languages": [
+          "en"
+        ],
+        "licenses": [
+          "apache-2.0",
+          "bsd-2-clause",
+          "bsd-3-clause",
+          "cc-by-4.0",
+          "cc0-1.0",
+          "isc",
+          "mit",
+          "unlicense"
+        ],
+        "manifest_task": "token-classification",
+        "max_candidates": 3,
+        "max_param_count": 150000000,
+        "order": "param_count_asc_repo_id_asc"
+      },
+      "task": "pii_detection",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "openmed.task_packs",
+  "schema_version": "1.0.0",
+  "source": "models.jsonl"
+}
