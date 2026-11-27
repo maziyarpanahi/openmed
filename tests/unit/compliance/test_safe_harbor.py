@@ -221,6 +221,43 @@ def test_keep_action_adds_residual_risk_to_a_covered_category() -> None:
     assert "keep action" in email.residual_risk_reason
 
 
+def test_generalized_ages_are_counted_without_residual_risk() -> None:
+    report = generate_safe_harbor_attestation(
+        {
+            "policy": "hipaa_safe_harbor",
+            "spans": [
+                {"canonical_label": "AGE", "action": "keep"},
+                {"canonical_label": "AGE", "action": "keep"},
+                {"canonical_label": "AGE", "action": "generalize"},
+                {"canonical_label": "AGE", "action": "mask"},
+            ],
+        }
+    )
+    dates = _categories(report)["DATE_ELEMENT"]
+
+    assert dates.policy_actions["AGE"] == "generalize"
+    assert dates.applied_action_counts == {"keep": 2, "generalize": 1, "mask": 1}
+    assert dates.residual_risk is False
+    assert dates.residual_risk_reason is None
+
+
+def test_kept_date_still_adds_residual_risk_next_to_kept_ages() -> None:
+    report = generate_safe_harbor_attestation(
+        {
+            "policy": "hipaa_safe_harbor",
+            "spans": [
+                {"canonical_label": "AGE", "action": "keep"},
+                {"canonical_label": "DATE", "action": "keep"},
+            ],
+        }
+    )
+    dates = _categories(report)["DATE_ELEMENT"]
+
+    assert dates.applied_action_counts == {"keep": 2}
+    assert dates.residual_risk is True
+    assert "keep action" in dates.residual_risk_reason
+
+
 def test_cli_emits_attestation_offline(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

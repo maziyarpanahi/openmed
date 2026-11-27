@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import validate_pii_input
+from .age_generalization import AGE_OUTCOME_KEPT, generalize_age_span
 from .budget import BudgetClock, RequestBudget, coerce_budget
 from .capabilities import MissingOptionalDependencyError
 from .capabilities import install_hint as _optional_dependency_install_instruction
@@ -79,6 +80,7 @@ from .result_cache import (
     get_result_cache,
     make_cache_key,
 )
+from .schemas.span import ACTION_GENERALIZE, ACTION_KEEP
 
 # Type alias for de-identification methods
 DEIDENTIFICATION_METHODS = (
@@ -2216,6 +2218,10 @@ def _build_deidentification_result(
                     entity_method == "format_preserve"
                     and _format_preserve_uses_mask_fallback(entity, anonymizer, lang)
                 )
+                or (
+                    _entity_policy_action(entity) == ACTION_GENERALIZE
+                    and _generalize_entity(entity) is None
+                )
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -2225,6 +2231,23 @@ def _build_deidentification_result(
                 ]
 
     for entity in redaction_entities:
+        if _entity_policy_action(entity) == ACTION_GENERALIZE:
+            generalized = _generalize_entity(entity)
+            if generalized is not None:
+                # Generalization is one-way by design: the span keeps its
+                # offsets and action record but never enters the
+                # re-identification mapping.
+                entity.action, entity.redacted_text = generalized
+                # A kept age must not be copied into audit artifacts.
+                entity.surrogate = (
+                    entity.redacted_text if entity.action == ACTION_GENERALIZE else None
+                )
+                deidentified = (
+                    deidentified[: entity.start]
+                    + entity.redacted_text
+                    + deidentified[entity.end :]
+                )
+                continue
         entity_method = _entity_redaction_method(entity, effective_method)
         actual_entity_method = entity_method
         if entity_method == "format_preserve" and _format_preserve_uses_mask_fallback(
@@ -2356,9 +2379,33 @@ def _entity_redaction_method(
         return "hash"
     if action == "format_preserve":
         return "format_preserve"
-    if action in {"mask", "redact"}:
+    if action in {"mask", "redact", ACTION_GENERALIZE}:
+        # ``generalize`` reaches this point only when the span could not be
+        # generalized, so it falls back to masking and nothing new can leak.
         return "mask"
     return fallback
+
+
+def _generalize_entity(entity: PIIEntity) -> Optional[tuple[str, str]]:
+    """Return ``(applied_action, text)`` for a ``generalize`` policy action.
+
+    Only ``AGE`` spans are supported. Ages 89 and below are kept, ages 90 and
+    above render the Safe Harbor top band. ``None`` means the span cannot be
+    generalized (another label, a mixed-label union, or an age that cannot be
+    read) and the caller must mask it.
+    """
+    if _is_mixed_label_union(entity):
+        return None
+    from .labels import AGE, normalize_label
+
+    if (entity.canonical_label or normalize_label(entity.entity_type)) != AGE:
+        return None
+    result = generalize_age_span(entity.original_text or entity.text)
+    if result.text is None:
+        return None
+    if result.outcome == AGE_OUTCOME_KEPT:
+        return ACTION_KEEP, result.text
+    return ACTION_GENERALIZE, result.text
 
 
 def _is_mixed_label_union(entity: PIIEntity) -> bool:

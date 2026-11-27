@@ -74,6 +74,7 @@ def test_simulation_classifies_actions_counts_and_blocking_changes() -> None:
     assert summary["action_counts"] == {
         "base": {
             "keep": 2,
+            "generalize": 0,
             "redact": 0,
             "replace": 0,
             "mask": 1,
@@ -82,6 +83,7 @@ def test_simulation_classifies_actions_counts_and_blocking_changes() -> None:
         },
         "candidate": {
             "keep": 0,
+            "generalize": 0,
             "redact": 1,
             "replace": 0,
             "mask": 2,
@@ -90,6 +92,7 @@ def test_simulation_classifies_actions_counts_and_blocking_changes() -> None:
         },
         "delta": {
             "keep": -2,
+            "generalize": 0,
             "redact": 1,
             "replace": 0,
             "mask": 1,
