@@ -1,6 +1,8 @@
 package com.openmed.openmedkit
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -92,10 +94,35 @@ class OpenMedSdkConfig private constructor(
         @JvmStatic
         fun validate(json: String): List<OpenMedSdkConfigIssue> = issues(decode(json))
 
+        private val JSON_NUMBER = Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")
+
         private fun decode(json: String): JsonObject? = try {
-            Json.parseToJsonElement(json) as? JsonObject
+            (Json.parseToJsonElement(json) as? JsonObject)?.takeIf(::isStrictJson)
         } catch (error: Exception) {
             null
+        } catch (error: StackOverflowError) {
+            null
+        }
+
+        /**
+         * kotlinx reads unquoted tokens such as `yes`, `NaN` or `0.5f` as
+         * literals; JSON allows only `true`, `false`, `null` and numbers.
+         */
+        private fun isStrictJson(root: JsonElement): Boolean {
+            val pending = ArrayDeque<JsonElement>().apply { add(root) }
+            while (pending.isNotEmpty()) {
+                when (val element = pending.removeLast()) {
+                    is JsonObject -> pending.addAll(element.values)
+                    is JsonArray -> pending.addAll(element)
+                    is JsonPrimitive -> if (!element.isString && element != JsonNull &&
+                        element.content != "true" && element.content != "false" &&
+                        !JSON_NUMBER.matches(element.content)
+                    ) {
+                        return false
+                    }
+                }
+            }
+            return true
         }
 
         private fun issues(document: JsonObject?): List<OpenMedSdkConfigIssue> {

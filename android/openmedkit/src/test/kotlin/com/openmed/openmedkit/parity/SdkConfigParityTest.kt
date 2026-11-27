@@ -103,6 +103,20 @@ class SdkConfigParityTest {
             listOf("config_not_object"),
             OpenMedSdkConfig.validate("{\"local_only\": ").map { it.toString() },
         )
+        // kotlinx reads unquoted tokens as literals; text that is not JSON is
+        // config_not_object, as in Swift, and never a valid configuration.
+        for (text in listOf(
+            """{"confidence_threshold": 0.5f}""",
+            """{"confidence_threshold": 0x1p-1}""",
+            """{"confidence_threshold": NaN}""",
+            """{"local_only": yes}""",
+            """{"model_id": synthetic}""",
+            """{"extra": [1, 2, nope]}""",
+            "{\"x\": " + "[".repeat(100_000) + "]".repeat(100_000) + "}",
+        )) {
+            assertEquals(listOf("config_not_object"), OpenMedSdkConfig.validate(text).map { it.toString() }, text.take(40))
+            assertFailsWith<OpenMedSdkConfigException> { OpenMedSdkConfig.parse(text) }
+        }
         assertEquals(
             "invalid SDK configuration: unknown_field, local_only:wrong_type",
             assertFailsWith<OpenMedSdkConfigException> {
