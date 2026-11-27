@@ -198,7 +198,7 @@ model available when the product must support constrained devices.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.3.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "4.0.0"),
 ]
 ```
 
@@ -738,6 +738,10 @@ The intent follows these rules:
 - **Returns only the redacted text.** No spans, labels, offsets, confidences
   or original values are returned. Shortcuts can pass the output to any other
   app or web action, so only already-redacted text may leave.
+- **Review before sharing.** Redaction is automated and can miss
+  identifiers. Unlike the Share extension, the intent shows no preview, so a
+  shortcut that forwards the result to another app or web action should let
+  the person review it first.
 - **Never opens the app** (`openAppWhenRun` is `false`) and **logs nothing**
   about its input.
 - **Value-free errors.** Every failure surfaces as `OpenMedIntentError`, whose

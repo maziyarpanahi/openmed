@@ -26,7 +26,7 @@ image:
   # Image repository to deploy.
   repository: openmed
   # Image tag to deploy. Defaults to Chart.appVersion when left empty.
-  tag: "3.3.0"
+  tag: "4.0.0"
   # Kubernetes image pull policy.
   pullPolicy: IfNotPresent
 
