@@ -89,6 +89,31 @@ a blanket platform skip. No trained checkpoint is a prerequisite for SDK release
 See [offline install smoke checks](install/smoke-check.md) for the exact local
 artifact commands, synthetic-provider boundaries and value-free JSON reports.
 
+### Free-threaded CPython 3.14t: experimental, core only
+
+Free-threaded CPython (PEP 779) is **not** a supported configuration yet, and
+optional extras are not tested on it. The `free-threading-smoke` job installs
+only the core package from the frozen lock on Linux `3.14t` and runs
+`scripts/release/free_threading_smoke.py --require-free-threaded`. The script:
+
+- imports `openmed` and reports whether the GIL is still disabled, plus the
+  first module that re-enabled it. CPython re-enables the GIL when it loads an
+  extension module that has not declared free-threading support;
+- runs `safety_sweep()` on synthetic notes from 4 threads at once and compares
+  every result with a single-threaded baseline.
+
+A crash or any threaded result that differs from the baseline fails the job. A
+GIL re-enabled at import is reported as a warning annotation, not a failure,
+because the results are still correct with the GIL on. The only non-standard-
+library extension module the core import loads is PyYAML's `yaml._yaml`, so it
+is the module to check first when the job warns. The uploaded
+`free-threading-smoke.json` report holds the interpreter version, GIL states,
+module names, counts and a digest of offsets and labels only, never input
+text. Run it locally with
+`python scripts/release/free_threading_smoke.py --report report.json` on any
+interpreter. On a build with the GIL it still checks thread-safety of the
+results.
+
 ## Test taxonomy
 
 | Marker | Location | Purpose |

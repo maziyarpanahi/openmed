@@ -117,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add CPython 3.15 to the supported interpreters: the `Programming Language :: Python :: 3.15` classifier, all three operating systems in the full `sdk-compatibility` matrix, and the newest-interpreter pull-request slots. Dependencies that publish no 3.15 wheels at their 3.11-3.14 versions get 3.15-only lower bounds, so only the 3.15 resolution moves (including `pandas` 3, `pyarrow` 26 and `duckdb` 2). `opencc` (`dev`, `zh`), `grpcio-tools` (`dev`), `apache-beam`, `nncf` and `scispacy` are excluded on 3.15, as documented in `docs/testing.md` (#5374).
 - Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
 - Add an on-device `PIISummaryIntent` that returns per-label identifier counts with the redacted text and never the detected values or offsets, register both OpenMed intents as App Shortcuts in the Swift demo app, and document the App Intents boundary in `docs/runtimes/apple-app-intents.md` (#5403).
+- Add an experimental, core-only `free-threading-smoke` CI job and `scripts/release/free_threading_smoke.py`. On free-threaded CPython 3.14t the script reports GIL re-enablement at import and fails on a crash or on concurrent `safety_sweep()` results that differ from the single-threaded baseline (#5399).
 
 ### Changed
 

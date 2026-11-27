@@ -555,6 +555,45 @@ jobs:
           pip-audit-report.json
       if: always()
 
+  free-threading-smoke:
+    # Experimental, core-only: import openmed on free-threaded CPython 3.14t
+    # and compare concurrent safety_sweep() results with a single-threaded
+    # baseline. A crash or mismatch fails the job; a GIL re-enabled at import
+    # is a warning annotation. Optional extras are not installed here.
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.14t"
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Install the core package from the frozen lock
+      run: uv sync --frozen --python 3.14t
+    - name: Free-threading smoke test
+      run: >-
+        uv run --frozen python scripts/release/free_threading_smoke.py
+        --require-free-threaded --report free-threading-smoke.json
+    - name: Upload value-free free-threading report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: free-threading-smoke
+        path: free-threading-smoke.json
+        if-no-files-found: warn
+
   sbom:
     needs: repo-policy
     runs-on: ubuntu-latest
