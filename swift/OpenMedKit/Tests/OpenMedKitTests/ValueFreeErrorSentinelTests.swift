@@ -700,6 +700,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         try addRawCases(MultimodalReviewError.self)
         try addRawCases(OpenMedDecisionEncoderError.self)
         try addRawCases(OpenMedSecretProviderError.self)
+        try addRawCases(OpenMedSessionLifecycleError.self)
         try addRawCases(PHISentinelSweepError.self)
         try addRawCases(PhysiologicalWaveformError.self)
         try addRawCases(PreprocessingConformanceError.self)

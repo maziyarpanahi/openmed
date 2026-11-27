@@ -2,13 +2,21 @@
 
 import io
 import json
+import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
+import openmed.core as openmed_core
+from openmed.multimodal import session_lifecycle
 from openmed.multimodal.abstention import AbstentionReason, AbstentionStage
 from openmed.multimodal.base import ExtractedDocument, SourceSpan
 from openmed.multimodal.runtime_session import (
+    SESSION_LIFECYCLE_PROJECTION,
     MultimodalSession,
     ProviderLease,
     RuntimeSessionError,
@@ -17,7 +25,13 @@ from openmed.multimodal.runtime_session import (
     SessionOutcome,
     SessionState,
 )
-from openmed.multimodal.streaming.speech.providers import PartialHypothesis
+from openmed.multimodal.streaming.speech.providers import (
+    STREAM_LIFECYCLE_PROJECTION,
+    PartialHypothesis,
+    SpeechProviderError,
+    StreamingAsrSession,
+    StreamState,
+)
 from openmed.multimodal.vision.providers.base import Prompt
 from tests.fixtures.multimodal.runtime_session import (
     PRIVATE,
@@ -419,3 +433,286 @@ def test_cancelled_or_closed_sessions_release_new_owned_handles_without_executio
 def test_invalid_session_limits_fail_without_echo(change):
     with pytest.raises(RuntimeSessionError, match="^invalid runtime session contract$"):
         SessionLimits(**change)
+
+
+# ---------------------------------------------------------------------------
+# Shared session lifecycle vocabulary (openmed.session.lifecycle.v1)
+# ---------------------------------------------------------------------------
+
+LIFECYCLE_VECTORS = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "fixtures"
+        / "parity"
+        / "session_lifecycle_v1.json"
+    ).read_text(encoding="utf-8")
+)
+LIFECYCLE_SCHEMA = json.loads(
+    (
+        Path(openmed_core.__file__).resolve().parent
+        / "schemas"
+        / "json"
+        / "session_lifecycle.schema.json"
+    ).read_text(encoding="utf-8")
+)
+RUNTIME_KIND = "python.runtime_session"
+STREAM_KIND = "python.streaming_asr"
+
+
+class _RuntimeDriver:
+    """Drive a MultimodalSession, holding one operation open on request."""
+
+    error = RuntimeSessionError
+
+    def __init__(self):
+        self.entered, self.unblock = threading.Event(), threading.Event()
+        entered, unblock = self.entered, self.unblock
+
+        class Blocking(FixedProvider):
+            def infer(self, request):
+                entered.set()
+                assert unblock.wait(10), "test coordination failed"
+                return super().infer(request)
+
+        self.session = MultimodalSession(image=Blocking().lease())
+        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.future = None
+
+    def apply(self, action):
+        if action in {"cancel", "close"}:
+            getattr(self.session, action)()
+        elif action in {"cancel_while_active", "close_while_active"}:
+            self.future = self.pool.submit(
+                self.session.infer_image, asset(), Prompt(text="synthetic")
+            )
+            assert self.entered.wait(10), "test coordination failed"
+            getattr(self.session, action.removesuffix("_while_active"))()
+        elif action == "release_active":
+            self.unblock.set()
+            self.future.result(timeout=10)
+        else:
+            pytest.fail("unknown runtime driver action")
+        return self.session.lifecycle_state
+
+    def shutdown(self):
+        self.unblock.set()
+        self.pool.shutdown(wait=True)
+        self.session.close()
+
+
+class _StreamDriver:
+    """Drive a StreamingAsrSession through its native terminal actions."""
+
+    error = SpeechProviderError
+
+    def __init__(self):
+        self.session = StreamingAsrSession(FixedProvider.declaration)
+
+    def apply(self, action):
+        assert action in {"finalize", "cancel"}
+        getattr(self.session, action)()
+        return self.session.lifecycle_state
+
+    def shutdown(self):
+        pass
+
+
+DRIVERS = {RUNTIME_KIND: _RuntimeDriver, STREAM_KIND: _StreamDriver}
+
+
+def _path_to(kind, state):
+    """Return driver actions that leave a fresh session of ``kind`` in ``state``."""
+    if state == "open":
+        return []
+    for sequence in LIFECYCLE_VECTORS["allowed_sequences"]:
+        actions = sequence["drivers"].get(kind)
+        if actions and state in sequence["states"][1:]:
+            return actions[: sequence["states"].index(state)]
+    return None
+
+
+def _reasons_match(error, kind, reason):
+    if kind == STREAM_KIND:
+        return error.category == reason and str(error) == reason
+    return str(error) == reason
+
+
+def test_lifecycle_vocabulary_agrees_across_module_schema_and_vectors():
+    order = list(session_lifecycle.LIFECYCLE_STATES)
+    defs = LIFECYCLE_SCHEMA["$defs"]
+
+    assert LIFECYCLE_VECTORS["synthetic"] is True
+    assert LIFECYCLE_VECTORS["version"] == 1
+    assert LIFECYCLE_VECTORS["lifecycle_schema_version"] == (
+        session_lifecycle.SESSION_LIFECYCLE_VERSION
+    )
+    assert order == ["open", "cancelling", "finalized", "cancelled", "failed", "closed"]
+    assert LIFECYCLE_VECTORS["states"] == order == defs["state"]["enum"]
+    terminal = {state.value for state in session_lifecycle.TERMINAL_STATES}
+    assert set(LIFECYCLE_VECTORS["terminal_states"]) == terminal
+    assert set(defs["terminal_state"]["enum"]) == terminal
+    assert LIFECYCLE_VECTORS["reason_codes"] == list(
+        session_lifecycle.LIFECYCLE_REASON_CODES
+    )
+    assert sorted(defs["reason_code"]["enum"]) == sorted(
+        session_lifecycle.LIFECYCLE_REASON_CODES
+    )
+    Draft202012Validator.check_schema(LIFECYCLE_SCHEMA)
+    validator = Draft202012Validator(LIFECYCLE_SCHEMA)
+    for source in order:
+        allowed = set(LIFECYCLE_VECTORS["transitions"][source])
+        assert allowed == {
+            state.value
+            for state in session_lifecycle.ALLOWED_TRANSITIONS[
+                session_lifecycle.LifecycleState(source)
+            ]
+        }
+        assert (not allowed) is (source in terminal)
+        for target in order:
+            record = {
+                "schema_version": session_lifecycle.SESSION_LIFECYCLE_VERSION,
+                "from": source,
+                "to": target,
+            }
+            assert validator.is_valid(record) is (target in allowed)
+            reason = session_lifecycle.transition_reason(source, target)
+            assert (reason is None) is (target in allowed)
+
+
+def test_projections_cover_every_native_state():
+    projections = LIFECYCLE_VECTORS["projections"]
+
+    assert projections[RUNTIME_KIND]["map"] == {
+        native.value: projected.value
+        for native, projected in SESSION_LIFECYCLE_PROJECTION.items()
+    }
+    assert set(projections[RUNTIME_KIND]["map"]) == {s.value for s in SessionState}
+    assert projections[STREAM_KIND]["map"] == {
+        native.value: projected.value
+        for native, projected in STREAM_LIFECYCLE_PROJECTION.items()
+    }
+    assert set(projections[STREAM_KIND]["map"]) == {s.value for s in StreamState}
+    swift_source = (
+        Path(__file__).resolve().parents[3]
+        / "swift"
+        / "OpenMedKit"
+        / "Sources"
+        / "OpenMedKit"
+        / "StreamingSpeechSession.swift"
+    ).read_text(encoding="utf-8")
+    declared = re.search(
+        r"enum SpeechSessionState: String, Sendable \{ case ([a-z, ]+) \}",
+        swift_source,
+    )
+    assert declared is not None
+    swift_states = {item.strip() for item in declared.group(1).split(",")}
+    assert set(projections["swift.streaming_speech"]["map"]) == swift_states
+    for projection in projections.values():
+        assert set(projection["map"].values()) <= set(LIFECYCLE_VECTORS["states"])
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    LIFECYCLE_VECTORS["allowed_sequences"],
+    ids=lambda sequence: sequence["id"],
+)
+@pytest.mark.parametrize("kind", [RUNTIME_KIND, STREAM_KIND])
+def test_allowed_sequences_pass_through_each_session_projection(kind, sequence):
+    states = sequence["states"]
+    for source, target in zip(states, states[1:]):
+        assert session_lifecycle.transition_reason(source, target) is None
+    actions = sequence["drivers"].get(kind)
+    if not actions:
+        # This runtime has no native path to the sequence; the shared
+        # transition table checked above is its contract.
+        return
+    driver = DRIVERS[kind]()
+    try:
+        assert driver.session.lifecycle_state.value == states[0]
+        observed = [states[0]]
+        for action, expected in zip(actions, states[1:]):
+            driver.session.check_lifecycle_transition(expected)
+            observed.append(driver.apply(action).value)
+        assert observed == states
+    finally:
+        driver.shutdown()
+
+
+@pytest.mark.parametrize(
+    "case",
+    LIFECYCLE_VECTORS["rejected_transitions"],
+    ids=lambda case: case["id"],
+)
+def test_rejected_transitions_raise_the_existing_error_with_the_reason(case):
+    assert case["reason"] in session_lifecycle.LIFECYCLE_REASON_CODES
+    assert (
+        session_lifecycle.transition_reason(case["from"], case["to"]) == case["reason"]
+    )
+    for kind, factory in DRIVERS.items():
+        path = _path_to(kind, case["from"])
+        if path is None:
+            continue
+        driver = factory()
+        try:
+            for action in path:
+                driver.apply(action)
+            before = driver.session.state
+            with pytest.raises(driver.error) as raised:
+                driver.session.check_lifecycle_transition(case["to"])
+            assert _reasons_match(raised.value, kind, case["reason"])
+            assert driver.session.state is before
+            native = case["native_actions"].get(kind)
+            if native is not None:
+                with pytest.raises(driver.error) as raised:
+                    getattr(driver.session, native)()
+                assert _reasons_match(raised.value, kind, case["reason"])
+        finally:
+            driver.shutdown()
+
+
+def test_every_reachable_python_state_is_exercised_by_the_vectors():
+    sources = {case["from"] for case in LIFECYCLE_VECTORS["rejected_transitions"]}
+    for kind, projection in (
+        (RUNTIME_KIND, SESSION_LIFECYCLE_PROJECTION),
+        (STREAM_KIND, STREAM_LIFECYCLE_PROJECTION),
+    ):
+        for state in projection.values():
+            assert _path_to(kind, state.value) is not None
+            assert state.value in sources
+
+
+def test_lifecycle_projection_leaves_native_enums_and_reports_unchanged():
+    assert [state.value for state in SessionState] == [
+        "open",
+        "cancelling",
+        "cancelled",
+        "closed",
+    ]
+    assert [state.value for state in StreamState] == ["open", "finalized", "cancelled"]
+    session = MultimodalSession()
+    assert session.to_json() == (
+        '{"cleanup_failures":0,"events":[],"input_bytes":0,'
+        '"requires_network":false,"schema_version":"openmed.multimodal.session.v1",'
+        '"state":"open"}'
+    )
+    session.close()
+    assert json.loads(session.to_json())["state"] == "closed"
+    assert session.lifecycle_state is session_lifecycle.LifecycleState.CLOSED
+    assert "lifecycle" not in session.to_json()
+    report = StreamingAsrSession(FixedProvider.declaration).finalize().to_dict()
+    assert report["state"] == "finalized"
+    assert list(report) == [
+        "schema_version",
+        "provider_id",
+        "provider_revision",
+        "model_fingerprint",
+        "state",
+        "buffered_chunks",
+        "buffered_byte_count",
+        "buffered_duration_ms",
+        "stream_duration_ms",
+        "partial_hypotheses",
+        "finalized_segments",
+        "reason_code",
+        "requires_network",
+    ]

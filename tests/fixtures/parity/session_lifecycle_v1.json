@@ -1,0 +1,319 @@
+{
+  "schema": "openmed.tests.session_lifecycle_parity",
+  "version": 1,
+  "synthetic": true,
+  "description": "Shared session lifecycle vectors. Every runtime projects its native session states onto this vocabulary, accepts every allowed sequence and rejects every listed transition with exactly its reason code. drivers name the native actions that produce a sequence on a given runtime; a sequence with no driver for a runtime is checked through the transition table only. Vectors carry states and reason codes only.",
+  "lifecycle_schema_version": "openmed.session.lifecycle.v1",
+  "reference": "openmed.multimodal.session_lifecycle.transition_reason",
+  "states": [
+    "open",
+    "cancelling",
+    "finalized",
+    "cancelled",
+    "failed",
+    "closed"
+  ],
+  "terminal_states": [
+    "finalized",
+    "cancelled",
+    "failed",
+    "closed"
+  ],
+  "transitions": {
+    "open": [
+      "cancelling",
+      "finalized",
+      "cancelled",
+      "failed",
+      "closed"
+    ],
+    "cancelling": [
+      "cancelled",
+      "failed",
+      "closed"
+    ],
+    "finalized": [],
+    "cancelled": [],
+    "failed": [],
+    "closed": []
+  },
+  "reason_codes": [
+    "session_cancelled",
+    "session_closed",
+    "session_failed",
+    "transition_not_allowed",
+    "unknown_state"
+  ],
+  "reason_order": "unknown_state when either state is outside the vocabulary; otherwise the terminal source code (finalized and closed: session_closed, cancelled: session_cancelled, failed: session_failed); otherwise transition_not_allowed for a pair outside transitions",
+  "projections": {
+    "python.runtime_session": {
+      "native_enum": "openmed.multimodal.runtime_session.SessionState",
+      "map": {
+        "open": "open",
+        "cancelling": "cancelling",
+        "cancelled": "cancelled",
+        "closed": "closed"
+      }
+    },
+    "python.streaming_asr": {
+      "native_enum": "openmed.multimodal.streaming.speech.providers.StreamState",
+      "map": {
+        "open": "open",
+        "finalized": "finalized",
+        "cancelled": "cancelled"
+      }
+    },
+    "swift.streaming_speech": {
+      "native_enum": "OpenMedKit.SpeechSessionState",
+      "map": {
+        "open": "open",
+        "finished": "finalized",
+        "cancelled": "cancelled",
+        "failed": "failed"
+      }
+    }
+  },
+  "allowed_sequences": [
+    {
+      "id": "finalize_stream",
+      "states": [
+        "open",
+        "finalized"
+      ],
+      "drivers": {
+        "python.streaming_asr": [
+          "finalize"
+        ]
+      }
+    },
+    {
+      "id": "cancel_idle",
+      "states": [
+        "open",
+        "cancelled"
+      ],
+      "drivers": {
+        "python.runtime_session": [
+          "cancel"
+        ],
+        "python.streaming_asr": [
+          "cancel"
+        ]
+      }
+    },
+    {
+      "id": "close_idle",
+      "states": [
+        "open",
+        "closed"
+      ],
+      "drivers": {
+        "python.runtime_session": [
+          "close"
+        ]
+      }
+    },
+    {
+      "id": "cancel_while_active",
+      "states": [
+        "open",
+        "cancelling",
+        "cancelled"
+      ],
+      "drivers": {
+        "python.runtime_session": [
+          "cancel_while_active",
+          "release_active"
+        ]
+      }
+    },
+    {
+      "id": "close_while_active",
+      "states": [
+        "open",
+        "cancelling",
+        "closed"
+      ],
+      "drivers": {
+        "python.runtime_session": [
+          "close_while_active",
+          "release_active"
+        ]
+      }
+    },
+    {
+      "id": "fail_while_open",
+      "states": [
+        "open",
+        "failed"
+      ],
+      "drivers": {}
+    },
+    {
+      "id": "fail_while_cancelling",
+      "states": [
+        "open",
+        "cancelling",
+        "failed"
+      ],
+      "drivers": {}
+    }
+  ],
+  "rejected_transitions": [
+    {
+      "id": "stay_open",
+      "from": "open",
+      "to": "open",
+      "reason": "transition_not_allowed",
+      "native_actions": {}
+    },
+    {
+      "id": "cancelling_reopens",
+      "from": "cancelling",
+      "to": "open",
+      "reason": "transition_not_allowed",
+      "native_actions": {}
+    },
+    {
+      "id": "cancelling_again",
+      "from": "cancelling",
+      "to": "cancelling",
+      "reason": "transition_not_allowed",
+      "native_actions": {}
+    },
+    {
+      "id": "cancelling_finalizes",
+      "from": "cancelling",
+      "to": "finalized",
+      "reason": "transition_not_allowed",
+      "native_actions": {}
+    },
+    {
+      "id": "finalized_reopens",
+      "from": "finalized",
+      "to": "open",
+      "reason": "session_closed",
+      "native_actions": {}
+    },
+    {
+      "id": "finalized_cancels",
+      "from": "finalized",
+      "to": "cancelled",
+      "reason": "session_closed",
+      "native_actions": {
+        "python.streaming_asr": "cancel"
+      }
+    },
+    {
+      "id": "finalized_finalizes_again",
+      "from": "finalized",
+      "to": "finalized",
+      "reason": "session_closed",
+      "native_actions": {
+        "python.streaming_asr": "finalize"
+      }
+    },
+    {
+      "id": "finalized_closes",
+      "from": "finalized",
+      "to": "closed",
+      "reason": "session_closed",
+      "native_actions": {}
+    },
+    {
+      "id": "cancelled_reopens",
+      "from": "cancelled",
+      "to": "open",
+      "reason": "session_cancelled",
+      "native_actions": {}
+    },
+    {
+      "id": "cancelled_finalizes",
+      "from": "cancelled",
+      "to": "finalized",
+      "reason": "session_cancelled",
+      "native_actions": {
+        "python.streaming_asr": "finalize"
+      }
+    },
+    {
+      "id": "cancelled_cancels_again",
+      "from": "cancelled",
+      "to": "cancelled",
+      "reason": "session_cancelled",
+      "native_actions": {
+        "python.streaming_asr": "cancel"
+      }
+    },
+    {
+      "id": "cancelled_closes",
+      "from": "cancelled",
+      "to": "closed",
+      "reason": "session_cancelled",
+      "native_actions": {}
+    },
+    {
+      "id": "closed_reopens",
+      "from": "closed",
+      "to": "open",
+      "reason": "session_closed",
+      "native_actions": {}
+    },
+    {
+      "id": "closed_cancels",
+      "from": "closed",
+      "to": "cancelled",
+      "reason": "session_closed",
+      "native_actions": {}
+    },
+    {
+      "id": "closed_starts_cancelling",
+      "from": "closed",
+      "to": "cancelling",
+      "reason": "session_closed",
+      "native_actions": {}
+    },
+    {
+      "id": "failed_reopens",
+      "from": "failed",
+      "to": "open",
+      "reason": "session_failed",
+      "native_actions": {}
+    },
+    {
+      "id": "failed_closes",
+      "from": "failed",
+      "to": "closed",
+      "reason": "session_failed",
+      "native_actions": {}
+    },
+    {
+      "id": "native_swift_name_is_not_vocabulary",
+      "from": "finished",
+      "to": "open",
+      "reason": "unknown_state",
+      "native_actions": {}
+    },
+    {
+      "id": "unknown_target",
+      "from": "open",
+      "to": "paused",
+      "reason": "unknown_state",
+      "native_actions": {}
+    },
+    {
+      "id": "state_names_are_case_sensitive",
+      "from": "open",
+      "to": "CANCELLED",
+      "reason": "unknown_state",
+      "native_actions": {}
+    },
+    {
+      "id": "unknown_target_wins_over_terminal_source",
+      "from": "finalized",
+      "to": "paused",
+      "reason": "unknown_state",
+      "native_actions": {}
+    }
+  ]
+}
