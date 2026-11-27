@@ -1,0 +1,27 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $pdb := .Values.podDisruptionBudget -}}
+{{- $hasMin := not (or (kindIs "invalid" $pdb.minAvailable) (eq (toString $pdb.minAvailable) "")) -}}
+{{- $hasMax := not (or (kindIs "invalid" $pdb.maxUnavailable) (eq (toString $pdb.maxUnavailable) "")) -}}
+{{- if and $hasMin $hasMax }}
+{{- fail "podDisruptionBudget: set either minAvailable or maxUnavailable, not both" }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openmed-service.fullname" . }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if $hasMax }}
+  maxUnavailable: {{ if kindIs "string" $pdb.maxUnavailable }}{{ $pdb.maxUnavailable | quote }}{{ else }}{{ $pdb.maxUnavailable }}{{ end }}
+  {{- else if $hasMin }}
+  minAvailable: {{ if kindIs "string" $pdb.minAvailable }}{{ $pdb.minAvailable | quote }}{{ else }}{{ $pdb.minAvailable }}{{ end }}
+  {{- else }}
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "openmed-service.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+{{- end }}
