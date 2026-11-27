@@ -46,6 +46,8 @@ class CircuitBreakerSnapshot:
 class CircuitBreakerOpenError(RuntimeError, LegacyRootedError):
     """Raised when a model/backend circuit is open and should fail fast."""
 
+    code = "circuit_breaker_open"
+
     def __init__(self, retry_after_seconds: int) -> None:
         self.retry_after_seconds = max(int(retry_after_seconds), 0)
         super().__init__("Model backend is temporarily unavailable")

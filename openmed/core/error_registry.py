@@ -29,6 +29,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Optional, Union
 
+from .errors import LegacyRootedError
+
 __all__ = [
     "CATEGORIES",
     "ERROR_REGISTRY_CONTRACT",
@@ -101,7 +103,7 @@ _GRPC_STATUS = re.compile(r"^[A-Z][A-Z_]{1,31}$")
 _MAX_TEXT = 512
 
 
-class ErrorRegistryError(ValueError):
+class ErrorRegistryError(ValueError, LegacyRootedError):
     """Raised when the error-code registry document is not valid.
 
     Messages are fixed strings; they never echo values from the document.

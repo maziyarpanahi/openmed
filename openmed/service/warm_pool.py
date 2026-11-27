@@ -133,6 +133,8 @@ def _parse_positive_byte_size(raw_value: Any, *, setting_name: str) -> int:
 class WarmPoolBackpressureError(RuntimeError, LegacyRootedError):
     """Raised when the warm-pool cannot admit a model within its wait bound."""
 
+    code = "service_busy"
+
     def __init__(
         self,
         *,

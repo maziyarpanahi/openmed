@@ -25,6 +25,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from .errors import LegacyRootedError
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from openmed.core.config import OpenMedConfig
 
@@ -123,7 +125,7 @@ class SdkConfigIssue:
         return {"code": self.code, "field": self.field}
 
 
-class SdkConfigError(ValueError):
+class SdkConfigError(ValueError, LegacyRootedError):
     """Raised when an SDK configuration document fails validation."""
 
     def __init__(self, issues: tuple[SdkConfigIssue, ...]) -> None:

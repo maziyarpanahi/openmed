@@ -429,6 +429,8 @@ class BlockingConcurrencyGate:
 class ServiceBusyError(RuntimeError, LegacyRootedError):
     """Reject additional model work when the request's gate is full."""
 
+    code = "service_busy"
+
     def __init__(self, gate: ConcurrencyGate, key_by: str) -> None:
         super().__init__("Service is busy; retry later")
         self.max_concurrency = gate.max_concurrency

@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Final
 
+from .errors import LegacyRootedError
 from .record_migrations import Migrator, MigratorRegistry
 
 CLINICAL_REVIEW_PACKET: Final = "clinical_review_packet"
@@ -49,7 +50,7 @@ _DECISION_RESULT_FIELDS = frozenset(
 )
 
 
-class BuiltinMigrationError(ValueError):
+class BuiltinMigrationError(ValueError, LegacyRootedError):
     """An adapted migration function reported a non-success outcome.
 
     The message is a controlled outcome code from the owning module and never

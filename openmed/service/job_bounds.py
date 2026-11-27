@@ -79,6 +79,8 @@ class BulkJobsSaturatedError(RuntimeError, LegacyRootedError):
     request path, URL or credential.
     """
 
+    code = "bulk_jobs_saturated"
+
     def __init__(
         self,
         *,

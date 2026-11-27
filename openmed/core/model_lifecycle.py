@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final, Protocol, runtime_checkable
 
+from .errors import LegacyRootedError
+
 MODEL_LIFECYCLE_SCHEMA_VERSION: Final[str] = "openmed.model.lifecycle.v1"
 
 
@@ -108,7 +110,7 @@ _FILE_EVENTS: Final[frozenset[ModelLifecycleEventType]] = frozenset(
 )
 
 
-class ModelLifecycleEventError(ValueError):
+class ModelLifecycleEventError(ValueError, LegacyRootedError):
     """Raised with a value-free message when an event field is invalid."""
 
 

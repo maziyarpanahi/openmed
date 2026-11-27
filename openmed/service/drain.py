@@ -110,6 +110,8 @@ class ServiceShuttingDownError(RuntimeError, LegacyRootedError):
         retry_after_seconds: Hint for when a client may retry elsewhere.
     """
 
+    code = "shutting_down"
+
     reason_code = SHUTTING_DOWN
 
     def __init__(

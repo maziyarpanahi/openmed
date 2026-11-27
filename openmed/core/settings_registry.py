@@ -34,6 +34,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from .errors import LegacyRootedError
+
 SETTINGS_SCHEMA_VERSION = 1
 SETTINGS_SCHEMA_FILENAME = "settings.schema.json"
 
@@ -65,7 +67,7 @@ _EXCLUDED_KEY = "x-excluded-identifiers"
 _IDENTIFIER_RE = re.compile(r"OPENMED_[A-Z0-9_]*[A-Z0-9]")
 
 
-class SettingsSchemaError(ValueError):
+class SettingsSchemaError(ValueError, LegacyRootedError):
     """Raised when the settings schema has a malformed declaration.
 
     Messages name the setting and the broken rule only; they never include a

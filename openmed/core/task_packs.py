@@ -25,6 +25,8 @@ from jsonschema import Draft202012Validator
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 
+from .errors import LegacyRootedError
+
 TASK_PACKS_SCHEMA = "openmed.task_packs"
 TASK_PACKS_SCHEMA_VERSION = "1.0.0"
 TASK_PACKS_DATA_FILE = Path(__file__).with_name("data") / "task_packs.json"
@@ -85,7 +87,7 @@ _VERSION_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _TOKEN_SPLIT_RE = re.compile(r"[-_]+")
 
 
-class TaskPackError(ValueError):
+class TaskPackError(ValueError, LegacyRootedError):
     """Raised with a value-free reason code when a pack cannot be resolved."""
 
     def __init__(self, reason: str) -> None:

@@ -1242,6 +1242,21 @@
       "divergences": ["graphql_resolver_error_masks_category", "rest_grpc_code_names"]
     },
     {
+      "code": "invalid_response",
+      "category": "internal",
+      "description": "The Python REST client received a response body that is not a JSON object.",
+      "portable": false,
+      "retryable": false,
+      "retryable_basis": "server_fault",
+      "python": ["openmed.service.client.OpenMedAPIError"],
+      "http": [],
+      "grpc": [],
+      "graphql": [],
+      "mcp": [],
+      "cli": [],
+      "divergences": []
+    },
+    {
       "code": "invalid_result",
       "category": "internal",
       "description": "An MCP tool returned a result outside its output schema.",
@@ -1548,7 +1563,7 @@
       "portable": false,
       "retryable": true,
       "retryable_basis": "retry_after_header",
-      "python": ["openmed.service.drain.ServiceShuttingDownError"],
+      "python": [],
       "http": [{"status": 503, "code": "not_ready", "retry_after": true, "note": "drain refusal"}, {"status": 503, "code": "not_ready", "note": "preload, decision backend or mTLS trust not serving"}],
       "grpc": [{"status": "UNAVAILABLE", "reason": null, "details": "shutting_down", "retryable_metadata": true, "note": "drain refusal"}],
       "graphql": [{"code": "shutting_down", "retryable_extension": true}],

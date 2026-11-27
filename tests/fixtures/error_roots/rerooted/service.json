@@ -192,7 +192,7 @@
       ]
     },
     "openmed.service.app:ServiceTimeoutError": {
-      "code": "service_timeout_error",
+      "code": "timeout",
       "mro": [
         "openmed.service.app:ServiceTimeoutError",
         "builtins:RuntimeError",
@@ -288,7 +288,7 @@
       ]
     },
     "openmed.service.batcher:BatcherClosedError": {
-      "code": "batcher_closed_error",
+      "code": "shutting_down",
       "mro": [
         "openmed.service.batcher:BatcherClosedError",
         "openmed.service.drain:ServiceShuttingDownError",
@@ -528,7 +528,7 @@
       ]
     },
     "openmed.service.drain:ServiceShuttingDownError": {
-      "code": "service_shutting_down_error",
+      "code": "shutting_down",
       "mro": [
         "openmed.service.drain:ServiceShuttingDownError",
         "builtins:RuntimeError",
@@ -885,7 +885,7 @@
       ]
     },
     "openmed.service.job_bounds:BulkJobsSaturatedError": {
-      "code": "bulk_jobs_saturated_error",
+      "code": "bulk_jobs_saturated",
       "mro": [
         "openmed.service.job_bounds:BulkJobsSaturatedError",
         "builtins:RuntimeError",
@@ -1029,7 +1029,7 @@
       ]
     },
     "openmed.service.jobs:JobQueueClosedError": {
-      "code": "job_queue_closed_error",
+      "code": "shutting_down",
       "mro": [
         "openmed.service.jobs:JobQueueClosedError",
         "openmed.service.drain:ServiceShuttingDownError",
@@ -2473,7 +2473,7 @@
       ]
     },
     "openmed.service.resilience:CircuitBreakerOpenError": {
-      "code": "circuit_breaker_open_error",
+      "code": "circuit_breaker_open",
       "mro": [
         "openmed.service.resilience:CircuitBreakerOpenError",
         "builtins:RuntimeError",
@@ -2496,7 +2496,7 @@
       ]
     },
     "openmed.service.runtime:ModelNotServedError": {
-      "code": "model_not_served_error",
+      "code": "model_not_served",
       "mro": [
         "openmed.service.runtime:ModelNotServedError",
         "builtins:ValueError",
@@ -3447,7 +3447,7 @@
       ]
     },
     "openmed.service.throttle:ServiceBusyError": {
-      "code": "service_busy_error",
+      "code": "service_busy",
       "mro": [
         "openmed.service.throttle:ServiceBusyError",
         "builtins:RuntimeError",
@@ -3497,7 +3497,7 @@
       ]
     },
     "openmed.service.warm_pool:WarmPoolBackpressureError": {
-      "code": "warm_pool_backpressure_error",
+      "code": "service_busy",
       "mro": [
         "openmed.service.warm_pool:WarmPoolBackpressureError",
         "builtins:RuntimeError",
@@ -3520,7 +3520,7 @@
       ]
     },
     "openmed.service.warm_pool:WarmPoolClosedError": {
-      "code": "warm_pool_closed_error",
+      "code": "shutting_down",
       "mro": [
         "openmed.service.warm_pool:WarmPoolClosedError",
         "openmed.service.drain:ServiceShuttingDownError",

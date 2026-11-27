@@ -973,6 +973,8 @@ def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
 class ModelNotServedError(ValueError, LegacyRootedError):
     """A network request selected a model outside the operator's served set."""
 
+    code = "model_not_served"
+
     def __init__(self) -> None:
         super().__init__("model_not_served")
 

@@ -389,6 +389,8 @@ _SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 class ServiceTimeoutError(RuntimeError, LegacyRootedError):
     """Raised when a request exceeds the configured service timeout."""
 
+    code = "timeout"
+
     def __init__(self, timeout_seconds: float):
         self.timeout_seconds = float(timeout_seconds)
         super().__init__(
