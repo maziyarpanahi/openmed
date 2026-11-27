@@ -1123,3 +1123,36 @@ trip. An unsigned `swift test` runner on macOS lacks the data-protection
 Keychain entitlement, so that test skips with `secret_missing_entitlement`
 there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
 physical device and is not covered by the package tests.
+
+## Identifier checksum validators
+
+`OpenMedIdentifierValidators` ports the portable identifier validator subset
+from Python. Each function returns whether a candidate passes the same format
+and checksum rules as its Python reference:
+
+| Swift | Python reference |
+| --- | --- |
+| `luhn(_:)` | `clinical_ids.validate_luhn` |
+| `ssn(_:)` | `clinical_ids.validate_ssn` |
+| `npi(_:)` | `clinical_ids.validate_npi` |
+| `iban(_:)` | `clinical_ids.validate_iban` |
+| `aadhaar(_:)` | `pii_i18n.validate_aadhaar` |
+| `ukNHSNumber(_:)` | `clinical_ids.validate_uk_nhs_number` |
+| `dutchBSN(_:)` | `pii_i18n.validate_dutch_bsn` |
+| `spanishDNI(_:)` | `pii_i18n.validate_spanish_dni` |
+| `frenchNIR(_:)` | `pii_i18n.validate_french_nir` |
+| `chineseResidentID(_:today:)` | `pii_i18n.validate_chinese_resident_id` |
+| `canadianSIN(_:)` | `clinical_ids.validate_canadian_sin` |
+
+Normalization follows each reference. Separators and Python whitespace are
+removed where Python removes them, letters are upper-cased where Python
+upper-cases, and Unicode decimal digits are accepted where Python's `\d` or
+`int()` accepts them. Aadhaar folds Gurmukhi and Arabic-Indic digits.
+`chineseResidentID` compares the birth date with `today` (default: now, in
+the current time zone, like Python's `date.today()`).
+
+The validators return `Bool` only: they never throw, log or keep the
+candidate. They are not wired into detection patterns yet; the existing
+`PostProcessing` SSN and Luhn checks are unchanged.
+`IdentifierValidatorParityTests` replays
+`tests/fixtures/parity/identifier_validators_v1.json`.
