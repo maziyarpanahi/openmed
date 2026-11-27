@@ -48,9 +48,18 @@ fun availableAndroidModels(context: Context): List<ModelCatalogEntry> {
 ```
 
 Each entry exposes its repository ID, runnable formats, languages, tier,
-parameter count, license, and reproducibility hash. `ModelCatalog.filter(...)`
-can also select an exact format, tier, maximum parameter count, language, or
-license, and `byRepoId(...)` resolves a known entry.
+parameter count, license, and reproducibility hash. It also carries the
+manifest `family` (such as `PII` or `NER`), `task` (such as
+`token-classification`) and `canonicalLabels`, so an app can tell a PII model
+from a disease NER model without parsing repository names. A catalog asset
+built before these fields existed still loads: `family` and `task` are null and
+`canonicalLabels` is empty. `ModelCatalog.filter(...)` can also select an exact
+format, tier, maximum parameter count, language, license, or family, and
+`byRepoId(...)` resolves a known entry.
+
+```kotlin
+val piiModels = ModelCatalog.load(context).filter(family = "PII", format = "onnx")
+```
 
 ## Download with lifecycle progress
 

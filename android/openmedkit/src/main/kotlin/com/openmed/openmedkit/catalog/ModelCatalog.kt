@@ -13,6 +13,12 @@ import java.io.InputStreamReader
 
 /**
  * Manifest-backed catalog entry for Android-runnable OpenMed models.
+ *
+ * @property family Model family from the manifest, such as `PII` or `NER`, or
+ *   null when the catalog asset predates the field.
+ * @property task Manifest task, such as `token-classification`, or null.
+ * @property canonicalLabels Canonical entity labels the model emits, in manifest
+ *   order; empty when the asset predates the field.
  */
 data class ModelCatalogEntry(
     val repoId: String,
@@ -22,7 +28,35 @@ data class ModelCatalogEntry(
     val languages: List<String>,
     val license: String?,
     val reproducibilityHash: String,
-)
+    val family: String? = null,
+    val task: String? = null,
+    val canonicalLabels: List<String> = emptyList(),
+) {
+    /** Builds an entry without family, task or labels, as catalogs before 4.1 did. */
+    constructor(
+        repoId: String,
+        formats: List<String>,
+        tier: String?,
+        paramCount: Long?,
+        languages: List<String>,
+        license: String?,
+        reproducibilityHash: String,
+    ) : this(repoId, formats, tier, paramCount, languages, license, reproducibilityHash, null, null, emptyList())
+
+    /** Keeps the 4.0 `copy` signature for callers compiled against it. */
+    @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+    fun copy(
+        repoId: String = this.repoId,
+        formats: List<String> = this.formats,
+        tier: String? = this.tier,
+        paramCount: Long? = this.paramCount,
+        languages: List<String> = this.languages,
+        license: String? = this.license,
+        reproducibilityHash: String = this.reproducibilityHash,
+    ): ModelCatalogEntry = copy(
+        repoId, formats, tier, paramCount, languages, license, reproducibilityHash, family, task, canonicalLabels,
+    )
+}
 
 /**
  * Read-only on-device model catalog bundled with OpenMedKit.
@@ -32,19 +66,37 @@ class ModelCatalog private constructor(
 ) {
     val entries: List<ModelCatalogEntry> = entries.toList()
 
+    /**
+     * Returns the entries that match every non-null predicate.
+     *
+     * Token predicates, including [family], compare case-insensitively. An entry
+     * without a family never matches a [family] predicate.
+     */
     fun filter(
         format: String? = null,
         tier: String? = null,
         maxParamCount: Long? = null,
         language: String? = null,
         license: String? = null,
+        family: String? = null,
     ): List<ModelCatalogEntry> = entries.filter { entry ->
         matchesFormat(entry, format) &&
             matchesToken(entry.tier, tier) &&
             matchesMaxParamCount(entry.paramCount, maxParamCount) &&
             matchesLanguage(entry, language) &&
-            matchesToken(entry.license, license)
+            matchesToken(entry.license, license) &&
+            matchesToken(entry.family, family)
     }
+
+    /** Keeps the 4.0 `filter` signature for callers compiled against it. */
+    @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+    fun filter(
+        format: String? = null,
+        tier: String? = null,
+        maxParamCount: Long? = null,
+        language: String? = null,
+        license: String? = null,
+    ): List<ModelCatalogEntry> = filter(format, tier, maxParamCount, language, license, family = null)
 
     fun byRepoId(repoId: String): ModelCatalogEntry? =
         entries.firstOrNull { it.repoId == repoId }
@@ -96,6 +148,10 @@ class ModelCatalog private constructor(
                     ?: throw IllegalArgumentException(
                         "Catalog entry missing reproducibility_hash on line $lineNumber",
                     ),
+                // Optional since 4.1; older assets omit them and still load.
+                family = jsonObject.stringValue("family"),
+                task = jsonObject.stringValue("task"),
+                canonicalLabels = jsonObject.stringList("canonical_labels"),
             )
         }
 
