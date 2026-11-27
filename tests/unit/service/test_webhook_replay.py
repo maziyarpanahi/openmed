@@ -12,6 +12,7 @@ from typing import Any, Optional
 import httpx
 import pytest
 
+from openmed.service._state_files import exclusive_lock
 from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import (
     NONCE_HEADER,
@@ -246,6 +247,17 @@ def test_replay_stays_rejected_after_a_receiver_restart(tmp_path: Path) -> None:
     retry = _verify(restarted, _signed(attempt=2, timestamp=T0 + 30), now=T0 + 30)
     assert retry.outcome is WebhookOutcome.DUPLICATE
     assert retry.reason == "delivery_applied"
+
+
+@pytest.mark.parametrize("original", [b"", b"0"])
+def test_lock_acquisition_preserves_empty_and_existing_files(
+    tmp_path: Path, original: bytes
+) -> None:
+    path = tmp_path / "ledger.lock"
+    path.write_bytes(original)
+    with exclusive_lock(path):
+        assert path.stat().st_size == len(original)
+    assert path.read_bytes() == original
 
 
 def test_concurrent_receivers_cannot_both_claim_one_delivery(tmp_path: Path) -> None:
