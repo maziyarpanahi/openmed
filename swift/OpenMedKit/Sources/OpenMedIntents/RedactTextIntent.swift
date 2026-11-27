@@ -15,7 +15,7 @@ public struct RedactTextIntent: AppIntent {
 
     public static var description: IntentDescription? {
         IntentDescription(
-            "Replaces personal health information in text on this device and returns only the redacted text. Uses a model the app already downloaded; it never downloads one or sends text off the device."
+            "Replaces personal health information in text on this device and returns only the redacted text. Uses a model the app already downloaded; it never downloads one or sends text off the device. Redaction is automated and can miss identifiers, so review the result before sharing it."
         )
     }
 
