@@ -652,6 +652,7 @@ classification:
     - multimodal/inference-cli.md
     - api/deidentification.md
     - api/errors.md
+    - api/record-migrations.md
     - api/compatibility-gate.md
     - api/protocol-parity.md
     - decision-models.md
