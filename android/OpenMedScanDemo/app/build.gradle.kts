@@ -41,7 +41,7 @@ kotlin {
 dependencies {
     implementation(project(":openmedkit"))
     implementation(project(":openmedkit-mlkit"))
-    implementation(platform("androidx.compose:compose-bom:2023.06.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.activity:activity-compose:1.7.2")
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-core:1.4.2")
