@@ -356,6 +356,39 @@ const result = await deidentify(clinicalNote, {
 - **Teardown.** `dispose()` rejects outstanding work with `disposed`, asks the
   worker to release its runtime and terminates it.
 
+## Verifying Signed Audit Reports
+
+`verifyAuditReport(json, key)` checks an audit report that Python's
+`AuditReport.sign()` produced, entirely in the browser or Node with WebCrypto:
+
+```js
+import { verifyAuditReport } from "openmed";
+
+const { result, reason, spanOrder } = await verifyAuditReport(reportJson, key);
+if (!result) {
+  // reason: hash_mismatch | signature_mismatch | unsupported_algorithm | malformed
+}
+```
+
+It recomputes the report's `repro_hash` and checks the `HMAC-SHA256` signature
+with `crypto.subtle.verify`, trying the deterministic span order first and then
+the legacy stored order, exactly as `AuditReport.verify()` does. `reason` is
+`valid` or one of the codes the Swift and Kotlin verifiers share; an unsigned
+report gives `signature_mismatch`, and a report that is not a well-formed
+`AuditReport` gives `malformed` without echoing it.
+
+- Pass the report text (or its UTF-8 bytes) exactly as received. Do not parse it
+  with `JSON.parse` first: that turns `1.0` into `1` and prints `1e-07` as
+  `1e-7`, so the canonical bytes no longer match.
+- Every member other than `repro_hash` and `signature` is covered; a member
+  added after signing fails with `hash_mismatch`.
+- The key is the caller's: text (UTF-8) or bytes, never logged, copied only for
+  the WebCrypto import and zeroed afterwards. An empty key throws
+  `AuditReceiptError` with code `key_invalid`, and a missing or failing WebCrypto
+  throws `verifier_unavailable`; errors carry the code only.
+- The package verifies and never signs. `canonicalAuditJson()` and
+  `auditReportPayloads()` expose the canonical bytes for diagnostics.
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.

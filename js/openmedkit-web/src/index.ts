@@ -120,6 +120,23 @@ export {
   PORTABLE_POLICY_RESOURCES,
   PORTABLE_TAXONOMY_LABELS,
 } from "./portable-policy-resources";
+export {
+  AUDIT_REPORT_SIGNATURE_ALGORITHM,
+  AUDIT_REPORT_VERIFICATION_REASONS,
+  AuditReceiptError,
+  auditReportPayloads,
+  canonicalAuditJson,
+  verifyAuditReport,
+} from "./receipt";
+export type {
+  AuditReceiptErrorCode,
+  AuditReportCrypto,
+  AuditReportPayload,
+  AuditReportSpanOrder,
+  AuditReportVerification,
+  AuditReportVerificationReason,
+  VerifyAuditReportOptions,
+} from "./receipt";
 export type {
   KitParityAction,
   KitParityBundleContract,

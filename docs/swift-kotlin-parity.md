@@ -579,6 +579,12 @@ signature digit, an unknown algorithm, the legacy stored span order, non-ASCII
 keys and values, and float edge cases (`0.1`, `1e-07`, `0.30000000000000004`,
 `5e-324`).
 
+The web package's `verifyAuditReport()` (`js/openmedkit-web/src/receipt.ts`)
+consumes every case in `tests/web/test_receipt_verification.spec.ts`: it must
+reproduce each candidate's payload bytes and the expected verdict, with reason
+codes `valid`, `hash_mismatch`, `signature_mismatch` (also for an unsigned
+report), `unsupported_algorithm` and `malformed`.
+
 Regenerate or check the fixture with
 `python scripts/parity/generate_receipt_vectors.py --write` or `--check`;
 `tests/unit/core/test_receipt_vectors.py` checks that regeneration is
