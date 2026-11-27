@@ -153,8 +153,11 @@ repository:
 1. Make sure the `@openmed` npm scope exists and the maintainer account can
    publish to it. npm configures trusted publishers per package, so if
    `@openmed/rest-client` does not exist on npm yet, create it first, for
-   example with one manual `npm publish --access public` of the tagged
-   `clients/typescript` build.
+   example with one manual
+   `npm publish --access public --provenance=false` of the tagged
+   `clients/typescript` build. The flag is needed because the manifest's
+   `publishConfig` requests provenance, which npm can only generate on a
+   supported CI runner.
 2. In the `@openmed/rest-client` package settings, add a GitHub Actions trusted
    publisher for user `maziyarpanahi`, repository `openmed`, workflow filename
    `publish.yml` and environment `npm`, the same values as for `openmed`.
