@@ -78,6 +78,27 @@ The projections are `MultimodalAsset`, `MultimodalVisual`, `MultimodalTranscript
 
 Python's `LocalMultimodalAdapter` and Swift's `LocalMultimodalAdapter` provide injected local execution seams. `run_local_adapter` / `LocalMultimodalExecution.run` reject a non-local declaration or an unsupported projection kind before invoking the adapter. A returned provider outcome must bind `input_digest` to the request packet's `evidence_digest`. Missing models, resource limits and validation failures use the existing provider result vocabulary; they never become successful empty outputs. Actual model execution, cancellation, resource enforcement and source custody remain responsibilities of the injected implementation. A declaration is not a network sandbox.
 
+## Browser and Node.js admission
+
+The `openmed` npm package admits the same packets from the `openmed/multimodal` subpath, so browser review tools can verify a packet's digest and read its source coordinates without Python or Swift. The default `openmed` entry does not include it.
+
+```ts
+import { admitMultimodalPacket, MultimodalContractError } from "openmed/multimodal";
+
+// wire is the canonical packet text or bytes from a trusted local source boundary.
+try {
+  const packet = await admitMultimodalPacket(wire);
+  if (packet.projection.kind === "visual") {
+    // Keep sourceBox for provenance; displayBox is only the validated rotation.
+    const { sourceBox, displayBox } = packet.projection.visual;
+  }
+} catch (error) {
+  if (error instanceof MultimodalContractError) console.warn(error.code);
+}
+```
+
+`admitMultimodalPacket` applies the checks below in the same order as Python, so a packet with several faults gets the same refusal code on every platform. It reads the packet with a strict JSON parser rather than `JSON.parse`, so duplicate keys are refused and integers keep their exact value. Fields that can exceed 2^53 are `bigint`: an asset's `byteSize`, provider `counts`, and clock bounds, overlap and uncertainty. Floating fields are decoded from their sixteen hex digits with a big-endian `DataView`. The evidence digest and a clock projection's source result digest are checked with WebCrypto SHA-256 (`globalThis.crypto.subtle`, available in secure browser contexts and Node.js 20+). Without it, admission throws `MultimodalDigestUnavailableError` instead of skipping the check; hosts can pass `{ subtle }` explicitly. Asset media types follow Python's `AssetManifest`, which also admits `video/mp4`, `application/edf` and `application/wfdb`. The packet, its projection and every nested value are frozen, and `toBytes()` returns a copy of the exact admitted bytes. The web package admits only `openmed.multimodal.apple.v1`, exported as `MULTIMODAL_PACKET_SCHEMAS`; it has no projection factories or local adapter seam.
+
 ## Wire identity and validation
 
 The exact envelope schema is `openmed.multimodal.apple.v1`, with four keys: `schema_version`, `kind`, `payload`, and `evidence_digest`. Its identity is SHA-256 over canonical JSON containing the first three fields. Canonical JSON is compact, sorted by ASCII field name, and ASCII-escaped. Admission requires byte-for-byte canonical form; whitespace variants, duplicate keys, trailing data and alternate numeric encodings are rejected. Use the projection factories to produce this wire format.
@@ -149,7 +170,7 @@ python -m pytest tests/unit/multimodal/test_runtime_session.py -q
 
 ## Offline parity validation
 
-The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.json`. Python recreates it from actual source contracts; Swift validates the same bytes, evidence identities, geometry, scalar/sample boundaries and all reason vocabularies. Negative controls cover unknown versions/capabilities, duplicate and unknown keys, numeric coercion and overflow, nonfinite values, incomplete provenance, incorrect transforms, invalidated citations and leaked held timestamps.
+The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.json`. Python recreates it from actual source contracts; Swift and the web package validate the same bytes, evidence identities, geometry, scalar/sample boundaries and all reason vocabularies. Negative controls cover unknown versions/capabilities, duplicate and unknown keys, numeric coercion and overflow, nonfinite values, incomplete provenance, incorrect transforms, invalidated citations and leaked held timestamps.
 
 ```bash
 python -m pytest tests/unit/multimodal/test_apple_contract.py -q
@@ -157,6 +178,8 @@ cd swift/OpenMedKit
 swift test --disable-automatic-resolution --filter MultimodalContractParityTests
 cd ../../android
 ./gradlew :openmedkit:testDebugUnitTest --tests '*MultimodalContractParityTest'
+cd ../../js/openmedkit-web
+npx tsx --test ../../tests/web/test_multimodal_contract.spec.ts
 ```
 
 Package dependencies must already be resolved and cached for an offline build. The tests themselves need no model weights, network access, microphone or real clinical data. The Swift workflow also runs when the shared fixture changes. These checks establish contract parity; they do not qualify any VLM/ASR model or complete application.

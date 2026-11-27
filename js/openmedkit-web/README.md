@@ -438,6 +438,28 @@ const result = await deidentify(clinicalNote, {
 - **Teardown.** `dispose()` rejects outstanding work with `disposed`, asks the
   worker to release its runtime and terminates it.
 
+## Multimodal Evidence Packets
+
+The `openmed/multimodal` subpath admits the `openmed.multimodal.apple.v1`
+evidence packets that Python and OpenMedKit exchange. Admission checks the
+canonical form, the 64 KiB limit and the WebCrypto SHA-256 evidence digest.
+It then returns a frozen, typed asset, visual, transcript, provider or clock
+projection:
+
+```ts
+import { admitMultimodalPacket } from "openmed/multimodal";
+
+const packet = await admitMultimodalPacket(wire);
+console.log(packet.evidenceDigest, packet.projection.kind);
+```
+
+A refused packet throws `MultimodalContractError`, whose `code` is one of the
+five shared refusals and whose message holds nothing else. Integers that can
+exceed 2^53, such as nanosecond clock bounds, are `bigint`. Admission decodes
+no media and makes no network request. A valid packet is structural evidence,
+not proof of who produced it and not a clinical or disclosure decision. See
+[OpenMedKit multimodal evidence contracts](../../docs/multimodal/openmedkit-contracts.md).
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.

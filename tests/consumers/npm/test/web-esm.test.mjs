@@ -62,6 +62,10 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/catalog.cjs",
     "dist/catalog.d.ts",
     "dist/catalog.d.cts",
+    "dist/multimodal/index.js",
+    "dist/multimodal/index.cjs",
+    "dist/multimodal/index.d.ts",
+    "dist/multimodal/index.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -216,6 +220,23 @@ test("openmed/catalog lists bundled ONNX models offline", async () => {
   assert.equal(catalog.getModel(first.repo_id), first);
   assert.equal(catalog.getModel("OpenMed/not-in-the-catalog"), undefined);
   assert.equal(Object.hasOwn(openmed, "listModels"), false, "catalog_in_main_entry");
+});
+
+test("openmed/multimodal admits packets offline from the installed build", async () => {
+  const multimodal = await import("openmed/multimodal");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/multimodal"));
+  assert.match(resolved, /multimodal[\\/]index\.js$/, "esm_multimodal_entry");
+  assert.equal(multimodal.MULTIMODAL_PACKET_SCHEMA, "openmed.multimodal.apple.v1");
+  await assert.rejects(multimodal.admitMultimodalPacket("{}"), (error) => {
+    assert.ok(error instanceof multimodal.MultimodalContractError, "multimodal_error_type");
+    assert.equal(error.code, "invalid_multimodal_contract");
+    return true;
+  });
+  assert.equal(
+    Object.hasOwn(openmed, "admitMultimodalPacket"),
+    false,
+    "multimodal_in_main_entry",
+  );
 });
 
 test("installed package made no network requests", () => {

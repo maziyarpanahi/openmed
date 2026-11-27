@@ -61,3 +61,19 @@ test("CommonJS and ESM catalog subpaths list the same rows", async () => {
   );
   assert.equal(catalog.MODEL_CATALOG_DIGEST, esm.MODEL_CATALOG_DIGEST);
 });
+
+test("CommonJS and ESM multimodal subpaths expose the same surface", async () => {
+  const multimodal = require("openmed/multimodal");
+  assert.ok(
+    require.resolve("openmed/multimodal").endsWith("index.cjs"),
+    "cjs_multimodal_entry",
+  );
+  const esm = await import("openmed/multimodal");
+  assert.deepEqual(
+    Object.keys(multimodal).sort(),
+    Object.keys(esm)
+      .filter((key) => key !== "default")
+      .sort(),
+  );
+  assert.deepEqual(multimodal.MULTIMODAL_REFUSALS, esm.MULTIMODAL_REFUSALS);
+});

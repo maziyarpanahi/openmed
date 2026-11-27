@@ -229,6 +229,16 @@
         "types": "./dist/catalog.d.cts",
         "default": "./dist/catalog.cjs"
       }
+    },
+    "./multimodal": {
+      "import": {
+        "types": "./dist/multimodal/index.d.ts",
+        "default": "./dist/multimodal/index.js"
+      },
+      "require": {
+        "types": "./dist/multimodal/index.d.cts",
+        "default": "./dist/multimodal/index.cjs"
+      }
     }
   }
 }
