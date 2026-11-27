@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `family`, `task` and `canonical_labels` to the bundled Android model catalog, expose them as optional `ModelCatalogEntry.family`, `task` and `canonicalLabels` (older assets still load), and add a `family` predicate to `ModelCatalog.filter`, keeping the previous constructor, `copy` and `filter` signatures binary-compatible (#5422).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.

@@ -169,7 +169,7 @@ and the per-span `actions`.
 | --- | --- |
 | `OpenMedBackend` | Local-first configuration pointing at an on-device model directory and tokenizer assets. Performs no network access. |
 | `OpenMedKit` | `Closeable` facade. `deidentify(text, policy, …)` redacts under a bundled policy; `extractPii(text, …)` and `extractPiiChunked(text, …)` return detected `EntityPrediction` spans. |
-| `ModelCatalog` | Reads the bundled `openmed_model_catalog.jsonl` asset into `ModelCatalogEntry` rows (`repoId`, `formats`, `languages`, …). |
+| `ModelCatalog` | Reads the bundled `openmed_model_catalog.jsonl` asset into `ModelCatalogEntry` rows (`repoId`, `formats`, `languages`, `family`, `task`, `canonicalLabels`, …). |
 | `ModelCache` | Resolves and manages on-device model directories keyed by `repoId`. |
 
 ## Local-First Guarantees

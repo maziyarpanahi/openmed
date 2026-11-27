@@ -851,6 +851,44 @@ def test_committed_kotlin_baseline_covers_the_parity_checklist():
         assert symbol in table
 
 
+def test_next_series_migration_guide_names_every_native_break_since_release():
+    # Compare the committed baselines with the latest release tag and require
+    # the guide that opens the next series to name every breaking symbol.
+    described = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "describe",
+            "--tags",
+            "--abbrev=0",
+            "--match",
+            "v[0-9]*",
+            "HEAD",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if described.returncode != 0:
+        pytest.skip("release tags are unavailable in this shallow checkout")
+    release_tag = described.stdout.strip()
+    series = release_tag.removeprefix("v").rsplit(".", 1)[0]
+    breaking = [
+        change
+        for change in native_api.compare_refs(
+            ROOT, release_tag, native_api.WORKTREE_REF
+        )
+        if change.breaking
+    ]
+    guides = {
+        guide.name: guide.read_text(encoding="utf-8")
+        for guide in (ROOT / "docs" / "migration").glob(f"{series}-to-*.md")
+    }
+
+    assert native_api.missing_migration_symbols(breaking, guides) == ()
+
+
 def test_kotlin_binary_compatibility_validator_is_pinned_and_applied():
     catalog = tomllib.loads(
         (ROOT / "android" / "gradle" / "libs.versions.toml").read_text("utf-8")
