@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   descriptor as typed fields with its digest, authorized like `GET /v1/capabilities` (#5345).
 - Add `openmed capabilities`, which prints the canonical capability descriptor and digest
   in a stable order, or as the standard `--json` envelope, and always exits 0 (#5346).
+- Expose the canonical capability descriptor, digest included, as the MCP resource
+  `openmed://capabilities` (#5347).
 
 ### Fixed
 
