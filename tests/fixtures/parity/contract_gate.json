@@ -1,0 +1,478 @@
+{
+  "schema": "openmed.contract_gate.manifest",
+  "version": 1,
+  "description": "Which runtime must pass which shared parity fixture. Every file under the roots is listed with its SHA-256 digest. docs/contract-gate.md documents the format; check it with python scripts/release/contract_gate.py verify.",
+  "algorithm": "sha256",
+  "roots": [
+    "fixtures/parity",
+    "tests/fixtures/parity"
+  ],
+  "result_schema": {
+    "path": "tests/fixtures/parity/contract_gate_result.schema.json",
+    "sha256": "ddd192201f2174aacfd80affec8374f9fbb94f5f33685c185414562de5be5074"
+  },
+  "runtimes": {
+    "python": {
+      "reporter": "active",
+      "command": "python scripts/release/contract_gate.py run-python"
+    },
+    "swift": {
+      "reporter": "pending",
+      "tracking": "#5327"
+    },
+    "kotlin": {
+      "reporter": "pending",
+      "tracking": "#5328"
+    },
+    "web": {
+      "reporter": "pending",
+      "tracking": "#5329"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "decision_encoder_v1",
+      "path": "tests/fixtures/parity/decision_encoder_v1.json",
+      "sha256": "b3963cbd239f00b1af5644db88733cdace7b38f8bc5350932e9df114e8821365",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        },
+        {
+          "key": "invalid_requests",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/structured/test_decision_encoder_parity.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/DecisionRuntimeParityTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/decision/DecisionRuntimeParityTest.kt"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "consumers": [
+            "tests/web/test_decision_runtime.spec.ts"
+          ]
+        }
+      }
+    },
+    {
+      "id": "document_intake_v1",
+      "path": "tests/fixtures/parity/document_intake_v1.json",
+      "sha256": "aa65ea79d6a75c45ce43cd2211309e01ed4b6bf05b239db30bebce50ba79f87f",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/multimodal/test_native_intake.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/DocumentIntakeParityTests.swift",
+            "swift/OpenMedKit/Tests/OpenMedKitTests/DocumentRedactionExportTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/intake/DocumentEvidenceParityTest.kt",
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/export/DocumentRedactionExportTest.kt"
+          ]
+        },
+        "web": {
+          "status": "not_applicable",
+          "reason": "Native PDF and image document intake has no web implementation."
+        }
+      }
+    },
+    {
+      "id": "expected_spans",
+      "path": "fixtures/parity/expected_spans.json",
+      "sha256": "d261ac3f428b43b069a13f11392fad043a118b0ccef90816bf2bfb60889ed43c",
+      "version": 2,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [
+        {
+          "path": "fixtures/parity/span_parity_manifest.json",
+          "sha256": "e9ddd466c79df56292e5eb799b26558967c735a1f42f6f39c259ca4827016738"
+        },
+        {
+          "path": "fixtures/parity/synthetic_clinical_note.txt",
+          "sha256": "a8778d36ef0e5d45ea0833ea1de415acc5ddc8b093d902f8d875e2d31535b70a"
+        }
+      ],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/parity/test_native_span_fixture.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/SpanEquivalenceParityTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/SpanEquivalenceTest.kt"
+          ]
+        },
+        "web": {
+          "status": "not_applicable",
+          "reason": "Native Swift and Kotlin span-equivalence fixture; web span parity is gated by kit_parity_vectors."
+        }
+      }
+    },
+    {
+      "id": "kit_parity_vectors",
+      "path": "tests/fixtures/parity/kit_parity_vectors.json",
+      "sha256": "fe8cb806f773f49c9c9df7302f154d43973a13899a00a8a1524a02303b01e99b",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "vectors",
+          "id_field": "id"
+        },
+        {
+          "key": "rejections",
+          "id_field": "id"
+        },
+        {
+          "key": "source_rejections",
+          "id_field": "id"
+        },
+        {
+          "key": "offset_rejections",
+          "id_field": "id"
+        },
+        {
+          "key": "compatibility",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/parity/test_kit_parity_vectors.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/KitParityVectorTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/KitParityVectorTest.kt"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "consumers": [
+            "tests/web/test_kit_parity.spec.ts"
+          ]
+        }
+      }
+    },
+    {
+      "id": "multimodal_contract_v1",
+      "path": "tests/fixtures/parity/multimodal_contract_v1.json",
+      "sha256": "5dff2d7983fc0d9f48cef1f8305b19eaad644eb57395651fdcc1fda456f227bd",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        },
+        {
+          "key": "negative_cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/multimodal/test_apple_contract.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/MultimodalContractParityTests.swift",
+            "swift/OpenMedKit/Tests/OpenMedKitTests/DocumentIntakeTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "not_applicable",
+          "reason": "Apple multimodal projection contract; Android metadata contracts are gated by multimodal_contracts_v1."
+        },
+        "web": {
+          "status": "not_applicable",
+          "reason": "The web package has no multimodal provider surface."
+        }
+      }
+    },
+    {
+      "id": "multimodal_contracts_v1",
+      "path": "tests/fixtures/parity/multimodal_contracts_v1.json",
+      "sha256": "e1be5be75d706fef13cc607aa06c57487b8943166e4f95bfbd98e75095c9cf55",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/multimodal/test_android_contract_parity.py"
+          ]
+        },
+        "swift": {
+          "status": "not_applicable",
+          "reason": "Android multimodal metadata contract; Apple projections are gated by multimodal_contract_v1."
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/MultimodalContractParityTest.kt"
+          ]
+        },
+        "web": {
+          "status": "not_applicable",
+          "reason": "The web package has no multimodal provider surface."
+        }
+      }
+    },
+    {
+      "id": "offset_contract",
+      "path": "tests/fixtures/parity/offset_contract.json",
+      "sha256": "5412d35a7b329c4f383f4a0c3069365bf0fc7f4665554901c78a3f6753b692af",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/core/test_offset_contract_parity.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/OffsetContractParityTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/OffsetContractParityTest.kt"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "consumers": []
+        }
+      }
+    },
+    {
+      "id": "portable_policy_vectors",
+      "path": "tests/fixtures/parity/portable_policy_vectors.json",
+      "sha256": "2206f78a3473d454399bc98a3d36285f7b77c63c8d0ec0cfefc3a50ac944414a",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "decision_cases",
+          "id_field": "id"
+        },
+        {
+          "key": "error_cases",
+          "id_field": "id"
+        },
+        {
+          "key": "load_cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/parity/test_portable_policy.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/PortablePolicyVectorTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/policy/PortablePolicyVectorTest.kt"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "consumers": [
+            "tests/web/test_portable_policy.spec.ts"
+          ]
+        }
+      }
+    },
+    {
+      "id": "speech_contract_v1",
+      "path": "tests/fixtures/parity/speech_contract_v1.json",
+      "sha256": "4f8571168ad4bfdf08f03c3ff1c180ce9b03ca8cfefafd145862ff6720a41ce4",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "segment"
+        },
+        {
+          "key": "provenance"
+        },
+        {
+          "key": "invalid_provenance"
+        },
+        {
+          "key": "invalid_tokens"
+        }
+      ],
+      "companions": [],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/multimodal/test_apple_speech_contract.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/SpeechContractParityTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "not_applicable",
+          "reason": "Android has no speech provider adapter."
+        },
+        "web": {
+          "status": "not_applicable",
+          "reason": "The web package has no speech provider adapter."
+        }
+      }
+    },
+    {
+      "id": "tokenizer_conformance_v1",
+      "path": "tests/fixtures/parity/tokenizer/tokenizer_conformance_v1.json",
+      "sha256": "688aef6280a5eaa467654c2d185ddc8ffa8732a0f1a5fa7c2ab57da4b4f57e03",
+      "version": 1,
+      "case_groups": [
+        {
+          "key": "cases",
+          "id_field": "id"
+        }
+      ],
+      "companions": [
+        {
+          "path": "tests/fixtures/parity/tokenizer/manifest.json",
+          "sha256": "78a590ea10367ec6724dad6e184405565d0926ffb925219b7ac3549dd3d60c96"
+        },
+        {
+          "path": "tests/fixtures/parity/tokenizer/tokenizer_runtime_support_v1.json",
+          "sha256": "dd1c788de62c89d2f2884688e5ef9fffedbe5fa8756f6c1f69a6eb528681e784"
+        },
+        {
+          "path": "tests/fixtures/parity/tokenizer/synthetic-wordpiece-v1/config.json",
+          "sha256": "46684b6950746c210c96c7531478faf0a8e43cc5d91cedb01f1b460e490af00b"
+        },
+        {
+          "path": "tests/fixtures/parity/tokenizer/synthetic-wordpiece-v1/tokenizer.json",
+          "sha256": "add4243611377eee2214a310ce0c582b6c48b65fae0ed0be1951b1dcb0ee8a89"
+        },
+        {
+          "path": "tests/fixtures/parity/tokenizer/synthetic-wordpiece-v1/tokenizer_config.json",
+          "sha256": "e3a977736587630a0bd6d580178be9e415e0ddb87715b4f942d8dd6f872a3e0d"
+        }
+      ],
+      "runtimes": {
+        "python": {
+          "status": "required",
+          "consumers": [
+            "tests/unit/eval/test_tokenizer_conformance.py"
+          ]
+        },
+        "swift": {
+          "status": "required",
+          "consumers": [
+            "swift/OpenMedKit/Tests/OpenMedKitTests/TokenizerConformanceTests.swift"
+          ]
+        },
+        "kotlin": {
+          "status": "required",
+          "consumers": [
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/TokenizerConformanceTest.kt"
+          ]
+        },
+        "web": {
+          "status": "required",
+          "consumers": [
+            "tests/web/test_tokenizer_conformance.spec.ts"
+          ]
+        }
+      }
+    }
+  ]
+}

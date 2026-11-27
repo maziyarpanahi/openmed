@@ -771,6 +771,7 @@ nav:
       - iOS Share and Action Extensions: runtimes/ios-share-extension.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
       - Tokenizer Conformance: tokenizer-conformance.md
+      - Cross-Runtime Contract Gate: contract-gate.md
       - Device Capability Resolution: runtimes/device-capabilities.md
       - Managed Offline Model-Bundle Import: mobile/managed-model-bundles.md
       - Installed OpenMedKit Packages: migration/openmedkit-installed-packages.md
