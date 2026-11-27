@@ -35,6 +35,7 @@ CLIENT_METHOD_BY_PATH = {
     "/jobs/{job_id}": "getJob",
     "/livez": "livez",
     "/models/loaded": "loadedModels",
+    "/v1/capabilities": "capabilities",
     "/models/unload": "unloadModels",
     "/omop/load": "loadOmop",
     "/pii/deidentify": "deidentify",
