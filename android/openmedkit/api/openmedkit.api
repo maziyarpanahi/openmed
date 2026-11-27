@@ -2161,6 +2161,18 @@ public final class com/openmed/openmedkit/decode/TokenPrediction {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/openmed/openmedkit/deid/DateShift {
+	public static final field DEFAULT_MAX_DAYS I
+	public static final field INSTANCE Lcom/openmed/openmedkit/deid/DateShift;
+	public final fun shift (Ljava/lang/String;I)Ljava/lang/String;
+	public final fun stableOffset (Ljava/lang/String;[BI)I
+	public static synthetic fun stableOffset$default (Lcom/openmed/openmedkit/deid/DateShift;Ljava/lang/String;[BIILjava/lang/Object;)I
+	public final fun stableOffsetFromSeed (JI)I
+	public final fun stableOffsetFromSeed (Ljava/math/BigInteger;I)I
+	public static synthetic fun stableOffsetFromSeed$default (Lcom/openmed/openmedkit/deid/DateShift;JIILjava/lang/Object;)I
+	public static synthetic fun stableOffsetFromSeed$default (Lcom/openmed/openmedkit/deid/DateShift;Ljava/math/BigInteger;IILjava/lang/Object;)I
+}
+
 public final class com/openmed/openmedkit/deid/DeidentifyAction {
 	public fun <init> (Lcom/openmed/openmedkit/deid/OpenMedSpan;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;II)V
 	public final fun component1 ()Lcom/openmed/openmedkit/deid/OpenMedSpan;
