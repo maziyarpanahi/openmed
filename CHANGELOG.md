@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `family`, `task` and `canonical_labels` to the bundled Android model catalog, expose them as optional `ModelCatalogEntry.family`, `task` and `canonicalLabels` (older assets still load), and add a `family` predicate to `ModelCatalog.filter`, keeping the previous constructor, `copy` and `filter` signatures binary-compatible (#5422).
 - Add `LegacyRootedError`, a compatibility root that lets existing builtin-based exceptions join `OpenMedError` with unchanged `args`, `str()`, MRO and transport mapping, plus a shrink-only gate for unrooted public exceptions (#5365).
 - List, measure and delete OpenMedKit Swift cached models through `OpenMedModelStore.listCachedModels`, `totalCacheSizeBytes` and `deleteModel`: the ready marker goes first so an interrupted delete is never reported ready, and symlinked or escaping cache paths are refused with a path-free error (#5376).
+- Define one session lifecycle vocabulary (`openmed.session.lifecycle.v1`: `open`, `cancelling`, `finalized`, `cancelled`, `failed`, `closed`) with `session_lifecycle.schema.json`, a `lifecycle_state` projection and `check_lifecycle_transition()` on the Python runtime and streaming ASR sessions, a documented mapping from each existing enum and shared vectors in `tests/fixtures/parity/session_lifecycle_v1.json`; existing state values and reports are unchanged (#5354).
 
 ### Changed
 

@@ -96,6 +96,44 @@ Packets are limited to 64 KiB. Counts, source spans, token references, clock ran
 
 A digest detects changes relative to the supplied packet; it does not authenticate who produced it. Applications must check current source custody and review state at use time. Packets contain coordinates, counts and digests instead of raw media or transcript content, but remain sensitive metadata and require access controls. No automatic role assignment, diagnosis, PHI release or model-license decision follows from admission.
 
+## Session lifecycle vocabulary
+
+Runtime and streaming speech sessions share one lifecycle vocabulary, `openmed.session.lifecycle.v1`, defined in `openmed.multimodal.session_lifecycle` and described by `openmed/core/schemas/json/session_lifecycle.schema.json`. It has six states: `open`, `cancelling`, `finalized`, `cancelled`, `failed` and `closed`. `finalized`, `cancelled`, `failed` and `closed` are terminal and have no outgoing transition.
+
+| From | Allowed targets |
+| --- | --- |
+| `open` | `cancelling`, `finalized`, `cancelled`, `failed`, `closed` |
+| `cancelling` | `cancelled`, `failed`, `closed` |
+| terminal states | none |
+
+Each session keeps its own enum and its serialized report. A read-only `lifecycle_state` property projects the native state onto the shared vocabulary:
+
+| Native enum | Native value | `lifecycle_state` |
+| --- | --- | --- |
+| `SessionState` (`openmed.multimodal.session.v1`, `MultimodalSession`) | `open`, `cancelling`, `cancelled`, `closed` | same names |
+| `StreamState` (Python `StreamingAsrSession`) | `open`, `finalized`, `cancelled` | same names |
+| Swift `SpeechSessionState` (`StreamingSpeechSession`) | `open`, `finished`, `cancelled`, `failed` | `open`, `finalized`, `cancelled`, `failed` |
+
+The Swift projection itself is separate work (#5355); the table is the mapping it implements. `MultimodalSession.to_json()` still reports `SessionState` values, and `StreamingAsrSessionReport` still reports `StreamState` values.
+
+`check_lifecycle_transition(target)` on either Python session checks a transition from the current state without changing it. A rejected transition raises the session's existing value-free error, `RuntimeSessionError` or `SpeechProviderError`, whose message (and, for `SpeechProviderError`, `category`) is the reason code:
+
+| Reason code | When |
+| --- | --- |
+| `unknown_state` | Either state is outside the vocabulary, such as the native Swift name `finished` |
+| `session_closed` | The source is `finalized` or `closed` |
+| `session_cancelled` | The source is `cancelled` |
+| `session_failed` | The source is `failed` |
+| `transition_not_allowed` | Any other pair outside the table, including staying in the same state |
+
+`session_closed` and `session_cancelled` are the codes the streaming ASR session already raises when `finalize()` or `cancel()` is called after it ended. `MultimodalSession.cancel()` and `close()` stay idempotent on a terminal session.
+
+The shared vectors are `tests/fixtures/parity/session_lifecycle_v1.json`: the states, terminal states, transition table, reason codes, the native projections above, allowed sequences with the native actions that produce them on each Python session, and rejected transitions with their reason codes. `failed` has no Python producer, so its sequences are checked through the transition table only.
+
+```bash
+python -m pytest tests/unit/multimodal/test_runtime_session.py -q
+```
+
 ## Offline parity validation
 
 The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.json`. Python recreates it from actual source contracts; Swift validates the same bytes, evidence identities, geometry, scalar/sample boundaries and all reason vocabularies. Negative controls cover unknown versions/capabilities, duplicate and unknown keys, numeric coercion and overflow, nonfinite values, incomplete provenance, incorrect transforms, invalidated citations and leaked held timestamps.
