@@ -238,6 +238,53 @@ public struct MultimodalPacket: Sendable, Equatable {
     }
 }
 
+extension MultimodalPacket {
+    /// Builds a visual packet from source coordinates, deriving the display geometry.
+    ///
+    /// The packet is serialized canonically and then admitted through `fromJSON`,
+    /// so it passes exactly the checks applied to packets produced by Python.
+    public static func visual(
+        nodeRef: String, sourceDigest: String, kind: MultimodalVisualKind, page: Int64,
+        width: Double, height: Double, unit: MultimodalSpatialUnit,
+        sourceBox: MultimodalRectangle?, scalarSpan: MultimodalInterval?, rotation: Int64
+    ) throws -> MultimodalPacket {
+        let quarter = rotation == 90 || rotation == 270
+        var displayBox: Any = NSNull()
+        if let box = sourceBox {
+            let coordinates: [Double]
+            switch rotation {
+            case 0: coordinates = [box.left, box.top, box.right, box.bottom]
+            case 90: coordinates = [height - box.bottom, box.left, height - box.top, box.right]
+            case 180: coordinates = [width - box.right, height - box.bottom, width - box.left, height - box.top]
+            case 270: coordinates = [box.top, width - box.right, box.bottom, width - box.left]
+            default: throw MultimodalContractRefusal.transform
+            }
+            displayBox = coordinates.map(Wire.bits)
+        }
+        let payload: [String: Any] = [
+            "source_schema": "openmed.multimodal.fused-evidence.v1",
+            "node_ref": nodeRef,
+            "source_digest": sourceDigest,
+            "kind": kind.rawValue,
+            "page": NSNumber(value: page),
+            "width_f64": Wire.bits(width),
+            "height_f64": Wire.bits(height),
+            "unit": unit.rawValue,
+            "box_f64": sourceBox.map { [$0.left, $0.top, $0.right, $0.bottom].map(Wire.bits) } ?? NSNull(),
+            "span": scalarSpan.map { [NSNumber(value: $0.start), NSNumber(value: $0.end)] } ?? NSNull(),
+            "rotation": NSNumber(value: rotation),
+            "display_width_f64": Wire.bits(quarter ? height : width),
+            "display_height_f64": Wire.bits(quarter ? width : height),
+            "display_box_f64": displayBox,
+        ]
+        var root: [String: Any] = ["schema_version": schema, "kind": MultimodalProjectionKind.visual.rawValue, "payload": payload]
+        do {
+            root["evidence_digest"] = try Wire.hash(root)
+            return try fromJSON(try ClinicalBrief.canonical(root))
+        } catch let refusal as MultimodalContractRefusal { throw refusal } catch { throw MultimodalContractRefusal.invalid }
+    }
+}
+
 /// Injected local execution. Declarations are not a network sandbox.
 public protocol LocalMultimodalAdapter: Sendable {
     var localOnly: Bool { get }

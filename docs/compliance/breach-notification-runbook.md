@@ -116,6 +116,11 @@ notification assessment:
 7. Reassess after each new fact. If the notification decision changes, record
    who approved the change and when.
 
+For OpenMed REST service credentials, client certificates, full disks and
+damaged job or Journey stores, follow the
+[service incident runbooks](../operations/runbooks/service-runbooks.md) for
+the technical containment and recovery steps.
+
 ## Synthetic Worked Example
 
 ### Scenario

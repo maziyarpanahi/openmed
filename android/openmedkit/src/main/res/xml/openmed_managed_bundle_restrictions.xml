@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Managed configuration keys of the OpenMedKit managed bundle importer
+  (docs/mobile/managed-model-bundles.md). Reference this file from the app
+  manifest:
+
+    <meta-data
+        android:name="android.content.APP_RESTRICTIONS"
+        android:resource="@xml/openmed_managed_bundle_restrictions" />
+
+  or copy these entries into the app's own restrictions file. Values hold
+  public keys, digests, and local locations only; never secrets.
+-->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction
+        android:key="openmed_bundle_config_version"
+        android:restrictionType="integer"
+        android:title="@string/openmed_managed_bundle_config_version_title"
+        android:description="@string/openmed_managed_bundle_config_version_description"
+        android:defaultValue="1" />
+    <restriction
+        android:key="openmed_bundle_trust_policy"
+        android:restrictionType="string"
+        android:title="@string/openmed_managed_bundle_trust_policy_title"
+        android:description="@string/openmed_managed_bundle_trust_policy_description" />
+    <restriction
+        android:key="openmed_bundle_key_pins"
+        android:restrictionType="string"
+        android:title="@string/openmed_managed_bundle_key_pins_title"
+        android:description="@string/openmed_managed_bundle_key_pins_description" />
+    <restriction
+        android:key="openmed_bundle_location"
+        android:restrictionType="string"
+        android:title="@string/openmed_managed_bundle_location_title"
+        android:description="@string/openmed_managed_bundle_location_description" />
+    <restriction
+        android:key="openmed_bundle_expected_id"
+        android:restrictionType="string"
+        android:title="@string/openmed_managed_bundle_expected_id_title"
+        android:description="@string/openmed_managed_bundle_expected_id_description" />
+    <restriction
+        android:key="openmed_bundle_expected_content_id"
+        android:restrictionType="string"
+        android:title="@string/openmed_managed_bundle_expected_content_id_title"
+        android:description="@string/openmed_managed_bundle_expected_content_id_description" />
+    <restriction
+        android:key="openmed_bundle_min_sequence"
+        android:restrictionType="integer"
+        android:title="@string/openmed_managed_bundle_min_sequence_title"
+        android:description="@string/openmed_managed_bundle_min_sequence_description" />
+    <restriction
+        android:key="openmed_bundle_activation"
+        android:restrictionType="choice"
+        android:title="@string/openmed_managed_bundle_activation_title"
+        android:description="@string/openmed_managed_bundle_activation_description"
+        android:entries="@array/openmed_managed_bundle_activation_entries"
+        android:entryValues="@array/openmed_managed_bundle_activation_values"
+        android:defaultValue="activate" />
+</restrictions>

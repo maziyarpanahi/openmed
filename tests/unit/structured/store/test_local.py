@@ -32,6 +32,7 @@ from openmed.structured.store import (
     FactStore,
     JobMetadata,
     JobMetadataStore,
+    JourneyStoreEncryption,
     LocalArtifactStore,
     LocalJourneyStore,
     PointInTimeReader,
@@ -42,6 +43,9 @@ from openmed.structured.store import (
     StoreState,
     TransactionalJourneyStore,
 )
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 CONTENT = b"synthetic local journey artifact"
 COMMITTED_1 = "2026-01-02T03:04:05Z"
@@ -164,7 +168,7 @@ def _canonical(fact_id: str, state: str) -> CanonicalRecord:
 def test_artifact_store_is_content_addressed_idempotent_and_private(
     tmp_path: Path,
 ) -> None:
-    store = LocalArtifactStore(tmp_path / "artifacts")
+    store = LocalArtifactStore(tmp_path / "artifacts", encryption=PLAINTEXT_DEV)
     first = store.put_bytes(_artifact(), CONTENT)
     second = store.put_bytes(_artifact(), CONTENT)
 
@@ -183,7 +187,7 @@ def test_artifact_store_rejects_mismatch_and_detects_restart_corruption(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "artifacts"
-    store = LocalArtifactStore(root)
+    store = LocalArtifactStore(root, encryption=PLAINTEXT_DEV)
     mismatch = store.put_bytes(_artifact(), b"different")
 
     assert mismatch.state is StoreState.CONFLICT
@@ -194,7 +198,7 @@ def test_artifact_store_rejects_mismatch_and_detects_restart_corruption(
     blob = root / "blobs" / "sha256" / digest[:2] / digest
     blob.write_bytes(b"corrupted")
 
-    reopened = LocalArtifactStore(root)
+    reopened = LocalArtifactStore(root, encryption=PLAINTEXT_DEV)
     result = reopened.get_bytes(_artifact().content_hash)
     assert result.state is StoreState.FAILURE
     assert result.code == "artifact_integrity_failed"
@@ -203,13 +207,13 @@ def test_artifact_store_rejects_mismatch_and_detects_restart_corruption(
 
 def test_migrations_are_deterministic_and_restart_safe(tmp_path: Path) -> None:
     path = tmp_path / "journey.sqlite3"
-    first = SQLiteJourneyStore(path)
+    first = SQLiteJourneyStore(path, encryption=PLAINTEXT_DEV)
     rows_before = first._connection.execute(  # noqa: SLF001
         "SELECT version, name, checksum FROM schema_migrations ORDER BY version"
     ).fetchall()
     first.close()
 
-    second = SQLiteJourneyStore(path)
+    second = SQLiteJourneyStore(path, encryption=PLAINTEXT_DEV)
     rows_after = second._connection.execute(  # noqa: SLF001
         "SELECT version, name, checksum FROM schema_migrations ORDER BY version"
     ).fetchall()
@@ -221,8 +225,10 @@ def test_migrations_are_deterministic_and_restart_safe(tmp_path: Path) -> None:
 
 
 def test_public_store_protocols_match_local_implementations(tmp_path: Path) -> None:
-    artifacts = LocalArtifactStore(tmp_path / "artifacts")
-    metadata = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    artifacts = LocalArtifactStore(tmp_path / "artifacts", encryption=PLAINTEXT_DEV)
+    metadata = SQLiteJourneyStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
 
     assert isinstance(artifacts, ArtifactStore)
     assert isinstance(metadata, EvidenceStore)
@@ -238,7 +244,7 @@ def test_public_store_protocols_match_local_implementations(tmp_path: Path) -> N
 
 def test_newer_or_drifted_migration_is_typed_unsupported(tmp_path: Path) -> None:
     path = tmp_path / "journey.sqlite3"
-    store = SQLiteJourneyStore(path)
+    store = SQLiteJourneyStore(path, encryption=PLAINTEXT_DEV)
     store.close()
     connection = sqlite3.connect(path)
     connection.execute(
@@ -248,7 +254,7 @@ def test_newer_or_drifted_migration_is_typed_unsupported(tmp_path: Path) -> None
     connection.commit()
     connection.close()
 
-    result = SQLiteJourneyStore.open(path)
+    result = SQLiteJourneyStore.open(path, encryption=PLAINTEXT_DEV)
 
     assert result.state is StoreState.UNSUPPORTED
     assert result.code == "schema_unsupported"
@@ -257,7 +263,7 @@ def test_newer_or_drifted_migration_is_typed_unsupported(tmp_path: Path) -> None
 
 def test_graph_ingest_is_atomic_idempotent_and_restart_safe(tmp_path: Path) -> None:
     root = tmp_path / "journey"
-    store = LocalJourneyStore(root)
+    store = LocalJourneyStore(root, encryption=PLAINTEXT_DEV)
     first = store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -283,7 +289,7 @@ def test_graph_ingest_is_atomic_idempotent_and_restart_safe(tmp_path: Path) -> N
     assert counts.value["clinical_facts"] == 1
     store.close()
 
-    reopened = LocalJourneyStore(root)
+    reopened = LocalJourneyStore(root, encryption=PLAINTEXT_DEV)
     assert reopened.artifacts.get_bytes(_artifact().content_hash).value == CONTENT
     assert reopened.metadata.get_fact(_fact().fact_id).value == _fact()
     assert reopened.metadata.latest_revision == 1
@@ -293,7 +299,7 @@ def test_graph_ingest_is_atomic_idempotent_and_restart_safe(tmp_path: Path) -> N
 def test_failed_graph_transaction_leaves_no_partial_graph_or_blob(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     result = store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -315,7 +321,7 @@ def test_failed_graph_transaction_leaves_no_partial_graph_or_blob(
 
 
 def test_exception_rolls_back_transaction(tmp_path: Path) -> None:
-    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
 
     with pytest.raises(RuntimeError, match="synthetic interruption"):
         with store.transaction(committed_at=COMMITTED_1) as transaction:
@@ -328,7 +334,7 @@ def test_exception_rolls_back_transaction(tmp_path: Path) -> None:
 
 
 def test_point_in_time_reads_reproduce_state_before_correction(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     ingested = store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -377,7 +383,7 @@ def test_point_in_time_reads_reproduce_state_before_correction(tmp_path: Path) -
 def test_conflicting_fact_version_is_typed_and_preserves_original(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     assert store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -402,7 +408,7 @@ def test_conflicting_fact_version_is_typed_and_preserves_original(
 def test_conflict_resolution_dataset_and_job_metadata_are_append_only(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     graph = store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -440,7 +446,9 @@ def test_unknown_denied_partial_and_failure_states_are_not_success(
 ) -> None:
     denied_policy = DenyStorageOperations(frozenset({"write"}))
     denied_blobs = LocalArtifactStore(
-        tmp_path / "denied-artifacts", policy=denied_policy
+        tmp_path / "denied-artifacts",
+        policy=denied_policy,
+        encryption=PLAINTEXT_DEV,
     )
     denied = denied_blobs.put_bytes(_artifact(), CONTENT)
     assert denied.state is StoreState.DENIED and not denied.ok
@@ -448,11 +456,12 @@ def test_unknown_denied_partial_and_failure_states_are_not_success(
     write_only = LocalArtifactStore(
         tmp_path / "write-only-artifacts",
         policy=DenyStorageOperations(frozenset({"read"})),
+        encryption=PLAINTEXT_DEV,
     )
     assert write_only.put_bytes(_artifact(), CONTENT).ok
     assert write_only.get_bytes(_artifact().content_hash).state is StoreState.DENIED
 
-    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     unknown = store.get_fact("fact_aaaaaaaaaaaaaaaa")
     partial = store.put_fact(_fact(), committed_at=COMMITTED_1)
     assert unknown.state is StoreState.UNKNOWN and not unknown.ok
@@ -522,7 +531,7 @@ def test_store_result_repr_hides_clinical_values() -> None:
 def test_payload_integrity_check_fails_closed_without_echoing_content(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     assert store.ingest_graph(
         _artifact(),
         CONTENT,
@@ -544,7 +553,7 @@ def test_payload_integrity_check_fails_closed_without_echoing_content(
 
 
 def test_invalid_stored_json_returns_typed_failure(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     assert store.ingest_graph(
         _artifact(),
         CONTENT,

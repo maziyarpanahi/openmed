@@ -23,6 +23,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        # Makes the mounted database Secret readable by the container group.
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -31,13 +33,14 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/bin/python3", "-m", "openmed.deploy.journey", "migrate"]
           env:
-            - name: OPENMED_JOURNEY_POSTGRES_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.journey.database.secretName | quote }}
-                  key: {{ .Values.journey.database.secretKey | quote }}
+            {{- include "openmed-service.journeyDatabaseEnv" . | nindent 12 }}
+            {{- if .Values.journey.database.tls.secretName }}
+            {{- include "openmed-service.journeyDatabaseTLSEnv" . | nindent 12 }}
+            {{- end }}
             - name: OPENMED_JOURNEY_SCHEMA
               value: {{ .Values.journey.schema | quote }}
+            - name: DISABLE_TELEMETRY
+              value: "1"
           resources:
             {{- toYaml .Values.journey.migration.resources | nindent 12 }}
           securityContext:
@@ -46,4 +49,24 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
+          {{- $dsnMount := include "openmed-service.journeyDatabaseVolumeMount" . }}
+          {{- if or $dsnMount .Values.journey.database.tls.secretName }}
+          volumeMounts:
+            {{- with $dsnMount }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- if .Values.journey.database.tls.secretName }}
+            {{- include "openmed-service.journeyDatabaseTLSVolumeMount" . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- $dsnVolume := include "openmed-service.journeyDatabaseVolume" . }}
+      {{- if or $dsnVolume .Values.journey.database.tls.secretName }}
+      volumes:
+        {{- with $dsnVolume }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.journey.database.tls.secretName }}
+        {{- include "openmed-service.journeyDatabaseTLSVolume" . | nindent 8 }}
+        {{- end }}
+      {{- end }}
 {{- end }}

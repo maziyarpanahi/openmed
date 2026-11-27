@@ -151,6 +151,16 @@ removed. A declared export that is temporarily unavailable remains in the
 snapshot but is not treated as a kind or signature change, so partial installs
 never produce false breaks.
 
+## OpenMedKit Swift and Kotlin APIs
+
+The Swift package and the Android AAR have their own committed baselines,
+which are produced with `swift-api-digester` and the Kotlin
+binary-compatibility validator. A pull request that removes or changes a
+public Swift or Kotlin declaration fails CI unless it refreshes the baseline
+and names each affected symbol in a `docs/migration/` guide it adds or
+modifies. See [Swift-Kotlin API Parity](../swift-kotlin-parity.md#public-api-baselines)
+for the regenerate commands.
+
 ## v3.1 security-remediation exception
 
 The maintainer explicitly approved a narrow security exception on 2026-10-20

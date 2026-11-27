@@ -28,7 +28,10 @@ from openmed.interop.ingest import (
     SQLiteIngestionStore,
     StepOutput,
 )
-from openmed.structured.store import StoreState
+from openmed.structured.store import JourneyStoreEncryption, StoreState
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -91,7 +94,7 @@ def _manifest() -> SourceManifest:
 
 
 def _prepare_store(path: Path) -> tuple[SQLiteIngestionStore, str]:
-    store = SQLiteIngestionStore(path)
+    store = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     with store.transaction(committed_at=T0) as transaction:
         assert transaction.put_artifact(_artifact()).ok
         assert transaction.put_evidence(_evidence()).ok
@@ -152,7 +155,7 @@ def test_worker_killed_at_each_checkpoint_resumes_without_duplicate_facts(
         )
     store.close()
 
-    store = SQLiteIngestionStore(path)
+    store = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     coordinator = IngestionCoordinator(store)
     for index in range(3):
         result = coordinator.execute_step(

@@ -1,0 +1,15 @@
+{
+  "description": "Synthetic, PHI-free inputs for scripts/security/no_egress_gate.py. The lexicon drives a deterministic token-classification fixture loader that stands in for a cached checkpoint.",
+  "fixture_version": 1,
+  "model_name": "synthetic/no-egress-fixture",
+  "lexicon": [
+    {"term": "Jane Example", "label": "NAME", "phi": true},
+    {"term": "555-0100", "label": "PHONE", "phi": true},
+    {"term": "MRN-000123", "label": "ID", "phi": true},
+    {"term": "asthma", "label": "CONDITION", "phi": false}
+  ],
+  "document": "Patient Jane Example, record MRN-000123, called 555-0100 about asthma.",
+  "stream_repeat": 64,
+  "stream_chunk_size": 16,
+  "journey_recorded_at": "2026-01-01T00:00:00Z"
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "openmed.rn.parity.corpus_manifest",
+  "version": 1,
+  "synthetic_only": true,
+  "description": "Shared synthetic corpora replayed through the React Native bridge and through direct native OpenMedKit calls. Results are compared with each other, never against platform-specific expected values. canonical_sha256 is sha256 over sorted-key compact JSON as computed by example/src/parity/canonical.ts.",
+  "defaults": {
+    "policy": "hipaa_safe_harbor",
+    "confidence_threshold": 0.5,
+    "use_smart_merging": true,
+    "operations": ["analyzeText", "extractPii", "deidentify"]
+  },
+  "tolerances": {
+    "score_abs": 0.000001
+  },
+  "corpora": [
+    {
+      "id": "offset_contract",
+      "path": "tests/fixtures/parity/offset_contract.json",
+      "canonical_sha256": "sha256:258daf7c3225ad2056cddd54dae744f1dcd44798f50822dce83d992c1e10aea9",
+      "offset_unit": "unicode_scalar",
+      "select": {
+        "cases": "cases",
+        "id": "id",
+        "text": "text"
+      }
+    }
+  ],
+  "pending": [
+    {
+      "id": "kit_parity_vectors",
+      "path": "tests/fixtures/parity/kit_parity_vectors.json",
+      "issue": 3642,
+      "select": {
+        "cases": "vectors",
+        "id": "id",
+        "text": "text",
+        "policy": "engine.policy"
+      }
+    },
+    {
+      "id": "portable_policy_vectors",
+      "path": "tests/fixtures/parity/portable_policy_vectors.json",
+      "issue": 3643,
+      "select": {
+        "cases": "decision_cases",
+        "id": "id",
+        "text": "text",
+        "policy": "profile"
+      }
+    }
+  ]
+}

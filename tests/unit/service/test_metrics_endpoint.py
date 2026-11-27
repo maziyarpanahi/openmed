@@ -224,6 +224,7 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
             "le",
             "priority",
             "queue",
+            "reason",
         }
 
 

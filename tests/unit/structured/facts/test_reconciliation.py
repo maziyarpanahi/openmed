@@ -27,7 +27,15 @@ from openmed.structured.facts import (
     load_fact_reconciliation_schema,
     persist_fact_reconciliation,
 )
-from openmed.structured.store import LocalJourneyStore, StorePoint, StoreState
+from openmed.structured.store import (
+    JourneyStoreEncryption,
+    LocalJourneyStore,
+    StorePoint,
+    StoreState,
+)
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 T0 = "2026-09-21T10:00:00Z"
 T1 = "2026-09-21T11:00:00Z"
@@ -470,7 +478,8 @@ def test_completed_review_builds_append_only_human_resolution() -> None:
 
 def _store_with_facts(tmp_path: Path, *facts: ClinicalFact) -> LocalJourneyStore:
     store = LocalJourneyStore(
-        tmp_path / derived_opaque_id("store", *(f.fact_id for f in facts))
+        tmp_path / derived_opaque_id("store", *(f.fact_id for f in facts)),
+        encryption=PLAINTEXT_DEV,
     )
     content = b"synthetic reconciliation artifact"
     artifact = ClinicalArtifact(

@@ -131,6 +131,15 @@ if (decision.state === "success") {
   console.log(decision.state, decision.code);
 }
 
+// The same route accepts an OpenAI-compatible Decisions body and answers in
+// that shape. `model` must name the model the service decides with.
+const answers = await client.openaiDecisions({
+  model: "openmed/deterministic-fixed-option",
+  input: "Synthetic review priority is urgent.",
+  questions: [{ type: "predicate", name: "urgent" }],
+});
+console.log(answers.answers[0], answers.openmed?.review.required);
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```
@@ -149,6 +158,17 @@ const job = await client.startSmartBackendIngestion({
 
 const status = await client.smartBackendIngestionStatus(job.job_id);
 const summary = await client.smartBackendIngestionSummary(job.job_id);
+```
+
+Pass `{ idempotencyKey }` as the second argument to make a retried start
+return the original job instead of starting a second export. Keep one key per
+logical start, for example a UUID generated before the first attempt:
+
+```ts
+const retryKey = crypto.randomUUID();
+const job = await client.startSmartBackendIngestion(request, {
+  idempotencyKey: retryKey,
+});
 ```
 
 Use `loadedModels()` to inspect cached model resources:

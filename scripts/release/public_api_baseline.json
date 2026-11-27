@@ -179,7 +179,7 @@
       },
       "MapleResponseError": {
         "kind": "class",
-        "signature": null
+        "signature": "(*args, kw:code=...)"
       },
       "MapleSpan": {
         "kind": "class",
@@ -247,7 +247,7 @@
       },
       "PIIPattern": {
         "kind": "class",
-        "signature": "(pattern, entity_type, priority=..., flags=..., base_score=..., context_boost=..., context_words=..., requires_context=..., validator=..., context_required=..., safety_sweep_requires_context=..., reject_on_validation_failure=..., match_normalizer=..., context_normalizer=...)"
+        "signature": "(pattern, entity_type, priority=..., flags=..., base_score=..., context_boost=..., context_words=..., requires_context=..., validator=..., context_required=..., safety_sweep_requires_context=..., reject_on_validation_failure=..., match_normalizer=..., context_normalizer=..., calendar=...)"
       },
       "PII_PATTERNS": {
         "kind": "constant",
@@ -371,7 +371,7 @@
       },
       "aanalyze_text": {
         "kind": "function",
-        "signature": "(text, model_name=..., kw:model_id=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:sentence_backend=..., kw:assert_context=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
+        "signature": "(text, model_name=..., kw:model_id=..., kw:family=..., kw:labels=..., kw:threshold=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:sentence_backend=..., kw:assert_context=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
       },
       "abatch": {
         "kind": "function",
@@ -387,7 +387,7 @@
       },
       "analyze_text": {
         "kind": "function",
-        "signature": "(text, model_name=..., kw:model_id=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:sentence_backend=..., kw:assert_context=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
+        "signature": "(text, model_name=..., kw:model_id=..., kw:family=..., kw:labels=..., kw:threshold=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:sentence_backend=..., kw:assert_context=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
       },
       "append_feedback": {
         "kind": "function",
@@ -10641,7 +10641,7 @@
       },
       "AuditChain": {
         "kind": "class",
-        "signature": "(entries=..., kw:declared_entry_count=..., kw:declared_head_hash=...)"
+        "signature": "(entries=..., kw:declared_entry_count=..., kw:declared_head_hash=..., kw:base_sequence=..., kw:base_hash=...)"
       },
       "AuditChainEntry": {
         "kind": "class",
@@ -10650,6 +10650,18 @@
       "AuditChainSpan": {
         "kind": "class",
         "signature": "(start, end, label, text_hash)"
+      },
+      "AuditContinuityError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "AuditContinuityRecoveryHook": {
+        "kind": "class",
+        "signature": "(chain_path, kw:key_provider, kw:manifest_path=..., kw:key_id=...)"
+      },
+      "AuditContinuityStore": {
+        "kind": "class",
+        "signature": "(chain_path, kw:key_provider, kw:manifest_path=..., kw:anchor_interval=...)"
       },
       "AuditKeyProvider": {
         "kind": "class",
@@ -10729,7 +10741,7 @@
       },
       "ChainVerificationResult": {
         "kind": "class",
-        "signature": "(valid, checked_entries, reason, entry_index=...)"
+        "signature": "(valid, checked_entries, reason, entry_index=..., code=...)"
       },
       "ChineseScriptEstimate": {
         "kind": "class",
@@ -10746,6 +10758,18 @@
       "ConfigurationError": {
         "kind": "class",
         "signature": "(message, kw:code=..., kw:details=...)"
+      },
+      "ContinuityAnchorRef": {
+        "kind": "class",
+        "signature": "(index, digest)"
+      },
+      "ContinuityManifest": {
+        "kind": "class",
+        "signature": "(chain_id, events, declared_event_count=..., declared_head_digest=..., declared_epochs=...)"
+      },
+      "ContinuityVerificationReport": {
+        "kind": "class",
+        "signature": "(valid, code, event_index, chain_id, manifest_digest, chain_head_hash, counts, epochs=..., policy_fingerprints=...)"
       },
       "CustomRecognizer": {
         "kind": "class",
@@ -10773,7 +10797,7 @@
       },
       "DetectionNormalization": {
         "kind": "class",
-        "signature": "(text, original_length, offset_starts, offset_ends, removed_zero_width=..., stripped_combining_marks=..., folded_confusables=..., folded_native_digits=..., indic_changes=..., indic_scripts=..., converted_legacy_bytes=..., legacy_encoding=..., scripts=..., mixed_script=..., chinese_variant_normalized=..., chinese_target_script=..., opencc_available=..., removed_bidi_controls=..., folded_perso_arabic_letters=...)"
+        "signature": "(text, original_length, offset_starts, offset_ends, removed_zero_width=..., stripped_combining_marks=..., folded_confusables=..., folded_native_digits=..., indic_changes=..., indic_scripts=..., converted_legacy_bytes=..., legacy_encoding=..., scripts=..., mixed_script=..., chinese_variant_normalized=..., chinese_target_script=..., opencc_available=..., removed_bidi_controls=..., folded_perso_arabic_letters=..., legacy_encoding_reason=..., zawgyi_detection=...)"
       },
       "DetectorInfo": {
         "kind": "class",
@@ -10909,7 +10933,7 @@
       },
       "LanguagePack": {
         "kind": "class",
-        "signature": "(code, scripts, default_model, segmenter_id, recognizers, surrogate_locale, national_id_providers=..., policy_overrides=..., recall_floor_overrides=..., candidate_priority=..., context_scripts=..., routing_markers=..., surrogate_locale_approximation=...)"
+        "signature": "(code, scripts, default_model, segmenter_id, recognizers, surrogate_locale, national_id_providers=..., policy_overrides=..., recall_floor_overrides=..., candidate_priority=..., context_scripts=..., routing_markers=..., surrogate_locale_approximation=..., default_calendar=...)"
       },
       "LanguagePackCoherenceError": {
         "kind": "class",
@@ -10953,7 +10977,7 @@
       },
       "ModelIntegrityError": {
         "kind": "class",
-        "signature": "(model_id, kw:expected_sha256, kw:actual_sha256, kw:artifact=..., kw:reason=...)"
+        "signature": "(model_id, kw:expected_sha256, kw:actual_sha256, kw:artifact=..., kw:reason=..., kw:code=...)"
       },
       "ModelLoadError": {
         "kind": "class",
@@ -11239,6 +11263,10 @@
         "kind": "function",
         "signature": "(name_or_alias, kw:revision=..., kw:allow_patterns=..., kw:cache_dir=..., kw:org=..., kw:config=..., kw:retries=..., kw:max_bandwidth=..., kw:progress_callback=...)"
       },
+      "record_restore_transition": {
+        "kind": "function",
+        "signature": "(chain_path, kw:key_provider, kw:backup_digest, kw:manifest_path=..., kw:restore_id=..., kw:key_id=...)"
+      },
       "record_review_decision": {
         "kind": "function",
         "signature": "(item, decision, kw:corrected_label=..., kw:corrected_start=..., kw:corrected_end=..., kw:reviewer_id=..., kw:note=..., kw:lang=..., kw:timestamp=...)"
@@ -11334,6 +11362,10 @@
       "verify_chain": {
         "kind": "function",
         "signature": "(chain)"
+      },
+      "verify_continuity": {
+        "kind": "function",
+        "signature": "(chain, manifest, kw:key_provider, kw:trusted_anchors=..., kw:allowed_policy_fingerprints=..., kw:expected_chain_id=..., kw:allow_unanchored_tail=...)"
       },
       "wrap_mask": {
         "kind": "function",
@@ -11977,7 +12009,19 @@
         "kind": "constant",
         "signature": null
       },
+      "DEFAULT_EXPOSURE_MATCH_RATIO": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_EXPOSURE_NGRAM_SIZE": {
+        "kind": "constant",
+        "signature": null
+      },
       "DEFAULT_FLAKY_TOLERANCE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_FUZZY_SIMILARITY": {
         "kind": "constant",
         "signature": null
       },
@@ -12005,7 +12049,15 @@
         "kind": "constant",
         "signature": null
       },
+      "DEFAULT_MAX_CANDIDATE_FRAGMENTS": {
+        "kind": "constant",
+        "signature": null
+      },
       "DEFAULT_MAX_FALSE_ENTAILMENT_RATE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_MAX_FINDINGS": {
         "kind": "constant",
         "signature": null
       },
@@ -12018,6 +12070,10 @@
         "signature": null
       },
       "DEFAULT_MINIMUM_CELL_SIZE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_MIN_FRAGMENT_CHARS": {
         "kind": "constant",
         "signature": null
       },
@@ -12110,6 +12166,10 @@
         "signature": null
       },
       "DEFAULT_SEQUENCE_LENGTHS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_SHINGLE_SIZE": {
         "kind": "constant",
         "signature": null
       },
@@ -12829,6 +12889,26 @@
         "kind": "class",
         "signature": "(realized_success_rate, reported_upper_bound, bound_violated, successful_links, patient_count, details, risk)"
       },
+      "MAX_CANDIDATES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_NGRAM_SIZE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_REFERENCES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_SHINGLE_SIZE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_TEXT_CHARS": {
+        "kind": "constant",
+        "signature": null
+      },
       "METRIC_NAMES": {
         "kind": "constant",
         "signature": null
@@ -12860,6 +12940,22 @@
       "MembershipInferenceRiskReport": {
         "kind": "class",
         "signature": "(member_count, nonmember_count, synthetic_row_count, advantage, advantage_ceiling, passed, method=...)"
+      },
+      "MemorizationFinding": {
+        "kind": "class",
+        "signature": "(candidate_id, reference_id, signal, reason, fragment_digest, candidate_offset, candidate_length, score)"
+      },
+      "MemorizationReasonCode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "MemorizationSignal": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "MemorizationVerdict": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "MemoryBudgetExceeded": {
         "kind": "class",
@@ -13329,6 +13425,10 @@
         "kind": "class",
         "signature": "(verdict, key, family, tier, format, champion_repo_id, challenger_repo_id, champion_repro_hash, challenger_repro_hash, ledger=..., reasons=..., ignored_f1=..., schema_version=..., record_hash=...)"
       },
+      "ProtectedReferenceFingerprint": {
+        "kind": "class",
+        "signature": "(reference_id, digest, char_length, fragments, ngram_digests, ngram_size, shingle_size=...)"
+      },
       "PublishedRate": {
         "kind": "class",
         "signature": "(rate, numerator, denominator, suppressed)"
@@ -13573,6 +13673,10 @@
         "kind": "class",
         "signature": "(reason, rate)"
       },
+      "ReferenceFragmentFingerprint": {
+        "kind": "class",
+        "signature": "(digest, token_count, shingle_hashes)"
+      },
       "RegressionClassification": {
         "kind": "class",
         "signature": "(alpha, signals=..., schema_version=...)"
@@ -13801,6 +13905,10 @@
         "kind": "constant",
         "signature": null
       },
+      "SYNTHETIC_MEMORIZATION_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "SYNTHETIC_MEMPROFILE_MODEL_NAME": {
         "kind": "constant",
         "signature": null
@@ -13900,6 +14008,18 @@
       "SurrogateRecordResult": {
         "kind": "class",
         "signature": "(record_id, language, checks)"
+      },
+      "SyntheticMemorizationError": {
+        "kind": "class",
+        "signature": null
+      },
+      "SyntheticMemorizationPolicy": {
+        "kind": "class",
+        "signature": "(min_fragment_chars=..., fuzzy_similarity=..., shingle_size=..., exposure_ngram_size=..., exposure_match_ratio=..., blocking_signals=..., max_findings=..., max_candidate_fragments=...)"
+      },
+      "SyntheticMemorizationReport": {
+        "kind": "class",
+        "signature": "(verdict, findings, blocking_signals, candidate_count, reference_count, skipped_candidate_count, truncated, schema_version=...)"
       },
       "SyntheticSpan": {
         "kind": "class",
@@ -14177,6 +14297,10 @@
         "kind": "function",
         "signature": "(fixtures=..., **kwargs)"
       },
+      "assert_release_allowed": {
+        "kind": "function",
+        "signature": "(report)"
+      },
       "assert_summary_coverage_gate": {
         "kind": "function",
         "signature": "(source_facts=..., summary_citations=..., kw:source_evidence=..., kw:fixture_count=...)"
@@ -14192,6 +14316,10 @@
       "audit_pii_tokenizers": {
         "kind": "function",
         "signature": "(manifest_rows, kw:tokenizer_loader, kw:existing_models=..., kw:on_model=..., kw:max_workers=...)"
+      },
+      "audit_synthetic_memorization": {
+        "kind": "function",
+        "signature": "(candidates, references, kw:policy=...)"
       },
       "audit_tokenizer_scripts": {
         "kind": "function",
@@ -14821,6 +14949,10 @@
         "kind": "function",
         "signature": "(model_id, model_revision=...)"
       },
+      "fingerprint_reference": {
+        "kind": "function",
+        "signature": "(reference_id, text, kw:policy=...)"
+      },
       "fit_calibration_thresholds": {
         "kind": "function",
         "signature": "(samples, kw:model_id, kw:suite, kw:target_leakage=..., kw:min_recall=..., kw:conformal_alpha=..., kw:gate_samples=..., kw:coverage_tolerance=..., kw:membership_defense=..., kw:generated_at=..., kw:metadata=...)"
@@ -15168,6 +15300,10 @@
       "normalize_temporal_edges": {
         "kind": "function",
         "signature": "(edges)"
+      },
+      "normalize_text": {
+        "kind": "function",
+        "signature": "(text)"
       },
       "ocr_noise_perturbation": {
         "kind": "function",
@@ -17383,7 +17519,7 @@
       },
       "MapleResponseError": {
         "kind": "class",
-        "signature": null
+        "signature": "(*args, kw:code=...)"
       },
       "MapleSpan": {
         "kind": "class",
@@ -17583,13 +17719,17 @@
         "kind": "class",
         "signature": "(asset_id, input_sha256, output_sha256)"
       },
+      "AssetHandle": {
+        "kind": "class",
+        "signature": "(kw:manifest, kw:source, kw:owned=...)"
+      },
       "AssetLimitError": {
         "kind": "class",
         "signature": null
       },
       "AssetManifest": {
         "kind": "class",
-        "signature": "(asset_id, media_type, sha256, byte_size, version=..., pages=..., width=..., height=..., frames=..., duration_seconds=...)"
+        "signature": "(asset_id, media_type, sha256, byte_size, version=..., pages=..., width=..., height=..., frames=..., duration_seconds=..., channel_count=..., sample_rate_hz=..., samples_per_channel=..., dicom_subprofile=...)"
       },
       "AssetManifestError": {
         "kind": "class",
@@ -17643,6 +17783,26 @@
         "kind": "class",
         "signature": "(field_path, path_parts, assigned_class, action, canonical_label=..., policy_label=..., detection_source=...)"
       },
+      "CodeCoverageReport": {
+        "kind": "class",
+        "signature": "(regions=..., coverage_incomplete=...)"
+      },
+      "CodeDetectionError": {
+        "kind": "class",
+        "signature": null
+      },
+      "CodeDetectionPolicy": {
+        "kind": "type_alias",
+        "signature": null
+      },
+      "CodeRegion": {
+        "kind": "class",
+        "signature": "(symbology, bbox, page=..., payload_sha256=...)"
+      },
+      "CodeRegionDetector": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
       "ColumnDecision": {
         "kind": "class",
         "signature": "(index, name, assigned_class, action, canonical_label=..., policy_label=..., detection_source=..., confidence=..., sampled_values=...)"
@@ -17659,6 +17819,14 @@
         "kind": "class",
         "signature": "(value)"
       },
+      "DEFAULT_MAX_FILE_META_BYTES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DEFAULT_MAX_FILE_META_ELEMENTS": {
+        "kind": "constant",
+        "signature": null
+      },
       "DEFAULT_MAX_RECOVERY_ATTEMPTS": {
         "kind": "constant",
         "signature": null
@@ -17667,11 +17835,23 @@
         "kind": "constant",
         "signature": null
       },
+      "DEFAULT_MAX_TRANSFER_SYNTAX_UID_BYTES": {
+        "kind": "constant",
+        "signature": null
+      },
       "DEFAULT_SMS_MODEL": {
         "kind": "constant",
         "signature": null
       },
       "DESKTOP_V1": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DESKTOP_V1_1": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DICOM_NON_PIXEL_V1": {
         "kind": "constant",
         "signature": null
       },
@@ -17701,7 +17881,7 @@
       },
       "DicomHeaderDeidPolicy": {
         "kind": "class",
-        "signature": "(output_path=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., uid_salt=..., keep_year=..., fail_on_unclean_pixels=..., redact_encapsulated_documents=..., document_policy=..., document_models=..., clean_descriptors=..., clean_structured_content=..., retain_longitudinal_temporal_information=..., retain_device_identity=..., retain_patient_characteristics=..., retain_uids=..., detector=...)"
+        "signature": "(output_path=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., uid_salt=..., keep_year=..., fail_on_unclean_pixels=..., redact_encapsulated_documents=..., document_policy=..., document_models=..., clean_descriptors=..., clean_structured_content=..., retain_longitudinal_temporal_information=..., retain_device_identity=..., retain_patient_characteristics=..., retain_uids=..., detector=..., keep_slide_associated_images=..., reviewer_confirmed=...)"
       },
       "DicomHeaderDeidResult": {
         "kind": "class",
@@ -17713,11 +17893,11 @@
       },
       "DicomPixelRedactionPolicy": {
         "kind": "class",
-        "signature": "(output_path=..., ocr_engine=..., model_name=..., confidence_threshold=..., bbox_padding=..., verify_residual=..., fail_on_residual=..., custom_recognizer=..., overlay_mode=..., redact_encapsulated_documents=..., document_policy=..., document_models=...)"
+        "signature": "(output_path=..., ocr_engine=..., model_name=..., confidence_threshold=..., bbox_padding=..., verify_residual=..., fail_on_residual=..., custom_recognizer=..., overlay_mode=..., redact_encapsulated_documents=..., document_policy=..., document_models=..., asset_limit_profile=..., keep_slide_associated_images=..., reviewer_confirmed=..., kw:code_detector=..., kw:code_detection_policy=...)"
       },
       "DicomPixelRedactionResult": {
         "kind": "class",
-        "signature": "(source_path, output_path, frames_processed, findings, residual_report, carrier_actions=..., pixel_status=..., _processed_document_digests=...)"
+        "signature": "(source_path, output_path, frames_processed, findings, residual_report, carrier_actions=..., pixel_status=..., _processed_document_digests=..., residual_verified=..., pixel_sha256=..., kw:code_coverage=...)"
       },
       "DicomPixelStatus": {
         "kind": "class",
@@ -17725,7 +17905,7 @@
       },
       "DicomResidualTextReport": {
         "kind": "class",
-        "signature": "(frame_count, residuals=...)"
+        "signature": "(frame_count, residuals=..., code_coverage=...)"
       },
       "DicomSrProvenanceError": {
         "kind": "class",
@@ -17775,6 +17955,10 @@
         "kind": "class",
         "signature": "(number, node_ids, width=..., height=...)"
       },
+      "DocumentProvider": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
       "DocumentTable": {
         "kind": "class",
         "signature": "(id, page, bbox, cells, start, end, caption=..., metadata=...)"
@@ -17791,6 +17975,10 @@
         "kind": "class",
         "signature": "(document_run_index, run_start, run_end, metadata=...)"
       },
+      "DraftReviewResult": {
+        "kind": "class",
+        "signature": "(output_digest, notice)"
+      },
       "EmailAttachmentReport": {
         "kind": "class",
         "signature": "(attachment_index, extension, content_type, handler_format, detected_span_count, output_sha256)"
@@ -17802,6 +17990,10 @@
       "ExtractedDocument": {
         "kind": "class",
         "signature": "(text, spans=..., metadata=...)"
+      },
+      "FakeCodeRegionDetector": {
+        "kind": "class",
+        "signature": "(regions=...)"
       },
       "FakeLayoutEngine": {
         "kind": "class",
@@ -17893,7 +18085,7 @@
       },
       "LimitProfile": {
         "kind": "class",
-        "signature": "(name, version, max_byte_size, max_pages, max_pixels, max_total_pixels, max_frames, max_duration_seconds)"
+        "signature": "(name, version, max_byte_size, max_pages, max_pixels, max_total_pixels, max_frames, max_duration_seconds, max_channel_count=..., max_sample_rate_hz=..., max_samples_per_channel=..., max_total_samples=...)"
       },
       "MANIFEST_VERSION": {
         "kind": "constant",
@@ -17911,6 +18103,10 @@
         "kind": "constant",
         "signature": null
       },
+      "MOBILE_V1_1": {
+        "kind": "constant",
+        "signature": null
+      },
       "MalformedDocumentError": {
         "kind": "class",
         "signature": null
@@ -17922,6 +18118,10 @@
       "ManifestProfileError": {
         "kind": "class",
         "signature": null
+      },
+      "MeasurementReviewResult": {
+        "kind": "class",
+        "signature": "(output_digest, notice)"
       },
       "MediaTypeDelta": {
         "kind": "class",
@@ -17955,9 +18155,37 @@
         "kind": "class",
         "signature": "(dependency, instruction)"
       },
+      "MultimodalNotice": {
+        "kind": "class",
+        "signature": "(identifier, text)"
+      },
+      "MultimodalNoticeError": {
+        "kind": "class",
+        "signature": null
+      },
+      "MultimodalSession": {
+        "kind": "class",
+        "signature": "(kw:image=..., kw:document=..., kw:speech=..., kw:limits=..., kw:clock=...)"
+      },
+      "NOTICE_CATALOG": {
+        "kind": "constant",
+        "signature": null
+      },
+      "NOTICE_RESULT_TYPES": {
+        "kind": "constant",
+        "signature": null
+      },
       "NormalizedBox": {
         "kind": "class",
         "signature": "(bbox, page=..., source_unit=..., source_origin=..., source_ref=...)"
+      },
+      "NoticeBoundOutput": {
+        "kind": "class",
+        "signature": "()"
+      },
+      "NoticeKind": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "OcrEngine": {
         "kind": "class",
@@ -17982,6 +18210,18 @@
       "OutcomeDelta": {
         "kind": "class",
         "signature": "(outcome, count)"
+      },
+      "PDF_ANNOTATION_SUBTYPES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "PDF_CONTENT_REASON_CODES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "PDF_PREFLIGHT_CHECKS": {
+        "kind": "constant",
+        "signature": null
       },
       "PDF_V1": {
         "kind": "constant",
@@ -18031,9 +18271,21 @@
         "kind": "class",
         "signature": "(index, bbox, word_indices)"
       },
+      "PdfContentInventory": {
+        "kind": "class",
+        "signature": "(annotation_subtypes=..., field_count=..., field_value_count=..., embedded_file_count=..., xfa_packet_count=..., optional_content_group_count=..., javascript_action_count=..., open_action_count=..., launch_action_count=..., revision_count=...)"
+      },
+      "PdfContentProfile": {
+        "kind": "class",
+        "signature": "(value)"
+      },
       "PdfFidelityReport": {
         "kind": "class",
         "signature": "(regions=..., metadata=...)"
+      },
+      "PdfInventoryReport": {
+        "kind": "class",
+        "signature": "(status, reason_codes, inventory, abstention)"
       },
       "PdfLayoutFidelityError": {
         "kind": "class",
@@ -18061,7 +18313,7 @@
       },
       "PdfRedactionResult": {
         "kind": "class",
-        "signature": "(output_path, page_count, region_count, render_dpi, output_sha256, region_fidelity, text_removal, layout_fidelity, annotations=...)"
+        "signature": "(output_path, page_count, region_count, render_dpi, output_sha256, region_fidelity, text_removal, layout_fidelity, annotations=..., kw:code_coverage=..., kw:residual_code_coverage=...)"
       },
       "PdfRegions": {
         "kind": "class",
@@ -18127,6 +18379,10 @@
         "kind": "class",
         "signature": "(start, end, page, bbox, label=..., confidence=..., metadata=...)"
       },
+      "ProviderLease": {
+        "kind": "class",
+        "signature": "(kw:provider, kw:owned=..., kw:release=..., kw:cancel=...)"
+      },
       "RasterExportError": {
         "kind": "class",
         "signature": null
@@ -18153,7 +18409,7 @@
       },
       "RedactedImage": {
         "kind": "class",
-        "signature": "(source_path, redacted_bytes, extracted_document, redaction_boxes, frame_count, image_format, changed_pixel_count, changed_pixels_by_frame, metadata_report, residual_report=..., output_path=...)"
+        "signature": "(source_path, redacted_bytes, extracted_document, redaction_boxes, frame_count, image_format, changed_pixel_count, changed_pixels_by_frame, metadata_report, residual_report=..., output_path=..., code_coverage=...)"
       },
       "RedactedSMSExport": {
         "kind": "class",
@@ -18166,6 +18422,10 @@
       "RedactedTextRemovalError": {
         "kind": "class",
         "signature": "(report)"
+      },
+      "RedactionAdmissionError": {
+        "kind": "class",
+        "signature": "(reason_code, field_name=..., limit=..., observed=...)"
       },
       "RedactionFidelityError": {
         "kind": "class",
@@ -18185,11 +18445,19 @@
       },
       "ResidualPhiReport": {
         "kind": "class",
-        "signature": "(residual_phi=..., frame_count=..., word_count=...)"
+        "signature": "(residual_phi=..., frame_count=..., word_count=..., code_coverage=...)"
       },
       "Rotation": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "RuntimeSessionError": {
+        "kind": "class",
+        "signature": null
+      },
+      "SESSION_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
       },
       "SHORT_TEXT": {
         "kind": "constant",
@@ -18203,6 +18471,30 @@
         "kind": "class",
         "signature": "(row_count=..., message_count=..., redacted_message_count=..., pseudonymized_contact_count=..., coarsened_timestamp_count=..., batch_count=...)"
       },
+      "SessionEvent": {
+        "kind": "class",
+        "signature": "(sequence, operation, outcome, input_digest, input_bytes, pdf_geometry_resolved, abstention, result, cleanup_failed=...)"
+      },
+      "SessionLimits": {
+        "kind": "class",
+        "signature": "(kw:max_asset_bytes=..., kw:max_total_input_bytes=..., kw:max_operations=..., kw:max_output_chars=..., kw:max_output_items=..., kw:pdf_dpi=..., kw:preflight=...)"
+      },
+      "SessionOperation": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SessionOutcome": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SessionResult": {
+        "kind": "class",
+        "signature": "(event, _output=...)"
+      },
+      "SessionState": {
+        "kind": "class",
+        "signature": "(value)"
+      },
       "ShortTextPreset": {
         "kind": "class",
         "signature": "(name=..., confidence_threshold=..., batch_size=..., preserve_whitespace=..., use_smart_merging=..., use_safety_sweep=...)"
@@ -18215,8 +18507,28 @@
         "kind": "class",
         "signature": "(start, end, page=..., bbox=..., metadata=...)"
       },
+      "SpeechExecutionProvider": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
       "SrContentItem": {
         "kind": "class",
+        "signature": null
+      },
+      "TRANSFER_SYNTAX_CATALOG": {
+        "kind": "constant",
+        "signature": null
+      },
+      "TRANSFER_SYNTAX_OUTCOMES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "TRANSFER_SYNTAX_REASON_CODES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "TRANSFER_SYNTAX_SCHEMA_VERSION": {
+        "kind": "constant",
         "signature": null
       },
       "TableCell": {
@@ -18233,7 +18545,7 @@
       },
       "TextRemovalRegion": {
         "kind": "class",
-        "signature": "(page, bbox, source_word_count, source_sha256, residual_word_count, residual_sha256, label=...)"
+        "signature": "(page, bbox, source_word_count, source_sha256, residual_word_count, residual_sha256, label=..., source_text_required=...)"
       },
       "TraceRecoveryError": {
         "kind": "class",
@@ -18247,6 +18559,22 @@
         "kind": "class",
         "signature": "(target_fingerprint, input_fingerprint, output_fingerprint, phase, recovery_decision, recovery_attempts, resumed, changed, output_size)"
       },
+      "TransferSyntaxCapability": {
+        "kind": "class",
+        "signature": "(uid, name, outcome, reason, decoder_required, retired=...)"
+      },
+      "TransferSyntaxError": {
+        "kind": "class",
+        "signature": "(category)"
+      },
+      "TransferSyntaxOutcome": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "TransferSyntaxReport": {
+        "kind": "class",
+        "signature": "(outcome, reason, reason_codes, transfer_syntax_uid, transfer_syntax_name, decoder_required, file_meta_bytes, element_count, schema_version=...)"
+      },
       "TurnRecordAdapter": {
         "kind": "class",
         "signature": "(content_fields=..., name=...)"
@@ -18259,6 +18587,14 @@
         "kind": "class",
         "signature": "(field_name, reason_code)"
       },
+      "VisualDescriptionResult": {
+        "kind": "class",
+        "signature": "(output_digest, notice)"
+      },
+      "WAVEFORM_V1": {
+        "kind": "constant",
+        "signature": null
+      },
       "XlsxCellRedaction": {
         "kind": "class",
         "signature": "(sheet_index, coordinate, labels)"
@@ -18266,6 +18602,10 @@
       "XlsxRedactionResult": {
         "kind": "class",
         "signature": "(output_path, sheet_count, redactions)"
+      },
+      "ZXingCodeRegionDetector": {
+        "kind": "class",
+        "signature": "()"
       },
       "assert_metadata_clean": {
         "kind": "function",
@@ -18305,7 +18645,7 @@
       },
       "deidentify_dicom_headers": {
         "kind": "function",
-        "signature": "(path, kw:policy=...)"
+        "signature": "(path, kw:policy=..., kw:slide_pixel_redaction=...)"
       },
       "deidentify_short_text": {
         "kind": "function",
@@ -18314,6 +18654,14 @@
       "derive_date_shift_days": {
         "kind": "function",
         "signature": "(values, kw:record_index, kw:fixed_days=..., kw:seed=...)"
+      },
+      "describe_transfer_syntax": {
+        "kind": "function",
+        "signature": "(uid)"
+      },
+      "detect_code_regions": {
+        "kind": "function",
+        "signature": "(image, kw:detector=..., kw:policy=..., kw:page=..., kw:max_regions=...)"
       },
       "detect_media_type": {
         "kind": "function",
@@ -18353,7 +18701,7 @@
       },
       "extract_docx": {
         "kind": "function",
-        "signature": "(path)"
+        "signature": "(path, kw:archive_policy=...)"
       },
       "extract_email": {
         "kind": "function",
@@ -18361,7 +18709,7 @@
       },
       "extract_epub": {
         "kind": "function",
-        "signature": "(path)"
+        "signature": "(path, kw:archive_policy=...)"
       },
       "extract_html": {
         "kind": "function",
@@ -18373,11 +18721,11 @@
       },
       "extract_odt": {
         "kind": "function",
-        "signature": "(path)"
+        "signature": "(path, kw:archive_policy=...)"
       },
       "extract_pdf": {
         "kind": "function",
-        "signature": "(path, kw:reading_order=..., kw:preserve_lines=..., kw:include_annotations=...)"
+        "signature": "(path, kw:reading_order=..., kw:preserve_lines=..., kw:include_annotations=..., kw:_limit_profile=...)"
       },
       "extract_pdf_captions": {
         "kind": "function",
@@ -18389,7 +18737,7 @@
       },
       "extract_pdf_regions": {
         "kind": "function",
-        "signature": "(path, document=...)"
+        "signature": "(path, document=..., kw:_limit_profile=...)"
       },
       "extract_pdf_tables": {
         "kind": "function",
@@ -18397,7 +18745,7 @@
       },
       "extract_pptx": {
         "kind": "function",
-        "signature": "(path)"
+        "signature": "(path, kw:archive_policy=...)"
       },
       "extract_rtf": {
         "kind": "function",
@@ -18475,6 +18823,10 @@
         "kind": "function",
         "signature": "(manifest, source, kw:limit_profile=...)"
       },
+      "preflight_pdf_asset": {
+        "kind": "function",
+        "signature": "(manifest, source, kw:limit_profile=..., kw:content_profile=...)"
+      },
       "project_region_spans": {
         "kind": "function",
         "signature": "(document, regions, spans, kw:fallback_to_words=...)"
@@ -18486,6 +18838,14 @@
       "project_text_spans": {
         "kind": "function",
         "signature": "(document, spans, kw:line_tolerance=...)"
+      },
+      "read_dicom_transfer_syntax": {
+        "kind": "function",
+        "signature": "(source, kw:max_bytes=..., kw:max_elements=..., kw:max_uid_bytes=...)"
+      },
+      "read_pdf_inventory": {
+        "kind": "function",
+        "signature": "(source, kw:profile=..., kw:max_bytes=..., kw:max_pages=..., kw:max_objects=..., kw:max_decompressed_bytes=...)"
       },
       "read_table": {
         "kind": "function",
@@ -18513,7 +18873,7 @@
       },
       "redact_dicom_pixels": {
         "kind": "function",
-        "signature": "(path, kw:policy=..., kw:output_path=..., kw:ocr_engine=..., kw:models=..., kw:model_name=..., kw:confidence_threshold=..., kw:bbox_padding=..., kw:verify_residual=..., kw:fail_on_residual=..., kw:custom_recognizer=..., kw:lang=...)"
+        "signature": "(path, kw:policy=..., kw:output_path=..., kw:ocr_engine=..., kw:models=..., kw:model_name=..., kw:confidence_threshold=..., kw:bbox_padding=..., kw:verify_residual=..., kw:fail_on_residual=..., kw:custom_recognizer=..., kw:lang=..., kw:code_detector=..., kw:code_detection_policy=...)"
       },
       "redact_document": {
         "kind": "function",
@@ -18525,7 +18885,7 @@
       },
       "redact_image": {
         "kind": "function",
-        "signature": "(path, kw:output_path=..., kw:policy=..., kw:models=..., kw:lang=..., kw:ocr_engine=..., kw:verification_ocr_engine=..., kw:box_color=..., kw:verify=...)"
+        "signature": "(path, kw:output_path=..., kw:policy=..., kw:models=..., kw:lang=..., kw:ocr_engine=..., kw:verification_ocr_engine=..., kw:code_detector=..., kw:code_detection_policy=..., kw:verification_code_detector=..., kw:box_color=..., kw:verify=...)"
       },
       "redact_sms_csv": {
         "kind": "function",
@@ -18557,7 +18917,7 @@
       },
       "redact_xlsx": {
         "kind": "function",
-        "signature": "(source, output_path, kw:policy=..., kw:models=..., kw:lang=..., kw:header_row=..., kw:header_heuristics=..., kw:action_overrides=..., kw:date_shift_days=..., kw:date_shift_seed=..., kw:keep_year=..., kw:sample_size=..., kw:cell_deidentifier=...)"
+        "signature": "(source, output_path, kw:policy=..., kw:models=..., kw:lang=..., kw:header_row=..., kw:header_heuristics=..., kw:action_overrides=..., kw:date_shift_days=..., kw:date_shift_seed=..., kw:keep_year=..., kw:sample_size=..., kw:cell_deidentifier=..., kw:archive_policy=...)"
       },
       "register_handler": {
         "kind": "function",
@@ -18581,11 +18941,11 @@
       },
       "render_redacted_pdf": {
         "kind": "function",
-        "signature": "(source, output, regions, kw:render_dpi=..., kw:fidelity_dpi=..., kw:pixel_tolerance=..., kw:max_outside_changed_fraction=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:overwrite=..., kw:annotation_detector=...)"
+        "signature": "(source, output, regions, kw:render_dpi=..., kw:fidelity_dpi=..., kw:pixel_tolerance=..., kw:max_outside_changed_fraction=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:overwrite=..., kw:code_detector=..., kw:code_detection_policy=..., kw:annotation_detector=...)"
       },
       "render_redacted_raster_pages": {
         "kind": "function",
-        "signature": "(pages, kw:output_format, kw:padding_pixels=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:max_output_bytes=..., kw:cancel_check=...)"
+        "signature": "(pages, kw:output_format, kw:padding_pixels=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:max_output_bytes=..., kw:cancel_check=..., kw:code_detector=..., kw:code_detection_policy=...)"
       },
       "resolve_short_text_preset": {
         "kind": "function",
@@ -18687,13 +19047,17 @@
         "kind": "function",
         "signature": "(prefix, declared_media_type)"
       },
+      "validate_notice_registry": {
+        "kind": "function",
+        "signature": "(result_types)"
+      },
       "verify_image_metadata": {
         "kind": "function",
         "signature": "(image)"
       },
       "verify_image_redaction": {
         "kind": "function",
-        "signature": "(image, kw:models, kw:lang=..., kw:ocr_engine=...)"
+        "signature": "(image, kw:models, kw:lang=..., kw:ocr_engine=..., kw:code_detector=..., kw:code_detection_policy=...)"
       },
       "verify_metadata": {
         "kind": "function",
@@ -19369,6 +19733,14 @@
         "kind": "class",
         "signature": "(text, start, end, label, score, group=..., extras=...)"
       },
+      "GLIFORMER_DISEASE_MODEL_ID": {
+        "kind": "constant",
+        "signature": null
+      },
+      "GLIFORMER_DISEASE_RECORD": {
+        "kind": "constant",
+        "signature": null
+      },
       "GLINER_BIOMED_MODEL_ID": {
         "kind": "constant",
         "signature": null
@@ -19403,11 +19775,11 @@
       },
       "ModelRecord": {
         "kind": "class",
-        "signature": "(id, family, domains=..., languages=..., path=..., notes=..., license=...)"
+        "signature": "(id, family, domains=..., languages=..., path=..., notes=..., license=..., default_labels=...)"
       },
       "NerRequest": {
         "kind": "class",
-        "signature": "(model_id, text, threshold=..., labels=..., domain=...)"
+        "signature": "(model_id, text, threshold=..., labels=..., domain=..., family=..., flat_ner=...)"
       },
       "NerResponse": {
         "kind": "class",
@@ -19437,6 +19809,10 @@
         "kind": "function",
         "signature": "(models_dir)"
       },
+      "ensure_gliformer_available": {
+        "kind": "function",
+        "signature": "()"
+      },
       "ensure_gliner2_available": {
         "kind": "function",
         "signature": "()"
@@ -19456,6 +19832,10 @@
       "infer_biomedical": {
         "kind": "function",
         "signature": "(text, kw:threshold=..., kw:labels=..., kw:model_id=..., kw:index=..., kw:index_path=..., kw:config=..., kw:loader=...)"
+      },
+      "is_gliformer_available": {
+        "kind": "function",
+        "signature": "(force_refresh=...)"
       },
       "is_gliner2_available": {
         "kind": "function",
@@ -19484,6 +19864,10 @@
       "reload_default_label_map": {
         "kind": "function",
         "signature": "()"
+      },
+      "resolve_model_record": {
+        "kind": "function",
+        "signature": "(model_id, kw:family=..., kw:index=...)"
       },
       "to_token_classification": {
         "kind": "function",
@@ -19725,7 +20109,7 @@
       },
       "LegacyConversion": {
         "kind": "class",
-        "signature": "(text, original, encoding, offset_map, changed)"
+        "signature": "(text, original, encoding, offset_map, changed, offset_unit=..., zawgyi=..., reason=...)"
       },
       "LegacyFontMap": {
         "kind": "class",
@@ -20085,7 +20469,7 @@
       },
       "convert_legacy_encoding": {
         "kind": "function",
-        "signature": "(data, kw:encoding=..., kw:legacy_font_map=..., kw:errors=...)"
+        "signature": "(data, kw:encoding=..., kw:legacy_font_map=..., kw:errors=..., kw:convert_zawgyi=...)"
       },
       "convert_script": {
         "kind": "function",
@@ -22529,7 +22913,7 @@
       },
       "DecisionBackendIdentity": {
         "kind": "class",
-        "signature": "(backend_id, kind, runtime, model_id, revision, license_id, local=..., deterministic=...)"
+        "signature": "(backend_id, kind, runtime, model_id, revision, license_id, local=..., deterministic=..., license_sha256=...)"
       },
       "DecisionBackendKind": {
         "kind": "class",
@@ -22561,11 +22945,11 @@
       },
       "DecisionRequest": {
         "kind": "class",
-        "signature": "(mode, input_text, options=..., namespace=..., purpose=..., calibration_id=..., timeout_ms=..., schema_version=..., compatibility_policy=...)"
+        "signature": "(mode, input_text, options=..., namespace=..., purpose=..., calibration_id=..., timeout_ms=..., schema_version=..., compatibility_policy=..., question_id=..., instructions=..., option_descriptions=..., levels=..., questions=..., input_format=..., max_input_chars=..., media=...)"
       },
       "DecisionResult": {
         "kind": "class",
-        "signature": "(mode, state, option_scores, choice, choices, ranking, scalar_score, confidence, margin, calibration, backend, access, warnings, review, code=..., advisory=..., autonomous_action=..., schema_version=..., compatibility_policy=..., extensions=...)"
+        "signature": "(mode, state, option_scores, choice, choices, ranking, scalar_score, confidence, margin, calibration, backend, access, warnings, review, code=..., advisory=..., autonomous_action=..., schema_version=..., compatibility_policy=..., extensions=..., questions=..., level_scores=..., expected_level=...)"
       },
       "DecisionState": {
         "kind": "class",
@@ -22773,7 +23157,7 @@
       },
       "LocalArtifactStore": {
         "kind": "class",
-        "signature": "(root, kw:policy=...)"
+        "signature": "(root, kw:policy=..., kw:encryption=...)"
       },
       "LocalDatasetExporter": {
         "kind": "class",
@@ -22781,7 +23165,7 @@
       },
       "LocalJourneyStore": {
         "kind": "class",
-        "signature": "(root, kw:policy=...)"
+        "signature": "(root, kw:policy=..., kw:encryption=..., kw:timeouts=...)"
       },
       "LocalSavedCohortStore": {
         "kind": "class",
@@ -22925,7 +23309,7 @@
       },
       "PostgresJourneyStore": {
         "kind": "class",
-        "signature": "(connection, kw:schema=..., kw:policy=...)"
+        "signature": "(connection, kw:schema=..., kw:policy=..., kw:timeouts=...)"
       },
       "PostgresJourneyTransaction": {
         "kind": "class",
@@ -23181,7 +23565,7 @@
       },
       "SQLiteJourneyStore": {
         "kind": "class",
-        "signature": "(path, kw:policy=...)"
+        "signature": "(path, kw:policy=..., kw:encryption=..., kw:timeouts=...)"
       },
       "SUPPORTED_COLUMN_TYPES": {
         "kind": "constant",

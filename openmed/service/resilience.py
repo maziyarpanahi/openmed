@@ -10,6 +10,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from .drain import ServiceShuttingDownError
+
 CIRCUIT_CLOSED = "closed"
 CIRCUIT_OPEN = "open"
 CIRCUIT_HALF_OPEN = "half_open"
@@ -258,5 +260,9 @@ def circuit_breaker_details(exc: CircuitBreakerOpenError) -> dict[str, Any]:
 
 
 def _is_retryable_exception(exc: BaseException) -> bool:
-    """Return whether an exception looks like backend/load infrastructure failure."""
-    return not isinstance(exc, ValueError)
+    """Return whether an exception looks like backend/load infrastructure failure.
+
+    A shutdown refusal is a lifecycle state, not a backend fault: it is neither
+    retried in-process nor counted against a circuit breaker.
+    """
+    return not isinstance(exc, (ValueError, ServiceShuttingDownError))

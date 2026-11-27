@@ -22,17 +22,74 @@ docker pull postgres:17-alpine
 ```
 
 Create a strong database password in the deployment secret manager and expose
-it only to the Compose invocation as `OPENMED_POSTGRES_PASSWORD`. Do not write
-it into this YAML, an image, a support bundle, or shell output. A clean
-development machine can generate an ephemeral value for its current shell:
+it, together with the matching Journey DSN, only to the Compose invocation as
+`OPENMED_POSTGRES_PASSWORD` and `OPENMED_JOURNEY_POSTGRES_DSN`. Do not write
+them into this YAML, an image, a support bundle, or shell output. A clean
+development machine can generate ephemeral values for its current shell:
 
 ```bash
 export OPENMED_POSTGRES_PASSWORD="$(openssl rand -hex 32)"
+export OPENMED_JOURNEY_POSTGRES_DSN="postgresql://openmed:${OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed"
 ```
 
-The value is required; Compose fails before startup when it is absent. For a
-long-lived deployment, inject it from the host's secret service rather than a
-checked-in `.env` file. `HF_TOKEN` is not configured by this profile.
+Both values are required; Compose fails before startup when either is absent.
+They are delivered as Compose `secrets:`, not container environment variables:
+Compose writes them to `/run/secrets/openmed_postgres_password` for
+PostgreSQL (`POSTGRES_PASSWORD_FILE`) and to
+`/run/secrets/openmed_journey_postgres_dsn` for the migration, worker, API
+health, and golden containers (`OPENMED_JOURNEY_POSTGRES_DSN_FILE`), owned by
+`65532:65532` with mode `0400`. `docker inspect` and `/proc/<pid>/environ` of
+the OpenMed containers therefore show only the file paths. Some Compose
+releases print a warning that secret `uid`, `gid`, and `mode` only apply to
+Swarm; current releases apply them to environment-sourced secrets, and the
+`prod` profile refuses a world-readable secret file with
+`secret_file_permissions_too_open` if one does not. See
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the file rules and error codes.
+
+For a long-lived deployment, inject the values from the host's secret service
+rather than a checked-in `.env` file. `HF_TOKEN` is not configured by this
+profile.
+
+## Prepare PostgreSQL TLS
+
+The Journey containers connect with `sslmode=verify-full` and verify the
+PostgreSQL server certificate and host name against an operator CA bundle at
+`/run/openmed/postgres-tls/ca.crt` (`OPENMED_JOURNEY_POSTGRES_SSLROOTCERT`).
+The production profile refuses a plaintext or non-verifying DSN before opening
+a socket and reports the value-free code `postgres_tls_required`.
+
+Point `OPENMED_POSTGRES_TLS_DIR` at a host directory containing:
+
+- `ca.crt`, the CA bundle that issued the server certificate;
+- `server.crt`, issued for the DNS name `postgres` (the Compose service name);
+- `server.key`, readable only by the PostgreSQL container user (uid `70` in
+  `postgres:17-alpine`, mode `0600`).
+
+Use the organization's certificate authority for long-lived deployments. A
+clean development machine can create a short-lived synthetic CA:
+
+```bash
+export OPENMED_POSTGRES_TLS_DIR="$PWD/postgres-tls"
+mkdir -p "$OPENMED_POSTGRES_TLS_DIR" && cd "$OPENMED_POSTGRES_TLS_DIR"
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -days 30 -subj "/CN=OpenMed Compose Development CA" \
+  -keyout ca.key -out ca.crt
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -subj "/CN=postgres" -keyout server.key -out server.csr
+printf '%s\n' "subjectAltName=DNS:postgres" \
+  "basicConstraints=critical,CA:FALSE" \
+  "keyUsage=critical,digitalSignature" \
+  "extendedKeyUsage=serverAuth" > server.ext
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -days 30 -extfile server.ext -out server.crt
+sudo chown 70:70 server.key && chmod 0600 server.key
+```
+
+Keep `ca.key` outside the Compose host and never commit any of these files.
+Only `ca.crt` is mounted into the OpenMed containers, read-only. Server-side
+`pg_hba.conf` enforcement, role management, and database encryption at rest
+remain operator responsibilities.
 
 ## Start and run the golden journey
 
@@ -117,6 +174,12 @@ services:
           create_host_path: false
 ```
 
+Every OpenMed container has CPU and memory limits and a 512-process cap. The
+API and MCP containers default to 2 CPUs and 4 GiB, matching the Helm chart;
+raise them with `OPENMED_CPU_LIMIT` / `OPENMED_MEMORY_LIMIT` and
+`OPENMED_MCP_CPU_LIMIT` / `OPENMED_MCP_MEMORY_LIMIT` for larger models. The
+worker gets 1 CPU and 1 GiB, the migration and smoke jobs 0.5 CPU and 512 MiB.
+
 The local log driver rotates three 10 MiB files. Operational output contains
 states and counts only. It must never contain source text, artifact bytes,
 database connection strings, vault values, or request bodies.
@@ -131,8 +194,29 @@ egress-capable network after images and model artifacts are prepared.
 
 The default port mapping is `127.0.0.1:8080:8080`. Changing
 `OPENMED_BIND_ADDRESS` requires authentication, TLS, and an explicit trusted
-host policy. A remote integration requires a separately declared network and
+host policy. The bundle defaults to `OPENMED_PROFILE=prod`, whose
+[security profile](../serving/security-profile.md) keeps the API closed until
+authentication is configured and, because the bundle enables Journey storage,
+until Journey principal binding and encryption ship; set
+`OPENMED_PROFILE=dev` to evaluate it locally. The
+[deployment posture lane](security-posture.md) checks this file against the
+production contract offline, including the offline and telemetry flags of
+every OpenMed service. A remote integration requires a separately declared network and
 a documented egress allowlist. Telemetry is opt-in and must remain value-free.
+
+## Connection and request-body bounds
+
+The `openmed` service sets `OPENMED_SERVICE_LIMIT_CONCURRENCY=128`,
+`OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5`, and
+`OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30` for the reference launcher, and
+`OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS=60`,
+`OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS=10`, and
+`OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND=1024` for request bodies.
+Override any of them in the shell that runs Compose. Keep the graceful-shutdown
+timeout below the service's `45s` stop grace period. A stalled or trickling
+upload returns `408 request_body_timeout`, and connections beyond the limit
+receive `503`. The [REST service guide](../rest-service.md) describes each
+bound.
 
 ## Backup and restore
 
@@ -147,6 +231,11 @@ version, Journey schema version, artifact snapshot identity, and UTC recovery
 point. Encrypt the backup and test restore into a separate namespace. After
 restore, run `openmed-journey migrate`, then `journey-golden`, before admitting
 traffic. Never run a restore over the active database or artifact volume.
+
+For local SQLite Journey stores, job metadata, registry state, and audit
+chains, `openmed recovery` creates encrypted, integrity-checked recovery
+points and restores them into an inactive directory before an explicit
+activation; see [Encrypted Service Backup and Restore](service-recovery.md).
 
 ## Upgrade and rollback
 
@@ -171,8 +260,9 @@ Use overlapping credentials so a secret rotation does not strand old
 containers:
 
 1. create a second least-privilege PostgreSQL role with the same schema grants;
-2. update the host secret source and recreate migration, worker, and API
-   containers in that order;
+2. update the host secret source for `OPENMED_POSTGRES_PASSWORD` and
+   `OPENMED_JOURNEY_POSTGRES_DSN` and recreate migration, worker, and API
+   containers in that order so Compose rewrites the secret files;
 3. verify the component health report and golden journey;
 4. revoke the old role, then remove it after the rollback window.
 

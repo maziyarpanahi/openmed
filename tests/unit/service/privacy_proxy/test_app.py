@@ -307,7 +307,7 @@ def test_chat_completion_rejects_unsupported_media_type_without_reading_body(
 
 
 def test_chat_completion_returns_safe_400_for_malformed_json():
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
         response = client.post(
             "/v1/chat/completions",
             content=f'{{"messages": "{SYNTHETIC_NAME}',
