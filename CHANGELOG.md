@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ship a typed ONNX model catalog in the `openmed` web package under the `openmed/catalog` subpath: `listModels()` filters the bundled permissive ONNX rows by format, tier, parameter count, language and license with the Android catalog semantics, `getModel()` looks one up by repo id, and `scripts/web/build_web_catalog.py --check` keeps the generated rows in step with `models.jsonl` (#5384).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
