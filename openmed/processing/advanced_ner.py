@@ -29,7 +29,11 @@ from openmed.core.model_registry import (
     get_recommended_models,
 )
 from openmed.core.models import ModelLoader
-from openmed.core.offline import OFFLINE_ENV_VAR, OfflineModeError, is_local_only
+from openmed.core.offline import (
+    OFFLINE_ENV_VAR,
+    OfflineModelUnavailableError,
+    is_local_only,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +302,9 @@ def extract_clinical_entities(
         character offsets.
 
     Raises:
-        OfflineModeError: If offline mode is active and the selected model is
-            not available in the local cache.
+        OfflineModelUnavailableError: If offline mode is active and the
+            selected model is not available in the local cache. It is an
+            ``OfflineModeError`` with the ``model_load_error`` code.
     """
 
     if not isinstance(text, str):
@@ -328,10 +333,11 @@ def extract_clinical_entities(
         )
     except Exception as exc:
         if is_local_only(loader.config):
-            raise OfflineModeError(
+            raise OfflineModelUnavailableError(
                 f"Clinical model {selected_model_id!r} is not available in the "
                 f"local cache; {OFFLINE_ENV_VAR}/local_only=True blocks loading. "
-                f"Cache the model before offline use or unset {OFFLINE_ENV_VAR}."
+                f"Cache the model before offline use or unset {OFFLINE_ENV_VAR}.",
+                model_name=selected_model_id,
             ) from exc
         raise
 

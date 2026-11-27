@@ -251,6 +251,11 @@ message prefix:
 OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
 ```
 
+Pre-fetching or loading a model that is not in the local cache while this
+mode is on raises `OfflineModelUnavailableError`. It is an `OfflineModeError`
+that also carries the stable `model_load_error` code (see
+[Structured public errors](api/errors.md#shared-error-code-vectors)).
+
 For `HF_ENDPOINT`, pip mirror, proxy, retry, and metered-connection setup, see
 the [low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md).
 It includes a cache-warming checklist and the `openmed doctor` fields used to

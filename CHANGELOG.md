@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an `OpenMedIntents` Swift library product with an on-device "Redact Text with OpenMed" App Intent (`RedactTextIntent`, `OpenMedIntentsPackage`) that redacts with an already cached model, never downloads or opens the app, logs nothing about its input, and returns only the redacted text (#5382).
 - Add an on-device `PIISummaryIntent` that returns per-label identifier counts with the redacted text and never the detected values or offsets, register both OpenMed intents as App Shortcuts in the Swift demo app, and document the App Intents boundary in `docs/runtimes/apple-app-intents.md` (#5403).
 - Add an experimental, core-only `free-threading-smoke` CI job and `scripts/release/free_threading_smoke.py`. On free-threaded CPython 3.14t the script reports GIL re-enablement at import and fails on a crash or on concurrent `safety_sweep()` results that differ from the single-threaded baseline (#5399).
+- Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 
 ### Changed
@@ -129,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generate the canonical fields of the GraphQL `OpenMedSpan` type from `span.schema.json`
   and check the Strawberry type against the schema; `label` and `text` are now deprecated in
   the SDL in favour of `canonicalLabel` and `textHash`, with unchanged values (#5336).
+- Three Python failures now carry a stable error code. They keep their builtin base and message: an empty `hmac_secret` raises `ConfigurationError` (a `ValueError`), invalid `OpenMedSpan` offsets raise `InputError` (a `ValueError`), and a model missing from the cache in offline mode raises `OfflineModelUnavailableError`, an `OfflineModeError` that is also a `ModelLoadError`. They also gain the taxonomy's extra builtin bases (`TypeError`; `KeyError` for `ConfigurationError`; `ImportError` and `ValueError` for the offline error), and REST, MCP and agent error envelopes now report their taxonomy codes (REST `400 configuration_error`/`input_error` instead of `400 bad_request`, and `503 model_load_error` instead of a generic 500 for the offline miss) (#5331).
 
 ### Fixed
 
