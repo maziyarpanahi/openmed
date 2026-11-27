@@ -28,6 +28,15 @@ from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import Any, Final
 
+from .model_lifecycle import (
+    NULL_MODEL_LIFECYCLE_SINK,
+    ModelLifecycleEvent,
+    ModelLifecycleEventType,
+    ModelLifecycleSink,
+    emit_event,
+    resolve_sink,
+)
+
 logger = logging.getLogger(__name__)
 
 CACHE_POLICY_MANIFEST = ".openmed-cache-policy.json"
@@ -379,6 +388,10 @@ class ModelCachePolicy:
         pinned_artifacts: Optional paths relative to ``cache_dir`` that are
             protected from eviction.  Paths become owned when registered.
         manifest_name: Cache-local JSON bookkeeping filename.
+        lifecycle_sink: Optional ``ModelLifecycleSink`` (see
+            :mod:`openmed.core.model_lifecycle`). Each artifact removed by
+            :meth:`apply_eviction` emits one value-free ``evicted`` event with
+            its digest and the bytes freed. The default records nothing.
 
     Only paths explicitly registered with :meth:`register_artifact` are
     eligible for removal.  Do not register a shared cache root or a directory
@@ -392,7 +405,9 @@ class ModelCachePolicy:
         *,
         pinned_artifacts: Iterable[str | Path] = (),
         manifest_name: str = CACHE_POLICY_MANIFEST,
+        lifecycle_sink: ModelLifecycleSink | None = None,
     ) -> None:
+        self._lifecycle_sink = resolve_sink(lifecycle_sink)
         self.cache_dir = Path(cache_dir).expanduser().resolve(strict=False)
         self.quota_bytes = _validate_nonnegative_int(quota_bytes, name="quota_bytes")
         if (
@@ -746,6 +761,7 @@ class ModelCachePolicy:
 
             evicted: list[str] = []
             skipped: list[str] = []
+            removals: list[tuple[str, int, str | None]] = []
             bytes_freed = 0
             changed = False
             for candidate in plan.candidates:
@@ -769,6 +785,7 @@ class ModelCachePolicy:
                     if not resolved.exists():
                         del records[relative]
                         evicted.append(candidate.path_hash)
+                        removals.append((record.sha256, 0, "artifact_absent"))
                         changed = True
                         continue
                     current_size, current_digest = _measure_path(resolved)
@@ -788,18 +805,37 @@ class ModelCachePolicy:
                     continue
                 del records[relative]
                 evicted.append(candidate.path_hash)
+                removals.append((record.sha256, current_size, None))
                 bytes_freed += current_size
                 changed = True
 
             if changed:
                 self._write_records(records)
             remaining_bytes = self._total_bytes(records)
-            return EvictionResult(
+            result = EvictionResult(
                 plan=plan,
                 evicted_path_hashes=tuple(evicted),
                 skipped_path_hashes=tuple(skipped),
                 bytes_freed=bytes_freed,
                 remaining_bytes=remaining_bytes,
+            )
+        self._emit_evictions(removals)
+        return result
+
+    def _emit_evictions(self, removals: list[tuple[str, int, str | None]]) -> None:
+        """Emit one ``evicted`` event per removed artifact, after commit."""
+
+        if self._lifecycle_sink is NULL_MODEL_LIFECYCLE_SINK:
+            return
+        for digest, size, reason in removals:
+            emit_event(
+                self._lifecycle_sink,
+                ModelLifecycleEvent(
+                    ModelLifecycleEventType.EVICTED,
+                    byte_count=size,
+                    digest=digest if _SHA256_PATTERN.fullmatch(digest) else None,
+                    reason=reason,
+                ),
             )
 
     def enforce_quota(

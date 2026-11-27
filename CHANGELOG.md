@@ -110,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/codegen/span_proto.py`, keep wire numbers stable through a committed field map
   that reserves removed fields, and run its `--check` mode in `make grpc-proto-check` (#5335).
 - Define OpenMed de-identification terms against GDPR Article 4(5) and Recital 26, EDPB Guidelines 01/2025 on Pseudonymisation and Court of Justice case law, mapping every policy action and `deidentify()` method, plus k-anonymity and differential-privacy outputs, to its default GDPR category and the evidence an anonymisation claim would need (#5410).
+- Emit value-free `openmed.model.lifecycle.v1` events (`requested`, `fetching`, `verified`, `integrity_failed`, `ready`, `activated`, `rolled_back`, `evicted`, `failed`) from `prefetch_model` and `ModelCachePolicy` through an injectable `lifecycle_sink` whose default records nothing, with `model_lifecycle_event.schema.json`, activation and rollback hooks, a `reason` code on `DownloadIntegrityError`, and ordered vectors in `tests/fixtures/parity/model_lifecycle_v1.json` (#5353).
 
 ### Changed
 

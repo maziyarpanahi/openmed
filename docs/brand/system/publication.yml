@@ -384,6 +384,7 @@ classification:
     - models/clinical-slm-template-digests.md
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
+    - models/lifecycle-events.md
     - models/rollback-compatibility.md
     - models/portable-bundle.md
     - models/bundle-cache.md
