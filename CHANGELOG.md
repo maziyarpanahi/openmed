@@ -129,6 +129,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seeds beyond 64 bits, and leap-day, month-end and year-boundary shifted
   dates, with a Python test that recomputes every vector and reports
   mismatches by vector id only (#5413).
+- Port patient-keyed date-shift offsets to the openmed web package: `stableDateShiftOffset()`, `stableDateShiftOffsetFromSeed()` and `shiftIsoDate()` match `openmed.core.date_shift` on every shared vector, with WebCrypto hashing, `BigInt` reduction, UTC proleptic-Gregorian date arithmetic and value-free `DateShiftError` codes (#5417).
+- Add synthetic cross-runtime date-shift vectors for the patient-keyed and
+  seeded offset helpers, covering non-ASCII patient keys, raw-byte secrets,
+  seeds beyond 64 bits, and leap-day, month-end and year-boundary shifted
+  dates, with a Python test that recomputes every vector and reports
+  mismatches by vector id only (#5413).
 
 ### Changed
 

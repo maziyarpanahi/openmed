@@ -187,6 +187,14 @@ export type {
   TaskPackLoadOptions,
   TaskPackResolution,
 } from "./packs";
+export {
+  DEFAULT_DATE_SHIFT_MAX_DAYS,
+  DateShiftError,
+  shiftIsoDate,
+  stableDateShiftOffset,
+  stableDateShiftOffsetFromSeed,
+} from "./date-shift";
+export type { DateShiftErrorCode, StableDateShiftOffsetOptions } from "./date-shift";
 export type { OpenMedOfflineErrorCode } from "./offline";
 export { OPENMED_ERROR_CODES, OPENMED_ERROR_CODE_RETRYABLE } from "./error-codes";
 export type { OpenMedErrorCode } from "./error-codes";

@@ -228,6 +228,29 @@ const result = await deidentify(text, toExtractPiiOptions(config));
 
 See `docs/configuration/sdk-config.md` for the keys, defaults and issue codes.
 
+### Date Shifting
+
+`stableDateShiftOffset()` returns the same patient-keyed day offset as
+Python's `openmed.core.date_shift.stable_offset_for()`, so every runtime shifts
+one patient's dates by the same number of days and keeps the intervals between
+them. `stableDateShiftOffsetFromSeed()` matches `stable_offset_from_seed()`, and
+`shiftIsoDate()` moves a `YYYY-MM-DD` date in UTC on the proleptic Gregorian
+calendar:
+
+```ts
+import { shiftIsoDate, stableDateShiftOffset } from "openmed";
+
+const days = await stableDateShiftOffset({ patientKey, secret, maxDays: 365 });
+shiftIsoDate("2024-03-01", days); // never 0, at most 365 days either way
+```
+
+The offset is HMAC-SHA256 of the patient key under your secret (text or bytes),
+reduced with `BigInt`; hashing uses WebCrypto only. Seeds may be numbers,
+`BigInt`s or decimal strings, so seeds beyond 2^53 stay exact. Invalid input
+throws `DateShiftError` with a code such as `secret_invalid` or
+`date_invalid`, and errors never include the key, secret, seed or date. The
+shared vectors in `tests/fixtures/parity/date_shift_v1.json` pin the results.
+
 ### Token Offsets
 
 Transformers.js token-classification output carries no character offsets.
