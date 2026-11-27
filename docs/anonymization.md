@@ -15,6 +15,11 @@ This document focuses on `replace`, which was upgraded in v1.3.0 to a full
 Faker-backed obfuscation engine. If you just want to compare all five
 methods side by side, start with the quickstart below.
 
+Under EU data protection law these methods produce pseudonymised data, which
+remain personal data, unless a separate risk assessment supports anonymity
+(GDPR Article 4(5) and Recital 26); see
+[EU pseudonymisation and anonymisation terms](compliance/eu-pseudonymisation-terms.md).
+
 ## Quickstart: choosing a method
 
 ### `mask` — clear placeholders

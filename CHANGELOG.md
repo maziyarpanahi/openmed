@@ -109,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generate the protobuf `OpenMedSpan` message from `span.schema.json` with
   `scripts/codegen/span_proto.py`, keep wire numbers stable through a committed field map
   that reserves removed fields, and run its `--check` mode in `make grpc-proto-check` (#5335).
+- Define OpenMed de-identification terms against GDPR Article 4(5) and Recital 26, EDPB Guidelines 01/2025 on Pseudonymisation and Court of Justice case law, mapping every policy action and `deidentify()` method, plus k-anonymity and differential-privacy outputs, to its default GDPR category and the evidence an anonymisation claim would need (#5410).
 
 ### Changed
 

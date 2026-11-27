@@ -80,6 +80,10 @@ they do not replace legal advice or supervisory-authority guidance:
 - [GDPR data-subject access and deletion export](compliance/gdpr-dsar-export.md)
   covers local evidence collection, identity verification, export, deletion,
   and audit handling.
+- [EU pseudonymisation and anonymisation terms](compliance/eu-pseudonymisation-terms.md)
+  maps each OpenMed action to its default GDPR category and to the evidence an
+  anonymisation claim would need, citing the EDPB pseudonymisation guidelines
+  and Court of Justice case law.
 - [Kenya Data Protection Act identifier checklist](compliance/ke-dpa-identifier-checklist.md)
   maps synthetic identifier fixtures and conservative validation steps.
 - [Nigeria Data Protection Act identifier checklist](compliance/ng-ndpa-identifier-checklist.md)

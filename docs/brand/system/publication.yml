@@ -916,6 +916,7 @@ classification:
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
     - compliance/waiver-ledger.md
+    - compliance/eu-pseudonymisation-terms.md
     - demo/browser-egress.md
     - integrations-llamaindex.md
     - i18n/glossary.md
