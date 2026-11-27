@@ -58,6 +58,7 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
   training-data licenses, intended use and check dates for candidate pose,
   audio, sleep and chest X-ray models, and marking models with unstated weight
   licenses as user-supplied only (#4759).
+- Pin calendar conversions with synthetic golden vectors for every registered calendar, including leap days and the supported-range edges of the table calendars, so ports can reuse `tests/fixtures/parity/calendar_conversion_v1.json` (#4872).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
