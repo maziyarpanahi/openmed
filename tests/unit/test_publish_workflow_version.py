@@ -464,6 +464,310 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
     assert sbom["needs"] == ["publish", "npm-publish"]
 
 
+# The PyPI job, byte for byte. Changing it needs docs/release/trusted-publishing.md
+# and this constant updated in the same change.
+PYPI_PUBLISH_JOB = """\
+  publish:
+    name: Publish distributions
+    needs: [provenance, npm-verify]
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag' &&
+       startsWith(github.ref_name, 'v')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'v'))
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/openmed
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
+
+"""
+REST_CLIENT_TAG_GATE = (
+    "vars.REST_CLIENT_NPM_TRUSTED_PUBLISHER == 'configured' && "
+    "((github.event_name == 'push' && github.ref_type == 'tag' && "
+    "startsWith(github.ref_name, 'v')) || "
+    "(github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'v')))"
+)
+
+
+def test_pypi_publish_job_is_byte_identical_with_the_rest_client_jobs():
+    content = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    start = content.index("\n  publish:\n") + 1
+    end = content.index("\n  npm-publish:\n", start) + 1
+
+    assert content[start:end] == PYPI_PUBLISH_JOB
+    jobs = _load_workflow(PUBLISH_WORKFLOW)["jobs"]
+    for job in ("publish", "npm-publish", "evidence", "sbom"):
+        assert not {"rest-client-verify", "rest-client-publish"} & set(
+            jobs[job]["needs"]
+        ), job
+
+
+def test_publish_workflow_verifies_and_gates_the_rest_client_package():
+    workflow = _load_workflow(PUBLISH_WORKFLOW)
+    verify = workflow["jobs"]["rest-client-verify"]
+    publish = workflow["jobs"]["rest-client-publish"]
+    verify_text = json.dumps(verify)
+    steps = {step.get("name"): step for step in publish["steps"]}
+    release_step = steps["Check for an existing matching REST client release"]
+    publish_step = steps["Publish REST client with provenance"]
+
+    assert "pull_request" not in workflow["on"]
+    assert verify["permissions"] == {"contents": "read"}
+    assert verify["steps"][0]["with"]["ref"] == "${{ inputs.tag || github.ref }}"
+    for command in (
+        "npm ci",
+        "npm audit --audit-level=low",
+        "npm run typecheck",
+        "npm run build",
+        "npm run test:workflow",
+        "npm run test:decisions",
+        "npm pack --dry-run",
+        "CLIENT_VERSION",
+        "./clients/typescript/package.json",
+    ):
+        assert command in verify_text, command
+    assert all(
+        step.get("working-directory", "clients/typescript") == "clients/typescript"
+        for step in verify["steps"][3:]
+    )
+
+    assert publish["needs"] == ["provenance", "npm-verify", "rest-client-verify"]
+    assert " ".join(publish["if"].split()) == REST_CLIENT_TAG_GATE
+    assert publish["environment"] == {
+        "name": "npm",
+        "url": "https://www.npmjs.com/package/@openmed/rest-client",
+    }
+    assert publish["permissions"] == {"contents": "read", "id-token": "write"}
+    assert publish["runs-on"] == "ubuntu-latest"
+    assert publish["steps"][0]["with"]["ref"] == "${{ inputs.tag || github.ref }}"
+    assert steps["Build REST client distribution"]["run"] == "npm run build"
+    assert release_step["id"] == "rest-client-release"
+    assert release_step["working-directory"] == "clients/typescript"
+    assert publish_step["run"] == (
+        "npm publish --ignore-scripts --access public --provenance"
+    )
+    assert publish_step["if"] == "steps.rest-client-release.outputs.exists != 'true'"
+    assert publish_step["working-directory"] == "clients/typescript"
+    assert "env" not in publish_step
+    content = json.dumps(publish)
+    for secret in ("NPM_TOKEN", "NPM_ACCESS_TOKEN", "NODE_AUTH_TOKEN", "secrets."):
+        assert secret not in content, secret
+
+
+def test_trusted_publishing_docs_cover_the_rest_client_gate():
+    docs = (ROOT / "docs" / "release" / "trusted-publishing.md").read_text(
+        encoding="utf-8"
+    )
+    section = docs.split("## TypeScript REST client workflow contract", 1)[1]
+
+    for expected in (
+        "`@openmed/rest-client`",
+        "`REST_CLIENT_NPM_TRUSTED_PUBLISHER`",
+        "`configured`",
+        "`rest-client-verify`",
+        "`rest-client-publish`",
+        "workflow filename\n   `publish.yml` and environment `npm`",
+        "npm publish --ignore-scripts --access public --provenance",
+        "never from a pull request",
+    ):
+        assert expected in section, expected
+
+
+_FAKE_CURL = """#!/usr/bin/env bash
+set -euo pipefail
+output=""
+write_out=""
+url=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    --write-out) write_out=$2; shift 2 ;;
+    --*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+echo "$url" >> "$FAKE_REGISTRY/requests.log"
+case "$url" in
+  *.tgz) cp "$FAKE_REGISTRY/registry.tgz" "$output" ;;
+  *)
+    status=404
+    if [ -f "$FAKE_REGISTRY/metadata.json" ]; then
+      cp "$FAKE_REGISTRY/metadata.json" "$output"
+      status=200
+    else
+      echo '{"error":"Not found"}' > "$output"
+    fi
+    if [ -n "$write_out" ]; then printf '%s' "$status"; fi
+    ;;
+esac
+"""
+_FAKE_GIT = '#!/usr/bin/env bash\necho "$FAKE_RELEASE_COMMIT"\n'
+_SYNTHETIC_COMMIT = "1" * 40
+_RELEASE_TOOLS = ("bash", "node", "npm", "tar", "sha1sum", "sha256sum", "diff", "awk")
+
+
+def _synthetic_client(path: Path, body: str) -> Path:
+    (path / "dist").mkdir(parents=True)
+    (path / "package.json").write_text(
+        json.dumps(
+            {"name": "@openmed/rest-client", "version": "9.9.9", "files": ["dist"]}
+        ),
+        encoding="utf-8",
+    )
+    (path / "dist" / "index.js").write_text(body, encoding="utf-8")
+    return path
+
+
+def _run_rest_client_release_check(
+    tmp_path: Path,
+    *,
+    registry_body: str | None,
+    git_head: str = _SYNTHETIC_COMMIT,
+    shasum: str | None = None,
+) -> tuple[subprocess.CompletedProcess[str], str, str]:
+    step = next(
+        step
+        for step in _load_workflow(PUBLISH_WORKFLOW)["jobs"]["rest-client-publish"][
+            "steps"
+        ]
+        if step.get("id") == "rest-client-release"
+    )
+    package = _synthetic_client(tmp_path / "package", "export const value = 1;\n")
+    registry = tmp_path / "registry"
+    registry.mkdir()
+    if registry_body is not None:
+        source = _synthetic_client(tmp_path / "registry-source", registry_body)
+        packed = subprocess.run(
+            [shutil.which("npm"), "pack", "--ignore-scripts", "--json"],
+            cwd=source,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        tarball = source / json.loads(packed.stdout)[0]["filename"]
+        shutil.copyfile(tarball, registry / "registry.tgz")
+        digest = subprocess.run(
+            [shutil.which("sha1sum"), str(registry / "registry.tgz")],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()[0]
+        (registry / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "version": "9.9.9",
+                    "gitHead": git_head,
+                    "dist": {
+                        "shasum": shasum or digest,
+                        "tarball": "https://registry.npmjs.org/@openmed/rest-client/-/"
+                        "rest-client-9.9.9.tgz",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, script in (("curl", _FAKE_CURL), ("git", _FAKE_GIT)):
+        (bin_dir / name).write_text(script, encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    runner_temp = tmp_path / "runner"
+    runner_temp.mkdir()
+    output = tmp_path / "github-output"
+    output.write_text("", encoding="utf-8")
+    result = subprocess.run(
+        [shutil.which("bash"), "-c", step["run"]],
+        cwd=package,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "RELEASE_TAG": "v9.9.9",
+            "RUNNER_TEMP": str(runner_temp),
+            "GITHUB_OUTPUT": str(output),
+            "FAKE_REGISTRY": str(registry),
+            "FAKE_RELEASE_COMMIT": _SYNTHETIC_COMMIT,
+            "npm_config_update_notifier": "false",
+        },
+    )
+    requests = (registry / "requests.log").read_text(encoding="utf-8")
+    return result, output.read_text(encoding="utf-8"), requests
+
+
+_needs_release_tools = pytest.mark.skipif(
+    sys.platform == "win32"
+    or any(shutil.which(tool) is None for tool in _RELEASE_TOOLS),
+    reason="the release check needs bash, node, npm and GNU-style digest tools",
+)
+
+
+@_needs_release_tools
+def test_rest_client_release_check_publishes_an_unreleased_version(tmp_path):
+    result, output, requests = _run_rest_client_release_check(
+        tmp_path, registry_body=None
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output == "exists=false\n"
+    assert requests == "https://registry.npmjs.org/@openmed%2frest-client/9.9.9\n"
+
+
+@_needs_release_tools
+def test_rest_client_release_rerun_skips_upload_after_a_digest_match(tmp_path):
+    result, output, requests = _run_rest_client_release_check(
+        tmp_path, registry_body="export const value = 1;\n"
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output == "exists=true\n"
+    assert "skipping npm upload" in result.stdout
+    assert requests.splitlines() == [
+        "https://registry.npmjs.org/@openmed%2frest-client/9.9.9",
+        "https://registry.npmjs.org/@openmed/rest-client/-/rest-client-9.9.9.tgz",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"registry_body": "export const value = 2;\n"}, "do not match"),
+        (
+            {"registry_body": "export const value = 1;\n", "git_head": "2" * 40},
+            "does not match the immutable tag",
+        ),
+        (
+            {"registry_body": "export const value = 1;\n", "shasum": "0" * 40},
+            "failed its registry digest",
+        ),
+    ],
+)
+@_needs_release_tools
+def test_rest_client_release_rerun_fails_closed_on_a_mismatch(
+    tmp_path, change, message
+):
+    result, output, _requests = _run_rest_client_release_check(tmp_path, **change)
+
+    assert result.returncode != 0
+    assert "exists=" not in output
+    assert message in result.stdout
+
+
 def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
     workflow = IMAGE_SBOM_WORKFLOW.read_text(encoding="utf-8")
 

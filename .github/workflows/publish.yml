@@ -232,6 +232,202 @@ jobs:
         working-directory: js/openmedkit-web
         # npm exchanges this job's GitHub OIDC identity with the trusted publisher.
         run: npm publish --ignore-scripts --access public --provenance
+
+  # The TypeScript REST client (@openmed/rest-client) is verified on every
+  # release but published only after a maintainer has configured its npm
+  # trusted publisher and set the REST_CLIENT_NPM_TRUSTED_PUBLISHER repository
+  # variable to `configured`. Neither job gates the PyPI or `openmed` npm uploads.
+  rest-client-verify:
+    name: Verify TypeScript REST client package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify REST client version matches the release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          PYTHON_VERSION=$(python3 -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
+          CLIENT_VERSION=$(node -p "require('./clients/typescript/package.json').version")
+          TAG_VERSION=${RELEASE_TAG#v}
+          if [ "$PYTHON_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: Python $PYTHON_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+          if [ "$CLIENT_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: REST client $CLIENT_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Install REST client dependencies
+        working-directory: clients/typescript
+        run: npm ci
+
+      - name: Audit REST client dependencies
+        working-directory: clients/typescript
+        run: npm audit --audit-level=low
+
+      - name: Build, typecheck, and test REST client
+        working-directory: clients/typescript
+        run: |
+          npm run typecheck
+          npm run build
+          npm run test:workflow
+          npm run test:decisions
+          node --test tests/example.test.mjs
+
+      - name: Inspect REST client package tarball
+        working-directory: clients/typescript
+        run: npm pack --dry-run
+
+  rest-client-publish:
+    name: Publish TypeScript REST client
+    needs: [provenance, npm-verify, rest-client-verify]
+    if: >-
+      vars.REST_CLIENT_NPM_TRUSTED_PUBLISHER == 'configured' &&
+      ((github.event_name == 'push' && github.ref_type == 'tag' &&
+        startsWith(github.ref_name, 'v')) ||
+       (github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'v')))
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@openmed/rest-client
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install REST client dependencies
+        working-directory: clients/typescript
+        run: npm ci
+
+      - name: Build REST client distribution
+        working-directory: clients/typescript
+        run: npm run build
+
+      - name: Check for an existing matching REST client release
+        id: rest-client-release
+        working-directory: clients/typescript
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_name=$(node -p "require('./package.json').name")
+          npm_version=$(node -p "require('./package.json').version")
+          tag_version=${RELEASE_TAG#v}
+          if [ "$package_name" != "@openmed/rest-client" ]; then
+            echo "Unexpected REST client package name: $package_name"
+            exit 1
+          fi
+          if [ "$npm_version" != "$tag_version" ]; then
+            echo "Version mismatch: REST client $npm_version != tag $tag_version"
+            exit 1
+          fi
+
+          # Scoped package names are URL-encoded in registry paths.
+          registry_name=${package_name/\//%2f}
+          registry_metadata="$RUNNER_TEMP/rest-client-release.json"
+          http_status=$(curl --silent --show-error --location \
+            --output "$registry_metadata" --write-out '%{http_code}' \
+            "https://registry.npmjs.org/$registry_name/$npm_version")
+          if [ "$http_status" = "404" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$http_status" != "200" ]; then
+            echo "Unexpected npm registry response: HTTP $http_status"
+            exit 1
+          fi
+
+          registry_version=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).version")
+          registry_git_head=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).gitHead || ''")
+          registry_shasum=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).dist.shasum")
+          registry_tarball_url=$(REGISTRY_METADATA="$registry_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.REGISTRY_METADATA, 'utf8')).dist.tarball")
+          release_commit=$(git rev-parse HEAD)
+          if [ "$registry_version" != "$npm_version" ] \
+             || [ "$registry_git_head" != "$release_commit" ]; then
+            echo "Existing REST client release does not match the immutable tag: version=$registry_version gitHead=$registry_git_head"
+            exit 1
+          fi
+
+          pack_metadata="$RUNNER_TEMP/rest-client-pack.json"
+          npm pack --ignore-scripts --json > "$pack_metadata"
+          tarball=$(PACK_METADATA="$pack_metadata" node -p \
+            "JSON.parse(require('fs').readFileSync(process.env.PACK_METADATA, 'utf8'))[0].filename")
+          registry_tarball="$RUNNER_TEMP/rest-client-$npm_version-registry.tgz"
+          curl --fail --silent --show-error --location \
+            --output "$registry_tarball" "$registry_tarball_url"
+          downloaded_shasum=$(sha1sum "$registry_tarball" | awk '{print $1}')
+          if [ "$downloaded_shasum" != "$registry_shasum" ]; then
+            echo "Downloaded REST client tarball failed its registry digest: downloaded=$downloaded_shasum registry=$registry_shasum"
+            exit 1
+          fi
+
+          local_contents="$RUNNER_TEMP/rest-client-local-contents"
+          registry_contents="$RUNNER_TEMP/rest-client-registry-contents"
+          mkdir -p "$local_contents" "$registry_contents"
+          tar -xzf "$tarball" -C "$local_contents"
+          tar -xzf "$registry_tarball" -C "$registry_contents"
+          if ! diff --recursive --brief --no-dereference \
+            "$local_contents/package" "$registry_contents/package"; then
+            echo "Existing REST client tarball contents do not match the immutable tag build."
+            exit 1
+          fi
+
+          package_digest() {
+            package_root=$1
+            (
+              cd "$package_root"
+              find . -type f -print0 \
+                | sort -z \
+                | xargs -0 sha256sum \
+                | sha256sum \
+                | awk '{print $1}'
+            )
+          }
+          local_content_digest=$(package_digest "$local_contents/package")
+          registry_content_digest=$(package_digest "$registry_contents/package")
+          if [ "$local_content_digest" != "$registry_content_digest" ]; then
+            echo "Existing REST client content digest mismatch: local=$local_content_digest registry=$registry_content_digest"
+            exit 1
+          fi
+          echo "Matching $package_name@$npm_version is already published; skipping npm upload."
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish REST client with provenance
+        if: steps.rest-client-release.outputs.exists != 'true'
+        working-directory: clients/typescript
+        # npm exchanges this job's GitHub OIDC identity with the trusted publisher.
+        run: npm publish --ignore-scripts --access public --provenance
+
   evidence:
     name: Sign and attach release evidence
     needs: [provenance, publish]
