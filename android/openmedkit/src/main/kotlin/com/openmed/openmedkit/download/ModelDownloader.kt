@@ -168,7 +168,9 @@ class ModelDownloader(
                     }
                 }
                 var reported = -1L
-                val report = { bytes: Long ->
+                val report = { written: Long ->
+                    // An oversized failed attempt must not report past the published size.
+                    val bytes = if (size != null) minOf(written, size) else written
                     if (bytes > reported) {
                         reported = bytes
                         try {

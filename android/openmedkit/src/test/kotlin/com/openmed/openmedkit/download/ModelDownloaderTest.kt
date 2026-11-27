@@ -190,6 +190,30 @@ class ModelDownloaderTest {
     }
 
     @Test
+    fun progressNeverPassesThePublishedSizeAfterAnOversizedAttempt() {
+        val files = mapOf("model.onnx" to "w".repeat(10_000))
+        val entry = catalogEntry(REPO_ID, integrityHash(REPO_ID, files.keys.toList(), COMMIT), listOf("onnx"))
+        val values = mutableListOf<Long>()
+        val events = mutableListOf<ModelLifecycleEvent>()
+        val client = ScenarioClient(REPO_ID, COMMIT, files, oversize = mapOf("model.onnx" to 1), chunkBytes = 4096)
+
+        ModelDownloader(
+            ModelCache(temporaryFolder.newFolder("cache")),
+            client,
+            lifecycleSink = ModelLifecycleSink { events += it },
+            progressListener = ModelDownloadProgressListener { _, _, bytes, _ -> values += bytes },
+        ).download(entry)
+
+        assertEquals(
+            listOf("requested", "fetching", "integrity_failed", "fetching", "verified", "ready"),
+            events.map { it.event },
+        )
+        assertEquals("size_mismatch", events[2].reason)
+        assertTrue(values.all { it <= 10_000L }, values.toString())
+        assertEquals(10_000L, values.last())
+    }
+
+    @Test
     fun reproducibilityHashMismatchEmitsIntegrityFailedAndWritesNoReadyDirectory() {
         val files = mapOf("model.onnx" to "weights")
         val entry = catalogEntry(REPO_ID, "sha256:" + "0".repeat(64), listOf("onnx"))
@@ -333,8 +357,10 @@ class ModelDownloaderTest {
         private val files: Map<String, String>,
         corrupt: Map<String, Int> = emptyMap(),
         private val chunkBytes: Int = 0,
+        oversize: Map<String, Int> = emptyMap(),
     ) : HuggingFaceModelClient {
         private val corruptLeft = corrupt.toMutableMap()
+        private val oversizeLeft = oversize.toMutableMap()
         val downloaded = mutableListOf<String>()
 
         override fun fetchModelInfo(repoId: String, revision: String?): HuggingFaceModelInfo {
@@ -366,17 +392,21 @@ class ModelDownloaderTest {
             // A corrupt copy keeps the size, so only the digest check catches it.
             val bytes = (if (left > 0) "#" + content.drop(1) else content).toByteArray()
             corruptLeft[path] = left - 1
+            val extra = oversizeLeft[path] ?: 0
+            oversizeLeft[path] = extra - 1
+            // An oversized copy appends bytes, so the size check catches it.
+            val body = if (extra > 0) bytes + ByteArray(bytes.size) else bytes
             destination.outputStream().use { output ->
-                val step = if (chunkBytes > 0) chunkBytes else bytes.size.coerceAtLeast(1)
+                val step = if (chunkBytes > 0) chunkBytes else body.size.coerceAtLeast(1)
                 var written = 0
-                while (written < bytes.size) {
-                    val count = minOf(step, bytes.size - written)
-                    output.write(bytes, written, count)
+                while (written < body.size) {
+                    val count = minOf(step, body.size - written)
+                    output.write(body, written, count)
                     written += count
                     transfer.onBytes?.invoke(written.toLong())
                 }
             }
-            return ModelFileTransferOutcome(0L, bytes.size.toLong())
+            return ModelFileTransferOutcome(0L, body.size.toLong())
         }
 
         private fun sha256Hex(content: String): String =
