@@ -7,6 +7,218 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-25
+
+OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
+
+### Service deployment and recovery
+
+Async de-identification jobs can resume from checkpoints after a restart. Clients can send an `Idempotency-Key` when retrying job submissions and FHIR bulk or SMART ingestion starts. Workers acquire expiring leases, and terminal jobs record their webhook intent with their final checkpoint. If an input is damaged or cannot be authenticated, the job can enter `quarantined`. Treat that status as pending operator action. Drain in-flight 3.3 jobs before upgrading because older in-flight records cannot resume under the new format. [Async jobs](https://github.com/maziyarpanahi/openmed/blob/master/docs/serving/async-jobs.md)
+
+The production profile checks authentication, storage, outbound access, and replica configuration. Remote gRPC binds require TLS. PostgreSQL Journey stores require certificate and hostname verification in production. GraphQL clients must use POST. Move version probes from `/health` to the authenticated `/service/metadata` endpoint. Operators can rehearse schema migrations, back up and restore encrypted service state, and inspect or plan recovery before applying it. [Security profile](https://github.com/maziyarpanahi/openmed/blob/master/docs/serving/security-profile.md) · [Recovery CLI](https://github.com/maziyarpanahi/openmed/blob/master/docs/cli/service-recovery.md)
+
+### Portable inference and document redaction
+
+Signed bundle manifests bind model assets, tokenizer inputs, and optional decision calibration profiles. Mobile and browser runtimes can verify assets before loading them. Swift and Android document intake share evidence coordinates for reviewing redactions before an explicit export. The browser kit adds cancellable workers with bounded queues. Packaged-consumer tests exercise native SDKs and bridges outside the source checkout.
+
+Platform coverage varies by model family, runtime, and device. The frozen matrix identifies the Python reference contract and Apple Silicon macOS Swift cells with supporting CI evidence. Android, browser, and bridge users should check their specific combination. Physical-device qualification and signed release evidence are recorded separately. [OpenMedKit support matrix](https://github.com/maziyarpanahi/openmed/blob/master/docs/openmedkit-support-matrix.md)
+
+### Upgrade from 3.3
+
+| If you use | Action for 4.0 |
+| --- | --- |
+| Python | Use Python 3.11.5 or newer. Update imports that previously came from service implementation modules. Supply a signing key when running relation or federated leakage evaluations. Load biomedical NER corpora from pinned, script-free data or a local export. |
+| Decisions API | Send either the OpenMed or OpenAI-compatible request shape to `/v1/decisions`. For OpenMed requests with local media, declare schema `1.2.0` or omit the version. Existing text-only 1.0 and 1.1 requests retain their result version. |
+| Swift | Bundle tokenizer assets locally or opt into acquisition with an explicit tokenizer pin. Update switches over policy and model-loading errors to use the documented codes or asset roles. |
+| Android | Supply a secret provider for keyed hashing. Add `openmedkit-mlkit` if using ML Kit OCR, pass an OCR adapter explicitly to document intake, and rebuild consumers against the new API. |
+
+The migration guide includes replacement imports, Swift case changes, and Kotlin and Java signatures. The changelog also covers model-cache invalidation, stable Maple response error codes, and synthetic gait fixtures. [3.3-to-4.0 migration guide](https://github.com/maziyarpanahi/openmed/blob/master/docs/migration/3.3-to-4.0.md)
+
+### Installation after publication
+
+| Surface | Coordinate |
+| --- | --- |
+| Python | `pip install "openmed==4.0.0"` |
+| JavaScript | `npm install openmed@4.0.0` |
+| Swift Package Manager | `.package(url: "https://github.com/maziyarpanahi/openmed.git", from: "4.0.0")` |
+| Android / JitPack | `com.github.maziyarpanahi:openmed:v4.0.0` |
+| Service image | `ghcr.io/maziyarpanahi/openmed:v4.0.0` |
+
+This candidate concerns the library and SDKs. Clinical use requires independent validation for the intended population, device, and workflow, with qualified human review.
+
+### Added
+
+- Add a standard-library synthetic side-view walker fixture for pose and gait
+  tests: seeded joint sequences with heel-strike, toe-off, cadence, step-time and
+  double-support truth, asymmetry, far-leg occlusion, joint jitter and a
+  second walker, plus seven curated scenarios with literature-grounded
+  parameters and pinned digests. The truth is checked against the generated
+  contact geometry and an independent pelvis-relative event detector (#4760).
+- Added a body-signal model license provenance page listing code, weight and
+  training-data licenses, intended use and check dates for candidate pose,
+  audio, sleep and chest X-ray models, and marking models with unstated weight
+  licenses as user-supplied only (#4759).
+- Added versioned JSON Schemas for the async job record, the terminal webhook
+  payload, and the REST error envelope, registered in the bundled schema
+  fingerprint snapshot, with drift tests that fail when a required field is
+  removed or an undeclared field appears (#3925).
+- Give `MapleResponseError` a stable `code` attribute drawn from the closed set
+  `MAPLE_RESPONSE_ERROR_CODES` (for example `invalid_json`, `invalid_span`,
+  `label_not_allowed`), so callers can branch on why a Maple response was
+  rejected without parsing the message. Messages and parsing behaviour are
+  unchanged, and unknown codes fall back to `invalid_response` (#5086).
+- Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
+- Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
+- Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
+- Add post-restore authorization reconciliation that opens a new recovery epoch, burns pre-restore approval nonces, rechecks recorded authority against current status, and holds or requires fresh review instead of reviving spent or revoked authority (#3707).
+- Add fail-closed required audit for declared service operations: durable intent/commit receipts on the action ledger, denied or reconcile-required outcomes when audit storage fails, and exactly-once reconciliation that never re-runs a committed effect (#3708).
+- Declare the v3.4 reference deployment, supported transports with their security posture, replica modes, durable components with recovery objectives, and unsupported deployments in a schema-validated file with a matching docs page (#3919).
+- Add a local `openmed service-recovery` operator CLI with read-only inspect, plan and verify commands and explicit apply commands that bind single-use approvals to the exact plan, active generation and state digest (#3703).
+- Add validated service security-policy generations: complete non-secret limit, authorization-policy and egress candidates activate atomically or are rejected with controlled findings, in-flight work stays pinned to one generation, and emergency tighten-only reloads apply at declared checkpoints (#3704).
+- Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
+- Make async `/jobs` work durable: workers claim jobs with expiring leases whose epoch fences every store write, coalesced checkpoints with chained output digests are the resume points, and the terminal state commits together with the final checkpoint and the webhook intent. Retryable failures back off within a bounded budget, poison or damaged work is quarantined until an authorized `DeidentifyJobQueue.replay()`, and a startup and periodic reconcile reclaims expired leases, resumes queued work, re-drives undelivered webhooks through the bounded dispatcher and fails corrupt recovery state closed. `POST /jobs` honours `Idempotency-Key` like the FHIR bulk starts, with keyed, owner-scoped digests (#3574).
+
+### Changed
+
+- Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).
+- The GraphQL endpoint now executes operations over `POST` only, keeps the
+  GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
+  and returns `Cache-Control: no-store`, `Pragma: no-cache` and
+  `Referrer-Policy: no-referrer` on every `/graphql` response (#3544).
+
+### Fixed
+
+- Key opt-in result-cache entries on the model revision and a model generation
+  counter, and clear the cache when a registry promotion, pointer flip or
+  rollback changes the served weights, so a model that keeps its name no longer
+  returns the previous weights' cached results (#4538).
+- Reject challengers that omit a critical recall measurement or a gate the
+  champion passed, preserving the missing-axis reason across signed comparison
+  record round trips (#4544).
+- Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
+  `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
+  links against it and no dependency ships it, so the tokenizer failed to load
+  on devices unless the host app happened to ship the runtime. The NDK is
+  pinned through `android.ndkVersion`; apps that already ship
+  `libc++_shared.so` need `packaging.jniLibs.pickFirsts += "**/libc++_shared.so"`.
+- Keep exact container runtime packages available through a signed Debian
+  snapshot, and recover release image SBOMs by verifying and scanning the
+  published image's immutable digest.
+- Require patched Soup Sieve for optional HTML/document dependencies and
+  Python 3.11.5 or newer, matching its supported Python patch level.
+- Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
+  headers before parsing.
+- Restored the Transformers.js runtime environment exactly after concurrent
+  model loads, so overlapping local and remote loads no longer leave
+  `allowLocalModels` or `allowRemoteModels` behind on the shared module object
+  (#3953).
+- Stop rewriting the local async job store after every document. Progress is
+  saved in coalesced checkpoints (at most 100 per job, at least 1 second
+  apart) while status changes and terminal results are saved immediately, so
+  bytes written grow linearly with job size. Failed writes roll back only the
+  affected record and still leave the previous store and no temporary file
+  (#3904).
+- Release the model reference when a streaming de-identification response
+  times out or the client disconnects mid-window. Cleanup no longer fails with
+  `generator already executing`; a still-running window keeps the reference
+  until it returns, then its output is discarded and the timeout or
+  cancellation is recorded as the request outcome (#3901).
+- Deliver async job webhooks on a bounded background executor so failing
+  receivers no longer hold job workers for hours. Delivery is recorded as
+  `pending` until it settles, capped by a server-side wall-time ceiling, and
+  backoff waits are cancelled on shutdown, which settles unfinished deliveries
+  as `abandoned` within a drain bound. `webhook_delivery` now stores only
+  controlled error codes, attempt counts and status codes (#3899).
+- Key service throttles by trusted proxy hops: `X-Forwarded-For` is honored only
+  from `OPENMED_SERVICE_TRUSTED_PROXIES` peers and resolved to the rightmost
+  untrusted address within `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`, so rotated
+  leftmost values no longer bypass rate or authentication-failure limits.
+  Without trusted proxies the header is ignored and the direct peer is used.
+  The authentication-failure limiter shares this resolution by default. Bound
+  limiter state with `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`, evicting only
+  fully refilled buckets and idle semaphores and falling back to a shared
+  overflow bucket; Helm exposes the new settings (#3900).
+- Enforce the declared JSON depth, node and longest-string limits on REST and
+  GraphQL request bodies with a streaming structural pre-scan in the shared
+  request-limit middleware. Violations return `json_structure_exceeded` with
+  only the limit category and ceiling before JSON decoding, Pydantic validation
+  or the route handler runs; `/cohort/resolve` documents a 250,000-value
+  ceiling for concept hierarchies (#3906).
+- Require verified PostgreSQL TLS for Journey stores in the production
+  profile. `PostgresJourneyStore.connect` and `openmed-journey` accept an
+  operator CA bundle and optional client certificate and key
+  (`sslrootcert`/`sslcert`/`sslkey`, `OPENMED_JOURNEY_POSTGRES_SSL*`), build a
+  verify-full context with host-name checks, and refuse plaintext or
+  non-verifying DSNs with `postgres_tls_required` before opening a socket.
+  Plaintext now needs an explicit `OPENMED_PROFILE=dev` or `test`; the Compose
+  bundle and Helm chart mount the CA bundle, and a value-free transport posture
+  is exported for deployment self-checks (#3915).
+- Reuse and explicitly dispose package-owned web inference pipelines. Release
+  settled and pending ONNX Runtime Web cached sessions once, draining active
+  native runs and preserving caller pipeline ownership (#3935).
+
+### Security
+
+- **Breaking:** evaluation reports no longer fall back to signing keys
+  published in the source, which let anyone forge a signature that verifies.
+  `run_relation_suite`, `run_suite(suite="relations")` and
+  `run_federated_leakage_eval` need `signing_key` or
+  `OPENMED_RELATION_SCORECARD_KEY` / `OPENMED_FEDERATED_EVAL_KEY`. Without
+  one, they raise `ValueError` before any fixture or detector runs. Treat
+  reports signed with the old built-in keys as unsigned.
+- **Breaking (Android):** `DeidentifyEngine` no longer keys `HASH`
+  replacements or span digests with the published
+  `openmed-android-deidentify-v1` salt. Hashing is keyed through an
+  `OpenMedSecretProvider` such as `AndroidKeystoreSecretProvider`, so the key
+  never sits in app memory. An engine built without a provider omits span
+  digests and refuses `HASH` with `OpenMedSecretException`. Pass
+  `LEGACY_PUBLIC_HASH_SALT` with `HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT` only
+  to reproduce digests made before 4.0.
+- **Breaking:** the public biomedical NER corpus loaders never run dataset
+  code from a repository. JNLPBA, Species-800 and BC2GM load Parquet files
+  pinned to a commit through the packaged `parquet` builder. BC5CDR and NCBI
+  Disease are published only as loading scripts, which `datasets` 4 and later
+  already refuse, so they need a local export. `BiomedicalNerSource` drops
+  `trust_remote_code` and gains `revision` and `data_dir`.
+- Bound inbound `X-Request-ID` values to `^[A-Za-z0-9_.:-]{1,128}$` in the REST
+  service. Oversized, non-ASCII or separator-bearing ids are replaced with a
+  random UUID before they reach response headers, error envelopes, access logs
+  or spans. The privacy proxy, privacy gateway and filters, and `OpenMedClient`
+  now share the one grammar in `openmed.service.request_id` (#3913).
+- Apply the shared trusted-host allowlist (loopback by default), opt-in API-key
+  or JWT auth and operational request-byte bound to the local privacy proxy
+  before any body parsing. Bound message count, total text characters and
+  streaming duration before redaction or transport calls, with controlled
+  `privacy_proxy_limit_exceeded` and `privacy_proxy_timeout` codes; refusals
+  carry no message text, placeholders or mappings (#3898).
+- Reject revoked REST mTLS client certificates from operator-supplied local CRL
+  files. CRL signatures are verified against the configured CA bundle at
+  startup, revocation and `nextUpdate` freshness (with a configurable grace
+  period) are checked per request before principal mapping, and invalid or
+  stale CRLs fail closed outside the `dev` and `test` profiles. Errors and logs
+  use only `client_certificate_revoked`, `crl_stale` and `crl_invalid`, never
+  subjects, SANs, serial numbers or file paths (#3922).
+- Hide REST discovery surfaces from unauthenticated production callers. Swagger
+  UI, ReDoc and the live `/openapi.json` are served only in the `dev` profile;
+  `OPENMED_SERVICE_OPENAPI_ENABLED=true` serves only `/openapi.json` behind
+  authentication elsewhere. Outside `dev`, `/health` returns status and service
+  name only, and version and profile move to the authenticated
+  `GET /service/metadata` route. The reference launcher no longer sends a
+  `server` header (#3911).
+- Add opt-in inbound HMAC signature enforcement for configured REST route
+  templates. Checks run after body limits and before routing, load the secret
+  from a file, fail closed at startup on bad settings and return value-free
+  `401` codes (`signature_missing`, `signature_invalid`, `signature_stale`,
+  `signature_replayed`); replay protection is per process (#3924).
+- Send `Cache-Control: no-store`, `Pragma: no-cache`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`
+  on every non-probe REST response, including NDJSON streams and error
+  envelopes for unhandled exceptions. Probe routes are unchanged, the
+  generated API documents declare `Cache-Control: no-cache`, and headers
+  already set, such as on `/graphql`, are never duplicated (#3912).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
@@ -359,6 +571,10 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 
 ### Added
 
+- Record resolved source identity, available source license, toolchain versions
+  and exact file inventories for MLX, ONNX and CoreML exports, with an explicit
+  offline provenance verifier.
+
 - Document existing synthetic generators, offline examples, public exports and
   dataset provenance limits in a shared navigation group (#3896).
 
@@ -569,6 +785,13 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   device-isolated caches, offline loading, exact spans, and disease-label
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
+### Changed
+
+- Write independent CoreML package manifests using schema v2 while retaining
+  schema v1 conversion observations and sibling labels outside packages. Keep
+  v1/v2 segmenter validation compatible; move variable export observations out
+  of canonical artifact metadata. See [export provenance](docs/export-matrix.md#producer-provenance-and-offline-verification).
+
 ### Fixed
 
 - Shift Chinese, Japanese and Korean marker-based dates without dateutil, retaining numeric field widths, whitespace, two-digit years and source digit systems (#4328).
@@ -642,6 +865,14 @@ clinical efficacy. Package publication remains a separate release action.
   scales, utility estimates, and seeded Gaussian outputs intentionally change;
   unrepresentable calibration fails closed. Update deterministic expectations
   without restoring the invalid classical scale (#3724).
+
+- Bound the FHIR Bulk Data and SMART ingestion job managers. Starts beyond
+  `OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS` return `503` `bulk_jobs_saturated`
+  with `Retry-After` before any task or output directory exists. Terminal
+  records expire after `OPENMED_SERVICE_BULK_JOB_TTL_SECONDS` and are capped by
+  `OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS`, oldest first; running jobs are never
+  evicted. Request tuning now has server ceilings, including a one-second
+  minimum poll interval; out-of-range values return `422` (#3909).
 
 ### Added
 
@@ -1084,6 +1315,12 @@ clinical efficacy. Package publication remains a separate release action.
   profile on every supported Python version. Reject basic, week-date, ordinal
   and compact-offset input with value-free errors while retaining supported
   extended values, caller timezone rules and golden digests.
+- Run REST trusted-host, CORS and header-only authentication checks before
+  request bodies are buffered or throttle tokens are spent. Preflights no
+  longer need credentials, error responses keep CORS headers for allowed
+  origins, and preflights allow `X-OpenMed-Priority` plus credential headers
+  when authentication is enabled while exposing `X-Request-ID` and
+  `Retry-After` (#3897).
 
 - Honor per-call ONNX revision overrides before configured and default revisions
   (#3504).

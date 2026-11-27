@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from openmed.service.app import create_app
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
@@ -30,6 +31,28 @@ from openmed.service.smart_backend import (
     SMARTBackendIngestionSummary,
     SMARTBackendJobStatus,
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_smart_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SMART egress is deny-by-default; allow only the synthetic test origins.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["smart_token"],
+                    "destination": "https://auth.example.test",
+                    "allow_credentials": True,
+                },
+                {
+                    "purposes": ["fhir_bulk"],
+                    "destination": "https://fhir.example.test",
+                    "allow_credentials": True,
+                },
+            ]
+        ),
+    )
 
 
 @dataclass
@@ -596,7 +619,11 @@ class _FakeManager:
             summary=self.completed_summary,
         )
 
-    def start(self, config, *, deidentifier=None, job_id=None):
+    def ensure_capacity(self) -> None:
+        return None
+
+    def start(self, config, *, deidentifier=None, job_id=None, owner_digest=None):
+        del owner_digest
         self.started = True
         self.started_config = config
         return self.status

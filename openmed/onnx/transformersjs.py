@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from openmed.core.export_provenance import SourceContext, write_canonical_manifest
 from openmed.processing.tokenization import (
     SEGMENTER_IDS,
     package_segmenter_resources,
@@ -97,7 +98,8 @@ def export_transformersjs_bundle(
         quantize: If true, create ``onnx/model_quantized.onnx`` with
             onnxruntime dynamic INT8 weight quantization.
         update_manifest: If true and ``openmed-onnx.json`` exists, add the
-            ``transformersjs`` format and artifact entry.
+            ``transformersjs`` format and artifact entry. A parent manifest with
+            provenance requires a bundle in a strict source subdirectory.
         segmenter_id: Optional compact Han/Indic resource set to package.
     """
 
@@ -111,6 +113,11 @@ def export_transformersjs_bundle(
         if output_dir is not None
         else (source_dir / DEFAULT_BUNDLE_DIRNAME)
     )
+    parent_manifest_path = source_dir / OPENMED_ONNX_MANIFEST_FILENAME
+    if update_manifest and parent_manifest_path.is_file():
+        _validate_parent_inventory_location(
+            source_dir, bundle_dir, _read_json(parent_manifest_path)
+        )
     onnx_dir = bundle_dir / "onnx"
     onnx_dir.mkdir(parents=True, exist_ok=True)
 
@@ -515,6 +522,20 @@ def _write_quantize_config(path: Path, *, quantized: bool) -> None:
     )
 
 
+def _validate_parent_inventory_location(
+    source_dir: Path, bundle_dir: Path, manifest: Mapping[str, Any]
+) -> None:
+    if "provenance" not in manifest:
+        return
+    source_root = source_dir.resolve()
+    bundle_root = bundle_dir.resolve()
+    if bundle_root == source_root or not bundle_root.is_relative_to(source_root):
+        raise ValueError(
+            "A provenance-enabled parent manifest requires a bundle in a strict "
+            "source subdirectory; use update_manifest=False for external bundles."
+        )
+
+
 def _update_openmed_onnx_manifest(
     source_dir: Path,
     bundle_dir: Path,
@@ -527,6 +548,7 @@ def _update_openmed_onnx_manifest(
         return None
 
     manifest = _read_json(manifest_path)
+    _validate_parent_inventory_location(source_dir, bundle_dir, manifest)
     formats = list(manifest.get("formats") or [])
     if TRANSFORMERSJS_FORMAT not in formats:
         formats.append(TRANSFORMERSJS_FORMAT)
@@ -553,7 +575,30 @@ def _update_openmed_onnx_manifest(
             for item in segmenter.get("resource_files", [])
         ]
         manifest["segmenter"] = rebased_segmenter
-    _write_json(manifest_path, manifest)
+    provenance = manifest.get("provenance")
+    if provenance is not None:
+        if not isinstance(provenance, Mapping) or not isinstance(
+            provenance.get("source"), Mapping
+        ):
+            raise ValueError("invalid export provenance source")
+        source = provenance["source"]
+        source_context = SourceContext(
+            source_model_id=source["model_id"],
+            load_reference="",
+            revision=source.get("revision"),
+            source_digest=source.get("content_digest"),
+            license=source.get("license"),
+        )
+        manifest["source_model_id"] = source_context.source_model_id
+        write_canonical_manifest(
+            source_dir,
+            manifest_path.name,
+            manifest,
+            source=source_context,
+            backend="onnx",
+        )
+    else:
+        _write_json(manifest_path, manifest)
     return manifest_path
 
 

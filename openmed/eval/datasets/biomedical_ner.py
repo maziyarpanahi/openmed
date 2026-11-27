@@ -3,6 +3,11 @@
 The suite loads corpus rows from public Hugging Face/BigBIO sources on demand,
 or from caller-supplied synthetic fixtures in tests. No benchmark corpus rows
 are stored in the repository.
+
+Remote corpora are read only as Parquet files pinned to a commit, through the
+packaged ``parquet`` builder, so loading never runs dataset code published in a
+repository. Corpora that are published only as loading scripts must be passed
+as a local export.
 """
 
 from __future__ import annotations
@@ -60,7 +65,21 @@ class BiomedicalNerSource:
     label_mapping: Mapping[str, str]
     loader_kind: str = "bigbio"
     token_label: str = ""
-    trust_remote_code: bool = True
+    revision: str | None = None
+    data_dir: str | None = None
+
+    def parquet_glob(self, split: str) -> str | None:
+        """Return the commit-pinned Parquet glob for *split*.
+
+        Returns ``None`` when the corpus has no pinned Parquet export.
+        """
+        if self.revision is None:
+            return None
+        data_dir = self.data_dir or self.config or self.corpus
+        return (
+            f"hf://datasets/{self.repository}@{self.revision}/"
+            f"{data_dir}/{split}/*.parquet"
+        )
 
     @property
     def source_url(self) -> str:
@@ -151,6 +170,13 @@ class BiomedicalNerCorpus:
         return [record.to_benchmark_fixture() for record in self.records]
 
 
+# Commits on each repository's ``refs/convert/parquet`` branch. BC5CDR and NCBI
+# Disease have no Parquet export (only loading scripts), so they stay unpinned
+# and must be loaded from a local export.
+_JNLPBA_PARQUET_REVISION = "c4d4db8684c996b6257b5f10f8a8f5c6e47b4cb4"
+_SPECIES_800_PARQUET_REVISION = "095d7c7223e891ad110a14c4a538faa3f4f5d903"
+_BLURB_PARQUET_REVISION = "2588833475f354bc8a5bfaa93e6688671cdd68a8"
+
 BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
     BC5CDR: BiomedicalNerSource(
         corpus=BC5CDR,
@@ -179,6 +205,7 @@ BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
         display_name="JNLPBA",
         repository="bigbio/jnlpba",
         config="jnlpba_bigbio_kb",
+        revision=_JNLPBA_PARQUET_REVISION,
         label_mapping={
             "cellline": OTHER,
             "celltype": OTHER,
@@ -199,6 +226,8 @@ BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
         },
         loader_kind="token_tags",
         token_label="Species",
+        revision=_SPECIES_800_PARQUET_REVISION,
+        data_dir="species_800",
     ),
     BC2GM: BiomedicalNerSource(
         corpus=BC2GM,
@@ -212,7 +241,7 @@ BIOMEDICAL_NER_SOURCES: Mapping[str, BiomedicalNerSource] = {
         },
         loader_kind="token_tags",
         token_label="GENE",
-        trust_remote_code=False,
+        revision=_BLURB_PARQUET_REVISION,
     ),
 }
 
@@ -265,6 +294,7 @@ def biomedical_ner_suite_metadata(
                 "display_name": source.display_name,
                 "loader_kind": source.loader_kind,
                 "repository": source.repository,
+                "revision": source.revision,
                 "source_url": source.source_url,
             }
             for source in sources
@@ -472,6 +502,13 @@ def _load_hf_rows(
     split: str,
     cache_dir: str | Path | None,
 ) -> list[Mapping[str, Any]]:
+    parquet_glob = source.parquet_glob(split)
+    if parquet_glob is None:
+        raise RuntimeError(
+            f"{source.display_name} is published on Hugging Face only as a "
+            "loading script, and OpenMed does not run dataset code; export the "
+            "corpus locally and pass its path instead"
+        )
     try:
         from datasets import load_dataset
     except ImportError as exc:
@@ -481,21 +518,11 @@ def _load_hf_rows(
             "local synthetic fixture path"
         ) from exc
 
-    kwargs: dict[str, Any] = {"split": split}
-    if source.config is not None:
-        kwargs["name"] = source.config
+    kwargs: dict[str, Any] = {"data_files": {split: parquet_glob}, "split": split}
     if cache_dir is not None:
         kwargs["cache_dir"] = str(Path(cache_dir).expanduser())
-    if source.trust_remote_code:
-        kwargs["trust_remote_code"] = True
 
-    try:
-        dataset = load_dataset(source.repository, **kwargs)
-    except TypeError as exc:
-        if "trust_remote_code" not in str(exc):
-            raise
-        kwargs.pop("trust_remote_code", None)
-        dataset = load_dataset(source.repository, **kwargs)
+    dataset = load_dataset("parquet", **kwargs)
 
     tag_names = _tag_names_from_dataset(dataset)
     rows: list[Mapping[str, Any]] = []

@@ -33,20 +33,28 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 7,848,985 bytes. Its maximum is 8,633,884
-bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
+The committed wheel baseline is 8,687,399 bytes. Its maximum is 9,729,887
+bytes, which provides 12% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
 
 The baseline records `master` commit
-`ac3b2df82fa547a395d6b24722e556d32b2b6c2e`. The
-[Ubuntu CI build](https://github.com/maziyarpanahi/openmed/actions/runs/40999415395/job/123886537270)
-and a clean archived macOS rebuild both measured 7,848,985 bytes. The local
-wheel has SHA-256
-`c6aac5686e941ebcd5ea6c563c807e9f9bcc27473dfe8e1d8e87efa61c38b166`.
+`174fd485c1539119d6dccebdca9a9526a0f0e7e1`. A clean archived rebuild with uv
+0.11.28 and Hatchling 1.33.0 measured 8,687,399 bytes, 1,772 wheel members,
+SHA-256 `a486d783dc0689e05e3f2b73d0e68baaba91e6cd58e6eb7ba57279118a312179`.
 The refresh PR's build job independently rebuilds the frozen base on
 `ubuntu-latest` and requires its measured size to equal the proposed baseline;
 the local reproduction is not a substitute for that hosted check.
+
+Headroom is normally 10%. This refresh uses 12% once, for the v4.0
+integration: it merges a whole release of changes at once, and its wheel
+measures 9,702,254 bytes (1,881 members), 11.7% above the baseline. The growth
+is first-party Python source for the v4.0 service, export qualification,
+recovery, migration rehearsal and kit release features; the wheel gains no
+model weights, fixtures or build caches. The next refresh returns to 10%.
+
+The previous baseline, 7,848,985 bytes, recorded `master` commit
+`ac3b2df82fa547a395d6b24722e556d32b2b6c2e`.
 
 The prior baseline, `a88fe2feb699fd1945d053859998e54e00237825`, rebuilds with
 its documented Hatchling 1.32.4 at 7,036,059 bytes and 1,495 wheel members.
@@ -123,6 +131,55 @@ and `2` when no safe decision can be produced. It does not publish, promote,
 download, or mutate release inputs. See
 `docs/release/v3.0-journey-release-gate.md` for the complete manifest,
 performance, licensing, exception, signing, and verification contracts.
+
+## V4.0 OpenMedKit release packet
+
+The portable-kit gate (planned as v3.5, folded into v4.0) binds one candidate
+commit to the kit artifacts, the frozen support matrix, the device
+qualification report, bundle, parity, license and threat-model digests,
+test-lane results and moved P1/P2 items, then writes a signed value-free
+packet with the Journey gate's canonicalization and HMAC signing. Set
+`OPENMED_KIT_RELEASE_KEY` from a secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/kit_release_gate.py \
+  --manifest kit-release-manifest.json \
+  --output kit-release-packet.json
+python scripts/release/kit_release_gate.py \
+  --verify kit-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Neither mode tags, publishes or promotes. See
+`docs/release/v4.0-kit-release-gate.md` for evidence kinds and reason codes.
+
+## V4.0 secure-service release packet
+
+The service gate (planned as v3.4, folded into v4.0) binds one candidate
+commit to the security-profile report, no-egress attestation, recovery-drill
+report, migration rehearsal matrix, protocol map, synthetic fixtures, the
+controlled failure-code inventory, the P0 status and the service threat
+model. It fails while any P0 in `openmed/eval/data/service_release_p0.json`
+is open, moved or missing evidence. Set `OPENMED_SERVICE_RELEASE_KEY` from a
+secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/service_recovery_drill.py --output drill.json
+python scripts/release/service_release_gate.py \
+  --write-failure-codes failure-codes.json --candidate "$(git rev-parse HEAD)"
+python scripts/release/service_release_gate.py \
+  --manifest service-release-manifest.json \
+  --output service-release-packet.json
+python scripts/release/service_release_gate.py \
+  --verify service-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Nothing is tagged, published or deployed. See
+`docs/release/v4.0-service-release-gate.md` for evidence kinds and reason
+codes.
 
 ## Retraining recipe proposals
 

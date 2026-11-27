@@ -94,7 +94,7 @@ def test_boundary_split_identifier_is_not_partially_emitted():
     emitted = [*first_events, *second_events, *final_events]
     redacted = "".join(event.redacted_text for event in emitted)
 
-    assert redacted == "Contact [email] before the appointment tomorrow."
+    assert redacted == "Contact [EMAIL] before the appointment tomorrow."
     for event in emitted:
         assert "jane.patient" not in event.redacted_text
         assert "example.com" not in event.redacted_text

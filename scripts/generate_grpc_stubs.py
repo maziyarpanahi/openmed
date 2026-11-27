@@ -100,6 +100,7 @@ def _generate_into(output_dir: Path) -> None:
         "from . import kserve_v2_pb2, openmed_pb2, openmed_pb2_grpc\n\n"
         '__all__ = ["kserve_v2_pb2", "openmed_pb2", "openmed_pb2_grpc"]\n',
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -109,7 +110,7 @@ def _patch_relative_import(path: Path) -> None:
         "import openmed_pb2 as openmed__pb2",
         "from . import openmed_pb2 as openmed__pb2",
     )
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def _diff_generated_files(expected_dir: Path, actual_dir: Path) -> list[str]:

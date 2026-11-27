@@ -13,10 +13,13 @@
     #endif
 
     private final class ManifestPathURLProtocol: URLProtocol {
+        // URLProtocol instances are created by the URL loading system, so the stub
+        // state has to be static. Every read and write holds `lock`, which is what
+        // makes the unchecked opt-out sound.
         private static let lock = NSLock()
-        private static var files: [String: Data] = [:]
-        private static var paths: [String] = []
-        private static var beforeResponse: ((String) throws -> Void)?
+        nonisolated(unsafe) private static var files: [String: Data] = [:]
+        nonisolated(unsafe) private static var paths: [String] = []
+        nonisolated(unsafe) private static var beforeResponse: ((String) throws -> Void)?
 
         static var requestedPaths: [String] {
             lock.lock()
@@ -561,10 +564,11 @@
             let directory = try makeManifestOnlyArtifact(family: "deberta-v2")
 
             XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { error in
-                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let family) = error else {
+                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let task, let family) = error else {
                     return XCTFail("Unexpected error: \(error)")
                 }
-                XCTAssertEqual(family, "deberta-v2")
+                XCTAssertEqual(task, .tokenClassification)
+                XCTAssertEqual(family, .debertaV2)
             }
         }
 
@@ -807,10 +811,11 @@
             )
 
             XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { error in
-                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let family) = error else {
+                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let task, let family) = error else {
                     return XCTFail("Unexpected error: \(error)")
                 }
-                XCTAssertEqual(family, "gliner-bi-encoder-span")
+                XCTAssertEqual(task, .zeroShotNER)
+                XCTAssertNil(family, "an unrecognized family must not be echoed back")
             }
         }
 
@@ -1334,6 +1339,7 @@
         }
 
         private func requireUsableMLXRuntime() throws {
+            try skipUnlessMLXCanRun()
             guard !Self.isSwiftPMCLI else {
                 throw XCTSkip("MLX runtime resources are not loadable from the SwiftPM CLI test bundle.")
             }

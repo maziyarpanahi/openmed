@@ -1,5 +1,12 @@
-# Local-first Journey deployment profile. Set OPENMED_POSTGRES_PASSWORD before
-# startup; the value is never persisted in this file or emitted by health tools.
+# Local-first Journey deployment profile. Set OPENMED_POSTGRES_PASSWORD and
+# OPENMED_JOURNEY_POSTGRES_DSN in the shell that runs Compose. Compose copies
+# them into owner-only secret files under /run/secrets; the containers never
+# receive them as environment variables, and health tools never emit them.
+# The DSN must target host "postgres" with sslmode=verify-full. Set
+# OPENMED_POSTGRES_TLS_DIR to an operator directory holding ca.crt plus a
+# server.crt/server.key pair issued for the host name "postgres". The Journey
+# store verifies the server certificate and host name and refuses plaintext in
+# the production profile.
 
 x-openmed-image: &openmed-image
   image: "${OPENMED_IMAGE:-openmed:distroless}"
@@ -19,6 +26,9 @@ x-openmed-security: &openmed-security
     - no-new-privileges:true
   pids_limit: 512
 
+x-postgres-ca-bundle: &postgres-ca-bundle >-
+  ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/ca.crt:/run/openmed/postgres-tls/ca.crt:ro
+
 x-openmed-environment: &openmed-environment
   OPENMED_PROFILE: "${OPENMED_PROFILE:-prod}"
   OPENMED_OFFLINE: "1"
@@ -33,20 +43,51 @@ x-openmed-environment: &openmed-environment
   TRANSFORMERS_CACHE: /cache/huggingface/transformers
   OPENMED_CACHE_DIR: /cache/openmed
   OPENMED_JOURNEY_ARTIFACT_ROOT: /cache/artifacts
-  OPENMED_JOURNEY_POSTGRES_DSN: >-
-    postgresql://openmed:${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed
+  OPENMED_JOURNEY_POSTGRES_SSLROOTCERT: /run/openmed/postgres-tls/ca.crt
   OPENMED_JOURNEY_SCHEMA: "${OPENMED_JOURNEY_SCHEMA:-openmed_journey}"
+
+x-openmed-journey-environment: &openmed-journey-environment
+  <<: *openmed-environment
+  OPENMED_JOURNEY_POSTGRES_DSN_FILE: /run/secrets/openmed_journey_postgres_dsn
+
+# Compose writes environment-sourced secrets inside the container with this
+# owner and mode. Some Compose releases warn that uid/gid/mode only apply to
+# Swarm; the prod profile refuses a world-readable secret file either way.
+x-openmed-journey-secrets: &openmed-journey-secrets
+  secrets:
+    - source: openmed_journey_postgres_dsn
+      uid: "65532"
+      gid: "65532"
+      mode: 0400
 
 services:
   postgres:
     image: "${OPENMED_POSTGRES_IMAGE:-postgres:17-alpine}"
     pull_policy: "${OPENMED_POSTGRES_PULL_POLICY:-missing}"
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - ssl_cert_file=/run/openmed/postgres-tls/server.crt
+      - -c
+      - ssl_key_file=/run/openmed/postgres-tls/server.key
     environment:
       POSTGRES_DB: openmed
       POSTGRES_USER: openmed
-      POSTGRES_PASSWORD: "${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/openmed_postgres_password
+    # The image entrypoint reads the file as root before dropping privileges.
+    secrets:
+      - source: openmed_postgres_password
+        mode: 0400
     volumes:
       - openmed-postgres:/var/lib/postgresql/data
+      - >-
+        ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/server.crt:/run/openmed/postgres-tls/server.crt:ro
+      - >-
+        ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/server.key:/run/openmed/postgres-tls/server.key:ro
     networks:
       - openmed-internal
     restart: unless-stopped
@@ -74,11 +115,15 @@ services:
         max-file: "3"
 
   journey-migrate:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
+    cpus: "0.5"
+    mem_limit: 512m
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["migrate"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
+    volumes:
+      - *postgres-ca-bundle
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,13 +132,16 @@ services:
     restart: "no"
 
   journey-worker:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
+    cpus: "1"
+    mem_limit: 1g
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["worker", "--host", "0.0.0.0", "--port", "8091"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
     volumes:
       - openmed-cache:/cache
+      - *postgres-ca-bundle
     depends_on:
       journey-migrate:
         condition: service_completed_successfully
@@ -120,23 +168,33 @@ services:
         max-file: "3"
 
   openmed:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
+    cpus: "${OPENMED_CPU_LIMIT:-2}"
+    mem_limit: "${OPENMED_MEMORY_LIMIT:-4g}"
     ports:
       - "${OPENMED_BIND_ADDRESS:-127.0.0.1}:${OPENMED_PORT:-8080}:8080"
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
       OPENMED_SERVICE_PRELOAD_MODELS: "${OPENMED_SERVICE_PRELOAD_MODELS:-}"
       OPENMED_SERVICE_KEEP_ALIVE: "${OPENMED_SERVICE_KEEP_ALIVE:-10m}"
       OPENMED_SERVICE_MAX_RESIDENT_MODELS: "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
       OPENMED_SERVICE_TRUSTED_HOSTS: "${OPENMED_SERVICE_TRUSTED_HOSTS:-localhost,127.0.0.1}"
+      OPENMED_SERVICE_REPLICA_MODE: "single"
       OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT: ""
       OPENMED_SERVICE_METRICS_ENABLED: "false"
       OPENMED_SERVICE_TRACING_ENABLED: "false"
       OPENMED_SERVICE_OTLP_ENDPOINT: ""
       OPENMED_OPENHIM_MEDIATOR_ENABLED: "false"
+      OPENMED_SERVICE_LIMIT_CONCURRENCY: "${OPENMED_SERVICE_LIMIT_CONCURRENCY:-128}"
+      OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE: "${OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE:-5}"
+      OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN: "${OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN:-30}"
+      OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS: "${OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS:-60}"
+      OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS: "${OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS:-10}"
+      OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND: "${OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND:-1024}"
     volumes:
       - openmed-cache:/cache
       - openmed-models:/models:ro
+      - *postgres-ca-bundle
     depends_on:
       journey-migrate:
         condition: service_completed_successfully
@@ -168,14 +226,17 @@ services:
         max-file: "3"
 
   journey-golden:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
+    cpus: "0.5"
+    mem_limit: 512m
     profiles: ["smoke"]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["golden"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
     volumes:
       - openmed-cache:/cache
+      - *postgres-ca-bundle
     depends_on:
       openmed:
         condition: service_healthy
@@ -185,12 +246,13 @@ services:
 
   mcp:
     <<: [*openmed-image, *openmed-security]
+    cpus: "${OPENMED_MCP_CPU_LIMIT:-2}"
+    mem_limit: "${OPENMED_MCP_MEMORY_LIMIT:-4g}"
     profiles: ["mcp"]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.mcp.server"]
     command: ["--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8081"]
     environment:
       <<: *openmed-environment
-      OPENMED_MCP_ALLOW_INSECURE_LOCALHOST: "1"
     volumes:
       - openmed-cache:/cache
       - openmed-models:/models:ro
@@ -225,3 +287,9 @@ volumes:
 networks:
   openmed-internal:
     internal: true
+
+secrets:
+  openmed_postgres_password:
+    environment: OPENMED_POSTGRES_PASSWORD
+  openmed_journey_postgres_dsn:
+    environment: OPENMED_JOURNEY_POSTGRES_DSN

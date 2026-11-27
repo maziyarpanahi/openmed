@@ -44,8 +44,312 @@ message shape for callers that consume schema-versioned span contracts.
 ```python
 from openmed.service.grpc_server import serve
 
-server = serve("127.0.0.1:50051")
+server = serve()  # plaintext, loopback only: 127.0.0.1:50051
 server.wait_for_termination()
+```
+
+`serve()` validates the listener before it creates the server, binds it, and
+only then starts serving. It raises `GrpcStartupError` instead of returning a
+server when the configuration is refused or the address cannot be bound, so a
+returned server is always listening.
+
+## Transport Security
+
+The default listener is `127.0.0.1:50051`. Plaintext is accepted only on
+loopback addresses (`127.0.0.0/8`, `[::1]`, `localhost`) and on local
+`unix:` / `unix-abstract:` sockets. Wildcard (`0.0.0.0`, `[::]`), routable and
+named hosts require server TLS credentials:
+
+```python
+from openmed.service.grpc_security import GrpcTLSConfig
+from openmed.service.grpc_server import serve
+
+server = serve(
+    "0.0.0.0:50051",
+    tls=GrpcTLSConfig(
+        certificate_chain_file="/etc/openmed/grpc/server-chain.pem",
+        private_key_file="/etc/openmed/grpc/server-key.pem",
+    ),
+)
+```
+
+Add `client_ca_file` to require mutual TLS. Clients must then present a
+certificate issued by one of the CAs in that bundle; clients without a
+certificate, or with one from another CA, fail the handshake:
+
+```python
+tls = GrpcTLSConfig(
+    certificate_chain_file="/etc/openmed/grpc/server-chain.pem",
+    private_key_file="/etc/openmed/grpc/server-key.pem",
+    client_ca_file="/etc/openmed/grpc/client-ca.pem",
+)
+```
+
+A mutual-TLS client trusts the server CA and presents its own certificate:
+
+```python
+from pathlib import Path
+
+import grpc
+
+credentials = grpc.ssl_channel_credentials(
+    root_certificates=Path("/etc/openmed/grpc/server-ca.pem").read_bytes(),
+    private_key=Path("/etc/openmed/grpc/client-key.pem").read_bytes(),
+    certificate_chain=Path("/etc/openmed/grpc/client-chain.pem").read_bytes(),
+)
+channel = grpc.secure_channel("openmed-grpc.internal:50051", credentials)
+```
+
+`require_client_cert` defaults to whether a client CA is configured. Setting it
+to `True` without a client CA, or to `False` with one, is refused rather than
+silently ignored.
+
+Credential material is loaded and checked before anything is bound. Startup is
+refused when a file is missing or unreadable, is not valid PEM, is empty or
+larger than 1 MiB, when the private key is encrypted or does not match the leaf
+certificate, or when the leaf certificate is expired or not yet valid. The
+certificate chain file must list the leaf first, followed by any
+intermediates. The private key must be unencrypted PEM, so protect it with file
+permissions or a secret mount.
+
+### Development override
+
+For a disposable lab that needs plaintext on a non-loopback address, pass
+`allow_insecure_remote_dev=True`. The override is accepted only when the
+`OPENMED_PROFILE` (or the supplied runtime's profile) is `dev` or `test`, and
+it logs `grpc_insecure_dev_override_active`. Under any other profile,
+including `prod` and an unset `OPENMED_PROFILE`, setting the override fails
+startup with `grpc_insecure_dev_override_rejected`, even for a loopback
+address.
+
+### Startup reason codes
+
+`GrpcStartupError` exposes `reason`, an optional `category`
+(`certificate_chain`, `private_key`, `client_ca`, `client_auth`, `listener`, or
+`override`) and, when a certificate was parsed, `fingerprint_sha256`. Messages
+never include file paths, addresses, PEM text or key bytes.
+
+| Reason | Meaning |
+| --- | --- |
+| `grpc_address_invalid` | The bind address is not `host:port`, `[ipv6]:port`, `unix:` or `unix-abstract:` |
+| `grpc_insecure_remote_bind` | Plaintext was requested on a non-loopback address |
+| `grpc_insecure_dev_override_rejected` | The development override was set outside `dev`/`test` |
+| `grpc_tls_incomplete` | A certificate, key, or required client CA is not configured |
+| `grpc_tls_client_auth_ambiguous` | A client CA was configured with `require_client_cert=False` |
+| `grpc_tls_unreadable` | A credential file could not be read |
+| `grpc_tls_malformed` | A credential file is empty, oversized, encrypted or not valid PEM |
+| `grpc_tls_key_mismatch` | The private key does not match the leaf certificate |
+| `grpc_tls_certificate_expired` | The leaf certificate is past its `notAfter` |
+| `grpc_tls_certificate_not_yet_valid` | The leaf certificate is before its `notBefore` |
+| `grpc_bind_failed` | grpcio raised or reported that nothing was bound |
+| `grpc_auth_required` | A non-loopback listener has neither service authentication nor mutual TLS |
+
+### Custom listeners
+
+`create_grpc_server()` returns an unbound server and accepts `interceptors`,
+`policy` and `listener`. Use `resolve_grpc_listener()` and
+`bind_grpc_listener()` to apply the same policy to a server you construct
+yourself, and pass the listener to `create_grpc_server(listener=...)` so the
+authentication check and mutual-TLS principals apply. `GrpcListener.report()`
+returns a value-free summary (loopback, transport, override use, certificate
+and client CA fingerprints, and certificate expiry) for deployment
+self-checks.
+
+### Certificate rotation
+
+A `GrpcTLSConfig` passed straight to `serve()` is read once at startup. To
+rotate without a restart, wrap it in a `GrpcCredentialReloader`. grpcio then
+asks the reloader for credentials on every new TLS handshake, so new
+connections use the newest validated generation while established connections
+and their in-flight unary and streaming RPCs keep the generation they were
+accepted under.
+
+```python
+from openmed.service.grpc_security import GrpcCredentialReloader, GrpcTLSConfig
+from openmed.service.grpc_server import serve
+from openmed.service.tls_reload import install_reload_signal_handler
+
+reloader = GrpcCredentialReloader(
+    GrpcTLSConfig(
+        certificate_chain_file="/etc/openmed/grpc/server-chain.pem",
+        private_key_file="/etc/openmed/grpc/server-key.pem",
+        client_ca_file="/etc/openmed/grpc/client-ca.pem",
+    ),
+    trust_overlap_seconds=300,       # old client CA accepted for 5 minutes
+    max_connection_age_seconds=3600,  # old connections retire within an hour
+    connection_grace_seconds=300,     # plus up to 5 minutes for running RPCs
+)
+server = serve("0.0.0.0:50051", tls=reloader)
+install_reload_signal_handler(reloader)  # `kill -HUP <pid>` reloads
+server.wait_for_termination()
+```
+
+Reloads are local only. Call `reloader.reload()`, send `SIGHUP` after
+`install_reload_signal_handler()` (POSIX), or run a
+`TLSCredentialWatcher(reloader, interval_seconds=...)` that polls file
+metadata and reloads when it changes. `reload()` may also be given a new
+`GrpcTLSConfig` when each generation is staged in its own directory.
+
+Every reload validates a complete candidate before anything changes: the same
+checks as startup, plus that the chain links from leaf to intermediates, that
+the leaf stays valid for at least `min_remaining_validity_seconds` (5 minutes
+by default), that every client CA is a currently valid CA certificate, and
+that the files did not change while they were read. A candidate that would
+change whether client certificates are required is refused, because grpcio
+fixes that when the listener is created. Any refusal keeps the previous
+generation serving; there is never a plaintext or unauthenticated interval.
+Write new material atomically (write a temporary file, then rename it, or use
+a secret volume) so a reload never sees half a generation. A restart loads
+the configured files again and fails closed if they are incomplete.
+
+When the client CA bundle changes, clients issued by the outgoing CA can keep
+opening connections until the trust overlap ends. After that only the new CA
+is accepted for new connections. Connections opened under the old generation
+are closed once they reach `max_connection_age_seconds`; RPCs still running
+after `connection_grace_seconds` end with `UNAVAILABLE`, which clients can
+retry on a fresh connection. Pass `max_connection_age_seconds=None` to leave
+connection age unbounded.
+
+`reload()` returns a `TLSReloadResult` with the new and previous generation
+IDs, `validation_state`, `activation_state`, the overlap deadline and a typed
+`outcome` (`activated`, `unchanged` or `rejected`) plus a reason code.
+`reloader.readiness()` reports whether the active certificate and client trust
+are inside their validity windows, and `reloader.report()` returns generation
+IDs, fingerprints, counters and states. None of these include file paths, PEM
+text, subjects or SANs.
+
+| Reload reason | Meaning |
+| --- | --- |
+| `tls_activated` / `tls_unchanged` | The candidate was activated, or matched the active generation |
+| `tls_incomplete` | A required file is not configured |
+| `tls_unreadable` / `tls_malformed` | A file could not be read, or is empty, oversized or not valid PEM |
+| `tls_key_mismatch` | The key does not match the leaf, for example after a partial write |
+| `tls_certificate_expired` / `tls_certificate_not_yet_valid` | A certificate is outside its validity window |
+| `tls_certificate_expiring` | The leaf, or the latest client CA, expires within the minimum remaining validity |
+| `tls_chain_untrusted` | The chain does not link leaf to intermediates, or does not lead to the optional `TLSCredentialSource.server_ca_file` |
+| `tls_client_ca_invalid` | The client CA bundle contains a certificate that is not a CA |
+| `tls_policy_incompatible` | The candidate would change the client-certificate requirement |
+| `tls_candidate_changed` | A file changed while the candidate was being read |
+| `tls_reload_in_progress` | Another reload was running; concurrent reloads are rejected, not queued |
+| `tls_activation_failed` | grpcio refused the validated material |
+
+## Authentication And Authorization
+
+Every server built by `serve()` or `create_grpc_server()` runs
+`GrpcSecurityInterceptor` before the servicer and before any interceptors you
+add. It reads the same settings as the REST service, so one environment
+configures both transports:
+
+- `OPENMED_SERVICE_AUTH_ENABLED`, `OPENMED_SERVICE_AUTH_API_KEYS`, the JWKS,
+  issuer, audience and lifetime settings, `OPENMED_SERVICE_AUTH_ROUTE_SCOPES`,
+  `OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT` and the failed-authentication rate
+  limit, described in [REST Service Authentication](authentication.md).
+- `OPENMED_SERVICE_MTLS_PRINCIPALS`, the certificate identity mappings
+  described in [Mutual TLS](mtls.md).
+
+Callers send exactly one credential in call metadata: `x-api-key: <key>`,
+`authorization: Bearer <jwt>` or `authorization: ApiKey <key>`. Duplicate
+entries, both kinds at once, `-bin` variants, empty values and non-printable
+values are refused as malformed. When the listener requires client
+certificates and no metadata credential is sent, the peer certificate is
+verified again against the listener's client CA bundle and mapped to a
+principal through the same mappings REST uses. Unmapped certificates get a
+fingerprint-derived subject with no scopes. Client certificates must be issued
+directly by a CA in that bundle, because grpcio exposes only the leaf.
+
+Each RPC requires the scopes of the REST route it mirrors, including any route
+scope override:
+
+| RPC | REST route | Default scope |
+| --- | --- | --- |
+| `Analyze` | `POST /analyze` | `analyze:write` |
+| `Extract` | `POST /pii/extract` | `pii:read` |
+| `Deidentify` | `POST /pii/deidentify` | `pii:write` |
+| `StreamDeidentify` | `POST /pii/deidentify/stream` | `pii:write` |
+
+All of these checks finish before any request text is parsed or any model
+runs. With neither service authentication nor a mutual-TLS listener, calls are
+anonymous. That loopback development mode is still available, but `serve()`
+refuses a non-loopback listener in that state with `grpc_auth_required`. The
+only exception is the `dev`/`test` plaintext override.
+
+```python
+metadata = (("authorization", f"Bearer {token}"),)
+response = stub.Deidentify(request, metadata=metadata, timeout=30)
+```
+
+## Resource Budgets
+
+`GrpcLimits` bounds every call. `GrpcLimits.from_env()` shares the REST
+budgets where one exists:
+
+| Limit | Default | Source |
+| --- | --- | --- |
+| `max_receive_message_bytes` | 16 MiB | `OPENMED_SERVICE_MAX_REQUEST_BYTES` |
+| `max_send_message_bytes` | 64 MiB | |
+| `max_text_chars` (also the total of all stream chunks) | 1,000,000 | `OPENMED_SERVICE_MAX_TEXT_LENGTH` |
+| `max_stream_chunks` | 4,096 | |
+| `max_stream_chunk_bytes` (UTF-8) | 128 KiB | |
+| `default_stream_buffer_chars` | 4,096 | |
+| `max_stream_buffer_chars` | 65,536 | |
+| `max_rpc_seconds` | the runtime `config.timeout` | |
+
+Message sizes are enforced by grpcio before the request reaches the
+application. Those rejections are `RESOURCE_EXHAUSTED` without an
+`openmed-reason` trailer. Text, chunk and buffer budgets are checked before
+chunks are copied or joined. A caller `max_buffer` above the cap is refused
+rather than trusted, and an unset `chunk_size` splits long text into chunks
+that always fit the per-chunk byte budget.
+
+Rate and concurrency limits use the REST settings
+(`OPENMED_SERVICE_RATE_LIMIT_RPS`, `OPENMED_SERVICE_RATE_LIMIT_BURST`,
+`OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`,
+`OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS` and `OPENMED_SERVICE_THROTTLE_KEY`).
+The `peer` key uses the gRPC peer host. The `x-forwarded-for` key reads that
+metadata entry.
+
+The effective deadline is the smaller of the client deadline and
+`max_rpc_seconds`. A concurrency permit is released exactly once, when the
+call's work settles:
+
+- a unary handler returns or raises;
+- a stream is exhausted, fails, is cancelled or passes its deadline.
+
+A cancelled stream stops at the next fragment boundary, and its model
+bookkeeping is released on the worker thread that ran it. A unary model call
+that is already running cannot be pre-empted. If it overruns the server
+budget, its result is discarded with `DEADLINE_EXCEEDED`.
+
+## Failure Reason Codes
+
+Refusals use canonical gRPC status codes. Each carries a stable reason in the
+`openmed-reason` trailing metadata. Status details are fixed strings. Metadata,
+tokens, request text, chunks, certificate contents and rejected values are
+never included.
+
+| Reason | Status |
+| --- | --- |
+| `authentication_required` | `UNAUTHENTICATED` |
+| `invalid_credentials` | `UNAUTHENTICATED` |
+| `credentials_malformed` | `UNAUTHENTICATED` |
+| `insufficient_scope` | `PERMISSION_DENIED` |
+| `auth_rate_limited` | `RESOURCE_EXHAUSTED` |
+| `rate_limited` | `RESOURCE_EXHAUSTED` |
+| `concurrency_limited` | `RESOURCE_EXHAUSTED` |
+| `text_too_long` | `RESOURCE_EXHAUSTED` |
+| `stream_too_many_chunks` | `RESOURCE_EXHAUSTED` |
+| `stream_chunk_too_large` | `RESOURCE_EXHAUSTED` |
+| `stream_buffer_too_large` | `RESOURCE_EXHAUSTED` |
+| `invalid_request` | `INVALID_ARGUMENT` |
+| `model_not_served` | `INVALID_ARGUMENT` |
+| `deadline_exceeded` | `DEADLINE_EXCEEDED` |
+| `internal_error` | `INTERNAL` |
+
+```python
+try:
+    stub.Deidentify(request, metadata=metadata, timeout=30)
+except grpc.RpcError as error:
+    reason = dict(error.trailing_metadata() or ()).get("openmed-reason")
 ```
 
 ## Client Example
@@ -103,4 +407,64 @@ make grpc-proto-check
 ```
 
 The unit test suite also runs the same drift check, so CI fails when
-`openmed.proto` and the committed generated stubs disagree.
+`openmed.proto` and the committed generated stubs disagree. Stub freshness does
+not judge compatibility: the [API compatibility gate](../api/compatibility-gate.md)
+compiles `openmed.proto` to a descriptor set and fails on removed, renumbered
+or retyped fields, reused reserved numbers or names, and removed messages,
+services or RPCs relative to `docs/api/baselines/openmed-proto-descriptor.json`.
+
+## Standard health probes
+
+The service extra pins `grpcio-health-checking==1.81.1`, the Apache-2.0
+upstream implementation of `grpc.health.v1.Health`. This matches the committed
+OpenMed generated stubs' grpcio version; the package requires grpcio 1.81.1 or
+newer and protobuf 6.33.5 through the 6.x series. No reflection service is enabled.
+
+`Check` and `Watch` expose only the standard status enum for the overall server
+(empty service name) and `openmed.service.v1.OpenMedService`. Both start
+`NOT_SERVING`. `server.preload_runtime()` invokes the configured runtime's actual
+preload and changes them to `SERVING` only after success. `serve()` performs this
+preload after starting the listener. Failed preload exposes only
+`grpc_preload_failed` and `serve()` stops its listener.
+
+Like the REST `/health`, `/livez` and `/readyz` probes, the two health RPCs
+never need credentials, even when service authentication is enabled with
+deny-by-default, so orchestrator probes keep working. They bypass admission
+control as well. Every `OpenMedService` RPC on the same listener still goes
+through `GrpcSecurityInterceptor`.
+
+For a custom listener, use `create_grpc_server()`, configure the listener,
+call `start()`, then `preload_runtime()`. The wrapper forwards `add_secure_port`
+credentials unchanged, so health and OpenMed RPCs share the same TLS listener.
+Call `begin_drain()` before the host stops accepting work or drains existing
+requests; `stop(grace)` also publishes terminal `NOT_SERVING` before stopping.
+A preload finishing after drain cannot restore readiness. This notification seam
+does not itself implement coordinated admission or runtime lease draining (#3576).
+Listener binding and credential policy remain owned by #3546.
+
+For Compose, an image that explicitly includes the separately maintained
+`grpc_health_probe` executable can use an exec healthcheck:
+
+```yaml
+healthcheck:
+  test: ["CMD", "/bin/grpc_health_probe", "-addr=127.0.0.1:50051", "-service=openmed.service.v1.OpenMedService"]
+  interval: 10s
+  timeout: 3s
+```
+
+The same container-local exec probe supports a loopback-bound Helm deployment:
+
+```yaml
+readinessProbe:
+  exec:
+    command: ["/bin/grpc_health_probe", "-addr=127.0.0.1:50051", "-service=openmed.service.v1.OpenMedService"]
+  periodSeconds: 10
+  timeoutSeconds: 3
+```
+
+These examples require a plaintext local listener and the executable in the image;
+OpenMed does not install it. A TLS listener requires that probe's TLS flags and
+trusted certificate configuration, rather than an additional insecure health
+port. Use the same health protocol over your configured TLS channel. The examples
+are configuration guidance; the focused tests exercise actual ephemeral loopback
+and TLS servers, not a deployed Compose or Helm cluster.

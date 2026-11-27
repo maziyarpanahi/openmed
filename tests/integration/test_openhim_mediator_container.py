@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import secrets
 import shutil
 import socket
 import subprocess
@@ -36,12 +38,47 @@ def test_openhim_container_example_mounts_registration_config() -> None:
     assert compose["services"]["openhim-fixture"]["profiles"] == ["fixture"]
 
 
-def test_openhim_dockerfile_probes_local_heartbeat() -> None:
+_SECRET_SETTINGS = {
+    "openmed_openhim_password": "OPENMED_OPENHIM_PASSWORD",
+    "openmed_service_api_keys": "OPENMED_SERVICE_AUTH_API_KEYS",
+    "openmed_service_digest_key": "OPENMED_SERVICE_DIGEST_KEY",
+}
+
+
+def test_openhim_container_example_reads_credentials_from_secret_files() -> None:
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    mediator = compose["services"]["openmed-mediator"]
+    environment = mediator["environment"]
+
+    for secret, setting in _SECRET_SETTINGS.items():
+        assert setting not in environment
+        assert environment[f"{setting}_FILE"] == f"/run/secrets/{secret}"
+    assert mediator["secrets"] == [
+        {"source": secret, "mode": 0o400} for secret in _SECRET_SETTINGS
+    ]
+    assert compose["secrets"] == {
+        secret: {"environment": setting} for secret, setting in _SECRET_SETTINGS.items()
+    }
+
+
+def test_openhim_container_example_enables_service_authentication() -> None:
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    environment = compose["services"]["openmed-mediator"]["environment"]
+
+    # The image selects the prod security profile, which keeps the mediator
+    # unready and unregistered until authentication is configured.
+    assert "OPENMED_PROFILE=prod" in DOCKERFILE.read_text(encoding="utf-8")
+    assert environment["OPENMED_SERVICE_AUTH_ENABLED"] == "true"
+
+
+def test_openhim_dockerfile_probes_local_readiness() -> None:
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
     assert "OPENMED_OPENHIM_MEDIATOR_ENABLED=true" in dockerfile
     assert "OPENMED_OPENHIM_CONFIG_PATH=/etc/openmed/mediator-config.json" in dockerfile
-    assert "127.0.0.1:8080/openhim/heartbeat" in dockerfile
+    # The heartbeat route needs credentials under authentication; readiness
+    # is unauthenticated and follows a successful OpenHIM registration.
+    assert "127.0.0.1:8080/readyz" in dockerfile
 
 
 def test_openhim_dockerfile_includes_forced_package_data() -> None:
@@ -83,12 +120,15 @@ def _unused_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_for_json(url: str, *, timeout_seconds: float) -> dict:
+def _wait_for_json(
+    url: str, *, timeout_seconds: float, headers: dict[str, str] | None = None
+) -> dict:
     deadline = time.monotonic() + timeout_seconds
     last_error: Exception | None = None
+    request = urllib.request.Request(url, headers=headers or {})
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=2) as response:
+            with urllib.request.urlopen(request, timeout=2) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (OSError, urllib.error.URLError) as exc:
             last_error = exc
@@ -107,6 +147,15 @@ def test_compose_example_registers_and_serves_heartbeat() -> None:
     project = f"openmed-openhim-{uuid4().hex[:10]}"
     mediator_port = _unused_port()
     fixture_port = _unused_port()
+    api_key = secrets.token_urlsafe(32)
+    api_keys = [
+        {
+            "id": "openhim-smoke",
+            "key_hash": "sha256:" + hashlib.sha256(api_key.encode()).hexdigest(),
+            "principal": "openhim-smoke",
+            "scopes": ["pii:write"],
+        }
+    ]
     env = {
         **os.environ,
         "OPENMED_OPENHIM_HOST_PORT": str(mediator_port),
@@ -115,6 +164,18 @@ def test_compose_example_registers_and_serves_heartbeat() -> None:
         "OPENMED_OPENHIM_USERNAME": "openhim@example.org",
         "OPENMED_OPENHIM_PASSWORD": "synthetic-password",
         "OPENMED_OPENHIM_ALLOW_INSECURE_HTTP": "true",
+        "OPENMED_SERVICE_AUTH_API_KEYS": json.dumps(api_keys),
+        "OPENMED_SERVICE_DIGEST_KEY": secrets.token_hex(32),
+        "OPENMED_EGRESS_RULES": json.dumps(
+            [
+                {
+                    "purposes": ["openhim"],
+                    "destination": "http://openhim-fixture:8081",
+                    "cidrs": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                    "allow_credentials": True,
+                }
+            ]
+        ),
     }
     compose = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
 
@@ -133,6 +194,7 @@ def test_compose_example_registers_and_serves_heartbeat() -> None:
         mediator = _wait_for_json(
             f"http://127.0.0.1:{mediator_port}/openhim/heartbeat",
             timeout_seconds=120,
+            headers={"X-API-Key": api_key},
         )
         fixture = _wait_for_json(
             f"http://127.0.0.1:{fixture_port}/health", timeout_seconds=30

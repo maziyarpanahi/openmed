@@ -52,7 +52,10 @@ from openmed.structured.facts import (
     MappingFactAdapter,
     persist_fact_reconciliation,
 )
-from openmed.structured.store import StoreState
+from openmed.structured.store import JourneyStoreEncryption, StoreState
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -79,7 +82,7 @@ ADAPTERS: dict[str, Callable[[], Any]] = {
 def test_worker_without_lease_cannot_execute_pipeline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "leased.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "leased.sqlite3", encryption=PLAINTEXT_DEV)
     pipeline = IngestionToFactPipeline(store, _components())
     adapter = TextEvidenceAdapter()
     source_id = derived_opaque_id("source", "leased-source")
@@ -289,7 +292,8 @@ def test_five_source_pipeline_is_durable_and_idempotent(
     source_fixture: dict[str, str],
 ) -> None:
     store = SQLiteIngestionStore(
-        tmp_path / f"{source_fixture['format']}-journey.sqlite3"
+        tmp_path / f"{source_fixture['format']}-journey.sqlite3",
+        encryption=PLAINTEXT_DEV,
     )
     pipeline = IngestionToFactPipeline(store, _components())
     adapter = ADAPTERS[source_fixture["format"]]()
@@ -359,7 +363,9 @@ def test_five_source_pipeline_is_durable_and_idempotent(
 def test_visual_evidence_pipeline_is_durable_idempotent_and_replay_safe(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "visual-journey.sqlite3")
+    store = SQLiteIngestionStore(
+        tmp_path / "visual-journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
     pipeline = IngestionToFactPipeline(store, _components())
     adapter = VisualEvidenceAdapter()
     source = _visual_source()
@@ -411,7 +417,9 @@ def test_visual_stage_failure_and_corrupt_source_never_persist_partial_facts(
 ) -> None:
     adapter = VisualEvidenceAdapter()
 
-    failure_store = SQLiteIngestionStore(tmp_path / "visual-stage-failure.sqlite3")
+    failure_store = SQLiteIngestionStore(
+        tmp_path / "visual-stage-failure.sqlite3", encryption=PLAINTEXT_DEV
+    )
     failing_pipeline = IngestionToFactPipeline(
         failure_store,
         _components(fail_stage="grounding"),
@@ -444,7 +452,9 @@ def test_visual_stage_failure_and_corrupt_source_never_persist_partial_facts(
     assert failure_store.list_facts(SUBJECT_ID).value == ()
     failure_store.close()
 
-    corrupt_store = SQLiteIngestionStore(tmp_path / "visual-corrupt.sqlite3")
+    corrupt_store = SQLiteIngestionStore(
+        tmp_path / "visual-corrupt.sqlite3", encryption=PLAINTEXT_DEV
+    )
     pipeline = IngestionToFactPipeline(corrupt_store, _components())
     corrupt_source = b"synthetic-corrupt-visual-source"
     corrupt_manifest = _visual_manifest(
@@ -484,7 +494,9 @@ def test_golden_journey_fact_code_resolves_with_versioned_mapping(
 ) -> None:
     """Carry one synthetic Journey fact through the public mapping contract."""
 
-    journey_store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    journey_store = SQLiteIngestionStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
     pipeline = IngestionToFactPipeline(journey_store, _components())
     adapter = TextEvidenceAdapter()
     source = "Synthetic terminology journey fixture."
@@ -579,7 +591,9 @@ def test_golden_journey_correction_appends_reconciliation_history(
 ) -> None:
     """Carry a normalized fact through correction and canonical replay."""
 
-    store = SQLiteIngestionStore(tmp_path / "correction-journey.sqlite3")
+    store = SQLiteIngestionStore(
+        tmp_path / "correction-journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
     pipeline = IngestionToFactPipeline(store, _components())
     adapter = TextEvidenceAdapter()
     source = "Synthetic correction journey fixture."
@@ -682,7 +696,7 @@ def test_failed_stage_commits_no_fact_or_successful_job_and_no_raw_audit(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "failed.sqlite3"
-    store = SQLiteIngestionStore(path)
+    store = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     pipeline = IngestionToFactPipeline(store, _components(fail_stage="grounding"))
     adapter = TextEvidenceAdapter()
     raw_canary = "synthetic-raw-canary-must-not-enter-audit"
@@ -728,7 +742,9 @@ def test_failed_stage_commits_no_fact_or_successful_job_and_no_raw_audit(
 def test_malformed_source_stops_at_adaptation_and_is_quarantined(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "malformed.sqlite3")
+    store = SQLiteIngestionStore(
+        tmp_path / "malformed.sqlite3", encryption=PLAINTEXT_DEV
+    )
     pipeline = IngestionToFactPipeline(store, _components())
     adapter = FHIRR4EvidenceAdapter()
     source = '{"resourceType":"Condition",'
@@ -772,7 +788,9 @@ def test_malformed_source_stops_at_adaptation_and_is_quarantined(
 def test_selected_stage_reprocessing_preserves_ancestors_and_appends_fact(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "reprocess.sqlite3")
+    store = SQLiteIngestionStore(
+        tmp_path / "reprocess.sqlite3", encryption=PLAINTEXT_DEV
+    )
     adapter = TextEvidenceAdapter()
     source = "Synthetic note: condition alpha remains active."
     source_id = "source_cccccccccccccccc"

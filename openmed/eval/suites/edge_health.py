@@ -2,6 +2,9 @@
 
 Tier names and host declarations are not remote attestation. Unavailable tiers
 remain unmeasured. CPU activity is an energy proxy, never joules or GPU energy.
+Android ONNX Runtime and iOS-family device tiers name the runtime a host bridge
+drives on a phone, tablet, watch or headset; the harness cannot tell a physical
+device from a simulator, so the bridge declares which one it ran.
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from statistics import fmean
-from typing import Any, Protocol
+from typing import Any, Final, Protocol
 
 from openmed.eval.suites.openphi_vision import (
     ReleaseProvenance,
@@ -39,6 +42,57 @@ class DeviceTier(str, Enum):
     MLX = "mlx"
     CORE_ML = "core_ml"
     ACCELERATOR = "optional_accelerator"
+    ANDROID_ORT_CPU = "android_ort_cpu"
+    ANDROID_ORT_NNAPI = "android_ort_nnapi"
+    ANDROID_ORT_QNN = "android_ort_qnn"
+    IOS_DEVICE_CPU = "ios_device_cpu"
+    IOS_DEVICE_MLX = "ios_device_mlx"
+    IOS_DEVICE_CORE_ML = "ios_device_core_ml"
+
+
+# Tiers whose model memory lives outside process RSS (GPU, Neural Engine, NPU
+# or DSP allocators). Their profiles need a separate allocator budget.
+DEVICE_MEMORY_TIERS: Final = frozenset(
+    {
+        DeviceTier.MLX,
+        DeviceTier.CORE_ML,
+        DeviceTier.ACCELERATOR,
+        DeviceTier.ANDROID_ORT_NNAPI,
+        DeviceTier.ANDROID_ORT_QNN,
+        DeviceTier.IOS_DEVICE_MLX,
+        DeviceTier.IOS_DEVICE_CORE_ML,
+    }
+)
+# Tiers measured on Android or iOS-family hardware through a host bridge.
+MOBILE_DEVICE_TIERS: Final = frozenset(
+    {
+        DeviceTier.ANDROID_ORT_CPU,
+        DeviceTier.ANDROID_ORT_NNAPI,
+        DeviceTier.ANDROID_ORT_QNN,
+        DeviceTier.IOS_DEVICE_CPU,
+        DeviceTier.IOS_DEVICE_MLX,
+        DeviceTier.IOS_DEVICE_CORE_ML,
+    }
+)
+# Every failure code :func:`run_device_profile` can report.
+FAILURE_CODES: Final = frozenset(
+    {
+        "abstention",
+        "cancelled",
+        "critical_or_document_phi_leakage",
+        "incomplete_measurements",
+        "latency",
+        "missing_resource_evidence",
+        "provider_or_measurement_failure",
+        "quality",
+        "reference_parity",
+        "repeat_parity",
+        "resource_budget",
+        "throughput",
+        "unassessed_or_failed_units",
+        "utility",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -91,7 +145,7 @@ class DeviceProfile:
                 and 0 < self.maximum_device_memory_bytes <= 2**50
             )
         )
-        if self.tier in (DeviceTier.MLX, DeviceTier.CORE_ML, DeviceTier.ACCELERATOR):
+        if self.tier in DEVICE_MEMORY_TIERS:
             _require(self.maximum_device_memory_bytes is not None)
         for value in (self.maximum_latency_ms, self.minimum_throughput):
             _require(type(value) in (int, float) and math.isfinite(value) and value > 0)

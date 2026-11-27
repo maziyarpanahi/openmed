@@ -22,11 +22,15 @@
         }
 
         /// Load a public or authenticated OpenMed model from Hugging Face Hub.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any download or MLX access.
         public static func load(
             modelID: String = defaultModelID,
             revision: String = "main",
             progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let modelDirectory = try await OpenMedHubDownloader().download(
                 id: modelID,
                 revision: revision,
@@ -41,9 +45,13 @@
         }
 
         /// Strictly load an already downloaded OpenMed model directory.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any file or MLX access.
         public static func load(
             modelDirectory: URL
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let container = try await OpenMedCompassLoader.loadContainer(
                 from: modelDirectory
             )
@@ -142,9 +150,12 @@
         }
 
         /// Generate from text and zero or more images.
+        ///
+        /// The images are handed to the model container's isolation domain, so
+        /// the caller must not keep using them concurrently (`sending`).
         public func generate(
             _ prompt: String,
-            images: [UserInput.Image],
+            images: sending [UserInput.Image],
             maxTokens: Int = 256,
             temperature: Float = 0,
             releaseGuard: GeneratedTextGuard? = nil,
@@ -179,7 +190,7 @@
                 temperature: temperature,
                 topP: temperature == 0 ? 1 : 0.8,
                 topK: temperature == 0 ? 0 : 20,
-                prefillStepSize: 2_048
+                prefill: PrefillParameters(stepSize: 2_048, chunking: .remainder)
             )
             let stream = try await container.perform(nonSendable: prepared) {
                 context,
@@ -309,7 +320,7 @@
         }
     }
 
-    struct OpenMedCompassProcessor: UserInputProcessor, @unchecked Sendable {
+    struct OpenMedCompassProcessor: UserInputProcessor, Sendable {
         private let configuration: OpenMedCompassProcessorConfiguration
         private let tokenizer: any MLXLMCommon.Tokenizer
 
@@ -606,7 +617,7 @@
             try compassConfiguration.validate()
 
             let model = OpenMedCompassModel(compassConfiguration)
-            try loadWeights(
+            try await loadWeights(
                 modelDirectory: directory,
                 model: model,
                 perLayerQuantization: baseConfiguration.perLayerQuantization
@@ -667,7 +678,7 @@
         }
     }
 
-    private struct OpenMedHubDownloader: Downloader, @unchecked Sendable {
+    private struct OpenMedHubDownloader: Downloader, Sendable {
         private let hub = HubApi.shared
 
         func download(
@@ -696,7 +707,7 @@
         }
     }
 
-    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, @unchecked Sendable {
+    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, Sendable {
         private let tokenizer: any Tokenizers.Tokenizer
 
         init(_ tokenizer: any Tokenizers.Tokenizer) {

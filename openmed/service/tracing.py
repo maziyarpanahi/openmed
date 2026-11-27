@@ -8,24 +8,39 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Iterator, Mapping, Optional
+from typing import Any, Callable, Iterator, Mapping, Optional, Sequence
 
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .egress import (
+    EgressAdapter,
+    EgressCredential,
+    EgressDataClass,
+    EgressDecision,
+    EgressDenied,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+)
 from .operational import (
     OPERATIONS_BY_CATEGORY,
     OperationalCategory,
     OperationalEvent,
     OperationalState,
 )
+from .secret_files import read_secret_setting
 
 try:  # pragma: no cover - exercised when the optional service extra is absent.
     from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import (
+        BatchSpanProcessor,
+        SpanExporter,
+        SpanExportResult,
+    )
     from opentelemetry.trace import SpanKind, Status, StatusCode
     from opentelemetry.trace.propagation.tracecontext import (
         TraceContextTextMapPropagator,
@@ -36,6 +51,8 @@ except ImportError as exc:  # pragma: no cover
     Resource = None  # type: ignore[assignment]
     TracerProvider = None  # type: ignore[assignment]
     BatchSpanProcessor = None  # type: ignore[assignment]
+    SpanExporter = None  # type: ignore[assignment]
+    SpanExportResult = None  # type: ignore[assignment]
     SpanKind = None  # type: ignore[assignment]
     Status = None  # type: ignore[assignment]
     StatusCode = None  # type: ignore[assignment]
@@ -47,6 +64,7 @@ else:
 TRACING_ENABLED_ENV_VAR = "OPENMED_SERVICE_TRACING_ENABLED"
 OTLP_ENDPOINT_ENV_VAR = "OPENMED_SERVICE_OTLP_ENDPOINT"
 OTLP_HEADERS_ENV_VAR = "OPENMED_SERVICE_OTLP_HEADERS"
+OTLP_HEADERS_FILE_ENV_VAR = "OPENMED_SERVICE_OTLP_HEADERS_FILE"
 OTLP_TIMEOUT_ENV_VAR = "OPENMED_SERVICE_OTLP_TIMEOUT_SECONDS"
 DEFAULT_OTLP_TIMEOUT_SECONDS = 10.0
 TRACER_NAME = "openmed.service"
@@ -152,11 +170,15 @@ class OpenTelemetryMiddleware:
             }
         )
 
+        # Exception messages and stack traces can carry request content, so
+        # spans record only the exception type and an error status.
         with self.tracing.tracer.start_as_current_span(
             "openmed.service.request",
             context=parent_context,
             kind=SpanKind.SERVER,
             attributes=attributes,
+            record_exception=False,
+            set_status_on_exception=False,
         ) as span:
             tracing_token = _CURRENT_TRACING.set(self.tracing)
 
@@ -169,7 +191,6 @@ class OpenTelemetryMiddleware:
             try:
                 await self.app(scope, receive, send_with_status)
             except Exception as exc:
-                span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
                 span.set_attributes(
                     safe_trace_attributes({"openmed.error.type": type(exc).__name__})
@@ -200,7 +221,7 @@ def service_trace_config_from_env() -> ServiceTraceConfig:
     return ServiceTraceConfig(
         enabled=enabled,
         otlp_endpoint=endpoint,
-        otlp_headers=parse_otlp_headers(os.getenv(OTLP_HEADERS_ENV_VAR)),
+        otlp_headers=parse_otlp_headers(read_secret_setting(OTLP_HEADERS_ENV_VAR)),
         otlp_timeout_seconds=parse_otlp_timeout(os.getenv(OTLP_TIMEOUT_ENV_VAR)),
     )
 
@@ -219,12 +240,7 @@ def service_tracing_from_env() -> ServiceTracing:
         resource=Resource.create({"service.name": config.service_name})
     )
     if config.otlp_endpoint:
-        exporter = OTLPSpanExporter(
-            endpoint=config.otlp_endpoint,
-            headers=dict(config.otlp_headers),
-            timeout=config.otlp_timeout_seconds,
-        )
-        provider.add_span_processor(BatchSpanProcessor(exporter))
+        provider.add_span_processor(BatchSpanProcessor(guarded_otlp_exporter(config)))
 
     return ServiceTracing(
         config=config,
@@ -232,6 +248,90 @@ def service_tracing_from_env() -> ServiceTracing:
         tracer=provider.get_tracer(TRACER_NAME),
         propagator=TraceContextTextMapPropagator(),
     )
+
+
+class _EgressGuardedSpanExporter(SpanExporter or object):  # type: ignore[misc]
+    """Re-authorize and re-resolve the OTLP endpoint before every batch."""
+
+    def __init__(
+        self,
+        exporter: Any,
+        authorize: Callable[[], EgressDecision],
+    ) -> None:
+        self._exporter = exporter
+        self._authorize = authorize
+
+    def export(self, spans: Sequence[Any]) -> Any:
+        """Export one batch only when the egress policy still allows it."""
+        try:
+            self._authorize().resolve()
+        except EgressDenied:
+            return SpanExportResult.FAILURE
+        return self._exporter.export(spans)
+
+    def shutdown(self) -> None:
+        """Shut down the wrapped exporter."""
+        self._exporter.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        """Flush the wrapped exporter."""
+        return bool(self._exporter.force_flush(timeout_millis))
+
+
+def guarded_otlp_exporter(
+    config: ServiceTraceConfig,
+    *,
+    egress_policy: Optional[EgressPolicy] = None,
+    exporter_factory: Optional[Callable[..., Any]] = None,
+) -> Any:
+    """Create the OTLP span exporter behind an egress decision.
+
+    The endpoint is authorized for the ``trace_export`` purpose before the
+    exporter is created, and it is re-authorized and re-resolved before every
+    export batch; a refused batch is dropped as a failed export. The OTLP
+    exporter owns its socket, so the address check runs just before each
+    batch rather than inside the connection.
+
+    Args:
+        config: Tracing configuration with an ``otlp_endpoint``.
+        egress_policy: Policy to apply; defaults to the environment policy.
+        exporter_factory: Exporter constructor; defaults to
+            ``OTLPSpanExporter``.
+
+    Returns:
+        A span exporter that enforces the egress policy.
+
+    Raises:
+        EgressDenied: When the policy refuses the configured endpoint.
+    """
+
+    endpoint = str(config.otlp_endpoint or "")
+    operation = EgressOperation(
+        EgressAdapter.TRACING,
+        policy=egress_policy,
+        bound_destinations=(endpoint,),
+    )
+    credential = (
+        EgressCredential.HEADER if config.otlp_headers else EgressCredential.NONE
+    )
+
+    def authorize() -> EgressDecision:
+        return operation.authorize(
+            endpoint,
+            purpose=EgressPurpose.TRACE_EXPORT,
+            data_class=EgressDataClass.TELEMETRY,
+            credential=credential,
+            timeout_seconds=config.otlp_timeout_seconds,
+        )
+
+    authorize()
+    factory = exporter_factory or OTLPSpanExporter
+    exporter = factory(
+        endpoint=endpoint,
+        headers=dict(config.otlp_headers),
+        timeout=config.otlp_timeout_seconds,
+    )
+    return _EgressGuardedSpanExporter(exporter, authorize)
 
 
 def parse_tracing_enabled(
@@ -306,11 +406,12 @@ def trace_service_stage(
         f"openmed.service.{stage}",
         kind=SpanKind.INTERNAL,
         attributes=safe_trace_attributes(span_attributes),
+        record_exception=False,
+        set_status_on_exception=False,
     ) as span:
         try:
             yield span
         except Exception as exc:
-            span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
             span.set_attributes(
                 safe_trace_attributes({"openmed.error.type": type(exc).__name__})
@@ -479,11 +580,13 @@ __all__ = [
     "DEFAULT_OTLP_TIMEOUT_SECONDS",
     "OTLP_ENDPOINT_ENV_VAR",
     "OTLP_HEADERS_ENV_VAR",
+    "OTLP_HEADERS_FILE_ENV_VAR",
     "OTLP_TIMEOUT_ENV_VAR",
     "OpenTelemetryMiddleware",
     "ServiceTraceConfig",
     "ServiceTracing",
     "TRACING_ENABLED_ENV_VAR",
+    "guarded_otlp_exporter",
     "parse_otlp_headers",
     "parse_otlp_timeout",
     "parse_tracing_enabled",
