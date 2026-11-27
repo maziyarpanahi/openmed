@@ -9,6 +9,10 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
     case missingWeights
     /// Carries a controlled confinement reason code such as `outside_snapshot`.
     case invalidManifestPath(String)
+    /// The Hub snapshot does not match the catalog entry's reproducibility hash.
+    case reproducibilityHashMismatch
+    /// The Hub model-info response has no valid commit sha or file list.
+    case invalidModelInfo
 
     /// Stable reason code for logs and metrics.
     public var reason: String {
@@ -18,6 +22,8 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
         case .missingManifest: return "missing_manifest"
         case .missingWeights: return "missing_weights"
         case .invalidManifestPath: return "invalid_manifest_path"
+        case .reproducibilityHashMismatch: return "reproducibility_hash_mismatch"
+        case .invalidModelInfo: return "invalid_model_info"
         }
     }
 
@@ -33,6 +39,10 @@ public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
             return "Downloaded MLX model does not contain any usable weight file."
         case .invalidManifestPath:
             return "MLX artifact path rejected by snapshot confinement."
+        case .reproducibilityHashMismatch:
+            return "The model snapshot does not match the catalog reproducibility hash."
+        case .invalidModelInfo:
+            return "The model info response has no valid commit or file list."
         }
     }
 }
@@ -151,7 +161,7 @@ struct OpenMedMLXPathBoundary {
 
 /// Download and cache OpenMed MLX model snapshots from the Hugging Face Hub.
 public enum OpenMedModelStore {
-    private static let readyMarkerFileName = ".openmed-artifact-ready"
+    static let readyMarkerFileName = ".openmed-artifact-ready"
 
     private static let legacyTokenizerFiles = [
         "tokenizer.json",
@@ -385,7 +395,7 @@ public enum OpenMedModelStore {
         try writeReadyMarker(to: boundary.fileURL(readyMarkerFileName))
     }
 
-    private static func defaultCacheDirectory() throws -> URL {
+    static func defaultCacheDirectory() throws -> URL {
         let base =
             try FileManager.default.url(
                 for: .cachesDirectory,
@@ -482,7 +492,7 @@ public enum OpenMedModelStore {
         return url
     }
 
-    private static func sanitizedPathComponent(_ value: String) -> String {
+    static func sanitizedPathComponent(_ value: String) -> String {
         value
             .replacingOccurrences(of: "/", with: "__")
             .replacingOccurrences(of: ":", with: "_")
