@@ -93,8 +93,8 @@ def exclusive_lock(lock_path: Path) -> Iterator[None]:
         if sys.platform == "win32":  # pragma: no cover - exercised on Windows only
             import msvcrt
 
-            if os.fstat(descriptor).st_size == 0:
-                os.write(descriptor, b"0")
+            # Windows can lock a range past EOF. Writing a marker here races
+            # with other descriptors that have already locked byte zero.
             os.lseek(descriptor, 0, os.SEEK_SET)
             msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
         else:
