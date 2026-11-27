@@ -647,3 +647,26 @@ Regenerate or check the fixture with
 `tests/unit/core/test_receipt_vectors.py` checks that regeneration is
 byte-stable, that every case verifies in Python with the expected result, and
 that the bytes, hashes and HMACs recompute without OpenMed code.
+
+### Kit verifiers
+
+`OpenMedReceiptVerifier` in OpenMedKit Swift replays every case in
+`ReceiptVerificationParityTests`. It checks the payload bytes, repro hash and
+HMAC of each candidate, and the verdict, `reproHashMatches` and matched span
+order. Each verdict carries one reason code, which the Kotlin and web verifiers
+share:
+
+| Reason | Cases |
+| --- | --- |
+| `valid` | `signed_baseline`, `legacy_span_order`, `non_ascii_keys_and_values`, `float_edge_cases` |
+| `hash_mismatch` | `tampered_offset`, `tampered_label`, `tampered_action` |
+| `signature_mismatch` | `unsigned`, `tampered_signature_byte` |
+| `unsupported_algorithm` | `unknown_algorithm` |
+| `malformed` | Input the verifier cannot check; no vector uses it |
+
+The checks run in Python's order. A missing or `null` signature is
+`signature_mismatch`. An algorithm other than `HMAC-SHA256` is
+`unsupported_algorithm`. A stored hash that no span order reproduces is
+`hash_mismatch`. Otherwise the HMAC decides between `valid` and
+`signature_mismatch`. `signature.value` must be the 64 lowercase hex digits
+Python writes.

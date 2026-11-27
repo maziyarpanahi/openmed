@@ -1436,3 +1436,47 @@ trip. An unsigned `swift test` runner on macOS lacks the data-protection
 Keychain entitlement, so that test skips with `secret_missing_entitlement`
 there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
 physical device and is not covered by the package tests.
+
+## Verifying signed audit reports
+
+`OpenMedReceiptVerifier` checks, on device and offline, an `AuditReport` that
+Python signed with `AuditReport.sign()`. It recomputes the `repro_hash` and the
+HMAC-SHA256 `signature` from the report bytes with a canonical JSON encoder
+that matches Python's `_canonical_json()`: members sorted by Unicode scalar
+value, compact separators, lowercase `\uXXXX` escapes with surrogate pairs, and
+floats formatted like Python `repr` (`1e-07`, `5e-324`, `1e+16`, `1.0`).
+
+```swift
+import CryptoKit
+
+// The caller keeps custody of the release key, for example in the Keychain.
+guard let verifier = OpenMedReceiptVerifier(key: SymmetricKey(data: releaseKey)) else {
+    return  // an empty key is refused
+}
+let verification = verifier.verify(reportJSON)
+if verification.isValid {
+    // verification.matchedSpanOrder is .sorted, or .stored for a report
+    // signed before deterministic span order
+}
+```
+
+`verify(_:)` never throws and returns one reason code:
+
+| Reason | Meaning |
+| --- | --- |
+| `valid` | The repro hash and the HMAC match |
+| `hash_mismatch` | No span order reproduces the stored `repro_hash`: the report changed |
+| `signature_mismatch` | The report is unsigned, or its HMAC does not match the key |
+| `unsupported_algorithm` | The signature algorithm is not `HMAC-SHA256` |
+| `malformed` | Invalid JSON or UTF-8, a byte order mark, duplicate members, lone surrogates, non-finite numbers, nesting deeper than 64 levels, more than 8 MiB, or a missing or mistyped `spans`, `repro_hash` or `signature` |
+
+Like Python's `verify()`, the verifier tries the spans sorted by `(start, end,
+canonical_label, action, canonical span JSON)` and then in their stored order,
+and compares the HMAC in constant time with CryptoKit. `reproHashMatches`
+reports whether the stored hash matches, as `verify_repro_hash()` does. The
+result never echoes the report, and the verifier's descriptions never show the
+key. It verifies the bytes it receives: a report that Python accepts only after
+normalizing it (unknown fields, an integer where Python writes a float) does
+not verify. OpenMedKit only verifies; it never signs. The shared vectors and
+the cross-kit contract are described in
+[Audit Receipt Verification Vectors](swift-kotlin-parity.md#audit-receipt-verification-vectors).

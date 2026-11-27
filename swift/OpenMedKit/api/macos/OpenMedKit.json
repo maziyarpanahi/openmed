@@ -7931,6 +7931,93 @@
     "OpenMedKit.OpenMedProtectionAvailability.unsupportedPlatform": [
       "case OpenMedKit.OpenMedProtectionAvailability.unsupportedPlatform"
     ],
+    "OpenMedKit.OpenMedReceiptVerification": [
+      "conformance OpenMedKit.OpenMedReceiptVerification: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerification: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification: Sendable",
+      "struct OpenMedKit.OpenMedReceiptVerification"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason": [
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: CaseIterable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Hashable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: RawRepresentable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Sendable",
+      "enum OpenMedKit.OpenMedReceiptVerification.Reason raw(String)"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.hashMismatch": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.hashMismatch"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.malformed": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.malformed"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.signatureMismatch": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.signatureMismatch"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.unsupportedAlgorithm": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.unsupportedAlgorithm"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.valid": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.valid"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder": [
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: CaseIterable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Hashable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: RawRepresentable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Sendable",
+      "enum OpenMedKit.OpenMedReceiptVerification.SpanOrder raw(String)"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder.sorted": [
+      "case OpenMedKit.OpenMedReceiptVerification.SpanOrder.sorted"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder.stored": [
+      "case OpenMedKit.OpenMedReceiptVerification.SpanOrder.stored"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.description": [
+      "var OpenMedKit.OpenMedReceiptVerification.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.isValid": [
+      "var OpenMedKit.OpenMedReceiptVerification.isValid: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.matchedSpanOrder": [
+      "var OpenMedKit.OpenMedReceiptVerification.matchedSpanOrder: OpenMedKit.OpenMedReceiptVerification.SpanOrder? { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.reason": [
+      "var OpenMedKit.OpenMedReceiptVerification.reason: OpenMedKit.OpenMedReceiptVerification.Reason { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.reproHashMatches": [
+      "var OpenMedKit.OpenMedReceiptVerification.reproHashMatches: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier": [
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomDebugStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomReflectable",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: Sendable",
+      "struct OpenMedKit.OpenMedReceiptVerifier"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.customMirror": [
+      "var OpenMedKit.OpenMedReceiptVerifier.customMirror: Swift.Mirror { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.debugDescription": [
+      "var OpenMedKit.OpenMedReceiptVerifier.debugDescription: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.description": [
+      "var OpenMedKit.OpenMedReceiptVerifier.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.init": [
+      "OpenMedKit.OpenMedReceiptVerifier.init(key: CryptoKit.SymmetricKey) -> OpenMedKit.OpenMedReceiptVerifier?"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.maximumReportBytes": [
+      "static var OpenMedKit.OpenMedReceiptVerifier.maximumReportBytes: Swift.Int { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.signatureAlgorithm": [
+      "static var OpenMedKit.OpenMedReceiptVerifier.signatureAlgorithm: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.verify": [
+      "func OpenMedKit.OpenMedReceiptVerifier.verify(_: Foundation.Data) -> OpenMedKit.OpenMedReceiptVerification",
+      "func OpenMedKit.OpenMedReceiptVerifier.verify(json: Swift.String) -> OpenMedKit.OpenMedReceiptVerification"
+    ],
     "OpenMedKit.OpenMedRelation": [
       "conformance OpenMedKit.OpenMedRelation: Sendable",
       "struct OpenMedKit.OpenMedRelation"
