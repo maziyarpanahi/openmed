@@ -44,4 +44,11 @@ class PiiValidatorsTest {
         assertFalse(PiiValidators.validatePhoneUS("415-055-1234"))
         assertFalse(PiiValidators.validatePhoneUS("555-1234"))
     }
+
+    @Test
+    fun usPhoneNumbersReadOnlyAsciiDigitsAsPythonDoes() {
+        assertFalse(PiiValidators.validatePhoneUS("(\u0664\u0661\u0665) \u0665\u0665\u0665-\u0661\u0662\u0663\u0664"))
+        assertFalse(PiiValidators.validatePhoneUS("(\uFF14\uFF11\uFF15) \uFF15\uFF15\uFF15-\uFF11\uFF12\uFF13\uFF14"))
+        assertTrue(PiiValidators.validatePhoneUS("(415) 555-1234\u0661"))
+    }
 }

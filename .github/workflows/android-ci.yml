@@ -36,6 +36,7 @@ on:
       - 'openmed/core/schemas/json/model_lifecycle_event.schema.json'
       - 'tests/fixtures/parity/error_codes_v1.json'
       - 'tests/fixtures/parity/date_shift_v1.json'
+      - 'tests/fixtures/parity/identifier_validators_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -79,6 +80,7 @@ on:
       - 'openmed/core/schemas/json/model_lifecycle_event.schema.json'
       - 'tests/fixtures/parity/error_codes_v1.json'
       - 'tests/fixtures/parity/date_shift_v1.json'
+      - 'tests/fixtures/parity/identifier_validators_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
@@ -217,6 +219,7 @@ jobs:
         --tests '*ModelDownloaderTest'
         --tests '*ErrorCodeParityTest'
         --tests '*DateShiftParityTest'
+        --tests '*IdentifierValidatorParityTest'
         --stacktrace
 
     - name: Verify Android library budgets

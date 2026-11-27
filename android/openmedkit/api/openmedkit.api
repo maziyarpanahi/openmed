@@ -4159,10 +4159,18 @@ public final class com/openmed/openmedkit/merge/PiiEntityMerger {
 
 public final class com/openmed/openmedkit/merge/PiiValidators {
 	public static final field INSTANCE Lcom/openmed/openmedkit/merge/PiiValidators;
+	public static final fun validateAadhaar (Ljava/lang/String;)Z
+	public static final fun validateCanadianSIN (Ljava/lang/String;)Z
+	public static final fun validateChineseResidentID (Ljava/lang/String;)Z
+	public static final fun validateDutchBSN (Ljava/lang/String;)Z
+	public static final fun validateFrenchNIR (Ljava/lang/String;)Z
+	public static final fun validateIBAN (Ljava/lang/String;)Z
 	public static final fun validateLuhn (Ljava/lang/String;)Z
 	public static final fun validateNPI (Ljava/lang/String;)Z
 	public static final fun validatePhoneUS (Ljava/lang/String;)Z
 	public static final fun validateSSN (Ljava/lang/String;)Z
+	public static final fun validateSpanishDNI (Ljava/lang/String;)Z
+	public static final fun validateUKNHSNumber (Ljava/lang/String;)Z
 }
 
 public final class com/openmed/openmedkit/merge/SemanticUnitMatch {

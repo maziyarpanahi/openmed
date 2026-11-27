@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dates, with a Python test that recomputes every vector and reports
   mismatches by vector id only (#5413).
 - Port patient-keyed date-shift offsets to OpenMedKit Swift: `OpenMedDateShift.stableOffset(patientKey:secret:maxDays:)` and `stableOffset(seed:maxDays:)` (plus `seedDecimal:` for seeds beyond `Int`) match `openmed.core.date_shift` with CryptoKit and a byte-wise modulo, `shift(isoDate:byDays:)` shifts `YYYY-MM-DD` dates in the proleptic Gregorian calendar, invalid input throws value-free `OpenMedDateShiftError` codes, and `DateShiftParityTests` replays every `date_shift_v1.json` vector (#5414).
+- Add the portable identifier validator subset to the Android OpenMedKit: `PiiValidators` gains IBAN, Aadhaar, UK NHS number, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN checks that match the Python references on every vector in `identifier_validators_v1.json`, next to the existing SSN, Luhn, NPI and US phone validators (#5420).
 
 ### Changed
 
@@ -152,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and check the Strawberry type against the schema; `label` and `text` are now deprecated in
   the SDL in favour of `canonicalLabel` and `textHash`, with unchanged values (#5336).
 - Three Python failures now carry a stable error code. They keep their builtin base and message: an empty `hmac_secret` raises `ConfigurationError` (a `ValueError`), invalid `OpenMedSpan` offsets raise `InputError` (a `ValueError`), and a model missing from the cache in offline mode raises `OfflineModelUnavailableError`, an `OfflineModeError` that is also a `ModelLoadError`. They also gain the taxonomy's extra builtin bases (`TypeError`; `KeyError` for `ConfigurationError`; `ImportError` and `ValueError` for the offline error), and REST, MCP and agent error envelopes now report their taxonomy codes (REST `400 configuration_error`/`input_error` instead of `400 bad_request`, and `503 model_load_error` instead of a generic 500 for the offline miss) (#5331).
+- Android OpenMedKit `PiiValidators.validateSSN`, `validateLuhn`, `validateNPI` and `validatePhoneUS` no longer accept non-ASCII digits. Like their Python references they read only the ASCII digits 0-9, so an Arabic-Indic or fullwidth number that passed in OpenMedKit Android 4.0 is now rejected (#5420).
 
 ### Fixed
 
