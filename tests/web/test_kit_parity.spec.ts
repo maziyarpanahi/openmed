@@ -28,75 +28,13 @@ import {
   type OpenMedDeidentifyResult,
   type OpenMedSpan,
 } from "../../js/openmedkit-web/src/index";
+import { webResult, webSpan, type Vectors } from "./kit_parity_support";
 
 // Shared OpenMedKit kit-parity golden: tests/fixtures/parity/kit_parity_vectors.json,
 // digest-pinned by fixtures/parity/span_parity_manifest.json.
 const rootDir = fileURLToPath(new URL("../..", import.meta.url));
 const VECTORS_PATH = join(rootDir, "tests", "fixtures", "parity", "kit_parity_vectors.json");
 const MANIFEST_PATH = join(rootDir, "fixtures", "parity", "span_parity_manifest.json");
-
-interface VectorSpan {
-  label: string;
-  canonical_label: string;
-  action: string;
-  start: number;
-  end: number;
-  confidence_ppm?: number;
-  replacement?: string;
-  utf8_start: number;
-  utf8_end: number;
-  utf16_start: number;
-  utf16_end: number;
-}
-
-interface Vector {
-  id: string;
-  categories: string[];
-  text: string;
-  spans: VectorSpan[];
-  deidentified_text: string;
-  deidentified_sha256: string;
-  result_json: string;
-  result_sha256: string;
-}
-
-interface Rejection {
-  id: string;
-  input: string;
-  reason: string;
-  field_path: string;
-  text?: string;
-}
-
-interface Vectors {
-  schema: string;
-  version: number;
-  profile: {
-    name: string;
-    version: number;
-    actions: string[];
-    canonical_labels: string[];
-    offset_contract_versions: number[];
-    decoder_contract_versions: number[];
-    privacy_sentinel: string;
-  };
-  vectors: Vector[];
-  rejections: Rejection[];
-  source_rejections: Required<Rejection>[];
-  offset_rejections: {
-    id: string;
-    text: string;
-    unit: "scalar" | "utf8" | "utf16";
-    offset: number;
-    reason: string;
-  }[];
-  compatibility: {
-    id: string;
-    offset_contract_version: number;
-    decoder_contract_version: number;
-    outcome: string;
-  }[];
-}
 
 class FixtureError extends Error {
   constructor(readonly code: string) {
@@ -136,38 +74,6 @@ function vectors(): Promise<Vectors> {
       JSON.parse(await readFile(MANIFEST_PATH, "utf8")) as Record<string, any>,
     ))();
   return cached;
-}
-
-function webSpan(text: string, span: VectorSpan): OpenMedSpan {
-  return {
-    schema_version: 1,
-    doc_id: "kit-parity",
-    start: scalarToUtf16Offset(text, span.start),
-    end: scalarToUtf16Offset(text, span.end),
-    text_hash: "hmac-sha256:00",
-    entity_type: span.label,
-    canonical_label: span.canonical_label as OpenMedSpan["canonical_label"],
-    policy_label: "DIRECT_IDENTIFIER",
-    regulatory_tags: [],
-    score:
-      span.confidence_ppm === undefined ? null : span.confidence_ppm / 1_000_000,
-    detector: "kit-parity-fixture",
-    evidence: {},
-    action: span.action as OpenMedSpan["action"],
-    replacement: span.replacement ?? null,
-    reversible_id: null,
-    section: null,
-    metadata: {},
-  };
-}
-
-function webResult(vector: Vector): OpenMedDeidentifyResult {
-  return {
-    text: vector.text,
-    deidentifiedText: vector.deidentified_text,
-    // Reverse the order so the projection's own sort is exercised.
-    spans: vector.spans.map((span) => webSpan(vector.text, span)).reverse(),
-  };
 }
 
 /** Value-free drift report: case id, field path, offsets, labels, actions. */

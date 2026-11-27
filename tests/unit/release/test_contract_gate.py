@@ -259,8 +259,8 @@ def test_every_fixture_declares_each_runtime_with_reasons_for_exclusions() -> No
                 assert cell.reason and not cell.consumers
             else:
                 assert cell.reason is None
-    # The offset contract is required on web even though no web reporter
-    # reads it yet: the gate must show that cell as missing, not hide it.
+    # The offset contract stays required on web even though the web package
+    # fails cases of it today: the gate must show those failures, not hide them.
     assert manifest.fixture("offset_contract").cells["web"].status == "required"
 
 
@@ -1202,6 +1202,50 @@ def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
     }
 
 
+def test_committed_web_results_are_shown_but_do_not_block_while_pending(
+    tmp_path: Path,
+) -> None:
+    # The web package fails offset_contract cases until the web offset fix in
+    # #5825, so its reporter stays pending: the gate evaluates and shows the
+    # uploaded web result, but neither its failures nor its absence block.
+    python = tmp_path / "python.json"
+    _write_json(python, _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST))
+    web_result = _passing_result(ROOT, "web", gate.DEFAULT_MANIFEST)
+    offsets = next(
+        item
+        for item in web_result["fixtures"]
+        if item["fixture_id"] == "offset_contract"
+    )
+    for case_id, reason in zip(
+        offsets["passed"][:2],
+        ("grapheme_boundary_mismatch", "offset_unit_mismatch"),
+        strict=True,
+    ):
+        offsets["passed"].remove(case_id)
+        offsets["failed"].append({"case_id": case_id, "reason": reason})
+    web = tmp_path / "web.json"
+    _write_json(web, web_result)
+
+    report = gate.aggregate(results=[python, web])
+    cell = _cell(report, "offset_contract", "web")
+
+    assert report.passed
+    assert (cell.state, cell.blocking, cell.failed, cell.note) == (
+        "failed",
+        False,
+        2,
+        "#5825",
+    )
+    assert _cell(report, "kit_parity_vectors", "web").state == "passed"
+    assert "| `offset_contract` | web | failed | no |" in report.to_markdown()
+    python_only = gate.aggregate(results=[python])
+    assert python_only.passed
+    assert {cell.state for cell in python_only.cells if cell.runtime == "web"} == {
+        "pending",
+        "not_applicable",
+    }
+
+
 def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))
@@ -1235,3 +1279,32 @@ def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
     for runtime, declaration in manifest.runtimes.items():
         if declaration.reporter == gate.REPORTER_ACTIVE:
             assert f"{runtime}-results" in jobs, runtime
+    web_steps = {step.get("name"): step for step in jobs["web-results"]["steps"]}
+    assert (
+        "npm ci --prefix js/openmedkit-web"
+        in (web_steps["Install web package dependencies"]["run"])
+    )
+    assert "run contract-gate" in web_steps["Write the web result file"]["run"]
+    web_upload = web_steps["Upload the web result file"]
+    assert web_upload["if"] == "always()"
+    assert web_upload["with"]["name"] == "contract-gate-result-web"
+    assert web_upload["with"]["path"] == "contract-gate-results/web.json"
+
+
+def test_web_reporter_is_wired_into_the_web_package() -> None:
+    manifest = gate.load_manifest()
+    package = json.loads(
+        (ROOT / "js" / "openmedkit-web" / "package.json").read_text(encoding="utf-8")
+    )
+    reporter = "tests/web/test_contract_gate.spec.ts"
+
+    # The reporter runs in CI but stays pending until the web offset fix.
+    assert manifest.runtimes["web"].reporter == gate.REPORTER_PENDING
+    assert manifest.runtimes["web"].tracking == "#5825"
+    assert "run contract-gate" in (manifest.runtimes["web"].command or "")
+    assert "contract_gate_reporter.ts" in package["scripts"]["contract-gate"]
+    assert f"../../{reporter}" in package["scripts"]["test:node"]
+    for entry in manifest.fixtures:
+        cell = entry.cells["web"]
+        if cell.status == gate.STATUS_REQUIRED:
+            assert reporter in cell.consumers, entry.id

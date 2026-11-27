@@ -60,8 +60,9 @@ the `command` that writes them, or `pending` with a `tracking` issue while its
 reporter is being built. A `required` cell of an `active` runtime must name at
 least one consumer. A `required` cell of a `pending` runtime may have an empty
 `consumers` list: the cell is still part of the contract and the runtime's
-reporter has to cover it when it becomes active. Today only Python is active;
-the Swift, Kotlin and web reporters are tracked in #5327, #5328 and #5329.
+reporter has to cover it when it becomes active. Today only Python is active.
+The Swift and Kotlin reporters are tracked in #5327 and #5328. The web reporter
+runs in CI but stays `pending` until the web offset fix tracked in #5825.
 
 ## Case ids
 
@@ -201,12 +202,16 @@ manifest's own reasons only.
 `.github/workflows/contract-gate.yml` runs on every push and pull request to
 `master`, `main` and `release/v*` with no path filter, so the check always
 reports. The `python-results` job runs `run-python` and uploads
-`contract-gate-result-python`. The `contract-gate` job runs even when a runtime
+`contract-gate-result-python`; the `web-results` job runs the web reporter and
+uploads `contract-gate-result-web`. The `contract-gate` job runs even when a runtime
 job failed, downloads every `contract-gate-result-*` artifact, runs
 `aggregate`, appends the summary to the job summary and uploads it as the
-`contract-gate-summary` artifact. A runtime job that fails to produce its file
-therefore fails the gate rather than skipping it. Make the `Contract gate`
-check required in the branch ruleset to block merges on it.
+`contract-gate-summary` artifact. An active runtime job that fails to produce
+its file therefore fails the gate rather than skipping it. While the web
+reporter is `pending`, its uploaded result is evaluated and shown in the
+summary but does not block, and a missing web result leaves its cells
+`pending`. Make the `Contract gate` check required in the branch ruleset to
+block merges on it.
 
 ## Adding or changing a fixture
 
@@ -219,6 +224,50 @@ check required in the branch ruleset to block merges on it.
 
 `refresh` only rewrites digests. It never adds a file or decides which runtimes
 must pass a fixture; those are reviewed manifest edits.
+
+## The web reporter
+
+`tests/web/contract_gate_reporter.ts` is the web package's reporter. It checks
+each case of every fixture whose `web` cell is `required` by calling the
+package directly, through one checker per fixture in
+`tests/web/contract_gate_checks.ts`, and writes `web.json`:
+
+```bash
+npm --prefix js/openmedkit-web ci
+npm --prefix js/openmedkit-web run contract-gate -- --results-dir results
+python scripts/release/contract_gate.py validate-result results/web.json
+```
+
+It takes the same `--results-dir`, `--output`, `--fixture` and `--check`
+options as `run-python`, with `$OPENMED_CONTRACT_GATE_RESULTS_DIR` as the
+default directory; relative paths resolve against the directory `npm` was run
+from. `tests/web/test_contract_gate.spec.ts`, part of the package's `npm test`,
+runs the same checks, validates the result against the schema with negative
+controls, and also writes `web.json` when that variable is set. Neither decides
+what blocks: a failing case is a failed case with a code, and the gate applies
+the manifest.
+
+Besides the shared codes above (`consumer_error` for an unexpected exception,
+`consumer_missing` for a fixture without a web checker, `case_not_exercised`,
+`fixture_unreadable`), each checker writes its own codes:
+
+| Fixture | Codes |
+| --- | --- |
+| `offset_contract` | `grapheme_boundary_mismatch` (the span is not on the expected grapheme-cluster boundaries), `offset_unit_mismatch` (the boundaries match but the span reports UTF-16 offsets, not Unicode scalars), `offset_not_scalar_boundary`, `span_count_mismatch`, `redaction_mismatch` |
+| `kit_parity_vectors` | `canonical_bytes_mismatch`, `result_digest_mismatch`, `deidentified_digest_mismatch`, `redaction_mismatch`, `round_trip_mismatch`, `verification_failed`, `projection_rejected`, `parse_rejected`, `rejection_not_raised`, `rejection_type_mismatch`, `reason_mismatch`, `field_path_mismatch`, `message_leaks_value`, `compatibility_mismatch` |
+| `portable_policy_vectors` | `canonical_bytes_mismatch`, `result_digest_mismatch`, `redaction_mismatch`, `decision_mismatch`, `policy_digest_mismatch`, `policy_name_mismatch`, `capabilities_mismatch`, `decision_rejected`, `unexpected_rejection`, plus the rejection codes above |
+| `decision_encoder_v1` | `result_mismatch`, `review_contract_mismatch`, `encoder_call_count_mismatch`, `encoder_input_mismatch`, `encoder_logits_mismatch`, `runtime_settings_missing`, plus the rejection codes above |
+| `tokenizer_conformance_v1` | the tokenizer harness codes in lower case, such as `tokenizer_field_value_mismatch`; a stale declared divergence or tokenizer digest is a fixture-level error |
+
+The `offset_contract` checker passes a synthetic prediction over each case's
+input span through `deidentify()` with an injected pipeline. The web package
+does not snap spans to grapheme clusters and reports UTF-16 offsets, so today
+the cases that need snapping fail with `grapheme_boundary_mismatch`, the
+supplementary-plane cases fail with `offset_unit_mismatch`, and the rest pass.
+The web reporter therefore stays `pending` until the web offset fix tracked in
+#5825: the gate lists those failed cases in the summary without blocking on
+them. That fix switches the web reporter to `active`, after which a failed web
+cell blocks the gate.
 
 ## Writing a reporter for another runtime
 
