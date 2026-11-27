@@ -77,6 +77,7 @@ When authentication is enabled, the current built-in route scopes are:
 | Route | Required scope |
 |---|---|
 | `GET /models/loaded` | `models:read` |
+| `GET /v1/capabilities` | `models:read` |
 | `POST /models/unload` | `models:write` |
 | `POST /analyze` | `analyze:write` |
 | `POST /pii/extract` | `pii:read` |

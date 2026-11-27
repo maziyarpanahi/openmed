@@ -54,6 +54,11 @@ class OpenMedServiceStub:
                 request_serializer=openmed__pb2.DeidentifyStreamRequest.SerializeToString,
                 response_deserializer=openmed__pb2.DeidentifyStreamResponse.FromString,
                 _registered_method=True)
+        self.GetCapabilities = channel.unary_unary(
+                '/openmed.service.v1.OpenMedService/GetCapabilities',
+                request_serializer=openmed__pb2.GetCapabilitiesRequest.SerializeToString,
+                response_deserializer=openmed__pb2.CapabilitiesResponse.FromString,
+                _registered_method=True)
 
 
 class OpenMedServiceServicer:
@@ -83,6 +88,12 @@ class OpenMedServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetCapabilities(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_OpenMedServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +116,11 @@ def add_OpenMedServiceServicer_to_server(servicer, server):
                     servicer.StreamDeidentify,
                     request_deserializer=openmed__pb2.DeidentifyStreamRequest.FromString,
                     response_serializer=openmed__pb2.DeidentifyStreamResponse.SerializeToString,
+            ),
+            'GetCapabilities': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetCapabilities,
+                    request_deserializer=openmed__pb2.GetCapabilitiesRequest.FromString,
+                    response_serializer=openmed__pb2.CapabilitiesResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +231,33 @@ class OpenMedService:
             '/openmed.service.v1.OpenMedService/StreamDeidentify',
             openmed__pb2.DeidentifyStreamRequest.SerializeToString,
             openmed__pb2.DeidentifyStreamResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetCapabilities(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/openmed.service.v1.OpenMedService/GetCapabilities',
+            openmed__pb2.GetCapabilitiesRequest.SerializeToString,
+            openmed__pb2.CapabilitiesResponse.FromString,
             options,
             channel_credentials,
             insecure,

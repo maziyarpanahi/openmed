@@ -10,6 +10,7 @@ service OpenMedService {
   rpc Deidentify(DeidentifyRequest) returns (DeidentifyResponse);
   rpc StreamDeidentify(DeidentifyStreamRequest)
       returns (stream DeidentifyStreamResponse);
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (CapabilitiesResponse);
 }
 
 message EntityPrediction {
@@ -143,4 +144,35 @@ message DeidentifyStreamResponse {
   bool final = 2;
   repeated OpenMedSpan spans = 3;
   google.protobuf.Struct audit_record = 4;
+}
+
+message GetCapabilitiesRequest {}
+
+message CapabilityBackend {
+  string name = 1;
+  string extra = 2;
+  bool available = 3;
+}
+
+message CapabilitySurface {
+  string name = 1;
+  bool available = 2;
+}
+
+message CapabilitySchemaVersion {
+  string name = 1;
+  int32 version = 2;
+}
+
+// The canonical, value-free capability descriptor. Fields mirror the
+// descriptor JSON; digest covers every other field.
+message CapabilitiesResponse {
+  string schema = 1;
+  int32 schema_version = 2;
+  repeated CapabilityBackend backends = 3;
+  repeated CapabilitySurface surfaces = 4;
+  repeated string served_models = 5;
+  repeated CapabilitySchemaVersion schema_versions = 6;
+  repeated string policy_profiles = 7;
+  string digest = 8;
 }

@@ -269,6 +269,91 @@ DESCRIPTOR = b'same-proto'
     assert module._generated_files_match(expected, actual, "openmed_pb2.py")
 
 
+def _capabilities_to_descriptor(response) -> dict[str, Any]:
+    """Rebuild the descriptor JSON from a ``CapabilitiesResponse``."""
+    return {
+        "schema": response.schema,
+        "schema_version": response.schema_version,
+        "backends": [
+            {"name": item.name, "extra": item.extra, "available": item.available}
+            for item in response.backends
+        ],
+        "surfaces": [
+            {"name": item.name, "available": item.available}
+            for item in response.surfaces
+        ],
+        "served_models": list(response.served_models),
+        "schema_versions": [
+            {"name": item.name, "version": item.version}
+            for item in response.schema_versions
+        ],
+        "policy_profiles": list(response.policy_profiles),
+        "digest": response.digest,
+    }
+
+
+def test_grpc_get_capabilities_returns_the_python_descriptor_digest(monkeypatch):
+    from openmed.core.capabilities import (
+        capability_descriptor,
+        capability_descriptor_digest,
+        validate_capability_descriptor,
+    )
+
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_SERVED_MODELS", "synthetic-org/synthetic-model,synthetic-a"
+    )
+    runtime = _runtime(monkeypatch)
+    server, channel, stub = _grpc_stub(runtime)
+    try:
+        response = stub.GetCapabilities(
+            openmed_pb2.GetCapabilitiesRequest(), timeout=10
+        )
+    finally:
+        channel.close()
+        server.stop(0).wait()
+
+    descriptor = _capabilities_to_descriptor(response)
+    expected = capability_descriptor(served_models=runtime.served_model_ids())
+    assert descriptor == expected
+    assert response.digest == expected["digest"]
+    assert capability_descriptor_digest(descriptor) == response.digest
+    validate_capability_descriptor(descriptor)
+    assert descriptor["served_models"] == [
+        "synthetic-a",
+        "synthetic-org/synthetic-model",
+    ]
+    assert runtime._loader is None
+
+
+def test_grpc_get_capabilities_carries_no_paths_or_environment_values(
+    monkeypatch, tmp_path: Path
+):
+    from openmed.service.grpc_server import OpenMedGrpcServicer
+
+    sentinel = "synthetic-grpc-capability-sentinel"
+    monkeypatch.setenv("HF_TOKEN", sentinel)
+    monkeypatch.setenv("OPENMED_CHINESE_USER_DICT", str(tmp_path / sentinel))
+    monkeypatch.setenv("OPENMED_CLINICAL_PROTECT_TERMS", sentinel)
+    runtime = _runtime(monkeypatch)
+
+    class Context:
+        def invocation_metadata(self):
+            return ()
+
+        def abort(self, code, details):
+            raise AssertionError(f"unexpected abort: {code}")
+
+    response = OpenMedGrpcServicer(runtime).GetCapabilities(
+        openmed_pb2.GetCapabilitiesRequest(), Context()
+    )
+
+    rendered = response.SerializeToString() + str(response).encode("utf-8")
+    assert sentinel.encode("utf-8") not in rendered
+    assert str(tmp_path).encode("utf-8") not in rendered
+    assert str(Path.home()).encode("utf-8") not in rendered
+    assert response.digest.startswith("sha256:")
+
+
 def _pii_entity_to_rest(entity) -> dict[str, Any]:
     return {
         "text": entity.text,
