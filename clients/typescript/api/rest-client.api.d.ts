@@ -487,6 +487,29 @@ export interface LoadedModelsResponse {
     models?: Record<string, LoadedModelStats>;
     [key: string]: unknown;
 }
+export interface CapabilityBackend {
+    name: string;
+    extra: string;
+    available: boolean;
+}
+export interface CapabilitySurface {
+    name: "cli" | "graphql" | "grpc" | "mcp" | "python" | "rest";
+    available: boolean;
+}
+export interface CapabilitySchemaVersion {
+    name: string;
+    version: number;
+}
+export interface CapabilityDescriptor {
+    schema: "openmed.capabilities";
+    schema_version: 1;
+    backends: CapabilityBackend[];
+    surfaces: CapabilitySurface[];
+    served_models: string[];
+    schema_versions: CapabilitySchemaVersion[];
+    policy_profiles: string[];
+    digest: string;
+}
 export interface ModelUnloadResponse {
     unloaded?: boolean;
     model_name?: string;
@@ -675,6 +698,7 @@ export declare class OpenMedClient {
     livez(): Promise<ProbeResponse>;
     readyz(): Promise<ReadyzResponse>;
     loadedModels(): Promise<LoadedModelsResponse>;
+    capabilities(): Promise<CapabilityDescriptor>;
     journeyResources(query: JourneyResourceQuery): Promise<JourneyResourcePage>;
     journeyWorkflow(workflow: JourneyWorkflowName, query?: JourneyWorkflowQuery): Promise<JourneyResourcePage>;
     journey(query?: JourneyWorkflowQuery): Promise<JourneyResourcePage>;
