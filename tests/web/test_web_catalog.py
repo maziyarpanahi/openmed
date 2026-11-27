@@ -12,6 +12,7 @@ import pytest
 from scripts.android.build_android_catalog import (
     ANDROID_CATALOG_FIELDS,
     is_permissive_license,
+    render_catalog,
     write_catalog,
 )
 from scripts.web.build_web_catalog import (
@@ -128,7 +129,10 @@ def test_rows_keep_only_permissive_onnx_formats_with_android_fields() -> None:
             "reproducibility_hash": _hash("1"),
         },
     ]
-    assert WEB_CATALOG_FIELDS == ANDROID_CATALOG_FIELDS
+    # The web catalog keeps the leading Android fields; family, task and
+    # canonical labels stay Android-only until #5833.
+    assert ANDROID_CATALOG_FIELDS[: len(WEB_CATALOG_FIELDS)] == WEB_CATALOG_FIELDS
+    assert not {"family", "task", "canonical_labels"} & set(WEB_CATALOG_FIELDS)
 
 
 @pytest.mark.parametrize(
@@ -174,13 +178,12 @@ def test_rows_refuse_duplicate_repo_ids() -> None:
         build_web_catalog_rows([row, dict(row)])
 
 
-def test_digest_hashes_the_android_writer_bytes(tmp_path: Path) -> None:
+def test_digest_hashes_the_android_writer_bytes() -> None:
     rows = build_web_catalog_rows(_synthetic_manifest())
-    android_jsonl = tmp_path / "catalog.jsonl"
 
-    write_catalog(rows, android_jsonl)
+    rendered = render_catalog(rows, fields=WEB_CATALOG_FIELDS)
 
-    expected = hashlib.sha256(android_jsonl.read_bytes()).hexdigest()
+    expected = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
     assert catalog_digest(rows) == f"sha256:{expected}"
 
 

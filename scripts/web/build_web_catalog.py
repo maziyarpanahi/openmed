@@ -48,8 +48,18 @@ DEFAULT_OUTPUT = ROOT / "js" / "openmedkit-web" / "src" / "catalog.generated.ts"
 
 #: Version tag of the generated catalog file; bump it when the row shape changes.
 WEB_CATALOG_FORMAT = "openmed.web-model-catalog.v1"
-#: Row fields, in order. Kept identical to the Android catalog JSONL fields.
-WEB_CATALOG_FIELDS = ANDROID_CATALOG_FIELDS
+#: Row fields, in order: the leading seven Android catalog fields. The family,
+#: task and canonical-label fields Android added in 4.1 are not in the web
+#: catalog yet (#5833), so the bundled catalog does not change shape.
+WEB_CATALOG_FIELDS = (
+    "repo_id",
+    "formats",
+    "tier",
+    "param_count",
+    "languages",
+    "license",
+    "reproducibility_hash",
+)
 #: Largest integer a JavaScript number holds exactly (2**53 - 1).
 MAX_SAFE_INTEGER = 2**53 - 1
 REGENERATE_COMMAND = "python scripts/web/build_web_catalog.py"
