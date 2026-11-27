@@ -411,13 +411,15 @@ def write_leaderboard(
     for archive in archives:
         report_output = reports_output / archive.relative_path
         report_output.parent.mkdir(parents=True, exist_ok=True)
-        report_output.write_text(_json_text(archive.payload), encoding="utf-8")
+        report_output.write_text(
+            _json_text(archive.payload), encoding="utf-8", newline="\n"
+        )
         copied_reports.append(report_output)
 
     html_path = destination / "index.html"
     json_path = destination / "leaderboard.json"
-    html_path.write_text(render_leaderboard_html(rows), encoding="utf-8")
-    json_path.write_text(render_leaderboard_json(rows), encoding="utf-8")
+    html_path.write_text(render_leaderboard_html(rows), encoding="utf-8", newline="\n")
+    json_path.write_text(render_leaderboard_json(rows), encoding="utf-8", newline="\n")
     return LeaderboardArtifacts(
         html_path=html_path,
         json_path=json_path,
