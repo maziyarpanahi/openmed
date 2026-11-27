@@ -84,8 +84,9 @@ object DateShift {
         }
 
     private fun offset(digest: ByteArray, maxDays: Int): Int {
-        val bucket = BigInteger(1, digest).mod(BigInteger.valueOf(2L * maxDays)).toInt()
-        return if (bucket < maxDays) bucket - maxDays else bucket - maxDays + 1
+        // The bucket can exceed Int.MAX_VALUE when maxDays > 2^30, so map it in Long.
+        val bucket = BigInteger(1, digest).mod(BigInteger.valueOf(2L * maxDays)).toLong()
+        return (if (bucket < maxDays) bucket - maxDays else bucket - maxDays + 1).toInt()
     }
 
     private fun requireMaxDays(maxDays: Int) {

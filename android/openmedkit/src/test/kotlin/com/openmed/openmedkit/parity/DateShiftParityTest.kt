@@ -102,6 +102,30 @@ class DateShiftParityTest {
     }
 
     @Test
+    fun largeMaxDaysFollowTheFormulaOnEveryFixtureDigest() {
+        // Buckets above Int.MAX_VALUE only occur when maxDays > 2^30.
+        for (maxDays in listOf((1 shl 30) + 1, Int.MAX_VALUE)) {
+            for (vector in vectors("patient_key_offsets")) {
+                val id = vector.text("id")
+                val secret = secrets.getValue(vector.text("secret_id"))
+                assertEquals(
+                    referenceOffset(vector.text("digest_sha256_hex"), maxDays),
+                    DateShift.stableOffset(vector.text("patient_key"), secret, maxDays),
+                    id,
+                )
+            }
+            for (vector in vectors("seed_offsets")) {
+                val id = vector.text("id")
+                assertEquals(
+                    referenceOffset(vector.text("digest_sha256_hex"), maxDays),
+                    DateShift.stableOffsetFromSeed(BigInteger(vector.text("seed_decimal")), maxDays),
+                    id,
+                )
+            }
+        }
+    }
+
+    @Test
     fun offsetsStayInRangeAndAreNeverZero() {
         val secret = secrets.getValue("test-secret-bytes")
         for (maxDays in listOf(1, 2, 7, Int.MAX_VALUE)) {
@@ -146,6 +170,14 @@ class DateShiftParityTest {
     }
 
     private fun vectors(name: String): List<JsonObject> = fixture.getValue(name).jsonArray.map { it.jsonObject }
+
+    /** The fixture's `algorithm` offset rule in arbitrary precision. */
+    private fun referenceOffset(digestHex: String, maxDays: Int): Int {
+        val limit = BigInteger.valueOf(maxDays.toLong())
+        val bucket = BigInteger(digestHex, 16).mod(limit.shiftLeft(1))
+        val offset = if (bucket < limit) bucket - limit else bucket - limit + BigInteger.ONE
+        return offset.intValueExact()
+    }
 
     private fun JsonObject.text(key: String): String = getValue(key).jsonPrimitive.content
 
