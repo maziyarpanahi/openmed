@@ -172,6 +172,17 @@ class IdentifierValidatorParityTest {
             Triple("French NIR", "18505750012347${bold("5")}", true),
             Triple("French NIR", bold("185057500123475"), false),
             Triple("Canadian SIN", bold("975886706"), false),
+            // SSN, Luhn and NPI read only ASCII 0-9 (Python's [0-9]): Arabic-Indic and
+            // fullwidth digits never count, and a stray one is ignored like a separator.
+            Triple("SSN", "\u0661\u0662\u0663-\u0664\u0665-\u0666\u0667\u0668\u0669", false),
+            Triple("SSN", "\uFF11\uFF12\uFF13-\uFF14\uFF15-\uFF16\uFF17\uFF18\uFF19", false),
+            Triple("SSN", "123-45-6789\uFF10", true),
+            Triple("Luhn", "\u0664\u0661\u0661\u0661 \u0661\u0661\u0661\u0661 \u0661\u0661\u0661\u0661 \u0661\u0661\u0661\u0661", false),
+            Triple("Luhn", "\uFF14\uFF11\uFF11\uFF11 \uFF11\uFF11\uFF11\uFF11 \uFF11\uFF11\uFF11\uFF11 \uFF11\uFF11\uFF11\uFF11", false),
+            Triple("Luhn", "4111 1111 1111 1111 \u0660", true),
+            Triple("NPI", "\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669\u0663", false),
+            Triple("NPI", "\uFF11\uFF12\uFF13\uFF14\uFF15\uFF16\uFF17\uFF18\uFF19\uFF13", false),
+            Triple("NPI", "1234567893\u0669", true),
         )
 
         private fun bold(digits: String): String = buildString {

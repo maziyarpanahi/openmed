@@ -10,12 +10,23 @@ import java.time.LocalDate
  * BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN) matches
  * the Python reference named in
  * `tests/fixtures/parity/identifier_validators_v1.json`.
+ * Digits follow those references too: SSN, Luhn, NPI, US phone, UK NHS number,
+ * Dutch BSN, Chinese resident ID and Canadian SIN read only the ASCII digits
+ * 0-9, as Python's `[0-9]` does, so Arabic-Indic, fullwidth and other non-ASCII
+ * digits never count toward them. The IBAN check digits, the Spanish DNI number and the
+ * French NIR after its leading 1 or 2 accept any Unicode decimal digit, as
+ * Python's `\d` and `int()` do, and Aadhaar accepts Arabic-Indic and Gurmukhi
+ * digits.
  * Validators only return a Boolean: they never log, store or echo the input.
  */
 object PiiValidators {
+    /**
+     * US SSN: nine ASCII digits outside the 000, 666 and 9xx areas, the 00
+     * group and the 0000 serial. Every other character is ignored.
+     */
     @JvmStatic
     fun validateSSN(text: String): Boolean {
-        val digits = digitsOnly(text)
+        val digits = asciiDigits(text)
         if (digits.length != 9) {
             return false
         }
@@ -37,27 +48,34 @@ object PiiValidators {
         return true
     }
 
+    /** Luhn checksum over at least 13 ASCII digits; every other character is ignored. */
     @JvmStatic
     fun validateLuhn(text: String): Boolean {
-        val digits = digitsOnly(text)
+        val digits = asciiDigits(text)
         if (digits.length < 13) {
             return false
         }
         return luhnChecksum(digits) == 0
     }
 
+    /** US NPI: ten ASCII digits that pass Luhn behind the 80840 prefix; every other character is ignored. */
     @JvmStatic
     fun validateNPI(text: String): Boolean {
-        val digits = digitsOnly(text)
+        val digits = asciiDigits(text)
         if (digits.length != 10) {
             return false
         }
         return luhnChecksum("80840$digits") == 0
     }
 
+    /**
+     * US phone: ten ASCII digits, or eleven with a leading 1, whose area code
+     * starts with 2-9 and exchange does not start with 0. Every other
+     * character is ignored.
+     */
     @JvmStatic
     fun validatePhoneUS(text: String): Boolean {
-        val digits = digitsOnly(text)
+        val digits = asciiDigits(text)
 
         if (digits.length == 10) {
             val firstArea = digits[0]
@@ -227,6 +245,7 @@ object PiiValidators {
         character in '\t'..'\r' || character in '\u001C'..'\u001F' || character == '\u0085' ||
             Character.isSpaceChar(character)
 
+    /** The ASCII digits 0-9 of [text], as Python's `re.sub(r"[^0-9]", "", text)` keeps. */
     private fun asciiDigits(text: String): String = text.filter { it in '0'..'9' }
 
     /**
@@ -292,6 +311,4 @@ object PiiValidators {
 
         return checksum % 10
     }
-
-    private fun digitsOnly(text: String): String = text.filter { it.isDigit() }
 }

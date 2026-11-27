@@ -543,14 +543,17 @@ files.
 the Python reference. That covers `validateSSN`, `validateLuhn`, `validateNPI`,
 `validateIBAN`, `validateAadhaar`, `validateUKNHSNumber`, `validateDutchBSN`,
 `validateSpanishDNI`, `validateFrenchNIR`, `validateChineseResidentID` and
-`validateCanadianSIN`, plus the Android-only `validatePhoneUS`. Each takes the
-candidate text and returns a `Boolean`. None of them logs, stores or echoes the
-input, so an app can reject a mistyped IBAN or Aadhaar number exactly where
-Python would. Separators, case and Unicode digits follow the Python function
-named for each validator in `tests/fixtures/parity/identifier_validators_v1.json`.
-For example, the Aadhaar check accepts Arabic-Indic and Gurmukhi digits, and
-the IBAN check ignores whitespace and hyphens. `IdentifierValidatorParityTest`
-replays that fixture.
+`validateCanadianSIN`, plus `validatePhoneUS`, which mirrors Python's
+`validate_phone_us` but has no shared vectors. Each takes the candidate text and
+returns a `Boolean`. None of them logs, stores or echoes the input, so an app
+can reject a mistyped IBAN or Aadhaar number exactly where Python would.
+Separators, case and Unicode digits follow the Python function named for each
+validator in `tests/fixtures/parity/identifier_validators_v1.json`. For example,
+the Aadhaar check accepts Arabic-Indic and Gurmukhi digits, and the IBAN check
+ignores whitespace and hyphens. The SSN, Luhn, NPI, US phone, UK NHS number,
+Dutch BSN, Chinese resident ID and Canadian SIN checks read only the ASCII
+digits 0-9, as Python does, so Arabic-Indic, fullwidth and other non-ASCII
+digits never count toward them. `IdentifierValidatorParityTest` replays that fixture.
 
 ## Shared C++ runtime (libc++_shared.so)
 
