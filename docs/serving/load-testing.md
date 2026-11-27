@@ -14,7 +14,7 @@ credentials, or production URLs.
 
 ## Run locally
 
-Install Docker, `curl`, and [k6](https://grafana.com/docs/k6/latest/). From the
+Install Docker, OpenSSL, `curl`, and [k6](https://grafana.com/docs/k6/latest/). From the
 repository root, run:
 
 ```bash
@@ -23,7 +23,8 @@ deploy/loadtest/run.sh
 
 The wrapper builds `deploy/docker/Dockerfile`, starts an ephemeral container on
 `127.0.0.1:18080`, waits for `/readyz`, warms the three routes, runs k6, and
-removes the container on exit. Model downloads are performed by the service
+removes the container on exit. Each run generates a temporary API key for the three
+measured routes. The service receives its SHA-256 verifier. Model downloads are performed by the service
 only when the image's local cache does not already contain the preloaded
 models. To use a prebuilt image or skip warmup:
 
@@ -35,7 +36,8 @@ deploy/loadtest/run.sh
 ```
 
 To run the scenario against an already-running loopback service, bypass the
-wrapper and keep the target local:
+wrapper and keep the target local. For an authenticated service, supply its scoped
+key in the `LOADTEST_API_KEY` environment variable:
 
 ```bash
 BASE_URL=http://127.0.0.1:8080 \
