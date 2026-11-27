@@ -94,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declare the MCP, OpenHIM, Journey, evaluation-dataset, integration, runtime and release-evidence settings in `settings.schema.json`, with dataset paths marked user-supplied and without defaults, and list `OPENMED_*` constants that only look like settings in `x-excluded-identifiers` with a reason; the undeclared-read allowlist is now empty (#5386).
 - Report value-free configuration provenance for every declared service setting with `resolve_service_configuration()`: each `OPENMED_SERVICE_*` setting gets a `default`, `environment` or `secret_file` source class and a conflict category, secrets report presence only, and the report is identical for reordered environment snapshots (#5341).
 - Admit `openmed.multimodal.apple.v1` evidence packets in the `openmed` web package from the `openmed/multimodal` subpath: strict canonical parsing, the 64 KiB limit, WebCrypto SHA-256 evidence and clock-result digests, the shared refusal codes and typed, frozen asset, visual, transcript, provider and clock projections that keep values above 2^53 as `bigint`; validated against every case of the shared `multimodal_contract_v1.json` fixture (#5370).
+- Publish `audit_report.schema.json`, a JSON Schema for the signed de-identification `AuditReport` with closed span, context, detector and signature objects (raw-text keys, negative offsets and unknown signature algorithms fail), a `load_audit_report_schema()` loader and an entry in the schema fingerprint snapshot (#5348).
 
 ### Changed
 

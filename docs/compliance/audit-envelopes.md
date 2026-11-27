@@ -88,9 +88,58 @@ generators can pick the unambiguous one. The `audit` name keeps working until a
 major release decides otherwise. Unknown names raise `KeyError` that names only
 the requested schema.
 
+## AuditReport JSON Schema
+
+The envelope above carries a payload fingerprint. The signed de-identification
+report itself, `openmed.core.audit.AuditReport`, has its own JSON Schema,
+`openmed/core/schemas/json/audit_report.schema.json`
+(`$id` `https://openmed.dev/schemas/v1/audit_report.schema.json`, title
+`OpenMedAuditReport`). It describes exactly what `AuditReport.to_dict()` and
+`to_json()` emit, signed or unsigned: the policy and resolved profile, detector
+provenance, the safety sweep, spans, thresholds, residual risk, the OpenMed
+version, the manifest, input and output hashes, the `repro_hash` and the
+`signature` (`null` until the report is signed).
+
+```python
+from jsonschema import Draft202012Validator
+
+from openmed.core.audit import load_audit_report_schema
+
+Draft202012Validator(load_audit_report_schema()).validate(report.to_dict())
+```
+
+The schema keeps the report value-free:
+
+- The report, every span, every detector, the signature and each span's
+  `context.before` and `context.after` descriptors are closed objects
+  (`additionalProperties: false`), so a raw-text key such as `text` fails
+  validation.
+- Span and context offsets are non-negative integers. Every hash field
+  (`text_hash`, `input_hash`, `deidentified_text_hash`, `manifest_hash`,
+  `repro_hash`) must match `sha256:<64 hex>`.
+- `signature.algorithm` must be `HMAC-SHA256` and `signature.value` a 64-digit
+  lowercase hex HMAC; any other algorithm fails validation, as it fails
+  `AuditReport.verify()`.
+
+A JSON Schema cannot check that `end >= start`, that offsets fall within
+`document_length`, or that the `repro_hash` and HMAC are correct; use
+`AuditReport.verify()` with the release key for that.
+
+Reports do not embed a `schema_version`. The schema declares the property for
+registry consistency but does not require it; the contract version is the
+`audit_report` entry in `openmed/core/schemas/json/schema-fingerprints.json`,
+which `tests/unit/core/test_schemas_versioning.py` pins so a removed field or a
+breaking change without a version bump fails.
+
+Do not confuse it with `audit.schema.json` (`OpenMedAuditEvent`), which
+describes one per-span audit event with an event id, document id, timestamp,
+actor and provenance reference. Tools that validate "the audit report" must
+use `audit_report.schema.json`.
+
 Focused tests:
 
 ```bash
 .venv/bin/python -m pytest tests/unit/compliance/test_audit_envelope.py -q
 .venv/bin/python -m pytest tests/unit/core/test_openmed_span.py -q
+.venv/bin/python -m pytest tests/unit/core/test_audit_report.py -q
 ```

@@ -43,6 +43,44 @@
     ],
     "schema_version": 1
   },
+  "audit_report": {
+    "fingerprint": "sha256:ace004c36ea6e6945dfc94ec5cddda8e9e5f354aa363d09dd6625c604d807b08",
+    "properties": [
+      "deidentified_text_hash",
+      "detectors",
+      "document_length",
+      "grounding",
+      "input_hash",
+      "manifest_hash",
+      "openmed_version",
+      "policy",
+      "repro_hash",
+      "residual_risk",
+      "resolved_profile",
+      "safety_sweep",
+      "schema_version",
+      "signature",
+      "spans",
+      "thresholds"
+    ],
+    "required": [
+      "deidentified_text_hash",
+      "detectors",
+      "document_length",
+      "input_hash",
+      "manifest_hash",
+      "openmed_version",
+      "policy",
+      "repro_hash",
+      "residual_risk",
+      "resolved_profile",
+      "safety_sweep",
+      "signature",
+      "spans",
+      "thresholds"
+    ],
+    "schema_version": 1
+  },
   "attestation": {
     "fingerprint": "sha256:c15d894ac1b2e1096dffd14efbac45912b1d5c498cbdd9ed130681cec00e4689",
     "properties": [
