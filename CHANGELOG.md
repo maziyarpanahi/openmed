@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expose the canonical capability descriptor, digest included, as the MCP resource
   `openmed://capabilities` (#5347).
 - Admit `openmed.multimodal.apple.v1` evidence packets in the Android OpenMedKit with the same canonical-form, digest, size, float-hex and refusal rules as Python and Swift, typed visual, transcript and clock projections, and the shared `AssetManifest` and `ProviderResultEnvelope` types, checked against every case in the shared fixture (#5369).
+- Commit API Extractor reports of the `openmed` web package's public declarations under `js/openmedkit-web/api/`, one per `exports` entry; `npm run api:check` fails in CI when the declarations differ from the reviewed baseline and `npm run api:update` refreshes it (#5361).
 
 ### Fixed
 

@@ -6,7 +6,10 @@ GraphQL schema baseline in
 the gRPC descriptor baseline in
 [`baselines/openmed-proto-descriptor.json`](./baselines/openmed-proto-descriptor.json).
 The compatibility gate compares each committed contract with the live surface
-without starting a server or making a network request.
+without starting a server or making a network request. The `openmed` npm
+package has a separate declaration baseline; see
+[TypeScript web package](#typescript-web-package) for `npm run api:check` and
+`npm run api:update`.
 
 ```bash
 python -m openmed.service.api_compatibility --json
@@ -192,6 +195,57 @@ does not match the current schemas or when a schema file has no entry.
 From Python, `openmed.core.schemas.packaged_schema_paths()` lists the bundled
 schema files, `build_packaged_schema_snapshot()` builds the snapshot, and
 `compare_packaged_schema_drift()` returns a `SchemaDriftResult` for one schema.
+
+## TypeScript web package
+
+The `openmed` npm package (`js/openmedkit-web`) keeps its public declarations
+in committed API reports under
+[`js/openmedkit-web/api/`](https://github.com/maziyarpanahi/openmed/tree/master/js/openmedkit-web/api).
+[API Extractor](https://api-extractor.com/) generates them from the declaration
+files that `npm run build` writes to `dist/`. The package has one report per
+entry in the `exports` map of `package.json`:
+
+| Export | Report |
+| --- | --- |
+| `openmed` (`.`) | `api/openmed.api.md` |
+| `openmed/<name>` (`./<name>`) | `api/openmed-<name>.api.md` |
+
+Run the check from the package directory:
+
+```bash
+cd js/openmedkit-web
+npm run api:check
+```
+
+`api:check` rebuilds `dist/`, regenerates every report into the ignored
+`temp/api/` folder and compares the result with the committed reports. Any
+difference fails, and so does an export without a report or a report without
+an export. The gate does not try to classify a change as breaking or
+additive: a removed export, a changed option type and a new export all fail
+until a reviewer accepts the new surface. The CI `openmedkit-kit-parity` job
+runs `npm --prefix js/openmedkit-web run api:check`, and the failure prints the
+report diff.
+
+### Updating the web API report
+
+When a pull request changes the public declarations, or another web pull
+request has landed first, review the diff that `api:check` prints and then
+refresh the baseline:
+
+```bash
+cd js/openmedkit-web
+npm run api:update
+git add api/
+```
+
+`api:update` rebuilds `dist/` and rewrites the reports. It also creates the
+report for a new subpath export and deletes the report of a removed one, so
+adding a subpath needs only a new `exports` entry and its source file in the
+`build` script's entry list.
+Commit the updated reports in the pull request that changes the API, so the
+diff is reviewed with the code. Both commands run offline, and
+`api-extractor.json` holds every setting except the per-export entry point and
+report name.
 
 The gate is a release-safety check, not a compliance certification or a
 clinical decision guarantee.
