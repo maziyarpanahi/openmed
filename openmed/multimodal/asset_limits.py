@@ -21,6 +21,8 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import (
     MAX_MANIFEST_BYTE_SIZE,
     MAX_MANIFEST_COUNT,
@@ -127,7 +129,7 @@ MAX_PIXEL_PRODUCT: Final = MAX_MANIFEST_COUNT**3
 _PROFILE_NAME_MAX: Final = 32
 
 
-class AssetLimitError(ValueError):
+class AssetLimitError(ValueError, LegacyRootedError):
     """Raised when a limit profile, finding, or evaluation input is invalid."""
 
 

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
@@ -26,7 +28,7 @@ __all__ = [
 ABSTENTION_SCHEMA_VERSION: Final = 1
 
 
-class AbstentionValidationError(ValueError):
+class AbstentionValidationError(ValueError, LegacyRootedError):
     """Raised when an abstention record fails strict, PHI-safe validation."""
 
 

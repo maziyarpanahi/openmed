@@ -16,6 +16,7 @@ from openmed.clinical.review_packet import (
     ReviewGateResult,
     ReviewPacket,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.evidence import EvidenceNode, NodeKind
 from openmed.multimodal.vision.providers.base import Confidence
 
@@ -27,7 +28,7 @@ _MAX_TEXT = 4096
 _MAX_TOTAL_TEXT = 262_144
 
 
-class ArbitrationError(ValueError):
+class ArbitrationError(ValueError, LegacyRootedError):
     """Controlled invalid-input or review-required failure without source values."""
 
 

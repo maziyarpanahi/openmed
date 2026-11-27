@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.streaming.speech.speaker_aliases import (
     ClinicalRole,
     SpeakerAliases,
@@ -32,7 +33,7 @@ _MAX_TEXT = 65_536
 _MAX_TOTAL_TEXT = 262_144
 
 
-class SpeakerRoleError(ValueError):
+class SpeakerRoleError(ValueError, LegacyRootedError):
     """Controlled invalid-input or blocked-role-use failure without protected text."""
 
 

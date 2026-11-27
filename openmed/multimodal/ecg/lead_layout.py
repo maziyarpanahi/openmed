@@ -10,6 +10,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .waveform import _LEAD_ALIASES, _LEADS, NON_DIAGNOSTIC_NOTICE
 
 LEAD_LAYOUT_VERSION = "openmed.ecg.lead-layout.v1"
@@ -17,7 +19,7 @@ STANDARD_LEADS = _LEADS
 _MAX_CHANNELS = 64
 
 
-class LeadLayoutError(ValueError):
+class LeadLayoutError(ValueError, LegacyRootedError):
     """Value-free malformed declaration or observation error."""
 
 

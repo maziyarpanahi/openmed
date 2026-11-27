@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_manifest import (
     MAX_MANIFEST_COUNT,
     MAX_MANIFEST_DURATION_SECONDS,
@@ -55,7 +57,7 @@ _REASON_CODES: Final = frozenset(
 )
 
 
-class ManifestProfileError(ValueError):
+class ManifestProfileError(ValueError, LegacyRootedError):
     """Raised when a manifest profile or metadata mapping is invalid."""
 
 

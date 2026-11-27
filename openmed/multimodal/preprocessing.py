@@ -13,13 +13,15 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import NoReturn, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 from .orientation_preflight import ImageTransform
 
 NOTICE = "synthetic_preprocessing_only_non_diagnostic"
 MAX_PIXELS = 4096
 
 
-class PreprocessingError(ValueError):
+class PreprocessingError(ValueError, LegacyRootedError):
     """A controlled, value-free preprocessing failure."""
 
 

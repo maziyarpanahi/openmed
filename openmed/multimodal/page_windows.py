@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final, Iterable
 
+from openmed.core.errors import LegacyRootedError
+
 PAGE_BATCH_SCHEMA_VERSION: Final[str] = "openmed.multimodal.page_windows.v1"
 MAX_DOCUMENT_PAGES: Final[int] = 100_000
 MAX_PAGE_PIXELS: Final[int] = 10_000_000_000
@@ -49,7 +51,7 @@ class OversizePolicy(str, Enum):
     ISOLATE = "isolate"
 
 
-class PageBatchError(ValueError):
+class PageBatchError(ValueError, LegacyRootedError):
     """Value-free failure raised for unusable page batching parameters."""
 
     def __init__(self, category: str) -> None:

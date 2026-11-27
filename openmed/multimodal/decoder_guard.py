@@ -24,8 +24,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 
-class DecoderGuardError(ValueError):
+
+class DecoderGuardError(ValueError, LegacyRootedError):
     """Fixed input error that does not reflect supplied values."""
 
 

@@ -17,6 +17,8 @@ from dataclasses import asdict, dataclass, field
 from io import BytesIO
 from typing import Any, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 from ..evidence.fused_graph import EvidenceNode, NodeKind, PageGeometry
 from ..page_rotation import PageRotation
 from ..render_raster import RasterRedactionPage, render_redacted_raster_pages
@@ -32,7 +34,7 @@ Box = tuple[int, int, int, int]
 _SCHEMA = "openmed.pixel-coverage.v1"
 
 
-class PixelCoverageError(ValueError):
+class PixelCoverageError(ValueError, LegacyRootedError):
     """Fixed-code rejection without source content or decoder exceptions."""
 
 

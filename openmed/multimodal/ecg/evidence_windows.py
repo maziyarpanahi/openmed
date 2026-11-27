@@ -9,6 +9,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
+from openmed.core.errors import LegacyRootedError
+
 from .interval_candidates import (
     ALGORITHM_VERSION,
     REVIEW_NOTICE,
@@ -35,7 +37,7 @@ _MAX_WINDOWS = 12 * 256 * 4
 _MAX_METADATA_CHARS = 16_000_000
 
 
-class EvidenceWindowError(ValueError):
+class EvidenceWindowError(ValueError, LegacyRootedError):
     """Controlled error that never includes source data or serialized input."""
 
 

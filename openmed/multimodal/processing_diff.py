@@ -7,6 +7,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .processing_summary import (
     PROCESSING_SUMMARY_SCHEMA_VERSION,
     ProcessingOutcome,
@@ -28,7 +30,7 @@ __all__ = [
 PROCESSING_DIFF_SCHEMA_VERSION: Final = 1
 
 
-class ProcessingDiffError(ValueError):
+class ProcessingDiffError(ValueError, LegacyRootedError):
     """Raised when summaries cannot be compared under the current schema."""
 
 

@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Literal, NoReturn, SupportsIndex
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "EmbeddingDestructionReceipt",
     "VoiceEmbeddingError",
@@ -23,7 +25,7 @@ __all__ = [
 Boundary = Literal["pause", "withdrawal", "cancellation", "finalization"]
 
 
-class VoiceEmbeddingError(ValueError):
+class VoiceEmbeddingError(ValueError, LegacyRootedError):
     """Value-free refusal with a stable reason code."""
 
     def __init__(self, reason_code: str) -> None:

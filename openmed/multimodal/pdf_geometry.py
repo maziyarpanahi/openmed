@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, BinaryIO, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_PDF_BYTES",
     "DEFAULT_MAX_PDF_DECOMPRESSED_BYTES",
@@ -80,7 +82,7 @@ _REFERENCE_TAIL_RE = re.compile(
 _VERSION_NAME_RE = re.compile(r"^(\d)\.(\d)$")
 
 
-class PdfGeometryError(ValueError):
+class PdfGeometryError(ValueError, LegacyRootedError):
     """Value-free failure raised for unusable arguments."""
 
     def __init__(self, category: str) -> None:

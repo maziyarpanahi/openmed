@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_manifest import AssetManifest
 from .digest import AssetDigest
@@ -49,7 +51,7 @@ __all__ = [
 PROCESSING_SUMMARY_SCHEMA_VERSION: Final = 1
 
 
-class ProcessingSummaryError(ValueError):
+class ProcessingSummaryError(ValueError, LegacyRootedError):
     """Raised when a processing summary cannot be built or validated safely."""
 
 

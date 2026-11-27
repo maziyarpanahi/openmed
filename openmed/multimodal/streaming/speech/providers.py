@@ -22,6 +22,8 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 SPEECH_PROVIDER_CONTRACT_VERSION: Final[str] = (
     "openmed.multimodal.streaming.speech.providers.v1"
 )
@@ -108,7 +110,7 @@ class StreamState(str, Enum):
     CANCELLED = "cancelled"
 
 
-class SpeechProviderError(ValueError):
+class SpeechProviderError(ValueError, LegacyRootedError):
     """Value-free failure raised for an unusable provider or session step.
 
     The message is the category itself, so no rejected payload, hypothesis text,
