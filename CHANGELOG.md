@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Generate the TypeScript contract types for the eight core JSON Schemas (span, entity, action, audit event, attestation, relation, code, provenance) into `js/openmedkit-web/src/generated/contract-types.ts` with `scripts/codegen/emit_ts_types.py`; the web package exports the `OpenMedContract*` types, takes `CANONICAL_LABELS`, `POLICY_LABELS` and `SPAN_ACTIONS` from the schema (adding the missing `SENSITIVE_ATTRIBUTE` policy label), type-checks its `OpenMedSpan` against the generated span type, and CI fails when the generated file drifts from the schemas (#5356).
+- Generate Kotlin contract types for the core JSON Schemas into the new `com.openmed.openmedkit.contract` package with `scripts/codegen/emit_kotlin_types.py`: `OpenMedContract*` data classes and enums with `fromJson`/`toJson` on kotlinx `JsonObject` and no serialization plugin, where missing, undeclared, mistyped or unknown values fail closed with a value-free `OpenMedContractException`; CI fails when the file drifts (#5358).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
