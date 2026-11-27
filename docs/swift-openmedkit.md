@@ -571,8 +571,9 @@ is the same canonical hash that `scripts/manifest/generate_manifest.py`,
 SHA-256 over compact sorted-key JSON of `released` (`YYYY-MM-DD` or `null`),
 `repo_id`, `sha` (or `null`) and the code-point-sorted `siblings`, with Python's
 default ASCII escaping. The synthetic vectors in
-`tests/fixtures/model_catalog/repro_hash_vectors.json` are checked by the Python
-production functions and by `OpenMedModelIntegrityTests`. The hash describes the
+`tests/fixtures/parity/model_repro_hash_v1.json` are checked by the Python
+production functions, by `OpenMedModelIntegrityTests` and by Android's
+`ModelDownloaderTest`. The hash describes the
 snapshot's commit and file list. It does not hash file contents. Signed portable
 bundles (see [Bundle cache](models/bundle-cache.md)) cover those.
 

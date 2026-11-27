@@ -38,6 +38,7 @@ on:
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
       - 'tests/fixtures/model_catalog/**'
+      - 'tests/fixtures/parity/model_repro_hash_v1.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -75,6 +76,7 @@ on:
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
       - 'tests/fixtures/model_catalog/**'
+      - 'tests/fixtures/parity/model_repro_hash_v1.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

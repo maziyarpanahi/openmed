@@ -787,6 +787,16 @@ class HttpHuggingFaceModelClient(
     }
 }
 
+/**
+ * The registry reproducibility hash shared with Python and Swift.
+ *
+ * It is SHA-256 over compact JSON with sorted keys: `released` (the first ten
+ * characters of the date, or null), `repo_id`, `sha` (or null) and `siblings`
+ * sorted by Unicode code point. Strings use Python `json.dumps` default ASCII
+ * escaping, so every character outside printable ASCII becomes a lowercase
+ * `\uXXXX` escape (UTF-16 surrogate pairs for supplementary characters).
+ * `tests/fixtures/parity/model_repro_hash_v1.json` pins the expected hashes.
+ */
 object ModelIntegrity {
     fun reproducibilityHash(
         repoId: String,
@@ -803,7 +813,7 @@ object ModelIntegrity {
             append(",\"sha\":")
             appendJsonStringOrNull(revisionSha)
             append(",\"siblings\":[")
-            siblings.sorted().forEachIndexed { index, sibling ->
+            siblings.sortedWith(CODE_POINT_ORDER).forEachIndexed { index, sibling ->
                 if (index > 0) {
                     append(",")
                 }
@@ -836,10 +846,21 @@ object ModelIntegrity {
                 '\n' -> append("\\n")
                 '\r' -> append("\\r")
                 '\t' -> append("\\t")
-                else -> append(character)
+                in ' '..'~' -> append(character)
+                // Python's ensure_ascii: one escape per UTF-16 code unit.
+                else -> append("\\u").append(Integer.toHexString(character.code).padStart(4, '0'))
             }
         }
         append("\"")
+    }
+
+    // Python sorts strings by code point; Kotlin's String order compares UTF-16
+    // code units, which disagrees for supplementary characters.
+    private val CODE_POINT_ORDER = Comparator<String> { left, right ->
+        val a = left.codePoints().toArray()
+        val b = right.codePoints().toArray()
+        val index = (0 until minOf(a.size, b.size)).firstOrNull { a[it] != b[it] }
+        if (index == null) a.size.compareTo(b.size) else a[index].compareTo(b[index])
     }
 }
 

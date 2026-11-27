@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin OpenMedKit Swift downloads of catalog entries to a commit: `OpenMedModelStore.downloadMLXModel(entry:)` recomputes the reproducibility hash from the Hub model info and refuses a mismatch before writing any file, fetches every file from the resolved commit sha, caches the snapshot under that sha, records it in the ready marker (`cachedMLXModelRevisionSHA`), and reuses a verified snapshot offline (#5378).
 - Bundle an `OpenMedModelCatalog` in OpenMedKit Swift, generated from `models.jsonl` by `scripts/swift/build_swift_catalog.py` with the Android row format, filter semantics and license allowlist but Apple MLX/Core ML formats only, so apps discover models offline by format, tier, size, language and license; a `--check` mode fails CI when the resource is stale (#5375).
 
+### Fixed
+
+- Make the Android `ModelIntegrity.reproducibilityHash` match Python and Swift byte for byte: escape every character outside printable ASCII as `\uXXXX` like Python's `json.dumps` and sort siblings by code point. Hashes change only for repository ids or file names outside printable ASCII. Move the shared vectors to `tests/fixtures/parity/model_repro_hash_v1.json`, add non-ASCII repository-id and supplementary-character ordering vectors, and recompute every vector in Python and Kotlin (#5398).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.

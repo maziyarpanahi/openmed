@@ -63,6 +63,19 @@ The downloader verifies the catalog reproducibility hash and available file
 checksums in a staging directory. It exposes the model as ready only after
 integrity checks succeed.
 
+`ModelIntegrity.reproducibilityHash(...)` computes the same hash as Python's
+`openmed/core/model_integrity.py` and Swift's `OpenMedModelIntegrity`: SHA-256
+over compact sorted-key JSON of `released` (the date's first ten characters, or
+`null`), `repo_id`, `sha` (or `null`) and `siblings` sorted by Unicode code
+point, with Python's default ASCII escaping. The synthetic vectors in
+`tests/fixtures/parity/model_repro_hash_v1.json` cover null commits and dates,
+unsorted and nested siblings, JSON special characters, and non-ASCII repository
+ids and file names. `ModelDownloaderTest` and `tests/unit/core/test_model_integrity.py`
+both recompute every vector. Before OpenMedKit 4.1, Android wrote non-ASCII
+and other non-printable characters raw and sorted siblings by UTF-16 code unit,
+so its hash disagreed with Python and Swift for such names; names in printable
+ASCII hash exactly as before.
+
 ```kotlin
 import android.content.Context
 import com.openmed.openmedkit.cache.ModelCache
