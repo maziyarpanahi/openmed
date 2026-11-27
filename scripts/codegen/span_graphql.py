@@ -35,6 +35,10 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# The live-type check must import this checkout's ``openmed``, not an installed
+# copy, or ``--check`` would validate a different tree.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 DEFAULT_SCHEMA_PATH = REPO_ROOT / "openmed/core/schemas/json/span.schema.json"
 DEFAULT_MODULE_PATH = REPO_ROOT / "openmed/service/graphql_span_fields.py"
 TYPE_NAME = "OpenMedSpan"
