@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Declare portable PII, clinical-entity and medication task packs in one generated manifest (`openmed/core/data/task_packs.json`) with a JSON Schema, an offline `scripts/manifest/build_task_packs.py --check` generator and a download-free `openmed.core.task_packs.resolve(pack_id, runtime)`; the medication pack carries an extraction-only notice (#5379).
+- Add a `MedicationPack` to the Android OpenMedKit that runs a prepared PharmaDetect model and returns `MedicationMention` values (`CHEMICAL` label, Unicode scalar offsets, confidence, source model id) with the pack's extraction-only notice on every result; it has no dose, interaction or action field and triggers no follow-up action (#5405).
+- Add a `PiiPack` to the Android OpenMedKit that resolves PII candidates from the bundled `task_packs.json`, prepares one from the cache or, only with `allowDownload`, a download, and runs `extract`/`deidentify` with typed fail-closed results and an opt-in local-recognizer fallback labelled by detector (#5383).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
