@@ -39,7 +39,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         // swift-transformers for HuggingFace-compatible tokenization
-        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.0.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.4.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.32.3"),
         // 3.32.3 is the first tag that contains upstream #419, which preserves
         // multimodal RoPE state from prefill into autoregressive decode.

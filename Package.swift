@@ -39,7 +39,7 @@ let package = Package(
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            exact: "1.0.0"
+            exact: "1.4.0"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
