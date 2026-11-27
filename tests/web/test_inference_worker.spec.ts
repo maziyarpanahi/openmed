@@ -580,7 +580,7 @@ test("a real worker thread keeps parity, isolates crashes and restarts on recove
   const client = createInferenceWorkerClient({
     createWorker: () => {
       const thread = new NodeWorker(
-        new URL("./fixtures/inference_worker_thread.ts", import.meta.url),
+        new URL("./fixtures/inference_worker_thread.mjs", import.meta.url),
       );
       threads.push(thread);
       return nodeWorkerEndpoint(thread);

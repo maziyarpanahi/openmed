@@ -685,9 +685,9 @@ def test_new_observations_reject_target_created_after_preflight(
     runtime.write_bytes(b'{"model_type": "bert"}\n')
     runtime_before = runtime.read_bytes()
     absent = tmp_path / "absent.json"
-    native_open = os.open
+    create = export_provenance._create_observation
 
-    def racing_open(path, flags, mode=0o777):
+    def racing_create(path):
         if target_kind == "file":
             observation.write_bytes(original)
         else:
@@ -695,9 +695,9 @@ def test_new_observations_reject_target_created_after_preflight(
                 observation.symlink_to(runtime if target_kind == "symlink" else absent)
             except (NotImplementedError, OSError):
                 pytest.skip("symlinks unavailable")
-        return native_open(path, flags, mode)
+        return create(path)
 
-    monkeypatch.setattr(export_provenance.os, "open", racing_open)
+    monkeypatch.setattr(export_provenance, "_create_observation", racing_create)
     with pytest.raises(FileExistsError):
         export_provenance.write_observation_report(observation, {"updated": True})
     assert runtime.read_bytes() == runtime_before
