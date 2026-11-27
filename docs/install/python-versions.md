@@ -1,8 +1,9 @@
 # Python 3.14 extras compatibility
 
-OpenMed's CI tests Python 3.11 and 3.12 and installs only a few optional
-extras. This page records which extras in `pyproject.toml` install on
-Python 3.14, so you can check before you pick an interpreter.
+OpenMed's CI installs only the core package and a few optional extras on each
+supported interpreter (see [Testing & QA](../testing.md)), so most extras are
+not exercised there. This page records which extras in `pyproject.toml`
+install on Python 3.14, so you can check before you pick an interpreter.
 
 Checked on **2026-11-14** against `master` at commit
 `174fd485c1539119d6dccebdca9a9526a0f0e7e1` (OpenMed 3.3.0) with uv 0.13.8
