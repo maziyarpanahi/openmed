@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Check the built wheel and sdist metadata against `pyproject.toml`
+  (`Requires-Python`, Python classifiers, `License-Expression` and shipped
+  `License-File` entries) and run `twine check --strict` in the CI build job.
+  The license metadata now uses the PEP 639 SPDX form (#5400).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
