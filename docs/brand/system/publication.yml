@@ -638,6 +638,7 @@ classification:
     - multimodal/preprocessing-conformance.md
     - multimodal/provider-capability-matrix.md
     - multimodal/provider-capability-schema.md
+    - multimodal/body-signal-model-licenses.md
     - multimodal/thermal-latency-gates.md
     - multimodal/runtime-session.md
     - multimodal/generated-text-guard.md
