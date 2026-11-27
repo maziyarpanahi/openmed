@@ -1,0 +1,125 @@
+name: Contract gate
+
+# One blocking check over the shared parity fixtures. Each runtime job writes
+# a value-free result file (fixture ids, digests, case ids and reason codes)
+# and uploads it as a `contract-gate-result-<runtime>` artifact. The
+# `contract-gate` job applies tests/fixtures/parity/contract_gate.json and
+# fails on any missing, failed or digest-mismatched required cell of a
+# runtime whose reporter is active. A new runtime reporter adds its job here
+# and to the `needs` list. There is no path filter, so the check always
+# reports on a pull request.
+
+on:
+  push:
+    branches: [main, master, 'release/v*']
+  pull_request:
+    branches: [main, master, 'release/v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python-results:
+    name: Python contract results
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --python 3.12
+
+      - name: Write the Python result file
+        run: >-
+          uv run --frozen python scripts/release/contract_gate.py run-python
+          --results-dir contract-gate-results
+
+      - name: Upload the Python result file
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: contract-gate-result-python
+          path: contract-gate-results/python.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14
+
+  contract-gate:
+    name: Contract gate
+    needs: [python-results]
+    # Aggregate even when a runtime job failed: its missing result then
+    # fails the gate instead of skipping it.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --python 3.12
+
+      - name: Download runtime result files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: contract-gate-result-*
+          path: contract-gate-results
+          merge-multiple: true
+
+      - name: Aggregate the runtime results
+        run: >-
+          uv run --frozen python scripts/release/contract_gate.py aggregate
+          --results-dir contract-gate-results
+          --summary contract-gate-summary/summary.md
+          --report contract-gate-summary/summary.json
+
+      - name: Publish the job summary
+        if: always()
+        run: |
+          if [ -f contract-gate-summary/summary.md ]; then
+            cat contract-gate-summary/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: contract-gate-summary
+          path: contract-gate-summary/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14

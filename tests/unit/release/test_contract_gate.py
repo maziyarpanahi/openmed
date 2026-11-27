@@ -1,4 +1,4 @@
-"""Contract-gate manifest, result schema and Python runner."""
+"""Contract-gate manifest, result schema, Python runner and aggregation."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from typing import Any
 from xml.sax.saxutils import quoteattr
 
 import pytest
+import yaml
 from jsonschema.validators import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -23,6 +24,7 @@ RESULT_SCHEMA = (
     ROOT / "tests" / "fixtures" / "parity" / "contract_gate_result.schema.json"
 )
 PARITY_ROOTS = (ROOT / "fixtures" / "parity", ROOT / "tests" / "fixtures" / "parity")
+WORKFLOW = ROOT / ".github" / "workflows" / "contract-gate.yml"
 
 SPEC = importlib.util.spec_from_file_location("contract_gate", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -867,3 +869,381 @@ def test_validate_result_cli_exit_codes(tmp_path: Path, capsys) -> None:
     assert "result_unreadable file=kotlin.json" in output
     assert SENTINEL not in output
     assert str(tmp_path) not in output
+
+
+# --- aggregate --------------------------------------------------------------
+
+
+def _passing_result(root: Path, runtime: str, manifest: str = MINI_MANIFEST):
+    parsed = gate.load_manifest(root, manifest)
+    fixtures = []
+    for entry in parsed.fixtures:
+        if entry.cells[runtime].status != gate.STATUS_REQUIRED:
+            continue
+        document = json.loads((root / entry.path).read_text(encoding="utf-8"))
+        fixtures.append(
+            {
+                "fixture_id": entry.id,
+                "fixture_sha256": entry.sha256,
+                "passed": list(gate.expected_case_ids(entry, document)),
+                "failed": [],
+                "skipped": [],
+            }
+        )
+    return {
+        "schema": gate.RESULT_SCHEMA,
+        "schema_version": gate.RESULT_SCHEMA_VERSION,
+        "runtime": runtime,
+        "manifest_sha256": parsed.sha256,
+        "fixtures": fixtures,
+    }
+
+
+def _activate_swift(root: Path) -> None:
+    def mutate(document: dict[str, Any]) -> None:
+        document["runtimes"]["swift"] = {"reporter": "active", "command": "swift"}
+        alpha = document["fixtures"][0]["runtimes"]["swift"]
+        alpha["consumers"] = ["tests/test_alpha.py"]
+
+    _edit_manifest(root, mutate)
+
+
+def _aggregate(root: Path, results: dict[str, Any], directory: Path):
+    paths = []
+    for name, document in results.items():
+        path = directory / f"{name}.json"
+        _write_json(path, document)
+        paths.append(path)
+    return gate.aggregate(root, MINI_MANIFEST, paths)
+
+
+def _cell(report, fixture_id: str, runtime: str):
+    return next(
+        cell
+        for cell in report.cells
+        if cell.fixture_id == fixture_id and cell.runtime == runtime
+    )
+
+
+def _complete_set(root: Path) -> dict[str, Any]:
+    _activate_swift(root)
+    return {
+        "python": _passing_result(root, "python"),
+        "swift": _passing_result(root, "swift"),
+    }
+
+
+def test_complete_passing_set_passes_and_lists_exclusions(
+    mini_repo: Path, tmp_path: Path
+) -> None:
+    report = _aggregate(mini_repo, _complete_set(mini_repo), tmp_path / "r")
+
+    assert report.passed and report.blocking == 0
+    assert [(cell.fixture_id, cell.runtime, cell.state) for cell in report.cells] == [
+        ("alpha", "python", "passed"),
+        ("alpha", "swift", "passed"),
+        ("beta", "python", "passed"),
+        ("beta", "swift", "not_applicable"),
+    ]
+    assert _cell(report, "alpha", "python").passed == 4
+    excluded = _cell(report, "beta", "swift")
+    assert excluded.note == "Synthetic Python-only contract."
+    markdown = report.to_markdown()
+    assert "Decision: **PASS** (0 blocking)." in markdown
+    assert "| `alpha` | swift | passed | no | 4 | 0 | 0 | 0 | - |" in markdown
+    assert "### Not applicable" in markdown
+    assert "| `beta` | swift | Synthetic Python-only contract. |" in markdown
+    summary = report.to_dict()
+    assert summary["decision"] == "pass"
+    assert summary["cells"][3]["note"] == "Synthetic Python-only contract."
+    assert SENTINEL not in markdown + json.dumps(summary)
+
+
+def _move(case_id: str, bucket: str, reason: str = "offset_mismatch"):
+    def mutate(results: dict[str, Any]) -> None:
+        alpha = results["swift"]["fixtures"][0]
+        alpha["passed"].remove(case_id)
+        alpha[bucket].append({"case_id": case_id, "reason": reason})
+
+    return mutate
+
+
+def _drop_case(results: dict[str, Any]) -> None:
+    results["swift"]["fixtures"][0]["passed"].remove("rejections/r1")
+
+
+def _add_case(results: dict[str, Any]) -> None:
+    results["swift"]["fixtures"][0]["passed"].append("cases/a9")
+
+
+def _stale(results: dict[str, Any]) -> None:
+    results["swift"]["fixtures"][0]["fixture_sha256"] = "c" * 64
+
+
+@pytest.mark.parametrize(
+    ("mutate", "state", "code"),
+    [
+        (lambda results: results.pop("swift"), "missing", "missing_result"),
+        (
+            lambda results: results["swift"]["fixtures"].clear(),
+            "missing",
+            "missing_cell",
+        ),
+        (_move("cases/a2", "failed"), "failed", "case_failed"),
+        (_move("cases/a2", "skipped", "known_divergence"), "failed", "case_skipped"),
+        (_drop_case, "failed", "case_missing"),
+        (_add_case, "failed", "unknown_case"),
+        (_stale, "stale_digest", "stale_digest"),
+        (
+            lambda results: results["swift"].update(manifest_sha256="d" * 64),
+            "failed",
+            "manifest_mismatch",
+        ),
+        (
+            lambda results: results["swift"]["fixtures"][0].update(
+                errors=["fixture_unreadable"]
+            ),
+            "failed",
+            "fixture_error",
+        ),
+    ],
+)
+def test_missing_failed_or_stale_cells_fail_aggregation(
+    mini_repo: Path, tmp_path: Path, mutate, state: str, code: str
+) -> None:
+    results = _complete_set(mini_repo)
+    mutate(results)
+
+    report = _aggregate(mini_repo, results, tmp_path / "r")
+    cell = _cell(report, "alpha", "swift")
+
+    assert not report.passed
+    assert (cell.state, cell.blocking) == (state, True)
+    assert code in cell.codes
+    assert report.findings == ()
+    assert _cell(report, "alpha", "python").state == "passed"
+    assert "Decision: **FAIL** (1 blocking)." in report.to_markdown()
+
+
+def test_python_failure_from_the_runner_blocks_the_gate(
+    mini_repo: Path, tmp_path: Path
+) -> None:
+    report = _junit(
+        (ALPHA, "test_case[a1]", "passed"),
+        (ALPHA, "test_case[a2]", "failed"),
+        (ALPHA, "test_case[a3]", "passed"),
+        (ALPHA, "test_fixture_level", "passed"),
+        (BETA, "test_items", "passed"),
+    )
+    python = gate.run_python(mini_repo, MINI_MANIFEST, runner=_fake_runner(report))
+
+    aggregated = _aggregate(mini_repo, {"python": python}, tmp_path / "r")
+    cell = _cell(aggregated, "alpha", "python")
+
+    assert not aggregated.passed
+    assert (cell.state, cell.failed, cell.passed, cell.codes) == (
+        "failed",
+        1,
+        3,
+        ("case_failed",),
+    )
+
+
+def test_pending_runtime_cells_are_listed_but_never_block(
+    mini_repo: Path, tmp_path: Path
+) -> None:
+    python = _passing_result(mini_repo, "python")
+
+    report = _aggregate(mini_repo, {"python": python}, tmp_path / "a")
+    pending = _cell(report, "alpha", "swift")
+
+    assert report.passed
+    assert (pending.state, pending.blocking, pending.missing, pending.note) == (
+        "pending",
+        False,
+        4,
+        "#1",
+    )
+    assert "| swift | #1 |" in report.to_markdown()
+
+    swift = _passing_result(mini_repo, "swift")
+    swift["fixtures"][0]["passed"].remove("cases/a1")
+    swift["fixtures"][0]["failed"].append(
+        {"case_id": "cases/a1", "reason": "offset_mismatch"}
+    )
+    report = _aggregate(mini_repo, {"python": python, "swift": swift}, tmp_path / "b")
+    informational = _cell(report, "alpha", "swift")
+
+    assert report.passed
+    assert (informational.state, informational.blocking) == ("failed", False)
+
+
+def _extra_key(results: dict[str, Any]) -> None:
+    results["swift"]["fixtures"][0]["deidentified_text"] = SENTINEL
+
+
+def _second_python(results: dict[str, Any]) -> None:
+    results["python-copy"] = copy.deepcopy(results["python"])
+
+
+def _unknown_runtime(results: dict[str, Any]) -> None:
+    results["swift"]["runtime"] = "flutter"
+
+
+def _unknown_fixture(results: dict[str, Any]) -> None:
+    extra = copy.deepcopy(results["swift"]["fixtures"][0])
+    extra["fixture_id"] = "gamma"
+    results["swift"]["fixtures"].append(extra)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "code"),
+    [
+        (_extra_key, "invalid_result"),
+        (_second_python, "duplicate_result"),
+        (_unknown_runtime, "unknown_runtime"),
+        (_unknown_fixture, "unknown_fixture"),
+    ],
+)
+def test_invalid_or_ambiguous_result_files_block_the_gate(
+    mini_repo: Path, tmp_path: Path, mutate, code: str
+) -> None:
+    results = _complete_set(mini_repo)
+    mutate(results)
+
+    report = _aggregate(mini_repo, results, tmp_path / "r")
+
+    assert not report.passed
+    assert code in {finding.code for finding in report.findings}
+    assert SENTINEL not in report.to_markdown() + json.dumps(report.to_dict())
+
+
+def test_unreadable_result_and_verify_findings_block_the_gate(
+    mini_repo: Path, tmp_path: Path
+) -> None:
+    results = _complete_set(mini_repo)
+    unreadable = tmp_path / "broken.json"
+    unreadable.write_text("{", encoding="utf-8")
+    paths = []
+    for runtime, document in results.items():
+        paths.append(tmp_path / f"{runtime}.json")
+        _write_json(paths[-1], document)
+    _write_json(mini_repo / "fx" / "nested" / "gamma.json", {"version": 1})
+
+    report = gate.aggregate(mini_repo, MINI_MANIFEST, [*paths, unreadable])
+
+    assert not report.passed
+    assert [(finding.code, finding.path) for finding in report.findings] == [
+        ("unlisted_file", "fx/nested/gamma.json"),
+        ("result_unreadable", "broken.json"),
+    ]
+
+
+def test_aggregate_cli_writes_summary_and_report(
+    mini_repo: Path, tmp_path: Path, capsys
+) -> None:
+    results = _complete_set(mini_repo)
+    directory = tmp_path / "results"
+    for runtime, document in results.items():
+        _write_json(directory / "nested" / f"{runtime}.json", document)
+    base = ["--root", str(mini_repo), "--manifest", MINI_MANIFEST, "aggregate"]
+    summary = tmp_path / "out" / "summary.md"
+    report = tmp_path / "out" / "summary.json"
+
+    status = gate.main(
+        [
+            *base,
+            "--results-dir",
+            str(directory),
+            "--summary",
+            str(summary),
+            "--report",
+            str(report),
+        ]
+    )
+
+    assert status == 0
+    assert summary.read_text(encoding="utf-8").startswith("## Contract gate")
+    assert json.loads(report.read_text(encoding="utf-8"))["decision"] == "pass"
+    assert gate.main([*base, str(directory / "nested" / "python.json")]) == 1
+    output = capsys.readouterr().out
+    assert "contract_gate aggregate: pass cells=4 blocking=0 results=2" in output
+    assert (
+        "contract_gate aggregate: missing fixture=alpha runtime=swift "
+        "codes=missing_result"
+    ) in output
+    assert str(tmp_path) not in output
+    assert SENTINEL not in output
+
+
+@pytest.mark.integration
+def test_real_python_run_aggregates_end_to_end(tmp_path: Path) -> None:
+    for broken, expected in ((False, True), (True, False)):
+        repo = tmp_path / f"repo-{broken}"
+        (repo / "fx").mkdir(parents=True)
+        _build_mini_repo(repo, broken=broken)
+        python = gate.run_python(repo, MINI_MANIFEST)
+
+        report = _aggregate(repo, {"python": python}, repo.parent / f"r-{broken}")
+
+        assert report.passed is expected
+        assert _cell(report, "beta", "python").state == "passed"
+
+
+def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
+    tmp_path: Path,
+) -> None:
+    python = _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST)
+    path = tmp_path / "python.json"
+    _write_json(path, python)
+
+    report = gate.aggregate(results=[path])
+    states = {(cell.runtime, cell.state) for cell in report.cells}
+
+    assert report.passed
+    assert {state for runtime, state in states if runtime == "python"} == {"passed"}
+    for runtime in ("swift", "kotlin", "web"):
+        assert {state for name, state in states if name == runtime} <= {
+            "pending",
+            "not_applicable",
+        }
+    missing = gate.aggregate()
+    assert not missing.passed
+    assert {cell.codes for cell in missing.cells if cell.runtime == "python"} == {
+        ("missing_result",)
+    }
+
+
+def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True))
+    jobs = workflow["jobs"]
+    gate_job = jobs["contract-gate"]
+    python_job = jobs["python-results"]
+
+    assert "paths" not in (triggers["pull_request"] or {})
+    assert "paths" not in (triggers["push"] or {})
+    assert gate_job["if"] == "always()"
+    assert set(gate_job["needs"]) == {name for name in jobs if name != "contract-gate"}
+    python_steps = {step.get("name"): step for step in python_job["steps"]}
+    assert (
+        "contract_gate.py run-python"
+        in (python_steps["Write the Python result file"]["run"])
+    )
+    upload = python_steps["Upload the Python result file"]
+    assert upload["if"] == "always()"
+    assert upload["with"]["name"] == "contract-gate-result-python"
+    steps = {step.get("name"): step for step in gate_job["steps"]}
+    download = steps["Download runtime result files"]["with"]
+    assert download["pattern"] == "contract-gate-result-*"
+    assert download["merge-multiple"] is True
+    aggregate_run = steps["Aggregate the runtime results"]["run"]
+    assert "contract_gate.py aggregate" in aggregate_run
+    assert "--summary contract-gate-summary/summary.md" in aggregate_run
+    assert "GITHUB_STEP_SUMMARY" in steps["Publish the job summary"]["run"]
+    assert steps["Upload the summary"]["with"]["name"] == "contract-gate-summary"
+    assert steps["Upload the summary"]["if"] == "always()"
+    manifest = gate.load_manifest()
+    for runtime, declaration in manifest.runtimes.items():
+        if declaration.reporter == gate.REPORTER_ACTIVE:
+            assert f"{runtime}-results" in jobs, runtime
