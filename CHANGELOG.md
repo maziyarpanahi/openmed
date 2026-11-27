@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Declare portable PII, clinical-entity and medication task packs in one generated manifest (`openmed/core/data/task_packs.json`) with a JSON Schema, an offline `scripts/manifest/build_task_packs.py --check` generator and a download-free `openmed.core.task_packs.resolve(pack_id, runtime)`; the medication pack carries an extraction-only notice (#5379).
+- Add `PIIPack` to OpenMedKit Swift: it resolves the `pii` task pack's Apple candidates from a bundled byte-identical `task_packs.json`, prepares the best cached one (downloading only with `allowDownload: true`), skips MLX candidates on the iOS Simulator with a typed `unsupportedOnSimulator` result, and returns offset-only spans and policy de-identification with the pack's review notice (#5380).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
