@@ -239,6 +239,16 @@
         "types": "./dist/multimodal/index.d.cts",
         "default": "./dist/multimodal/index.cjs"
       }
+    },
+    "./speech": {
+      "import": {
+        "types": "./dist/speech/index.d.ts",
+        "default": "./dist/speech/index.js"
+      },
+      "require": {
+        "types": "./dist/speech/index.d.cts",
+        "default": "./dist/speech/index.cjs"
+      }
     }
   }
 }

@@ -66,6 +66,10 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/multimodal/index.cjs",
     "dist/multimodal/index.d.ts",
     "dist/multimodal/index.d.cts",
+    "dist/speech/index.js",
+    "dist/speech/index.cjs",
+    "dist/speech/index.d.ts",
+    "dist/speech/index.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -237,6 +241,34 @@ test("openmed/multimodal admits packets offline from the installed build", async
     false,
     "multimodal_in_main_entry",
   );
+});
+
+test("openmed/speech validates token timings from the installed build", async () => {
+  const speech = await import("openmed/speech");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/speech"));
+  assert.match(resolved, /speech[\\/]index\.js$/, "esm_speech_entry");
+  const token = new speech.SpeechTokenTiming({
+    tokenIndex: 0,
+    startMilliseconds: 500,
+    endMilliseconds: 650,
+    confidencePPM: 750000,
+    text: "synthetic",
+  });
+  const result = new speech.SpeechRecognition({ text: "synthetic", tokenTimes: [token] });
+  assert.equal(result.alignmentStatus, "aligned");
+  assert.equal(JSON.stringify(result).includes("synthetic"), false, "speech_text_serialized");
+  assert.throws(
+    () =>
+      new speech.SpeechTokenTiming({
+        tokenIndex: 0,
+        startMilliseconds: -1,
+        endMilliseconds: 650,
+        confidencePPM: 750000,
+        text: "synthetic",
+      }),
+    (error) => error instanceof speech.SpeechContractError && error.code === "speech_hypothesis_invalid",
+  );
+  assert.equal(Object.hasOwn(openmed, "SpeechTokenTiming"), false, "speech_in_main_entry");
 });
 
 test("installed package made no network requests", () => {

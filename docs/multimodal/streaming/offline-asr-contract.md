@@ -157,6 +157,48 @@ cd android
 ./gradlew :openmedkit:testDebugUnitTest --tests '*SpeechContractParityTest'
 ```
 
+## Browser and Node.js types
+
+The `openmed` npm package carries the same data contract on the
+`openmed/speech` subpath. Browser and Electron hosts that run their own speech
+provider can check its output there. The subpath includes no audio capture,
+ASR engine or session, and the default `openmed` entry does not include it.
+
+```ts
+import { SpeechRecognition, SpeechTokenTiming } from "openmed/speech";
+
+const token = new SpeechTokenTiming({
+  tokenIndex: 0,
+  startMilliseconds: 500,
+  endMilliseconds: 650,
+  confidencePPM: 750_000,
+  text: tokenText,
+});
+const result = new SpeechRecognition({ text: hypothesisText, tokenTimes: [token] });
+```
+
+`SpeechTokenTiming`, `SpeechRecognition`, `SpeechPartialHypothesis`,
+`SpeechFinalizedSegment` and `SpeechEngineProvenance` apply the rules in the
+table above. Their field bounds and alignment-status rule follow OpenMedKit's
+Swift types:
+
+- token indices 0 to 4096, at most 4096 token timings;
+- times between 0 and 86400000 ms with `end` not before `start`;
+- confidences in parts per million;
+- text of at most 8192 Unicode code points (Swift `unicodeScalars`, Python
+  `len`), not UTF-16 code units;
+- `alignmentStatus` is `aligned` exactly when token timings are present.
+
+Finalized and partial tokens must also lie inside their segment or window, as
+in Python. Invalid timing or text throws `SpeechContractError` with code
+`speech_hypothesis_invalid`, and invalid provenance throws it with code
+`speech_artifact_unverified`, the same codes Swift's `StreamingSpeechError`
+uses. Each error names the offending field, never the value. Text is readable
+through `text` but stays out of `JSON.stringify` (which emits Python's
+value-free `to_dict()` fields), `String()` and `util.inspect`.
+`tests/web/test_speech_contract.spec.ts` runs the shared
+`tests/fixtures/parity/speech_contract_v1.json` fixture against these types.
+
 ## See also
 
 - [Streaming audio windows](../audio-windows.md)

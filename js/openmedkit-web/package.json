@@ -45,6 +45,16 @@
         "types": "./dist/multimodal/index.d.cts",
         "default": "./dist/multimodal/index.cjs"
       }
+    },
+    "./speech": {
+      "import": {
+        "types": "./dist/speech/index.d.ts",
+        "default": "./dist/speech/index.js"
+      },
+      "require": {
+        "types": "./dist/speech/index.d.cts",
+        "default": "./dist/speech/index.cjs"
+      }
     }
   },
   "files": [
@@ -53,10 +63,10 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts src/catalog.ts src/multimodal/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
+    "build": "tsup src/index.ts src/catalog.ts src/multimodal/index.ts src/speech/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_examples_node.spec.ts ../../tests/web/test_ort_web_loader.spec.ts ../../tests/web/test_webgpu_session.spec.ts ../../tests/web/test_model_loader_env.spec.ts ../../tests/web/test_kit_parity.spec.ts ../../tests/web/test_portable_policy.spec.ts ../../tests/web/test_inference_worker.spec.ts ../../tests/web/test_tokenizer_conformance.spec.ts ../../tests/web/test_decision_runtime.spec.ts ../../tests/web/test_portable_bundle.spec.ts ../../tests/web/test_device_capabilities.spec.ts ../../tests/web/test_bundle_cache.spec.ts ../../tests/web/test_portable_bundle_calibration.spec.ts ../../tests/web/test_model_catalog.spec.ts ../../tests/web/test_pii_pack.spec.ts ../../tests/web/test_contract_types.spec.ts ../../tests/web/test_api_report.spec.ts ../../tests/web/test_sdk_config.spec.ts ../../tests/web/test_multimodal_contract.spec.ts",
+    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_examples_node.spec.ts ../../tests/web/test_ort_web_loader.spec.ts ../../tests/web/test_webgpu_session.spec.ts ../../tests/web/test_model_loader_env.spec.ts ../../tests/web/test_kit_parity.spec.ts ../../tests/web/test_portable_policy.spec.ts ../../tests/web/test_inference_worker.spec.ts ../../tests/web/test_tokenizer_conformance.spec.ts ../../tests/web/test_decision_runtime.spec.ts ../../tests/web/test_portable_bundle.spec.ts ../../tests/web/test_device_capabilities.spec.ts ../../tests/web/test_bundle_cache.spec.ts ../../tests/web/test_portable_bundle_calibration.spec.ts ../../tests/web/test_model_catalog.spec.ts ../../tests/web/test_pii_pack.spec.ts ../../tests/web/test_contract_types.spec.ts ../../tests/web/test_api_report.spec.ts ../../tests/web/test_sdk_config.spec.ts ../../tests/web/test_multimodal_contract.spec.ts ../../tests/web/test_speech_contract.spec.ts",
     "prepack": "npm run build",
     "api:check": "npm run build && node scripts/api-report.mjs --check",
     "api:update": "npm run build && node scripts/api-report.mjs --update"
