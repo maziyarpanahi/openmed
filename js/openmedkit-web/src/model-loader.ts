@@ -1,3 +1,4 @@
+import { OpenMedError } from "./errors";
 import {
   failClosedWhenOffline,
   OpenMedOfflineError,
@@ -292,7 +293,8 @@ async function resolveRuntime(
   try {
     return (await import(moduleName)) as RawTransformersRuntime;
   } catch (error) {
-    throw new Error(
+    throw new OpenMedError(
+      "capability_error",
       "Install @huggingface/transformers or pass a token-classification pipeline.",
       { cause: error },
     );

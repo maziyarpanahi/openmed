@@ -128,9 +128,10 @@
         "web": {
           "status": "required",
           "entry": [
-            "extractPii and deidentify hashSecret option"
+            "extractPii and deidentify hashSecret option",
+            "hmacTextHash"
           ],
-          "today": "Error without a code"
+          "today": "OpenMedError configuration_error"
         }
       }
     },
@@ -246,9 +247,10 @@
         "web": {
           "status": "required",
           "entry": [
-            "setOfflineOnly(true), then a load without local assets"
+            "setOfflineOnly(true), then a load without local assets",
+            "setOfflineOnly(true), then a Hub id load"
           ],
-          "today": "OpenMedOfflineError local_assets_unavailable"
+          "today": "OpenMedOfflineError local_assets_unavailable or remote_model_refused"
         }
       }
     },

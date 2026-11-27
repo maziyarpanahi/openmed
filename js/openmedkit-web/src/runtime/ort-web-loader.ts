@@ -1,3 +1,4 @@
+import { OpenMedError } from "../errors";
 import type {
   TokenClassificationCallOptions,
   TokenClassificationOutput,
@@ -135,12 +136,19 @@ export const DEFAULT_ORT_WEB_SESSION_CACHE: OrtWebSessionCache = new Map();
 export function assertOfflineAssetPath(path: string, label = "asset path"): string {
   const trimmed = path.trim();
   if (trimmed.length === 0) {
-    throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
+    throw new OpenMedError(
+      "configuration_error",
+      `ONNX Runtime Web ${label} must not be empty.`,
+    );
   }
   // Browsers strip C0 controls (leading NUL..US, tab/CR/LF anywhere) and read "/\"
   // or "\/" as "//", which would turn the path into a remote URL.
   if (/[\u0000-\u001f]/.test(trimmed) || /^[\\/]{2}/.test(trimmed)) {
-    throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
+    throw new OpenMedError(
+      "configuration_error",
+      `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      { code: "remote_asset_refused" },
+    );
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
     return trimmed;
@@ -148,28 +156,38 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   // URL parsers fold "\" into "/" and drop tab/CR/LF, so outside Windows drive
   // paths these characters make a path non-canonical; refuse them outright.
   if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) {
-    throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
+    throw new OpenMedError(
+      "configuration_error",
+      `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+      { code: "remote_asset_refused" },
+    );
   }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)) {
     if (!trimmed.startsWith("file://")) {
-      throw new Error(
+      throw new OpenMedError(
+        "configuration_error",
         `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+        { code: "remote_asset_refused" },
       );
     }
     let fileUrl: URL;
     try {
       fileUrl = new URL(trimmed);
     } catch {
-      throw new Error(
+      throw new OpenMedError(
+        "configuration_error",
         `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+        { code: "remote_asset_refused" },
       );
     }
     if (
       (fileUrl.hostname !== "" && fileUrl.hostname !== "localhost") ||
       fileUrl.pathname.startsWith("//")
     ) {
-      throw new Error(
+      throw new OpenMedError(
+        "configuration_error",
         `ONNX Runtime Web ${label} must be local/offline, not remote.`,
+        { code: "remote_asset_refused" },
       );
     }
   }
@@ -188,7 +206,8 @@ export function assertOfflineExternalData(
   options: Pick<OrtWebLoaderOptions, "externalData" | "sessionOptions">,
 ): { path: string; data: string; byteLength: number }[] | undefined {
   if (options.sessionOptions?.externalData !== undefined) {
-    throw new Error(
+    throw new OpenMedError(
+      "configuration_error",
       "ONNX Runtime Web external data must use the typed externalData option.",
     );
   }
@@ -216,12 +235,16 @@ export function assertOfflineExternalData(
       data: assertOfflineShardLocation(shard.location, `${label} location`),
     };
     if (paths.has(file.path)) {
-      throw new Error("ONNX Runtime Web external data contains duplicate shard paths.");
+      throw new OpenMedError(
+        "configuration_error",
+        "ONNX Runtime Web external data contains duplicate shard paths.",
+      );
     }
     paths.add(file.path);
     const byteLength = positiveByteCount(shard.byteLength, `${label} byteLength`);
     if (byteLength > maxShardBytes) {
-      throw new Error(
+      throw new OpenMedError(
+        "budget_exceeded",
         `ONNX Runtime Web ${label} exceeds the per-shard byte limit.`,
       );
     }
@@ -229,7 +252,10 @@ export function assertOfflineExternalData(
     return { ...file, byteLength };
   });
   if (totalBytes > maxTotalBytes) {
-    throw new Error("ONNX Runtime Web external data exceeds the total byte limit.");
+    throw new OpenMedError(
+      "budget_exceeded",
+      "ONNX Runtime Web external data exceeds the total byte limit.",
+    );
   }
   return files;
 }
@@ -307,7 +333,7 @@ export async function loadOrtWebTokenClassificationPipeline(
     text: string,
     callOptions?: TokenClassificationCallOptions,
   ): Promise<TokenClassificationOutput> => {
-    if (closed) throw new Error("OpenMed pipeline is disposed");
+    if (closed) throw new OpenMedError("input_error", "OpenMed pipeline is disposed");
     active++;
     try {
       const inputs = await options.tokenize(text);
@@ -364,7 +390,7 @@ export async function clearOrtWebSessionCache(cache = DEFAULT_ORT_WEB_SESSION_CA
     await loaded.session.release?.();
   }));
   if (results.some(result => result.status === "rejected")) {
-    throw new Error("OpenMed session release failed");
+    throw new OpenMedError("internal_error", "OpenMed session release failed");
   }
 }
 
@@ -387,7 +413,7 @@ async function createOrtWebSession(
   let disposal: Promise<void> | undefined;
   const session: OrtInferenceSession = {
     async run(feeds, runOptions) {
-      if (closing) throw new Error("OpenMed session is disposed");
+      if (closing) throw new OpenMedError("input_error", "OpenMed session is disposed");
       active++;
       try { return await rawSession.run(feeds, runOptions); }
       finally { if (--active === 0) drained?.(); }
@@ -397,7 +423,7 @@ async function createOrtWebSession(
       return disposal ??= (async () => {
         if (active > 0) await new Promise<void>(resolve => { drained = resolve; });
         try { await rawSession.release?.(); } catch {
-          throw new Error("OpenMed session release failed");
+          throw new OpenMedError("internal_error", "OpenMed session release failed");
         }
       })();
     },
@@ -424,7 +450,8 @@ async function resolveOrtRuntime(
   try {
     return (await import(ONNXRUNTIME_WEB_MODULE)) as OrtWebRuntime;
   } catch (error) {
-    throw new Error(
+    throw new OpenMedError(
+      "capability_error",
       "Install onnxruntime-web or pass an ONNX Runtime Web runtime object.",
       { cause: error },
     );
@@ -447,14 +474,20 @@ function resolveCapabilities(
 function assertOfflineShardLocation(path: string, label: string): string {
   const location = assertOfflineAssetPath(path, label);
   if (location.includes("?")) {
-    throw new Error(`ONNX Runtime Web ${label} must not include a query string.`);
+    throw new OpenMedError(
+      "configuration_error",
+      `ONNX Runtime Web ${label} must not include a query string.`,
+    );
   }
   return location;
 }
 
 function positiveByteCount(value: number, label: string): number {
   if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`ONNX Runtime Web ${label} must be a positive integer.`);
+    throw new OpenMedError(
+      "configuration_error",
+      `ONNX Runtime Web ${label} must be a positive integer.`,
+    );
   }
   return value;
 }

@@ -1,3 +1,6 @@
+import { OpenMedError } from "./errors";
+import type { OpenMedErrorCode } from "./error-codes";
+
 /** Value-free reason codes carried by {@link OpenMedOfflineError}. */
 export type OpenMedOfflineErrorCode =
   | "remote_model_refused"
@@ -12,18 +15,29 @@ const OFFLINE_ERROR_MESSAGES: Record<OpenMedOfflineErrorCode, string> = {
     "OpenMed could not load the local model or runtime assets.",
 };
 
+// A Hub id refused in offline-only mode cannot load without leaving the
+// device, which Python reports as a model load failure; a remote runtime
+// asset location is configuration that offline-only mode does not accept.
+const OFFLINE_REGISTRY_CODES: Record<OpenMedOfflineErrorCode, OpenMedErrorCode> = {
+  remote_model_refused: "model_load_error",
+  remote_asset_refused: "configuration_error",
+  local_assets_unavailable: "model_load_error",
+};
+
 /**
  * Raised when a load would leave the device or local assets cannot be loaded
  * in offline-only mode. The message and `code` never include input text,
- * paths, URLs or the underlying runtime error.
+ * paths, URLs or the underlying runtime error. `errorCode` is the portable
+ * registry code: `model_load_error` for `remote_model_refused` and
+ * `local_assets_unavailable`, `configuration_error` for
+ * `remote_asset_refused`.
  */
-export class OpenMedOfflineError extends Error {
-  readonly code: OpenMedOfflineErrorCode;
+export class OpenMedOfflineError extends OpenMedError {
+  declare readonly code: OpenMedOfflineErrorCode;
 
   constructor(code: OpenMedOfflineErrorCode) {
-    super(OFFLINE_ERROR_MESSAGES[code]);
+    super(OFFLINE_REGISTRY_CODES[code], OFFLINE_ERROR_MESSAGES[code], { code });
     this.name = "OpenMedOfflineError";
-    this.code = code;
   }
 }
 

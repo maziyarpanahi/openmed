@@ -527,6 +527,29 @@ report gives `signature_mismatch`, and a report that is not a well-formed
 - The package verifies and never signs. `canonicalAuditJson()` and
   `auditReportPayloads()` expose the canonical bytes for diagnostics.
 
+## Errors
+
+Failures that used to be plain `Error`s, and the `PortablePolicyError` and
+`OpenMedOfflineError` classes, are `OpenMedError`s, which extend `Error`. Read
+the portable code that every OpenMed runtime reports from `errorCode` (from
+`OPENMED_ERROR_CODES`); `code` is the most specific code, for example
+`profile_unknown`:
+
+```ts
+import { OpenMedError, extractPii } from "openmed";
+
+try {
+  await extractPii(text, { hashSecret });
+} catch (error) {
+  if (error instanceof OpenMedError && error.errorCode === "configuration_error") {
+    // fix the configuration; error.retryable says whether retrying can help
+  }
+}
+```
+
+Messages never include input text, secrets, paths or URLs. See
+`docs/api/errors.md` for the code each failure carries.
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.
