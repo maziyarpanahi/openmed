@@ -636,6 +636,12 @@ against every case. Its result codes are `valid`, `hash_mismatch`,
 `signature_mismatch` (also used for an unsigned report),
 `unsupported_algorithm` and `malformed`.
 
+The web package's `verifyAuditReport()` (`js/openmedkit-web/src/receipt.ts`)
+consumes every case in `tests/web/test_receipt_verification.spec.ts`: it must
+reproduce each candidate's payload bytes and the expected verdict, with reason
+codes `valid`, `hash_mismatch`, `signature_mismatch` (also for an unsigned
+report), `unsupported_algorithm` and `malformed`.
+
 Regenerate or check the fixture with
 `python scripts/parity/generate_receipt_vectors.py --write` or `--check`;
 `tests/unit/core/test_receipt_vectors.py` checks that regeneration is
