@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import cast
 from urllib.parse import urlsplit
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.smart_scope_audit import (
     audit_smart_scope_preflight,
     parse_smart_scope_preflight,
@@ -40,7 +41,7 @@ _REASONS = frozenset(
 )
 
 
-class SmartCustodyError(ValueError):
+class SmartCustodyError(ValueError, LegacyRootedError):
     """A fixed, value-free reason for rejecting a custody operation."""
 
     def __init__(self, reason_code: str) -> None:

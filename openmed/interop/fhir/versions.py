@@ -19,6 +19,8 @@ from collections.abc import Mapping, Sequence
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "FHIRConversionError",
     "FHIRVersion",
@@ -55,7 +57,7 @@ FHIR_R4 = FHIRVersion.R4
 FHIR_R5 = FHIRVersion.R5
 
 
-class FHIRConversionError(ValueError):
+class FHIRConversionError(ValueError, LegacyRootedError):
     """Base error for a rejected FHIR version conversion."""
 
 

@@ -22,6 +22,8 @@ from itertools import islice
 from types import MappingProxyType
 from typing import Any, ClassVar, Final, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 DIRECTIONALITY_SCHEMA_VERSION: Final = 1
 DIRECTIONALITY_ADVISORY: Final = (
     "Guarded relation directionality is a deterministic input-validation gate. "
@@ -32,7 +34,7 @@ DIRECTIONALITY_ADVISORY: Final = (
 RelationDirection = Literal["forward", "reverse"]
 
 
-class DirectionalityError(ValueError):
+class DirectionalityError(ValueError, LegacyRootedError):
     """Base error for a guarded relation directionality validation failure.
 
     Error messages and ``to_dict`` output contain only canonical relation

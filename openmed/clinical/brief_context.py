@@ -32,6 +32,7 @@ from openmed.clinical.nli_gate import NLIThresholds
 from openmed.clinical.sections import detect_sections
 from openmed.clinical.summary_envelope import verify_deidentified_artifact
 from openmed.clinical.summary_profiles import get_summary_profile
+from openmed.core.errors import LegacyRootedError
 from openmed.core.pii import DeidentificationResult
 
 
@@ -162,7 +163,7 @@ class BriefContextOutcome:
         }
 
 
-class BriefContextError(ValueError):
+class BriefContextError(ValueError, LegacyRootedError):
     """Value-free provider error for existing transport injection seams."""
 
     def __init__(self, code: BriefContextCode):

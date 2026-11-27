@@ -18,12 +18,13 @@ from pathlib import Path
 from typing import Any, Final
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 
 ARX_PROTOCOL_SCHEMA_VERSION: Final = 1
 DEFAULT_ARX_TIMEOUT_SECONDS: Final = 300.0
 
 
-class ArxBridgeError(RuntimeError):
+class ArxBridgeError(RuntimeError, LegacyRootedError):
     """Base class for privacy-safe ARX bridge failures."""
 
 

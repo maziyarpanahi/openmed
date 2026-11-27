@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, cast
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.policy import canonical_policy_name
 
 try:
@@ -102,7 +103,7 @@ Record = str | Mapping[str, Any]
 Deidentifier = Callable[..., Any]
 
 
-class BeamRedactionError(RuntimeError):
+class BeamRedactionError(RuntimeError, LegacyRootedError):
     """Raised for a safe, deterministic Beam redaction contract failure."""
 
 

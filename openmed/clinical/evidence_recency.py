@@ -23,6 +23,7 @@ from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Final, cast
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 __all__ = [
@@ -118,7 +119,7 @@ _POLICY_KEYS = frozenset(
 )
 
 
-class EvidenceRecencyError(ValueError):
+class EvidenceRecencyError(ValueError, LegacyRootedError):
     """Raised when recency policy or serialized metadata is malformed."""
 
 

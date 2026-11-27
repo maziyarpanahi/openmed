@@ -13,13 +13,15 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_DEMOGRAPHIC_MINIMIZER_SCHEMA_VERSION: Final[int] = 1
 NOT_ALLOWED_FOR_PURPOSE: Final[str] = "not_allowed_for_purpose"
 
 _OPAQUE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-class DemographicMinimizationError(ValueError):
+class DemographicMinimizationError(ValueError, LegacyRootedError):
     """Raised when demographic evidence or a purpose policy is invalid."""
 
 

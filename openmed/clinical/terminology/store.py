@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .resolution import (
@@ -31,7 +32,7 @@ _TIMESTAMP_RE = re.compile(
 _REVIEW_STATES = frozenset({"ambiguous", "unmapped", "rejected"})
 
 
-class TerminologyMappingStoreError(RuntimeError):
+class TerminologyMappingStoreError(RuntimeError, LegacyRootedError):
     """Base error for safe terminology-store lifecycle failures."""
 
 

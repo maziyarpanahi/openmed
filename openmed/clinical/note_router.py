@@ -20,6 +20,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .routing import PATHOLOGY_PROFILE, RADIOLOGY_PROFILE, NoteTypeProfile
 from .sections import SectionSpan, detect_sections, validate_sections
 
@@ -428,7 +430,7 @@ class NoteExtractionResult:
         return payload
 
 
-class SectionRoutingError(RuntimeError):
+class SectionRoutingError(RuntimeError, LegacyRootedError):
     """Raised when a configured extractor cannot be safely dispatched."""
 
 

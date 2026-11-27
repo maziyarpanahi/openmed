@@ -7,10 +7,12 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 NLI_BATCH_PLAN_SCHEMA_VERSION: Final[int] = 1
 
 
-class NliBatchPlanningError(ValueError):
+class NliBatchPlanningError(ValueError, LegacyRootedError):
     """Raised when a batch-planning input violates the value-free contract."""
 
 

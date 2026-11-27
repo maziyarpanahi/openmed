@@ -25,6 +25,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import is_local_only, network_blocked_if_offline
 
 from .vocab import VocabConcept, VocabularyIndex
@@ -90,11 +91,11 @@ _SYSTEM_URI_ALIASES = {
 }
 
 
-class SnapshotIntegrityError(ValueError):
+class SnapshotIntegrityError(ValueError, LegacyRootedError):
     """Raised when a terminology snapshot or manifest fails validation."""
 
 
-class SnapshotPolicyError(ValueError):
+class SnapshotPolicyError(ValueError, LegacyRootedError):
     """Raised when cache policy would persist restricted terminology."""
 
 

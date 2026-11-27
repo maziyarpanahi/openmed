@@ -31,6 +31,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .vocab import RestrictedVocabularyError, normalize_alias, normalize_language
 
 __all__ = [
@@ -1061,7 +1063,7 @@ DEFAULT_CROSSWALK_RESOURCES: tuple[str, ...] = (
 _SUPPORTED_TARGET_SYSTEMS = frozenset({"HPO", "ICD10"})
 
 
-class CrosswalkFormatError(ValueError):
+class CrosswalkFormatError(ValueError, LegacyRootedError):
     """Raised when a local crosswalk does not satisfy the public schema."""
 
 

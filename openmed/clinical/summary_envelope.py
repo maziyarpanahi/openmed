@@ -24,6 +24,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.pii import DeidentificationResult
 
 SUMMARY_ENVELOPE_SCHEMA_VERSION = 1
@@ -81,7 +82,7 @@ _RAW_PROVENANCE_KEYS = frozenset(
 )
 
 
-class SummaryEnvelopeError(ValueError):
+class SummaryEnvelopeError(ValueError, LegacyRootedError):
     """Raised when a summary safety invariant cannot be satisfied."""
 
 

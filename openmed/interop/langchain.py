@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.capabilities import raise_missing_backend
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
@@ -25,7 +26,7 @@ _MESSAGE_METADATA_KEYS = frozenset(
 )
 
 
-class LangChainRedactionError(RuntimeError):
+class LangChainRedactionError(RuntimeError, LegacyRootedError):
     """Raised when a LangChain payload cannot be redacted safely.
 
     The adapter deliberately omits payload values from this exception. A

@@ -1,0 +1,3400 @@
+{
+  "classes": {
+    "openmed.interop.airflow:RedactionOperatorError": {
+      "code": "redaction_operator_error",
+      "mro": [
+        "openmed.interop.airflow:RedactionOperatorError",
+        "openmed.interop.airflow:_AirflowException",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.airflow:RedactionOperatorError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.airflow:RedactionOperatorError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.airflow:RedactionOperatorError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.artifact_inventory:ArtifactInventoryError": {
+      "code": "artifact_inventory_error",
+      "mro": [
+        "openmed.interop.artifact_inventory:ArtifactInventoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactInventoryError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactInventoryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactInventoryError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.artifact_inventory:ArtifactPathError": {
+      "code": "artifact_path_error",
+      "mro": [
+        "openmed.interop.artifact_inventory:ArtifactPathError",
+        "openmed.interop.artifact_inventory:ArtifactInventoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactPathError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactPathError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.artifact_inventory:ArtifactPathError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.artifact_inventory:DuplicateArtifactError": {
+      "code": "duplicate_artifact_error",
+      "mro": [
+        "openmed.interop.artifact_inventory:DuplicateArtifactError",
+        "openmed.interop.artifact_inventory:ArtifactInventoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.artifact_inventory:DuplicateArtifactError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.artifact_inventory:DuplicateArtifactError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.artifact_inventory:DuplicateArtifactError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.artifact_inventory:UnreadableArtifactError": {
+      "code": "unreadable_artifact_error",
+      "mro": [
+        "openmed.interop.artifact_inventory:UnreadableArtifactError",
+        "openmed.interop.artifact_inventory:ArtifactInventoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.artifact_inventory:UnreadableArtifactError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.artifact_inventory:UnreadableArtifactError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.artifact_inventory:UnreadableArtifactError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.beam:BeamRedactionError": {
+      "code": "beam_redaction_error",
+      "mro": [
+        "openmed.interop.beam:BeamRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.beam:BeamRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.beam:BeamRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.beam:BeamRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.arx:ArxBridgeError": {
+      "code": "arx_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.arx:ArxBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.arx:ArxBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.arx:ArxBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.arx:ArxBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.arx:ArxNotAvailableError": {
+      "code": "arx_not_available_error",
+      "mro": [
+        "openmed.interop.bridges.arx:ArxNotAvailableError",
+        "openmed.interop.bridges.arx:ArxBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.arx:ArxNotAvailableError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.arx:ArxNotAvailableError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.arx:ArxNotAvailableError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.arx:ArxProtocolError": {
+      "code": "arx_protocol_error",
+      "mro": [
+        "openmed.interop.bridges.arx:ArxProtocolError",
+        "openmed.interop.bridges.arx:ArxBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.arx:ArxProtocolError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.arx:ArxProtocolError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.arx:ArxProtocolError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.arx_bridge:ARXBridgeError": {
+      "code": "arx_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.arx_bridge:ARXBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.arx_bridge:ARXUnavailableError": {
+      "code": "arx_unavailable_error",
+      "mro": [
+        "openmed.interop.bridges.arx_bridge:ARXUnavailableError",
+        "openmed.interop.bridges.arx_bridge:ARXBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXUnavailableError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXUnavailableError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.arx_bridge:ARXUnavailableError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError": {
+      "code": "cohort_service_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.cohort_definition:CohortServiceProtocolError": {
+      "code": "cohort_service_protocol_error",
+      "mro": [
+        "openmed.interop.bridges.cohort_definition:CohortServiceProtocolError",
+        "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceProtocolError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceProtocolError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceProtocolError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.cohort_definition:CohortServiceUnavailableError": {
+      "code": "cohort_service_unavailable_error",
+      "mro": [
+        "openmed.interop.bridges.cohort_definition:CohortServiceUnavailableError",
+        "openmed.interop.bridges.cohort_definition:CohortServiceBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceUnavailableError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceUnavailableError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.cohort_definition:CohortServiceUnavailableError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.dp_synth:DPSynthBridgeError": {
+      "code": "dp_synth_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.dp_synth:DPSynthEngineUnavailable": {
+      "code": "dp_synth_engine_unavailable",
+      "mro": [
+        "openmed.interop.bridges.dp_synth:DPSynthEngineUnavailable",
+        "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthEngineUnavailable",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthEngineUnavailable",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthEngineUnavailable",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.dp_synth:DPSynthLicenseError": {
+      "code": "dp_synth_license_error",
+      "mro": [
+        "openmed.interop.bridges.dp_synth:DPSynthLicenseError",
+        "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthLicenseError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthLicenseError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthLicenseError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.dp_synth:DPSynthProtocolError": {
+      "code": "dp_synth_protocol_error",
+      "mro": [
+        "openmed.interop.bridges.dp_synth:DPSynthProtocolError",
+        "openmed.interop.bridges.dp_synth:DPSynthBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthProtocolError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthProtocolError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.dp_synth:DPSynthProtocolError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.medcat:MedCATBridgeError": {
+      "code": "med_cat_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.medcat:MedCATBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.medcat:MedCATLicenseNotAcknowledgedError": {
+      "code": "med_cat_license_not_acknowledged_error",
+      "mro": [
+        "openmed.interop.bridges.medcat:MedCATLicenseNotAcknowledgedError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATLicenseNotAcknowledgedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATLicenseNotAcknowledgedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.medcat:MedCATLicenseNotAcknowledgedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.pipeline_migration:PipelineMigrationError": {
+      "code": "pipeline_migration_error",
+      "mro": [
+        "openmed.interop.bridges.pipeline_migration:PipelineMigrationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.pipeline_migration:PipelineMigrationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.pipeline_migration:PipelineMigrationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.pipeline_migration:PipelineMigrationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError": {
+      "code": "sdc_micro_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.sdcmicro:SDCMicroLicenseError": {
+      "code": "sdc_micro_license_error",
+      "mro": [
+        "openmed.interop.bridges.sdcmicro:SDCMicroLicenseError",
+        "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroLicenseError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroLicenseError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroLicenseError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.sdcmicro:SDCMicroUnavailableError": {
+      "code": "sdc_micro_unavailable_error",
+      "mro": [
+        "openmed.interop.bridges.sdcmicro:SDCMicroUnavailableError",
+        "openmed.interop.bridges.sdcmicro:SDCMicroBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroUnavailableError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroUnavailableError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.sdcmicro:SDCMicroUnavailableError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError": {
+      "code": "snomed_terminology_bridge_error",
+      "mro": [
+        "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyConfigurationError": {
+      "code": "snomed_terminology_configuration_error",
+      "mro": [
+        "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyConfigurationError",
+        "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+        "builtins:RuntimeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyConfigurationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyConfigurationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyConfigurationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyServerError": {
+      "code": "snomed_terminology_server_error",
+      "mro": [
+        "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyServerError",
+        "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyBridgeError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyServerError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyServerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.bridges.snomed_terminology_bridge:SNOMEDTerminologyServerError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.elasticsearch:ElasticsearchRedactionError": {
+      "code": "elasticsearch_redaction_error",
+      "mro": [
+        "openmed.interop.elasticsearch:ElasticsearchRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.elasticsearch:ElasticsearchRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.elasticsearch:ElasticsearchRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.elasticsearch:ElasticsearchRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.elasticsearch:UnsupportedDynamicFieldError": {
+      "code": "unsupported_dynamic_field_error",
+      "mro": [
+        "openmed.interop.elasticsearch:UnsupportedDynamicFieldError",
+        "openmed.interop.elasticsearch:ElasticsearchRedactionError",
+        "builtins:RuntimeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.elasticsearch:UnsupportedDynamicFieldError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.elasticsearch:UnsupportedDynamicFieldError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.elasticsearch:UnsupportedDynamicFieldError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.bulk:BulkJobCancelled": {
+      "code": "bulk_job_cancelled",
+      "mro": [
+        "openmed.interop.fhir.bulk:BulkJobCancelled",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.bulk:BulkJobCancelled",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.bulk:BulkJobCancelled",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.bulk:BulkJobCancelled",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.bulk:FHIRNDJSONLineError": {
+      "code": "fhirndjson_line_error",
+      "mro": [
+        "openmed.interop.fhir.bulk:FHIRNDJSONLineError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointCompatibilityError": {
+      "code": "bulk_checkpoint_compatibility_error",
+      "mro": [
+        "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointCompatibilityError",
+        "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointCompatibilityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointCompatibilityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointCompatibilityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError": {
+      "code": "bulk_checkpoint_error",
+      "mro": [
+        "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointSchemaError": {
+      "code": "bulk_checkpoint_schema_error",
+      "mro": [
+        "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointSchemaError",
+        "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointSchemaError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointSchemaError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.bulk_checkpoint:BulkCheckpointSchemaError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.concurrency_guard:FHIRWriteConflict": {
+      "code": "fhir_write_conflict",
+      "mro": [
+        "openmed.interop.fhir.concurrency_guard:FHIRWriteConflict",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.journey_roundtrip:FHIRJourneyConflictError": {
+      "code": "fhir_journey_conflict_error",
+      "mro": [
+        "openmed.interop.fhir.journey_roundtrip:FHIRJourneyConflictError",
+        "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError": {
+      "code": "fhir_journey_round_trip_error",
+      "mro": [
+        "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.journey_roundtrip:FHIRJourneyUnsupportedError": {
+      "code": "fhir_journey_unsupported_error",
+      "mro": [
+        "openmed.interop.fhir.journey_roundtrip:FHIRJourneyUnsupportedError",
+        "openmed.interop.fhir.journey_roundtrip:FHIRJourneyRoundTripError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.journey_roundtrip:FHIRJourneyUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.sdc:SDCValidationError": {
+      "code": "sdc_validation_error",
+      "mro": [
+        "openmed.interop.fhir.sdc:SDCValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.sdc:SDCValidationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.sdc:SDCValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.sdc:SDCValidationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.sdc_privacy:AmbiguousPolicyPathError": {
+      "code": "ambiguous_policy_path_error",
+      "mro": [
+        "openmed.interop.fhir.sdc_privacy:AmbiguousPolicyPathError",
+        "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+        "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:AmbiguousPolicyPathError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:AmbiguousPolicyPathError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:AmbiguousPolicyPathError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.sdc_privacy:InvalidPolicyError": {
+      "code": "invalid_policy_error",
+      "mro": [
+        "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+        "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError": {
+      "code": "questionnaire_response_privacy_error",
+      "mro": [
+        "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.sdc_privacy:UnknownPolicyPathError": {
+      "code": "unknown_policy_path_error",
+      "mro": [
+        "openmed.interop.fhir.sdc_privacy:UnknownPolicyPathError",
+        "openmed.interop.fhir.sdc_privacy:InvalidPolicyError",
+        "openmed.interop.fhir.sdc_privacy:QuestionnaireResponsePrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:UnknownPolicyPathError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:UnknownPolicyPathError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.sdc_privacy:UnknownPolicyPathError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.smart_custody:SmartCustodyError": {
+      "code": "smart_custody_error",
+      "mro": [
+        "openmed.interop.fhir.smart_custody:SmartCustodyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_configuration',)",
+          "call": 1,
+          "pickle_args": "('invalid_configuration',)",
+          "pickle_str": "invalid_configuration",
+          "pickle_type": "openmed.interop.fhir.smart_custody:SmartCustodyError",
+          "str": "invalid_configuration"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.smart_refresh:SMARTTokenValidationError": {
+      "code": "smart_token_validation_error",
+      "mro": [
+        "openmed.interop.fhir.smart_refresh:SMARTTokenValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('invalid_response',)",
+          "call": 0,
+          "pickle_args": "('invalid_response',)",
+          "pickle_str": "invalid_response",
+          "pickle_type": "openmed.interop.fhir.smart_refresh:SMARTTokenValidationError",
+          "str": "invalid_response"
+        },
+        {
+          "args": "('invalid_response',)",
+          "call": 1,
+          "pickle_args": "('invalid_response',)",
+          "pickle_str": "invalid_response",
+          "pickle_type": "openmed.interop.fhir.smart_refresh:SMARTTokenValidationError",
+          "str": "invalid_response"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.subscription_checkpoint:SubscriptionCheckpointError": {
+      "code": "subscription_checkpoint_error",
+      "mro": [
+        "openmed.interop.fhir.subscription_checkpoint:SubscriptionCheckpointError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.subscription_checkpoint:SubscriptionCheckpointError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.subscription_checkpoint:SubscriptionCheckpointError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.subscription_checkpoint:SubscriptionCheckpointError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.subscription_notifications:SubscriptionNotificationError": {
+      "code": "subscription_notification_error",
+      "mro": [
+        "openmed.interop.fhir.subscription_notifications:SubscriptionNotificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_metadata',)",
+          "call": 1,
+          "pickle_args": "('invalid_metadata',)",
+          "pickle_str": "invalid_metadata",
+          "pickle_type": "openmed.interop.fhir.subscription_notifications:SubscriptionNotificationError",
+          "str": "invalid_metadata"
+        },
+        {
+          "args": "('invalid_metadata',)",
+          "call": 2,
+          "pickle_args": "('invalid_metadata',)",
+          "pickle_str": "invalid_metadata",
+          "pickle_type": "openmed.interop.fhir.subscription_notifications:SubscriptionNotificationError",
+          "str": "invalid_metadata"
+        }
+      ]
+    },
+    "openmed.interop.fhir.transactions:TransactionAssemblyError": {
+      "code": "transaction_assembly_error",
+      "mro": [
+        "openmed.interop.fhir.transactions:TransactionAssemblyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.transactions:TransactionAssemblyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.transactions:TransactionAssemblyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.transactions:TransactionAssemblyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.versions:FHIRConversionError": {
+      "code": "fhir_conversion_error",
+      "mro": [
+        "openmed.interop.fhir.versions:FHIRConversionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRConversionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRConversionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRConversionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.versions:FHIRVersionError": {
+      "code": "fhir_version_error",
+      "mro": [
+        "openmed.interop.fhir.versions:FHIRVersionError",
+        "openmed.interop.fhir.versions:FHIRConversionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRVersionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRVersionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.versions:FHIRVersionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir.versions:UnsupportedFHIRFieldError": {
+      "code": "unsupported_fhir_field_error",
+      "mro": [
+        "openmed.interop.fhir.versions:UnsupportedFHIRFieldError",
+        "openmed.interop.fhir.versions:FHIRConversionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.write_client:FHIRWriteError": {
+      "code": "fhir_write_error",
+      "mro": [
+        "openmed.interop.fhir.write_client:FHIRWriteError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_configuration',)",
+          "call": 1,
+          "pickle_args": "('invalid_configuration',)",
+          "pickle_str": "invalid_configuration",
+          "pickle_type": "openmed.interop.fhir.write_client:FHIRWriteError",
+          "str": "invalid_configuration"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.write_labels:WriteLabelError": {
+      "code": "write_label_error",
+      "mro": [
+        "openmed.interop.fhir.write_labels:WriteLabelError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('fhir_write_label_rejected',)",
+          "call": 1,
+          "pickle_args": "('fhir_write_label_rejected',)",
+          "pickle_str": "fhir_write_label_rejected",
+          "pickle_type": "openmed.interop.fhir.write_labels:WriteLabelError",
+          "str": "fhir_write_label_rejected"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.fhir.write_provenance:ProvenanceError": {
+      "code": "provenance_error",
+      "mro": [
+        "openmed.interop.fhir.write_provenance:ProvenanceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir.write_provenance:ProvenanceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir.write_provenance:ProvenanceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir.write_provenance:ProvenanceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir_capability_preflight:CapabilityStatementError": {
+      "code": "capability_statement_error",
+      "mro": [
+        "openmed.interop.fhir_capability_preflight:CapabilityStatementError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail"
+        }
+      ]
+    },
+    "openmed.interop.fhir_omop:FhirOmopConformanceError": {
+      "code": "fhir_omop_conformance_error",
+      "mro": [
+        "openmed.interop.fhir_omop:FhirOmopConformanceError",
+        "openmed.interop.fhir_omop:FhirOmopError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopConformanceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopConformanceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopConformanceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir_omop:FhirOmopError": {
+      "code": "fhir_omop_error",
+      "mro": [
+        "openmed.interop.fhir_omop:FhirOmopError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir_omop:FhirOmopMappingError": {
+      "code": "fhir_omop_mapping_error",
+      "mro": [
+        "openmed.interop.fhir_omop:FhirOmopMappingError",
+        "openmed.interop.fhir_omop:FhirOmopError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopMappingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopMappingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir_omop:FhirOmopMappingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.fhir_r5_fidelity:FHIRR5FidelityError": {
+      "code": "fhirr5_fidelity_error",
+      "mro": [
+        "openmed.interop.fhir_r5_fidelity:FHIRR5FidelityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.fhir_r5_fidelity:FHIRR5FidelityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.fhir_r5_fidelity:FHIRR5FidelityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.fhir_r5_fidelity:FHIRR5FidelityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.icd11_api:ICD11APIError": {
+      "code": "icd11_api_error",
+      "mro": [
+        "openmed.interop.icd11_api:ICD11APIError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.icd11_api:ICD11APIError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.icd11_api:ICD11APIError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.icd11_api:ICD11APIError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.icd11_api:SnapshotIntegrityError": {
+      "code": "snapshot_integrity_error",
+      "mro": [
+        "openmed.interop.icd11_api:SnapshotIntegrityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.icd11_api:SnapshotIntegrityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.icd11_api:SnapshotIntegrityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.icd11_api:SnapshotIntegrityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.identity.contracts:IdentityContractError": {
+      "code": "identity_contract_error",
+      "mro": [
+        "openmed.interop.identity.contracts:IdentityContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.identity.contracts:IdentityContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.identity.contracts:IdentityContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.identity.contracts:IdentityContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.identity.store:IdentityStoreCompatibilityError": {
+      "code": "identity_store_compatibility_error",
+      "mro": [
+        "openmed.interop.identity.store:IdentityStoreCompatibilityError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreCompatibilityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreCompatibilityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreCompatibilityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.identity.store:IdentityStoreError": {
+      "code": "identity_store_error",
+      "mro": [
+        "openmed.interop.identity.store:IdentityStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.identity.store:IdentityStoreError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.ingest.contracts:IngestionContractError": {
+      "code": "ingestion_contract_error",
+      "mro": [
+        "openmed.interop.ingest.contracts:IngestionContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.ingest.contracts:IngestionContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.ingest.contracts:IngestionContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.ingest.contracts:IngestionContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.ingest.evidence_contracts:EvidenceAdapterContractError": {
+      "code": "evidence_adapter_contract_error",
+      "mro": [
+        "openmed.interop.ingest.evidence_contracts:EvidenceAdapterContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.ingest.evidence_contracts:EvidenceAdapterContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.ingest.evidence_contracts:EvidenceAdapterContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.ingest.evidence_contracts:EvidenceAdapterContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.ingest.multimodal_evidence:MultimodalCoordinateError": {
+      "code": "multimodal_coordinate_error",
+      "mro": [
+        "openmed.interop.ingest.multimodal_evidence:MultimodalCoordinateError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.ingest.multimodal_evidence:MultimodalCoordinateError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.ingest.multimodal_evidence:MultimodalCoordinateError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.ingest.multimodal_evidence:MultimodalCoordinateError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.ingest.pipeline_contracts:PipelineLineageError": {
+      "code": "pipeline_lineage_error",
+      "mro": [
+        "openmed.interop.ingest.pipeline_contracts:PipelineLineageError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.ingest.pipeline_contracts:PipelineLineageError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.ingest.pipeline_contracts:PipelineLineageError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.ingest.pipeline_contracts:PipelineLineageError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.langchain:LangChainRedactionError": {
+      "code": "lang_chain_redaction_error",
+      "mro": [
+        "openmed.interop.langchain:LangChainRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.langchain:LangChainRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.langchain:LangChainRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.langchain:LangChainRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.lineage.fhir_omop_writes:FhirOmopLineageError": {
+      "code": "fhir_omop_lineage_error",
+      "mro": [
+        "openmed.interop.lineage.fhir_omop_writes:FhirOmopLineageError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.lineage.fhir_omop_writes:FhirOmopLineageError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.interop.lineage.fhir_omop_writes:FhirOmopLineageError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.interop.lineage.nlp_omop_writes:NlpOmopStagingError": {
+      "code": "nlp_omop_staging_error",
+      "mro": [
+        "openmed.interop.lineage.nlp_omop_writes:NlpOmopStagingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_input',)",
+          "call": 1,
+          "pickle_args": "('invalid_input',)",
+          "pickle_str": "invalid_input",
+          "pickle_type": "openmed.interop.lineage.nlp_omop_writes:NlpOmopStagingError",
+          "str": "invalid_input"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.notebook_redaction:NotebookRedactionError": {
+      "code": "notebook_redaction_error",
+      "mro": [
+        "openmed.interop.notebook_redaction:NotebookRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.notebook_redaction:NotebookRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.notebook_redaction:NotebookRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.notebook_redaction:NotebookRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.fact_projection:OmopFactProjectionConflictError": {
+      "code": "omop_fact_projection_conflict_error",
+      "mro": [
+        "openmed.interop.omop.fact_projection:OmopFactProjectionConflictError",
+        "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.fact_projection:OmopFactProjectionDeniedError": {
+      "code": "omop_fact_projection_denied_error",
+      "mro": [
+        "openmed.interop.omop.fact_projection:OmopFactProjectionDeniedError",
+        "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionDeniedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionDeniedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionDeniedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.fact_projection:OmopFactProjectionError": {
+      "code": "omop_fact_projection_error",
+      "mro": [
+        "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.fact_projection:OmopFactProjectionUnsupportedError": {
+      "code": "omop_fact_projection_unsupported_error",
+      "mro": [
+        "openmed.interop.omop.fact_projection:OmopFactProjectionUnsupportedError",
+        "openmed.interop.omop.fact_projection:OmopFactProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.fact_projection:OmopFactProjectionUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.mutation_batch:OmopMutationError": {
+      "code": "omop_mutation_error",
+      "mro": [
+        "openmed.interop.omop.mutation_batch:OmopMutationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.mutation_batch:OmopMutationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.interop.omop.mutation_batch:OmopMutationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.interop.omop.quality:OmopQualityConflictError": {
+      "code": "omop_quality_conflict_error",
+      "mro": [
+        "openmed.interop.omop.quality:OmopQualityConflictError",
+        "openmed.interop.omop.quality:OmopQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.quality:OmopQualityDeniedError": {
+      "code": "omop_quality_denied_error",
+      "mro": [
+        "openmed.interop.omop.quality:OmopQualityDeniedError",
+        "openmed.interop.omop.quality:OmopQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityDeniedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityDeniedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityDeniedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.quality:OmopQualityError": {
+      "code": "omop_quality_error",
+      "mro": [
+        "openmed.interop.omop.quality:OmopQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.quality:OmopQualityProtocolError": {
+      "code": "omop_quality_protocol_error",
+      "mro": [
+        "openmed.interop.omop.quality:OmopQualityProtocolError",
+        "openmed.interop.omop.quality:OmopQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityProtocolError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityProtocolError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityProtocolError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.quality:OmopQualityUnsupportedError": {
+      "code": "omop_quality_unsupported_error",
+      "mro": [
+        "openmed.interop.omop.quality:OmopQualityUnsupportedError",
+        "openmed.interop.omop.quality:OmopQualityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.omop.quality:OmopQualityUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.omop.sqlite_committer:OmopDatabaseError": {
+      "code": "omop_database_error",
+      "mro": [
+        "openmed.interop.omop.sqlite_committer:OmopDatabaseError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_input',)",
+          "call": 1,
+          "pickle_args": "('invalid_input',)",
+          "pickle_str": "invalid_input",
+          "pickle_type": "openmed.interop.omop.sqlite_committer:OmopDatabaseError",
+          "str": "invalid_input"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.omop.vocabulary_write_gate:VocabularyWriteGateError": {
+      "code": "vocabulary_write_gate_error",
+      "mro": [
+        "openmed.interop.omop.vocabulary_write_gate:VocabularyWriteGateError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop.vocabulary_write_gate:VocabularyWriteGateError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.interop.omop.vocabulary_write_gate:VocabularyWriteGateError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.interop.omop_cohort_check:OmopCohortExportValidationError": {
+      "code": "omop_cohort_export_validation_error",
+      "mro": [
+        "openmed.interop.omop_cohort_check:OmopCohortExportValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.interop.omop_rollback_manifest:OmopRollbackManifestError": {
+      "code": "omop_rollback_manifest_error",
+      "mro": [
+        "openmed.interop.omop_rollback_manifest:OmopRollbackManifestError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.omop_rollback_manifest:OmopRollbackManifestError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.interop.omop_rollback_manifest:OmopRollbackManifestError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.interop.opensearch:OpenSearchRedactionError": {
+      "code": "open_search_redaction_error",
+      "mro": [
+        "openmed.interop.opensearch:OpenSearchRedactionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.opensearch:OpenSearchRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.opensearch:OpenSearchRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.opensearch:OpenSearchRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.postgres:PostgresRedactionError": {
+      "code": "postgres_redaction_error",
+      "mro": [
+        "openmed.interop.postgres:PostgresRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.postgres:PostgresRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.postgres:PostgresRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.postgres:PostgresRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.quickumls:QuickUMLSResourceError": {
+      "code": "quick_umls_resource_error",
+      "mro": [
+        "openmed.interop.quickumls:QuickUMLSResourceError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.quickumls:QuickUMLSResourceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.quickumls:QuickUMLSResourceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.quickumls:QuickUMLSResourceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:InvalidDocumentKeyError": {
+      "code": "invalid_document_key_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:InvalidDocumentKeyError",
+        "openmed.interop.retrieval.reidentify:ReidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:InvalidDocumentKeyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:InvalidDocumentKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:InvalidDocumentKeyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:MappingVaultIntegrityError": {
+      "code": "mapping_vault_integrity_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:MappingVaultIntegrityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:MappingVaultIntegrityError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:MappingVaultIntegrityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:MappingVaultIntegrityError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:PrivacyGatewayProxyError": {
+      "code": "privacy_gateway_proxy_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:PrivacyGatewayProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:PrivacyGatewayProxyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:PrivacyGatewayProxyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:PrivacyGatewayProxyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:ReidentificationError": {
+      "code": "reidentification_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:ReidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:ReidentificationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:ReidentificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:ReidentificationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:UnauthorizedPrincipalError": {
+      "code": "unauthorized_principal_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:UnauthorizedPrincipalError",
+        "openmed.interop.retrieval.reidentify:ReidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnauthorizedPrincipalError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnauthorizedPrincipalError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnauthorizedPrincipalError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:UnknownDocumentError": {
+      "code": "unknown_document_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:UnknownDocumentError",
+        "openmed.interop.retrieval.reidentify:ReidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownDocumentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownDocumentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownDocumentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.retrieval.reidentify:UnknownPlaceholderError": {
+      "code": "unknown_placeholder_error",
+      "mro": [
+        "openmed.interop.retrieval.reidentify:UnknownPlaceholderError",
+        "openmed.interop.retrieval.reidentify:ReidentificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownPlaceholderError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownPlaceholderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.retrieval.reidentify:UnknownPlaceholderError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.scispacy_linker:ScispaCyLinkerResourceError": {
+      "code": "scispa_cy_linker_resource_error",
+      "mro": [
+        "openmed.interop.scispacy_linker:ScispaCyLinkerResourceError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.scispacy_linker:ScispaCyLinkerResourceError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.scispacy_linker:ScispaCyLinkerResourceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.scispacy_linker:ScispaCyLinkerResourceError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.spark:SparkRedactionError": {
+      "code": "spark_redaction_error",
+      "mro": [
+        "openmed.interop.spark:SparkRedactionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.spark:SparkRedactionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.spark:SparkRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.spark:SparkRedactionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.interop.terminology_binding:RestrictedVocabularyBindingError": {
+      "code": "restricted_vocabulary_binding_error",
+      "mro": [
+        "openmed.interop.terminology_binding:RestrictedVocabularyBindingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.interop.terminology_binding:RestrictedVocabularyBindingError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.interop.terminology_binding:RestrictedVocabularyBindingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.interop.terminology_binding:RestrictedVocabularyBindingError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

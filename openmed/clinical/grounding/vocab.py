@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import is_local_only, raise_offline_error
 
 from .systems import canonical_system, system_uri
@@ -73,11 +74,11 @@ _RESTRICTED_ALIASES = {
 }
 
 
-class VocabLoaderError(RuntimeError):
+class VocabLoaderError(RuntimeError, LegacyRootedError):
     """Base error raised by the vocabulary loader."""
 
 
-class GroundingConfigError(VocabLoaderError, ImportError):
+class GroundingConfigError(VocabLoaderError, ImportError, LegacyRootedError):
     """Raised when grounding needs a caller-supplied terminology resource.
 
     The error is also an :class:`ImportError` so callers get the familiar

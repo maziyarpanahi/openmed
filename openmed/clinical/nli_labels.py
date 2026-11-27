@@ -31,6 +31,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 NLI_LABEL_CONTRACT_SCHEMA_VERSION = 1
 NLI_LABEL_SCHEMA_VERSION = NLI_LABEL_CONTRACT_SCHEMA_VERSION
 
@@ -89,7 +91,7 @@ _CANONICAL_ALIASES = {
 }
 
 
-class NliLabelContractError(ValueError):
+class NliLabelContractError(ValueError, LegacyRootedError):
     """Base error for malformed or unsafe clinical NLI contract data."""
 
 

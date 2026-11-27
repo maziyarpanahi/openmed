@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal, TypeAlias, cast
 
 from openmed.core.audit import hash_text, stable_hash
+from openmed.core.errors import LegacyRootedError
 
 from .context import (
     AFFIRMED,
@@ -67,7 +68,7 @@ _END_KEYS = ("end", "source_end", "end_offset")
 _EXPERIENCER_VALUES = frozenset({"patient", "family", "other"})
 
 
-class NliAssertionPairError(ValueError):
+class NliAssertionPairError(ValueError, LegacyRootedError):
     """Base error for malformed assertion-aware NLI pair inputs."""
 
 

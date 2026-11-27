@@ -17,6 +17,8 @@ from typing import Any, Protocol
 from urllib.parse import parse_qsl
 from uuid import UUID, uuid5
 
+from openmed.core.errors import LegacyRootedError
+
 from .validation import validation_result
 from .versions import SUPPORTED_RESOURCE_TYPES
 
@@ -39,7 +41,7 @@ _SYSTEM = "https://openmed.dev/fhir/sid/"
 _WRITE_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES - {"Bundle", "Provenance"}
 
 
-class TransactionAssemblyError(ValueError):
+class TransactionAssemblyError(ValueError, LegacyRootedError):
     """Controlled, value-free rejection code; never contains input content."""
 
 

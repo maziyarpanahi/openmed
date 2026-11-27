@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 DateMode = Literal["shift", "coarsen", "none"]
@@ -54,7 +55,7 @@ _WEEKLY_PERIOD_RE = re.compile(r"^(\d{4})W(\d{1,2})$")
 _UNSET = cast(int | None, object())
 
 
-class DHIS2ExportError(ValueError):
+class DHIS2ExportError(ValueError, LegacyRootedError):
     """Raised when a local snapshot or payload cannot be exported safely."""
 
 

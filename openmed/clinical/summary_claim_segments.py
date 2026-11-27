@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
+from openmed.core.errors import LegacyRootedError
 from openmed.processing import segment_text
 
 SUMMARY_CLAIM_SEGMENTATION_SCHEMA_VERSION: Final[int] = 1
@@ -53,7 +54,7 @@ _FINITE_PREDICATE_RE = re.compile(
 _WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 
-class SummaryClaimSegmentationError(ValueError):
+class SummaryClaimSegmentationError(ValueError, LegacyRootedError):
     """Raised when a summary cannot be segmented into safe offset spans."""
 
 

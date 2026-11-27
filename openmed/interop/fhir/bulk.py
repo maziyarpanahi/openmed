@@ -26,6 +26,7 @@ from threading import Event
 from typing import Any, TextIO
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.schema_policy import (
     PolicyInput,
     SchemaPolicy,
@@ -258,7 +259,7 @@ _UNSAFE_NARRATIVE_TAGS = frozenset(
 )
 
 
-class BulkJobCancelled(RuntimeError):
+class BulkJobCancelled(RuntimeError, LegacyRootedError):
     """Raised when a bulk job is cancelled before its next atomic commit."""
 
 
@@ -316,7 +317,7 @@ class NDJSONLineError:
         return payload
 
 
-class FHIRNDJSONLineError(ValueError):
+class FHIRNDJSONLineError(ValueError, LegacyRootedError):
     """Raised by :func:`iter_ndjson` when a line cannot be parsed."""
 
     def __init__(self, path: Path, line_number: int, message: str) -> None:

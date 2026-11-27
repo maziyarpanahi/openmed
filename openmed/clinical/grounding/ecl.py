@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 if TYPE_CHECKING:
     from .postcoordination import SnomedExpression
 
@@ -109,7 +111,7 @@ class ECLValidationResult:
             raise ECLValidationError(self)
 
 
-class ECLValidationError(ValueError):
+class ECLValidationError(ValueError, LegacyRootedError):
     """Raised when an expression does not satisfy its ECL constraints."""
 
     def __init__(self, result: ECLValidationResult) -> None:

@@ -14,6 +14,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 
 PIPELINE_LINEAGE_SCHEMA_VERSION = "1.0.0"
 PIPELINE_LINEAGE_COMPATIBILITY_POLICY = "same_major"
@@ -55,7 +56,7 @@ _TIMESTAMP_RE = re.compile(
 R = TypeVar("R", bound="PipelineLineageRecord")
 
 
-class PipelineLineageError(ValueError):
+class PipelineLineageError(ValueError, LegacyRootedError):
     """Value-safe validation error for pipeline lineage records."""
 
 

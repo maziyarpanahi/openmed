@@ -19,6 +19,7 @@ from openmed.clinical.brief import ClinicalBrief, _digest
 from openmed.clinical.guarded_provenance import check_guarded_provenance
 from openmed.clinical.review_packet_privacy import scan_review_packet_privacy
 from openmed.clinical.summary_envelope import SUMMARY_SAFETY_DISCLAIMER
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.core.offline import network_blocked_if_offline
 from openmed.interop.fhir.reference_integrity import check_bundle_reference_integrity
@@ -40,7 +41,7 @@ _LOSSES = (
 )
 
 
-class BriefDocumentError(ValueError):
+class BriefDocumentError(ValueError, LegacyRootedError):
     """Controlled, value-free export/import failure code."""
 
 

@@ -22,6 +22,7 @@ from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID
 
 from openmed.agent.approvals.tokens import ApprovalAuthorization, ApprovalReceipt
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir_capability_preflight import (
     FHIRCapabilityMetadata,
     FHIRWriteInteraction,
@@ -78,7 +79,7 @@ _REASONS = frozenset(
 )
 
 
-class FHIRWriteError(ValueError):
+class FHIRWriteError(ValueError, LegacyRootedError):
     """A closed, value-free local rejection code."""
 
     def __init__(self, reason_code: str) -> None:

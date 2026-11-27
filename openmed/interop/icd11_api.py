@@ -23,6 +23,8 @@ from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
 
+from openmed.core.errors import LegacyRootedError
+
 ICD11_MMS_SYSTEM = "http://id.who.int/icd/release/11/mms"
 ICD11_API_BASE_URL = "https://id.who.int"
 ICD11_TOKEN_ENDPOINT = "https://icdaccessmanagement.who.int/connect/token"
@@ -73,11 +75,11 @@ __all__ = [
 ]
 
 
-class ICD11APIError(RuntimeError):
+class ICD11APIError(RuntimeError, LegacyRootedError):
     """Raised when the WHO ICD-API cannot provide a valid response."""
 
 
-class SnapshotIntegrityError(ValueError):
+class SnapshotIntegrityError(ValueError, LegacyRootedError):
     """Raised when an ICD-11 snapshot or its manifest fails validation."""
 
 

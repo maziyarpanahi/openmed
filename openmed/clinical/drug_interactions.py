@@ -34,6 +34,8 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 from .decision_support import GuardedSuggestion, SourceSpan, build_guarded_suggestion
 
 INTERACTION_TABLE_SCHEMA_VERSION = 1
@@ -71,7 +73,7 @@ _RXNORM_SYSTEMS = frozenset(
 )
 
 
-class InteractionTableError(ValueError):
+class InteractionTableError(ValueError, LegacyRootedError):
     """Raised when a caller-supplied interaction table is malformed."""
 
 

@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from openmed.core.audit import stable_hash
 from openmed.core.decoding import SpanEdge
+from openmed.core.errors import LegacyRootedError
 from openmed.eval.calibrate import (
     RELATION_REPORT_ARTIFACT,
     RELATION_REPORT_SCHEMA_VERSION,
@@ -301,7 +302,7 @@ class RelationAbstentionResult:
         }
 
 
-class RelationCalibrationConsistencyError(RuntimeError):
+class RelationCalibrationConsistencyError(RuntimeError, LegacyRootedError):
     """Raised when retained calibrated relation accuracy misses its floor."""
 
 

@@ -11,6 +11,7 @@ from importlib import resources
 from typing import Any, ClassVar, TypeVar
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 
 INGESTION_SCHEMA_VERSION = "1.0.0"
 INGESTION_SCHEMA_PACKAGE = "openmed.core.schemas.json"
@@ -52,7 +53,7 @@ QUARANTINE_CLASSIFICATIONS = frozenset(
 R = TypeVar("R", bound="CanonicalIngestionRecord")
 
 
-class IngestionContractError(ValueError):
+class IngestionContractError(ValueError, LegacyRootedError):
     """Value-safe validation error for an ingestion record."""
 
 

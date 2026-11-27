@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.policy import canonical_policy_name
 
 Deidentifier = Callable[..., Any]
@@ -57,7 +58,7 @@ _DEFAULT_RESERVED_DEIDENTIFY_KWARGS = frozenset(
 _FrozenOptionValue: TypeAlias = tuple[str, Any]
 
 
-class OpenSearchRedactionError(ValueError):
+class OpenSearchRedactionError(ValueError, LegacyRootedError):
     """Raised for a safe, deterministic OpenSearch processor failure."""
 
 

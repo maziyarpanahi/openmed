@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 _VERSION = re.compile(r"[A-Za-z0-9.-]{1,64}\Z")
 _MISSING = object()
 
 
-class FHIRWriteConflict(Exception):
+class FHIRWriteConflict(LegacyRootedError):
     """A value-free conflict requiring a fresh read and human review."""
 
     def __init__(self, reason_code: str) -> None:

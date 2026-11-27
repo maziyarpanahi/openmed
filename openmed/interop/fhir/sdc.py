@@ -17,6 +17,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.forms import (
     FormExtractionResult,
     _sanitize_value,
@@ -64,7 +65,7 @@ _ALLOWED_TYPES = frozenset(
 )
 
 
-class SDCValidationError(ValueError):
+class SDCValidationError(ValueError, LegacyRootedError):
     """Raised when a generated resource is outside the supported SDC subset."""
 
 
