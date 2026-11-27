@@ -907,6 +907,7 @@ classification:
     - clinical-domains.md
     - compliance/access-review-expiry.md
     - compliance/dpa-template.md
+    - compliance/eu-ehds-secondary-use.md
     - compliance/dpia-template.md
     - compliance/gdpr-dsar-export.md
     - compliance/ke-dpa-identifier-checklist.md
