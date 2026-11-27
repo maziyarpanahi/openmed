@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Requires-Python`, Python classifiers, `License-Expression` and shipped
   `License-File` entries) and run `twine check --strict` in the CI build job.
   The license metadata now uses the PEP 639 SPDX form (#5400).
+- Document which optional extras install on Python 3.14 on Linux and macOS,
+  with the date and commands used (#5426).
 
 ## [4.0.0] - 2026-11-25
 
