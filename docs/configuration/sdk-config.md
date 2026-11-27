@@ -39,8 +39,9 @@ the Swift kit's MLX and Core ML backends.
 
 ## Spelling in each kit today
 
-The kit loaders that read this document are separate work (#5387 Swift,
-#5388 Kotlin, #5389 web). Until they land, the same intent is spelled like
+OpenMedKit Swift reads this document with `OpenMedSDKConfig` (see
+[Swift](#swift-openmedkit)). The Kotlin and web loaders are separate work
+(#5388 Kotlin, #5389 web). Without a loader, the same intent is spelled like
 this:
 
 | Key | Swift (OpenMedKit) | Kotlin (OpenMedKit) | TypeScript (`openmedkit-web`) |
@@ -163,6 +164,55 @@ When `download` gets no revision and the entry is `model_id`, it requests
 current behaviour. `onnx_variant` and `policy_profile` are exposed as
 properties for the caller to pass to `OpenMedKit.fromDirectory` and
 `PolicyProfiles.load`.
+
+## Swift (OpenMedKit)
+
+`OpenMedSDKConfig` is a `Codable`, `Sendable` value with one immutable
+property per key: `confidenceThreshold`, `localOnly`, `modelID`,
+`modelRevision`, `onnxVariant` (`ONNXVariant`) and `policyProfile`
+(`PolicyProfile`, raw values as above). Decoding is strict and returns the
+issues above in the same order, as `OpenMedSDKConfigError.issues`. Data that
+is not JSON at all also fails with `config_not_object`.
+
+`OpenMedSDKConfig.load` reads strict RFC 8259 JSON, like the Kotlin and web
+loaders. As there and in Python's `json.loads`, the last value of a repeated
+key wins and a number too small for a `Double` resolves to `0`. A byte-order
+mark, comments, trailing commas, unquoted keys, `NaN`, `Infinity`, text after
+the object and nesting deeper than 512 levels fail with `config_not_object`.
+Decoding with `JSONDecoder` directly uses Foundation's own grammar, which
+keeps the first value of a repeated key, so read configuration text with
+`load`.
+
+```swift
+let url = Bundle.main.url(forResource: "openmed", withExtension: "json")!
+let config = try OpenMedSDKConfig.load(contentsOf: url)  // or OpenMedSDKConfig.load(data)
+let openmed = try await OpenMed.load(
+    backend: .mlx(modelDirectoryURL: modelDirectory),
+    config: config  // allowNetworkAccess = !config.localOnly
+)
+let result = try openmed.deidentify(
+    text,
+    policy: config.policyProfile.rawValue,
+    confidenceThreshold: Float(config.confidenceThreshold)
+)
+```
+
+`OpenMed(backend:config:maxSeqLength:tokenizerPin:)` and
+`OpenMed.load(backend:config:maxSeqLength:tokenizerPin:)` map the
+configuration onto the existing initializers with
+`allowNetworkAccess = !config.localOnly`; the existing signatures are
+unchanged. With the default `local_only: true`, initialization makes no network
+request, even when a tokenizer pin would allow a download. As in Python,
+`confidence_threshold` and `policy_profile` are per-call settings, and
+`onnx_variant` is ignored by the Core ML and MLX backends. Pass `modelID` and
+`modelRevision` to `OpenMedModelStore`, and only download when `localOnly` is
+`false`. The typed initializer `OpenMedSDKConfig(confidenceThreshold:...)`
+applies the same bounds and formats. `OpenMedSDKConfig.validate(_:)` returns
+the issue list without throwing.
+
+```bash
+cd swift/OpenMedKit && swift test --filter SDKConfigParityTests
+```
 
 ## Shared vectors
 
