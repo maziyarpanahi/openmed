@@ -8,6 +8,7 @@ import zipfile
 import pytest
 
 from openmed.onnx.maple_bundle import (
+    _MAX_MANIFEST_BYTES,
     MAPLE_BUNDLE_FILENAME,
     MapleBundleError,
     build_maple_onnx_bundle,
@@ -25,6 +26,29 @@ def _write_fake_export(root):
     }
     for name, payload in files.items():
         (root / name).write_bytes(payload)
+
+
+def _valid_manifest(tmp_path):
+    """Build a valid bundle and return it with its manifest JSON text."""
+
+    source = tmp_path / "export"
+    source.mkdir()
+    _write_fake_export(source)
+    built = build_maple_onnx_bundle(source, tmp_path / "maple-valid.zip")
+    with zipfile.ZipFile(built.bundle_path) as archive:
+        return built, archive.read(MAPLE_BUNDLE_FILENAME).decode("utf-8")
+
+
+def _replace_manifest(tmp_path, built, payload):
+    """Copy a valid bundle, replacing only its manifest entry."""
+
+    hostile = tmp_path / "maple-hostile.zip"
+    with zipfile.ZipFile(built.bundle_path) as source_archive:
+        with zipfile.ZipFile(hostile, "w", compression=zipfile.ZIP_STORED) as output:
+            output.writestr(MAPLE_BUNDLE_FILENAME, payload)
+            for entry in source_archive.infolist()[1:]:
+                output.writestr(entry.filename, source_archive.read(entry))
+    return hostile
 
 
 def test_builds_android_bundle_with_manifest_first_and_exact_integrity(tmp_path):
@@ -153,3 +177,91 @@ def test_rejects_undeclared_archive_entry(tmp_path):
 
     with pytest.raises(MapleBundleError, match="exactly match"):
         validate_maple_onnx_bundle(invalid)
+
+
+def test_rejects_duplicate_manifest_keys(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    duplicate = text.replace(
+        '"runtime": "onnxruntime-mobile"',
+        '"runtime": "onnxruntime-mobile",\n    "runtime": "sentinel-runtime"',
+        1,
+    )
+    assert duplicate != text
+    hostile = _replace_manifest(tmp_path, built, duplicate.encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="repeat object keys") as excinfo:
+        validate_maple_onnx_bundle(hostile)
+    assert "sentinel-runtime" not in str(excinfo.value)
+
+
+def test_rejects_duplicate_keys_inside_a_nested_manifest_object(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    duplicate = text.replace(
+        '"graphs": {',
+        '"graphs": {\n      "prefill_path": "sentinel.ort",',
+        1,
+    )
+    assert duplicate != text
+    hostile = _replace_manifest(tmp_path, built, duplicate.encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="repeat object keys") as excinfo:
+        validate_maple_onnx_bundle(hostile)
+    assert "sentinel.ort" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_rejects_non_finite_manifest_numbers(tmp_path, literal):
+    built, text = _valid_manifest(tmp_path)
+    hostile_text = text.replace(
+        '"max_context_tokens": 4096',
+        f'"max_context_tokens": {literal}',
+        1,
+    )
+    assert hostile_text != text
+    hostile = _replace_manifest(tmp_path, built, hostile_text.encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="non-finite"):
+        validate_maple_onnx_bundle(hostile)
+
+
+def test_rejects_manifest_over_the_size_limit(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    oversized = text.encode("utf-8") + b" " * (_MAX_MANIFEST_BYTES + 1 - len(text))
+    hostile = _replace_manifest(tmp_path, built, oversized)
+
+    with pytest.raises(MapleBundleError, match="too large"):
+        validate_maple_onnx_bundle(hostile)
+
+
+def test_rejects_unknown_runtime(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    manifest = json.loads(text)
+    manifest["runtime"] = "sentinel-runtime"
+    hostile = _replace_manifest(tmp_path, built, json.dumps(manifest).encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="runtime must be") as excinfo:
+        validate_maple_onnx_bundle(hostile)
+    assert "sentinel-runtime" not in str(excinfo.value)
+
+
+def test_rejects_malformed_sha256_digest(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    manifest = json.loads(text)
+    manifest["files"][0]["sha256"] = "sentinel-digest"
+    hostile = _replace_manifest(tmp_path, built, json.dumps(manifest).encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="valid SHA-256") as excinfo:
+        validate_maple_onnx_bundle(hostile)
+    assert "sentinel-digest" not in str(excinfo.value)
+    assert manifest["files"][0]["path"] not in str(excinfo.value)
+
+
+def test_rejects_short_source_revision(tmp_path):
+    built, text = _valid_manifest(tmp_path)
+    manifest = json.loads(text)
+    manifest["source_revision"] = "sentinel-revision"
+    hostile = _replace_manifest(tmp_path, built, json.dumps(manifest).encode("utf-8"))
+
+    with pytest.raises(MapleBundleError, match="immutable lowercase commit") as excinfo:
+        validate_maple_onnx_bundle(hostile)
+    assert "sentinel-revision" not in str(excinfo.value)

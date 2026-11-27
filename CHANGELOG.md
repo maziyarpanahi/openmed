@@ -89,6 +89,9 @@ This candidate concerns the library and SDKs. Clinical use requires independent 
 
 ### Fixed
 
+- Reject duplicate object keys and the non-finite `NaN`/`Infinity` literals in
+  the Maple ONNX bundle manifest instead of letting the last value win, and keep
+  the manifest error messages from echoing manifest paths or values (#5083).
 - Key opt-in result-cache entries on the model revision and a model generation
   counter, and clear the cache when a registry promotion, pointer flip or
   rollback changes the served weights, so a model that keeps its name no longer
