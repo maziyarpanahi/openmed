@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+import sys
 import types
 from pathlib import Path
 
@@ -344,3 +345,36 @@ def test_offline_cache_hit_reports_ready_without_network(
 
     assert calls["snapshot"] == [True] and calls["download"] == []
     assert [event.event.value for event in sink.events] == ["requested", "ready"]
+
+
+@pytest.mark.parametrize(
+    "parent",
+    ["C:\\Users\\synthetic\\hub\\snapshots", "/home/synthetic/hub/snapshots"],
+    ids=["windows", "posix"],
+)
+def test_offline_cache_hit_reads_the_commit_from_either_path_style(
+    parent: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _refuse_network(monkeypatch)
+    scenario = _scenario("offline_cache_hit")
+    install_fake_hub(monkeypatch, scenario, tmp_path)
+    separator = "\\" if "\\" in parent else "/"
+    snapshot = f"{parent}{separator}{scenario['commit']}"
+    monkeypatch.setattr(
+        sys.modules["huggingface_hub"],
+        "snapshot_download",
+        lambda **_kwargs: snapshot,
+    )
+    sink = RecordingModelLifecycleSink()
+
+    result = prefetch_model(
+        scenario["repo_id"],
+        config=types.SimpleNamespace(local_only=True),
+        lifecycle_sink=sink,
+    )
+
+    assert result == snapshot
+    assert [event["revision_sha"] for event in sink.to_list()] == [
+        None,
+        scenario["commit"],
+    ]

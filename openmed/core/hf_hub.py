@@ -26,7 +26,7 @@ import shutil
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Callable, List, Mapping, Optional, Sequence
 
 from .model_lifecycle import (
@@ -322,11 +322,13 @@ def prefetch_model(
         )
         raise
     # A cache hit is not re-measured: counts stay unknown rather than guessed.
+    # PureWindowsPath splits on both separators, so the snapshot directory name
+    # (the commit) is found on Windows and POSIX alike.
     _lifecycle(
         sink,
         ModelLifecycleEventType.READY,
         repo_id=repo_id,
-        revision_sha=_revision_sha(PurePosixPath(str(snapshot_path)).name),
+        revision_sha=_revision_sha(PureWindowsPath(str(snapshot_path)).name),
     )
     return snapshot_path
 
