@@ -150,6 +150,7 @@ nav:
       - Offline & Air-Gapped Installation: offline-install.md
       - Standalone Local Redactor Manifest: install/standalone.md
       - Offline Install Smoke Check: install/smoke-check.md
+      - Python 3.14 Optional Extras: install/python-versions.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - Continuation Authorization: serving/continuation-authorization.md
       - HMAC Request Signing: serving/request-signing.md
