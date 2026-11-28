@@ -19,6 +19,7 @@ const rootDir = fileURLToPath(new URL("../..", import.meta.url));
 const SCHEMA_DIR = join(rootDir, "openmed", "core", "schemas", "json");
 const PACKAGE_DIR = join(rootDir, "js", "openmedkit-web");
 const TYPES_PATH = resolve(PACKAGE_DIR, "src", "types.ts");
+const GUARD_PATH = resolve(PACKAGE_DIR, "src", "contract-guards.ts");
 const GENERATED_PATH = resolve(PACKAGE_DIR, "src", "generated", "contract-types.ts");
 const EXAMPLES_PATH = join(
   rootDir,
@@ -63,8 +64,9 @@ function compilerOptions(): TypeScript.CompilerOptions {
 function diagnosticsFor(
   root: string,
   files: ReadonlyMap<string, string> = new Map(),
+  extraOptions: TypeScript.CompilerOptions = {},
 ): readonly TypeScript.Diagnostic[] {
-  const options = compilerOptions();
+  const options = { ...compilerOptions(), ...extraOptions };
   const host = ts.createCompilerHost(options, true);
   const readSourceFile = host.getSourceFile.bind(host);
   const fileExists = host.fileExists.bind(host);
@@ -83,16 +85,16 @@ function diagnosticsFor(
     .filter((item) => item.file !== undefined && resolve(item.file.fileName) === root);
 }
 
-/** Type-check `types.ts`, optionally rewriting the generated module first. */
-function typesDiagnostics(
+/** Type-check the guard module, optionally rewriting the generated module first. */
+function guardDiagnostics(
   rewriteGenerated?: (source: string) => string,
 ): readonly TypeScript.Diagnostic[] {
   if (rewriteGenerated === undefined) {
-    return diagnosticsFor(TYPES_PATH);
+    return diagnosticsFor(GUARD_PATH);
   }
   const original = ts.sys.readFile(GENERATED_PATH);
   assert.ok(original !== undefined);
-  return diagnosticsFor(TYPES_PATH, new Map([[GENERATED_PATH, rewriteGenerated(original)]]));
+  return diagnosticsFor(GUARD_PATH, new Map([[GENERATED_PATH, rewriteGenerated(original)]]));
 }
 
 type Examples = Record<string, Record<string, unknown>[]>;
@@ -173,18 +175,27 @@ test("hand-written and generated span types accept the same record", () => {
 });
 
 test("the span contract guard type-checks against the committed module", () => {
-  assert.deepEqual(typesDiagnostics().map((item) => item.code), []);
+  assert.deepEqual(guardDiagnostics().map((item) => item.code), []);
+});
+
+test("types.ts compiles for consumers that reject unused locals", () => {
+  // The browser extension compiles the web sources with these options.
+  const strict = { noUnusedLocals: true, noUnusedParameters: true };
+  assert.deepEqual(
+    diagnosticsFor(TYPES_PATH, new Map(), strict).map((item) => item.code),
+    [],
+  );
 });
 
 test("an added required schema property fails the span contract guard", () => {
-  const diagnostics = typesDiagnostics((source) =>
+  const diagnostics = guardDiagnostics((source) =>
     rewriteSpanInterface(source, (body) => `  synthetic_field: string;\n${body}`),
   );
   assert.ok(diagnostics.some((item) => item.code === CONSTRAINT_NOT_SATISFIED));
 });
 
 test("a changed schema field type fails the span contract guard", () => {
-  const diagnostics = typesDiagnostics((source) =>
+  const diagnostics = guardDiagnostics((source) =>
     rewriteSpanInterface(source, (body) =>
       body.replace("  score: number | null;", "  score: number;"),
     ),
