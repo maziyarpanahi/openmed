@@ -10,6 +10,7 @@ import platform
 import re
 import subprocess
 import sys
+import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,7 @@ def run_diagnostics() -> list[dict[str, Any]]:
     )
 
     _check_openmed_version(checks)
+    _check_unicode_data(checks)
     _check_low_resource_envelope(checks)
     _check_optional_dependencies(checks)
     _check_hf_token(checks)
@@ -429,6 +431,11 @@ def _check_openmed_version(checks: list[dict[str, Any]]) -> None:
         checks.append(_check("openmed_version", "PASS", __version__))
     except Exception:
         checks.append(_check("openmed_version", "WARN", "version unavailable"))
+
+
+def _check_unicode_data(checks: list[dict[str, Any]]) -> None:
+    """Report the runtime Unicode database version as an informational check."""
+    checks.append(_check("unicode_data_version", "PASS", unicodedata.unidata_version))
 
 
 def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
