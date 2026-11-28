@@ -213,3 +213,19 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^swift/OpenMedKit/Tests/OpenMedKitTests/DateShiftParityTests\.swift$''']
 regexes = ['''^\s*let (secret|key) = "SYNTHETIC(_PRIVATE_SECRET|-PATIENT-SENTINEL)[-_]5414"\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic sentinel in the Swift SDK config value-free error test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^swift/OpenMedKit/Tests/OpenMedKitTests/SDKConfigParityTests\.swift$''']
+regexes = ['''^\s*let secret = "SYNTHETIC_PRIVATE_SENTINEL_5387"\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic key sentinel in the web receipt verification error test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/web/test_receipt_verification\.spec\.ts$''']
+regexes = ['''^\s*const key = "synthetic-key-sentinel-7b1f";\s*$''']
