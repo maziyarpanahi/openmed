@@ -20,6 +20,7 @@ SCRIPT = CODEGEN_DIR / "emit_ts_types.py"
 SCHEMA_DIR = ROOT / "openmed" / "core" / "schemas" / "json"
 GENERATED = ROOT / "js" / "openmedkit-web" / "src" / "generated" / "contract-types.ts"
 WEB_TYPES = ROOT / "js" / "openmedkit-web" / "src" / "types.ts"
+WEB_GUARDS = ROOT / "js" / "openmedkit-web" / "src" / "contract-guards.ts"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 MAKEFILE = ROOT / "Makefile"
 EXAMPLES = ROOT / "tests" / "fixtures" / "contracts" / "core_contract_examples.json"
@@ -322,9 +323,11 @@ def test_pattern_prefix_never_requires_an_optional_literal(
 
 def test_web_span_type_is_guarded_against_the_generated_contract() -> None:
     source = WEB_TYPES.read_text(encoding="utf-8")
+    guards = WEB_GUARDS.read_text(encoding="utf-8")
 
     assert 'from "./generated/contract-types";' in source
-    assert "MutuallyAssignable<OpenMedSpan, OpenMedContractSpan>" in source
+    assert 'from "./generated/contract-types";' in guards
+    assert "MutuallyAssignable<OpenMedSpan, OpenMedContractSpan>" in guards
     for name in ("CANONICAL_LABELS", "POLICY_LABELS", "SPAN_ACTIONS"):
         assert f"export const {name}" not in source, name
 
