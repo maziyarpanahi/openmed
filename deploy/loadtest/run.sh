@@ -41,10 +41,8 @@ if [[ ! "$STARTUP_TIMEOUT" =~ ^[0-9]+$ ]] || (( STARTUP_TIMEOUT < 1 )); then
 fi
 
 BASE_URL="${BASE_URL%/}"
-case "$BASE_URL" in
-  http://127.0.0.1:*|http://localhost:*) ;;
-  *) die "LOADTEST_BASE_URL must point to a local loopback service" ;;
-esac
+[[ "$BASE_URL" =~ ^http://(127\.0\.0\.1|localhost):[0-9]+$ ]] ||
+  die "LOADTEST_BASE_URL must point to a local loopback service"
 
 if [[ "$RESULT_FILE" != /* ]]; then
   RESULT_FILE="$ROOT_DIR/$RESULT_FILE"
@@ -58,6 +56,12 @@ if [[ "${LOADTEST_SKIP_BUILD-0}" != "1" ]]; then
     "$ROOT_DIR"
 fi
 
+# Only the verifier for this run enters the container. The client key expires
+# with the ephemeral service and is never written to the k6 report.
+LOADTEST_API_KEY="$(openssl rand -hex 32)"
+key_digest="$(printf '%s' "$LOADTEST_API_KEY" | openssl dgst -sha256 -r)"
+key_record="$(printf '[{"id":"loadtest","principal":"loadtest","scopes":["analyze:write","pii:read","pii:write"],"key_hash":"sha256:%s"}]' "${key_digest%% *}")"
+
 container_args=(
   run
   --detach
@@ -65,9 +69,12 @@ container_args=(
   --name "$CONTAINER_NAME"
   --publish "127.0.0.1:${SERVICE_PORT}:8080"
   --env "OPENMED_PROFILE=$SERVICE_PROFILE"
+  --env OPENMED_SERVICE_DIGEST_KEY
+  --env OPENMED_SERVICE_AUTH_ENABLED=true
+  --env "OPENMED_SERVICE_AUTH_API_KEYS=$key_record"
   --env "OPENMED_SERVICE_PRELOAD_MODELS=$PRELOAD_MODELS"
   --env "OPENMED_SERVICE_KEEP_ALIVE=$KEEP_ALIVE"
-  --env HF_HOME=/root/.cache/huggingface
+  --env HF_HOME=/home/nonroot/.cache/huggingface
 )
 
 if [[ -n "${OPENMED_OFFLINE+x}" ]]; then
@@ -76,7 +83,7 @@ fi
 
 container_args+=("$SERVICE_IMAGE")
 
-"$DOCKER_BIN" "${container_args[@]}" >/dev/null
+OPENMED_SERVICE_DIGEST_KEY="$(openssl rand -hex 32)" "$DOCKER_BIN" "${container_args[@]}" >/dev/null
 CONTAINER_STARTED=1
 
 wait_for_ready() {
@@ -101,20 +108,20 @@ if [[ "$WARMUP" == "1" ]]; then
   stream_payload='{"text":"Taylor Reed, born 1981-02-03, visited Example Clinic for a routine follow-up. Call the fictional records desk at 555-0100.","confidence_threshold":0,"chunk_size":128,"window_chars":256,"tokenizer_context_chars":64,"max_entity_chars":128,"include_text":false}'
 
   curl --fail --silent --show-error --max-time 300 \
-    -H 'Content-Type: application/json' \
+    -H "x-api-key: $LOADTEST_API_KEY" -H 'Content-Type: application/json' \
     --data "{\"text\":\"Taylor Reed, born 1981-02-03, visited Example Clinic for a routine follow-up. Call the fictional records desk at 555-0100.\",\"model_name\":\"disease_detection_superclinical\",\"confidence_threshold\":0}" \
     "$BASE_URL/analyze" >/dev/null
   curl --fail --silent --show-error --max-time 300 \
-    -H 'Content-Type: application/json' \
+    -H "x-api-key: $LOADTEST_API_KEY" -H 'Content-Type: application/json' \
     --data "$synthetic_payload" \
     "$BASE_URL/pii/deidentify" >/dev/null
   curl --fail --silent --show-error --max-time 300 \
-    -H 'Content-Type: application/json' \
+    -H "x-api-key: $LOADTEST_API_KEY" -H 'Content-Type: application/json' \
     --data "$stream_payload" \
     "$BASE_URL/pii/extract/stream" >/dev/null
 fi
 
-export BASE_URL
+export BASE_URL LOADTEST_API_KEY
 export LOADTEST_RESULT_FILE="$RESULT_FILE"
 "$K6_BIN" run "$ROOT_DIR/deploy/loadtest/scenario.js"
 

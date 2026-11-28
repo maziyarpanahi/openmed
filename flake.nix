@@ -147,6 +147,20 @@
               python.pkgs.setuptools
             ];
           });
+          # The gRPC health service ships with the same release as grpcio, so
+          # pin it to the overridden runtime instead of the nixpkgs grpcio.
+          grpcio-health-checking = python.pkgs.grpcio-health-checking.overridePythonAttrs (_: {
+            version = "1.81.1";
+            src = pkgs.fetchPypi {
+              pname = "grpcio_health_checking";
+              version = "1.81.1";
+              hash = "sha256-7MYUgOJQWKSgThHkq2kArXQ5sy5gqM5Ozn2fIZIhyF0=";
+            };
+            propagatedBuildInputs = [
+              grpcio
+              python.pkgs.protobuf
+            ];
+          });
           # Keep Nix's development shell inside the version bounds declared
           # by the canonical dev extra. The pinned nixpkgs revision trails
           # both packages, while the tests exercise their current APIs.
@@ -249,6 +263,7 @@
             ])
             ++ [
               grpcio
+              grpcio-health-checking
               grpcio-tools
               mcp
               openmed

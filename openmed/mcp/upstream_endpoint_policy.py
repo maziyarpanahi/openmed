@@ -728,6 +728,44 @@ def authorize_upstream_endpoint(
     ).authorize(endpoint)
 
 
+def canonical_host(
+    host: str,
+) -> tuple[str, ipaddress.IPv4Address | ipaddress.IPv6Address | None]:
+    """Return a canonical hostname or IP literal and its parsed address.
+
+    Args:
+        host: Hostname or IP literal without brackets, port, or user info.
+
+    Returns:
+        The lower-case IDNA hostname (or normalized IP literal) and the parsed
+        address for IP literals, otherwise ``None``.
+
+    Raises:
+        UpstreamEndpointPolicyError: With reason ``invalid_host`` when the host
+            is empty, contains wildcards or separators, or is not a valid name.
+    """
+
+    return _canonical_host(host)
+
+
+def classify_address(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ResolvedAddressClass:
+    """Classify one IP address for SSRF-safe destination checks.
+
+    IPv4-mapped IPv6 addresses are classified by their IPv4 address, and
+    well-known cloud metadata endpoints are reported before broader ranges.
+
+    Args:
+        address: Parsed IPv4 or IPv6 address.
+
+    Returns:
+        The fail-closed address class.
+    """
+
+    return _address_class(address)
+
+
 EndpointApproval = ValidatedUpstreamEndpoint
 EndpointPolicyError = UpstreamEndpointPolicyError
 
@@ -745,6 +783,8 @@ __all__ = [
     "UpstreamEndpointResolutionError",
     "ValidatedUpstreamEndpoint",
     "authorize_upstream_endpoint",
+    "canonical_host",
+    "classify_address",
     "resolve_hostname",
     "validate_upstream_endpoint",
 ]

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        The emulator lane runs offline. ML Kit's transport libraries merge the
+        INTERNET permission into the instrumented test APK; removing it makes the
+        kernel refuse every AF_INET and AF_INET6 socket the test process tries to
+        create. OfflineGuardTest checks that refusal on the device.
+    -->
+    <uses-permission
+        android:name="android.permission.INTERNET"
+        tools:node="remove" />
+</manifest>

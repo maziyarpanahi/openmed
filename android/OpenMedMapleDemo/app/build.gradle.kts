@@ -1,16 +1,19 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "org.openmed.maple"
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "org.openmed.maple"
         minSdk = 26
-        targetSdk = 33
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -19,17 +22,9 @@ android {
         compose = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.4.8"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
     }
 
     testOptions {
@@ -37,17 +32,9 @@ android {
     }
 }
 
-// DJL 0.33 pulls Java-17-era annotation/logging jars that AGP 7.4's D8 cannot
-// transform. These API-compatible pins keep the demo aligned with this repo's
-// JDK 11 / AGP 7.4 Android baseline.
-configurations.configureEach {
-    resolutionStrategy.eachDependency {
-        when (requested.group to requested.name) {
-            "org.slf4j" to "slf4j-api" ->
-                useVersion(libs.versions.slf4j.android.compatible.get())
-            "com.google.errorprone" to "error_prone_annotations" ->
-                useVersion(libs.versions.errorprone.android.compatible.get())
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
     }
 }
 

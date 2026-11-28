@@ -6,7 +6,12 @@
     /// Converts between iOS extension items and OpenMed's plain-text contract.
     public enum ExtensionItemCodec {
         /// Load every plain-text attachment supplied by the host app.
-        public static func plainText(from inputItems: [Any]) async throws -> [String] {
+        ///
+        /// Runs in the caller's isolation domain, so a main-actor view controller
+        /// can pass its extension context's items without sending them elsewhere.
+        public nonisolated(nonsending) static func plainText(
+            from inputItems: [Any]
+        ) async throws -> [String] {
             var providers: [NSItemProvider] = []
             for item in inputItems.compactMap({ $0 as? NSExtensionItem }) {
                 for provider in item.attachments ?? []
@@ -41,7 +46,9 @@
             }
         }
 
-        private static func plainText(from provider: NSItemProvider) async throws -> String {
+        private nonisolated(nonsending) static func plainText(
+            from provider: NSItemProvider
+        ) async throws -> String {
             try await withCheckedThrowingContinuation { continuation in
                 provider.loadItem(
                     forTypeIdentifier: UTType.plainText.identifier,

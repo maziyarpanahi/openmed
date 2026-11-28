@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import inspect
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
 from typing import Any, Optional, cast
 
@@ -17,13 +18,23 @@ from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
+from .admission import (
+    AUTH_SCOPE_KEY,
+    TRANSPORT_GRAPHQL,
+    AdmissionController,
+    AdmissionRejected,
+    AdmissionSaturated,
+    release_when_settled,
+)
 from .auth import AuthPrincipal, scopes_satisfy
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE, ServiceShuttingDownError
+from .graphql_limits import GraphQLLimitsExtension
+from .journey_access import JourneyAccessGate, JourneyAccessRequest
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
     JourneyResourceKind,
     JourneyResourcePage,
-    JourneyResourceQuery,
     parse_access_attributes,
     parse_resource_fields,
 )
@@ -38,6 +49,11 @@ GRAPHQL_FIELD_SCOPES = {
     "journeyResources": ("journey:read",),
     "entityTypes": (),
 }
+# Root fields that start model or heavy work, mirroring the REST route
+# policies of ``/analyze``, ``/pii/deidentify`` and ``/v1/journey/resources``.
+GRAPHQL_ADMITTED_FIELDS = frozenset({"analyze", "deidentify", "journeyResources"})
+ADMISSION_REJECTED_CODE = "OPENMED_ADMISSION_REJECTED"
+ADMISSION_REJECTED_MESSAGE = "Request admission limit reached; retry later."
 
 
 class FieldScopeExtension(SchemaExtension):
@@ -72,6 +88,86 @@ class FieldScopeExtension(SchemaExtension):
         yield
 
 
+class RequestAdmissionExtension(SchemaExtension):
+    """Admit each model-backed root field through the shared controller.
+
+    Every selected ``analyze``, ``deidentify`` or ``journeyResources`` field,
+    aliases included, takes one permit from the same principal budget that
+    REST requests use, so batching fields into one document cannot exceed a
+    principal's share. A rejected field fails with a value-free
+    ``OPENMED_ADMISSION_REJECTED`` error, and the HTTP response carries the
+    matching 429 or 503 status and ``Retry-After`` header.
+    """
+
+    def resolve(
+        self,
+        _next: Callable[..., Any],
+        root: Any,
+        info: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Wrap admitted root fields; pass every other field through."""
+        if (
+            info.field_name not in GRAPHQL_ADMITTED_FIELDS
+            or info.parent_type.name != "Query"
+        ):
+            return _next(root, info, *args, **kwargs)
+        controller = getattr(
+            getattr(info.context, "runtime", None), "admission_controller", None
+        )
+        if not isinstance(controller, AdmissionController) or not controller.enabled:
+            return _next(root, info, *args, **kwargs)
+        return self._admitted(controller, _next, root, info, args, kwargs)
+
+    async def _admitted(
+        self,
+        controller: AdmissionController,
+        _next: Callable[..., Any],
+        root: Any,
+        info: Any,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        request = getattr(info.context, "request", None)
+        scope = getattr(request, "scope", None)
+        principal = scope.get(AUTH_SCOPE_KEY) if isinstance(scope, Mapping) else None
+        try:
+            permit = await controller.acquire(
+                controller.ticket(principal, transport=TRANSPORT_GRAPHQL)
+            )
+        except AdmissionRejected as exc:
+            _mark_admission_rejection(info.context, exc)
+            raise GraphQLError(
+                ADMISSION_REJECTED_MESSAGE,
+                extensions={"code": ADMISSION_REJECTED_CODE, "reason": exc.reason},
+            ) from None
+        settled = False
+        try:
+            result = _next(root, info, *args, **kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+            settled = True
+            return result
+        finally:
+            if settled:
+                permit.release()
+            else:
+                # A failed or timed-out resolver may leave model work running;
+                # keep the unit until the request's tracked work settles.
+                release_when_settled(permit)
+
+
+def _mark_admission_rejection(context: Any, exc: AdmissionRejected) -> None:
+    response = getattr(context, "response", None)
+    if response is None:
+        return
+    # A saturated service (503) outranks a principal over its share (429).
+    if response.status_code != AdmissionSaturated.status_code:
+        response.status_code = exc.status_code
+    response.headers["Retry-After"] = exc.retry_after_header
+
+
 class OpenMedGraphQLContext(BaseContext):
     """Request context carrying the service's shared runtime."""
 
@@ -80,10 +176,27 @@ class OpenMedGraphQLContext(BaseContext):
         runtime: ServiceRuntime,
         journey_resources: JourneyResourceCatalog,
         journey_access_policy: JourneyAccessPolicy,
+        *,
+        journey_access: JourneyAccessGate | None = None,
+        principal: AuthPrincipal | None = None,
     ) -> None:
+        """Bind shared service state and the authenticated caller.
+
+        Args:
+            runtime: Shared service runtime.
+            journey_resources: Shared Journey catalog.
+            journey_access_policy: Active Journey policy envelope.
+            journey_access: Shared Journey access gate; built from the
+                environment when omitted.
+            principal: Authenticated principal from the transport, if any.
+        """
         self.runtime = runtime
         self.journey_resources = journey_resources
         self.journey_access_policy = journey_access_policy
+        self.journey_access = (
+            JourneyAccessGate.from_env() if journey_access is None else journey_access
+        )
+        self.principal = principal if type(principal) is AuthPrincipal else None
 
 
 @strawberry.enum(name="JourneyResourceKind")
@@ -545,6 +658,10 @@ class Query:
             raise GraphQLError(
                 "Requested model is not served", extensions={"code": "model_not_served"}
             ) from None
+        except ServiceShuttingDownError:
+            raise GraphQLError(
+                SHUTTING_DOWN_MESSAGE, extensions={"code": SHUTTING_DOWN}
+            ) from None
         except Exception:
             raise GraphQLError(
                 SAFE_RESOLVER_ERROR,
@@ -566,6 +683,10 @@ class Query:
             raise GraphQLError(
                 "Requested model is not served", extensions={"code": "model_not_served"}
             ) from None
+        except ServiceShuttingDownError:
+            raise GraphQLError(
+                SHUTTING_DOWN_MESSAGE, extensions={"code": SHUTTING_DOWN}
+            ) from None
         except Exception:
             raise GraphQLError(
                 SAFE_RESOLVER_ERROR,
@@ -585,34 +706,43 @@ class Query:
         self,
         info: Info[OpenMedGraphQLContext, None],
         resource_type: JourneyResourceKindType,
-        namespace: str = "default",
-        purpose: str = "care_review",
-        role: str = "clinician",
+        namespace: Optional[str] = None,
+        purpose: Optional[str] = None,
+        role: Optional[str] = None,
         attributes: Optional[list[str]] = None,
-        consent_state: str = "active",
-        export_policy: str = "metadata_only",
+        consent_state: Optional[str] = None,
+        export_policy: Optional[str] = None,
         first: int = 20,
         after: Optional[str] = None,
         fields: Optional[list[str]] = None,
     ) -> JourneyResourceConnection:
-        """List one bounded, policy-filtered Journey resource connection."""
+        """List one bounded, principal-bound Journey resource connection.
+
+        Access context comes from the authenticated principal. Access
+        arguments may only narrow it; wider requests return a denied state.
+        """
 
         try:
-            query = JourneyResourceQuery(
+            access_request = JourneyAccessRequest(
                 resource_type=JourneyResourceKind(resource_type.value),
                 namespace=namespace,
                 purpose=purpose,
                 role=role,
-                attributes=parse_access_attributes(attributes),
+                attributes=(
+                    None if attributes is None else parse_access_attributes(attributes)
+                ),
                 consent_state=consent_state,
                 export_policy=export_policy,
                 first=first,
                 after=after,
                 fields=parse_resource_fields(fields),
             )
-            page = info.context.journey_resources.list_resources(
-                query,
+            page = info.context.journey_access.list_resources(
+                info.context.journey_resources,
+                access_request,
+                principal=info.context.principal,
                 policy=info.context.journey_access_policy,
+                transport="graphql",
             )
             return JourneyResourceConnection.from_page(page)
         except Exception:
@@ -633,7 +763,12 @@ class PrivacySafeSchema(strawberry.Schema):
         """Suppress Strawberry's default exception logger to protect PHI."""
 
 
-schema = PrivacySafeSchema(query=Query, extensions=[FieldScopeExtension])
+# Budgets run first so oversized documents never reach the scope rule, the
+# standard graphql-core validation rules, or request admission.
+schema = PrivacySafeSchema(
+    query=Query,
+    extensions=[GraphQLLimitsExtension, FieldScopeExtension, RequestAdmissionExtension],
+)
 
 
 async def _run_analyze(

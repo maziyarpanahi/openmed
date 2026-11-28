@@ -1,9 +1,20 @@
 # Synthetic values used by the Helm CI workflow to exercise non-default paths.
 replicaCount: 2
 
+# Two replicas render multi mode. Accept the per-replica limiters configured
+# below and turn off the replica-local job components so readiness can pass.
+replicaState:
+  accept:
+    - rate_limiter
+    - concurrency_limiter
+  disable:
+    - async_jobs
+    - fhir_bulk_jobs
+    - smart_backend_jobs
+
 image:
   repository: ghcr.io/maziyarpanahi/openmed
-  tag: "v3.3.0"
+  tag: "v4.0.0"
 
 config:
   preloadModels:
@@ -31,6 +42,19 @@ config:
     maxConcurrency: 4
     concurrencyWaitSeconds: 0.1
     keyBy: x-forwarded-for
+    trustedProxies:
+      - 198.51.100.0/24
+      - 2001:db8:ffff::/48
+    trustedProxyHops: 2
+    maxTrackedKeys: 5000
+
+secretFiles:
+  - env: OPENMED_SERVICE_AUTH_API_KEYS
+    secretName: openmed-service-auth
+    secretKey: api-keys.json
+  - env: OPENMED_SERVICE_OTLP_HEADERS
+    secretName: openmed-otlp
+    secretKey: headers
 
 extraEnv:
   - name: HF_TOKEN

@@ -105,6 +105,7 @@ REVIEWED_LICENSES = {
     "gliformer": "Apache-2.0",
     "gliner2": "Apache-2.0",
     "grpcio": "Apache-2.0",
+    "grpcio-health-checking": "Apache-2.0",
     "griffe": "ISC",
     "h2": "MIT",
     "hanlp": "Apache-2.0",

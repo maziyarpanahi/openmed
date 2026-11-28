@@ -7,7 +7,10 @@ ARG DEBIAN_SNAPSHOT=20261108T000000Z
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+    OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+    OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30
 
 WORKDIR /app
 
@@ -57,6 +60,18 @@ RUN python -m pip install --no-cache-dir --upgrade \
     && pip install --no-cache-dir ".[hf,journey,mcp,service]" \
     && python -m pip check \
     && python -m pip uninstall --yes pip
+
+# Run as the fixed non-root UID/GID 65532 shared with the distroless image,
+# the Compose profile and the Helm chart. Its cache directory is where the
+# Helm chart and Compose mount the persistent model cache.
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-log-init --create-home \
+        --home-dir /home/nonroot --shell /usr/sbin/nologin nonroot \
+    && install -d -o 65532 -g 65532 -m 0755 /home/nonroot/.cache
+
+ENV HOME=/home/nonroot
+
+USER 65532:65532
 
 EXPOSE 8080
 

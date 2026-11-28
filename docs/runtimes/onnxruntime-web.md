@@ -96,3 +96,17 @@ serve shard files whose sizes match their declarations.
 `sessionOptions.externalData` is rejected so shards cannot bypass these checks.
 Validation errors contain only the shard index and the failed rule, never the
 path, location, or file content.
+
+## Content-Security-Policy
+
+A synthetic WebAssembly fixture exercises a strict CSP (`script-src 'self'
+'wasm-unsafe-eval'`, `connect-src 'self' blob:`, `worker-src 'self' blob:`) plus
+COOP/COEP. See [Content-Security-Policy profile](https://github.com/maziyarpanahi/openmed/blob/master/js/openmedkit-web/README.md#content-security-policy-profile)
+for the full header set and what each directive is for. Removing
+`'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
+rather than falling back silently.
+
+
+The [OpenMedKit portable-kit threat model](../security/openmedkit-threat-model.md)
+lists the browser, Electron and Tauri trust boundaries, the controls this loader
+provides and the gaps that are still open.

@@ -1,0 +1,14 @@
+# Negative control: credentials are configured but authentication is off and
+# deny-by-default is disabled.
+extraEnv:
+  - name: OPENMED_SERVICE_AUTH_ENABLED
+    value: "false"
+  - name: OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT
+    value: "false"
+  - name: OPENMED_SERVICE_AUTH_API_KEYS
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: api-keys
+  - name: OPENMED_SERVICE_SERVED_MODELS
+    value: pii_detection_superclinical

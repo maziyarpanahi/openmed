@@ -287,7 +287,7 @@ def test_deidentification_redacts_original_nfc_changed_entity_surface():
     assert "normalized_text" not in span.metadata
     assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
     assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
-    assert result.redacted_text == "Patient [NAME] visited"
+    assert result.redacted_text == "Patient [PERSON] visited"
 
 
 def test_deidentification_redacts_original_collapsed_whitespace_entity_surface():
@@ -330,7 +330,7 @@ def test_deidentification_redacts_original_collapsed_whitespace_entity_surface()
     assert "normalized_text" not in span.metadata
     assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
     assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
-    assert result.redacted_text == "Patient [NAME] visited"
+    assert result.redacted_text == "Patient [PERSON] visited"
 
 
 def test_shift_dates_missing_dateutil_raises_clear_optional_extra_error(monkeypatch):
@@ -427,4 +427,4 @@ def test_stage9_safety_sweep_only_increases_redacted_character_count():
         >= stage9.metadata["redacted_chars_before"]
     )
     assert stage9.metadata["spans_added"] == 1
-    assert result.redacted_text == "Patient [NAME] email [email]"
+    assert result.redacted_text == "Patient [PERSON] email [EMAIL]"

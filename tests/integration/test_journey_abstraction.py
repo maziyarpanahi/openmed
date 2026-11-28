@@ -20,7 +20,10 @@ from openmed.clinical.journey_contracts import (
     ClinicalFact,
     EvidenceLocator,
 )
-from openmed.structured.store import SQLiteJourneyStore
+from openmed.structured.store import JourneyStoreEncryption, SQLiteJourneyStore
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -34,7 +37,7 @@ def test_sqlite_journey_snapshot_requires_source_coverage_and_explicit_review(tm
     artifact = ClinicalArtifact.from_dict(fixture["clinical_artifact"])
     fact = ClinicalFact.from_dict(fixture["clinical_fact"])
     locator = EvidenceLocator.from_dict(fixture["evidence_locator"])
-    store = SQLiteJourneyStore(tmp_path / "synthetic.sqlite3")
+    store = SQLiteJourneyStore(tmp_path / "synthetic.sqlite3", encryption=PLAINTEXT_DEV)
     try:
         with store.transaction(committed_at="2026-01-02T04:00:00Z") as transaction:
             assert transaction.put_artifact(artifact).ok

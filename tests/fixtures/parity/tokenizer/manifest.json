@@ -1,0 +1,39 @@
+{
+  "schema": "openmed.tokenizer-conformance.manifest",
+  "version": 1,
+  "contract_version": "openmed.tokenizer-conformance.v1",
+  "synthetic_only": true,
+  "files": [
+    {
+      "path": "synthetic-wordpiece-v1/config.json",
+      "role": "tokenizer_model_config",
+      "bytes": 53,
+      "sha256": "46684b6950746c210c96c7531478faf0a8e43cc5d91cedb01f1b460e490af00b"
+    },
+    {
+      "path": "synthetic-wordpiece-v1/tokenizer.json",
+      "role": "tokenizer",
+      "bytes": 6735,
+      "sha256": "add4243611377eee2214a310ce0c582b6c48b65fae0ed0be1951b1dcb0ee8a89"
+    },
+    {
+      "path": "synthetic-wordpiece-v1/tokenizer_config.json",
+      "role": "tokenizer_config",
+      "bytes": 315,
+      "sha256": "e3a977736587630a0bd6d580178be9e415e0ddb87715b4f942d8dd6f872a3e0d"
+    },
+    {
+      "path": "tokenizer_conformance_v1.json",
+      "role": "vectors",
+      "bytes": 21773,
+      "sha256": "688aef6280a5eaa467654c2d185ddc8ffa8732a0f1a5fa7c2ab57da4b4f57e03"
+    },
+    {
+      "path": "tokenizer_runtime_support_v1.json",
+      "role": "runtime_support",
+      "bytes": 5879,
+      "sha256": "dd1c788de62c89d2f2884688e5ef9fffedbe5fa8756f6c1f69a6eb528681e784"
+    }
+  ],
+  "contract_digest": "sha256:818d31049b14f066733a084fbd9dad85168ef660d55e8d4f32634ec2ec0be59d"
+}

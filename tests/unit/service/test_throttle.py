@@ -44,6 +44,9 @@ _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_RATE_LIMIT_BURST",
     "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY",
     "OPENMED_SERVICE_THROTTLE_KEY",
+    "OPENMED_SERVICE_TRUSTED_PROXIES",
+    "OPENMED_SERVICE_TRUSTED_PROXY_HOPS",
+    "OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS",
     "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS",
     "OPENMED_SERVICE_COALESCING_ENABLED",
     "OPENMED_SERVICE_METRICS_ENABLED",
@@ -667,3 +670,26 @@ def test_parallel_graphql_fields_reuse_capacity_after_worker_completion(
 
     asyncio.run(scenario())
     assert state == {"active": 0, "peak": 1, "calls": 2}
+
+
+def test_cancelled_gate_wait_propagates_and_holds_no_permit() -> None:
+    from openmed.service.throttle import ConcurrencyGate
+
+    async def scenario() -> tuple[str, int]:
+        gate = ConcurrencyGate(max_concurrency=1, wait_seconds=0.5)
+        holder = await gate.acquire()
+        assert holder is not None
+
+        waiter = asyncio.create_task(gate.acquire())
+        await asyncio.sleep(0)
+        # Free the slot so the waiter's acquire completes in the same step
+        # that delivers the cancellation.
+        holder.release()
+        waiter.cancel()
+        (result,) = await asyncio.gather(waiter, return_exceptions=True)
+        return type(result).__name__, gate.tracked_key_count
+
+    outcome, tracked = asyncio.run(scenario())
+
+    assert outcome == "CancelledError"
+    assert tracked == 0

@@ -625,3 +625,167 @@ def test_dry_run_reports_private_target_repo(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert "OpenMed/source-v1-onnx-android" in stdout.getvalue()
+
+
+_PRIVACY_FILTER_ROWS = [
+    {
+        "repo_id": "OpenMed/privacy-filter-nemotron",
+        "task": "token-classification",
+        "formats": ["pytorch"],
+        "architecture": "privacy-filter",
+        "family": "PII",
+    },
+    {
+        "repo_id": "OpenMed/privacy-filter-multilingual",
+        "task": "token-classification",
+        "formats": ["pytorch"],
+        "architecture": "privacy-filter",
+        "family": "PII",
+    },
+    {
+        "repo_id": "attacker/privacy-filter-copy",
+        "task": "token-classification",
+        "formats": ["pytorch"],
+        "architecture": "privacy-filter",
+        "family": "PII",
+    },
+]
+
+
+def _qualified_registry(monkeypatch, *, variants=None, revision="c0ffee"):
+    from openmed.torch import privacy_filter_export as pf
+
+    qualified = pf.PrivacyFilterCheckpoint(
+        "OpenMed/privacy-filter-nemotron",
+        "nemotron_fine_v1",
+        221,
+        revision=revision,
+        qualified_variants={
+            "onnx": tuple(
+                variants or ("onnx-android-fp32", "onnx-android-fp16", "onnx-int8")
+            )
+        },
+        evidence_sha256={"onnx": "ab" * 32},
+    )
+    others = tuple(
+        item
+        for item in pf.PRIVACY_FILTER_CHECKPOINTS
+        if item.repo_id != qualified.repo_id
+    )
+    monkeypatch.setattr(pf, "PRIVACY_FILTER_CHECKPOINTS", (qualified, *others))
+    return qualified
+
+
+def test_unqualified_privacy_filter_sources_stay_excluded() -> None:
+    assert batch.select_candidates(_PRIVACY_FILTER_ROWS) == []
+    for row in _PRIVACY_FILTER_ROWS:
+        assert batch.is_privacy_filter_row(row)
+    assert not batch.is_privacy_filter_row(
+        {"repo_id": "OpenMed/source", "architecture": "bert"}
+    )
+
+
+def test_only_fully_qualified_privacy_filter_sources_are_batched(
+    monkeypatch,
+) -> None:
+    _qualified_registry(monkeypatch)
+    selected = batch.select_candidates(_PRIVACY_FILTER_ROWS)
+    assert [item.repo_id for item in selected] == ["OpenMed/privacy-filter-nemotron"]
+
+    # Missing INT8 evidence excludes the source unless INT8 is disabled.
+    _qualified_registry(
+        monkeypatch, variants=("onnx-android-fp32", "onnx-android-fp16")
+    )
+    assert batch.select_candidates(_PRIVACY_FILTER_ROWS) == []
+    assert [
+        item.repo_id
+        for item in batch.select_candidates(_PRIVACY_FILTER_ROWS, include_int8=False)
+    ] == ["OpenMed/privacy-filter-nemotron"]
+
+    # Evidence without a reviewed revision never qualifies.
+    _qualified_registry(monkeypatch, revision=None)
+    assert batch.select_candidates(_PRIVACY_FILTER_ROWS) == []
+
+
+def test_qualified_privacy_filter_converts_at_the_pinned_revision(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _qualified_registry(monkeypatch)
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(
+        "\n".join(json.dumps(row) for row in _PRIVACY_FILTER_ROWS) + "\n",
+        encoding="utf-8",
+    )
+    convert_calls = []
+
+    def fake_convert(model_id, output_dir, **kwargs):
+        convert_calls.append((model_id, kwargs))
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True)
+        manifest_path = output_dir / "openmed-onnx.json"
+        manifest_path.write_text("{}", encoding="utf-8")
+        return types.SimpleNamespace(
+            output_dir=output_dir,
+            manifest_path=manifest_path,
+            formats=["onnx-android", "onnx-int8"],
+        )
+
+    monkeypatch.setattr(batch, "convert", fake_convert)
+    exit_code = batch.run(
+        batch.build_parser().parse_args(
+            [
+                "--manifest",
+                str(manifest),
+                "--output-root",
+                str(tmp_path / "out"),
+                "--status-log",
+                str(tmp_path / "status.jsonl"),
+            ]
+        ),
+        stdout=io.StringIO(),
+    )
+
+    assert exit_code == 0
+    assert [model_id for model_id, _ in convert_calls] == [
+        "OpenMed/privacy-filter-nemotron"
+    ]
+    assert convert_calls[0][1]["expected_source_revision"] == "c0ffee"
+    assert convert_calls[0][1]["profile"] == "android"
+
+
+def test_existing_artifact_with_failed_qualification_is_not_reused(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_dir = tmp_path / "artifact"
+    artifact_dir.mkdir()
+    for name in [
+        "config.json",
+        "id2label.json",
+        "model.onnx",
+        "model_fp16.onnx",
+        "model_int8.onnx",
+        "tokenizer.json",
+    ]:
+        (artifact_dir / name).write_text("artifact", encoding="utf-8")
+    monkeypatch.setattr(
+        batch, "_onnx_external_data_files_present", lambda path: path.is_file()
+    )
+    manifest_path = artifact_dir / "openmed-onnx.json"
+    for qualification, reusable in (
+        ({"passed": False, "status": "not_run"}, False),
+        ("passed", False),
+        ({"passed": True}, True),
+    ):
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "formats": ["onnx-android", "onnx-int8"],
+                    "qualification": qualification,
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = batch._load_existing_artifact_result(artifact_dir, include_int8=True)
+        assert (result is not None) is reusable

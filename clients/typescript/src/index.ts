@@ -214,6 +214,9 @@ export type DecisionState =
 
 export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
 
+/** Decision contract versions this client reads and writes. */
+export type DecisionSchemaVersion = "1.0.0" | "1.1.0" | "1.2.0";
+
 export interface DecisionQuestion {
   question_id: string;
   mode: DecisionQuestionMode;
@@ -244,7 +247,7 @@ export interface FixedOptionDecisionRequest {
   purpose?: string;
   calibration_id?: string;
   timeout_ms?: number;
-  schema_version?: "1.0.0" | "1.1.0";
+  schema_version?: DecisionSchemaVersion;
   compatibility_policy?: "same_major";
   question_id?: string;
   instructions?: string | null;
@@ -307,9 +310,80 @@ export interface FixedOptionDecisionResult {
   review: { required: true; reasons: string[] };
   advisory: string;
   autonomous_action: false;
-  schema_version: "1.0.0" | "1.1.0";
+  schema_version: DecisionSchemaVersion;
   compatibility_policy: "same_major";
   extensions: JsonObject;
+}
+
+/** One question of an OpenAI-compatible Decisions body. */
+export type OpenAIDecisionsQuestion =
+  | { type: "predicate"; name: string; instructions?: string | null }
+  | {
+      type: "choice";
+      name: string;
+      instructions?: string | null;
+      choices: { value: string; description?: string | null }[];
+    }
+  | {
+      type: "score";
+      name: string;
+      instructions?: string | null;
+      levels: { label: string }[];
+    };
+
+/**
+ * Text-only OpenAI-compatible Decisions body for POST /v1/decisions.
+ * `model` must name the model the service decides with.
+ */
+export interface OpenAIDecisionsRequest {
+  model: string;
+  input: string;
+  questions: OpenAIDecisionsQuestion[];
+}
+
+/** Non-success questions carry their OpenMed state and code. */
+export interface OpenAIDecisionsOutcome {
+  state?: Exclude<DecisionState, "success">;
+  code?: string | null;
+}
+
+export type OpenAIDecisionsAnswer =
+  | ({ type: "predicate"; name: string; probability: number | null } &
+      OpenAIDecisionsOutcome)
+  | ({
+      type: "choice";
+      name: string;
+      choice: string | null;
+      confidence: number | null;
+      probabilities?: { value: string; probability: number }[];
+    } & OpenAIDecisionsOutcome)
+  | ({
+      type: "score";
+      name: string;
+      score: number | null;
+      confidence: number | null;
+      probabilities?: { label: string; value: number; probability: number }[];
+    } & OpenAIDecisionsOutcome);
+
+/** Review requirement, advisory and provenance of the underlying result. */
+export interface OpenAIDecisionsReview {
+  state: DecisionState;
+  code: string | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  schema_version: DecisionSchemaVersion;
+  compatibility_policy: "same_major";
+}
+
+export interface OpenAIDecisionsResponse {
+  model: string;
+  answers: OpenAIDecisionsAnswer[];
+  openmed?: OpenAIDecisionsReview;
 }
 
 export interface DeidentifyJobDocument {
@@ -340,6 +414,8 @@ export interface DeidentifyJobRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+  /** Requested payload retention; may not exceed the service maximum. */
+  payload_retention_seconds?: number | null;
 }
 
 export interface ModelUnloadRequest {
@@ -369,6 +445,16 @@ export interface SMARTBackendIngestionRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+}
+
+/** Options for job starts that deduplicate client retries. */
+export interface StartJobOptions {
+  /**
+   * Sent as `Idempotency-Key`. Retrying with the same key and request returns
+   * the original job instead of starting another export; reusing the key for
+   * a different request fails with `409 idempotency_key_conflict`.
+   */
+  idempotencyKey?: string;
 }
 
 export interface OMOPLoadRequest {
@@ -515,8 +601,10 @@ export type PIIDeidentifyStreamResponse = string;
 export interface HealthResponse {
   status: string;
   service: string;
-  version: string;
-  profile: string;
+  /** Reported only by the `dev` profile. */
+  version?: string;
+  /** Reported only by the `dev` profile. */
+  profile?: string;
   [key: string]: unknown;
 }
 
@@ -591,12 +679,29 @@ export interface SMARTBackendJobStatus {
   error: string | null;
 }
 
-export type JobStatus = "queued" | "running" | "done" | "failed";
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+
+/** Keyed, domain-separated digest; values compare only within one key_id. */
+export interface KeyedDigest {
+  alg: "hmac-sha256";
+  key_id: string;
+  value: string;
+}
+
+/** How the digests in a job record were made; omitted digests are null. */
+export type JobDigests =
+  | { mode: "keyed"; alg: "hmac-sha256"; key_id: string; reason: null }
+  | {
+      mode: "omitted";
+      alg: null;
+      key_id: null;
+      reason: "digest_key_unconfigured" | "legacy_digests_removed";
+    };
 
 export interface JobDocumentMetadata {
   id: string;
   length: number;
-  text_hash: string;
+  text_digest: KeyedDigest | null;
 }
 
 export interface JobSpan {
@@ -604,30 +709,68 @@ export interface JobSpan {
   start: number;
   end: number;
   label: string;
-  text_hash: string;
+  text_digest: KeyedDigest | null;
   confidence: number | null;
 }
 
 export interface JobWebhookMetadata {
   configured: boolean;
-  url_hash: string;
+  url_digest: KeyedDigest | null;
   max_attempts: number;
   backoff_seconds: number;
+}
+
+export interface JobWebhookAttemptReceipt {
+  attempt: number;
+  /** Public signing key id; never key material. */
+  key_id: string | null;
+  signed_at: number | null;
+  status_code: number | null;
+  error: string | null;
 }
 
 export interface JobWebhookDelivery {
   success: boolean;
   attempts: number;
   status_code: number | null;
+  /** Value-free code such as "HTTP 500", "timeout" or "transport_error". */
   error: string | null;
+  /** Opaque id sent as X-OpenMed-Delivery-Id on every retry. */
+  delivery_id?: string;
+  /** Webhook signature scheme version, such as "v2". */
+  signature_version?: string | null;
+  attempt_receipts?: JobWebhookAttemptReceipt[];
+  /** Opaque reference to the immutable terminal-event payload. */
+  payload_ref?: string | null;
 }
 
 export interface JobErrorSummary {
+  code?: string;
   type: string;
   message: string;
 }
 
+export interface JobPayloadRef {
+  ref: string;
+  schema_version: number;
+  state: "retained" | "deleted" | "expired";
+  created_at: string;
+  expires_at: string;
+  digest: string | null;
+  reason: string | null;
+}
+
+export interface JobPayloads {
+  schema_version: number;
+  mode: "memory" | "encrypted";
+  retention_seconds: number;
+  input: JobPayloadRef | null;
+  terminal_event: JobPayloadRef | null;
+}
+
 export interface JobResponse {
+  /** 3 for records that carry keyed digests. */
+  schema_version: number;
   id: string;
   status: JobStatus;
   progress_percent: number;
@@ -635,11 +778,13 @@ export interface JobResponse {
   processed_count: number;
   failed_count: number;
   label_histogram: Record<string, number>;
+  digests: JobDigests;
   spans: JobSpan[];
   documents: JobDocumentMetadata[];
   error: JobErrorSummary | null;
   webhook: JobWebhookMetadata | null;
   webhook_delivery: JobWebhookDelivery | null;
+  payloads?: JobPayloads;
   created_at: string;
   updated_at: string;
   started_at: string | null;
@@ -777,6 +922,13 @@ export class OpenMedClient {
     return this.post("/v1/decisions", request);
   }
 
+  /** Send an OpenAI-compatible Decisions body; the answer has the same shape. */
+  async openaiDecisions(
+    request: OpenAIDecisionsRequest,
+  ): Promise<OpenAIDecisionsResponse> {
+    return this.post("/v1/decisions", request);
+  }
+
   async health(): Promise<HealthResponse> {
     return this.get("/health");
   }
@@ -876,8 +1028,13 @@ export class OpenMedClient {
 
   async startSmartBackendIngestion(
     request: SMARTBackendIngestionRequest,
+    options: StartJobOptions = {},
   ): Promise<SMARTBackendJobStatus> {
-    return this.post("/fhir/smart-backend/ingestions", request);
+    return this.post(
+      "/fhir/smart-backend/ingestions",
+      request,
+      idempotencyHeaders(options.idempotencyKey),
+    );
   }
 
   async smartBackendIngestionStatus(
@@ -912,10 +1069,14 @@ export class OpenMedClient {
     return this.request<T>(path, { method: "GET" });
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
     return this.request<T>(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
   }
@@ -986,6 +1147,10 @@ function headersToRecord(headers?: HeadersInit): Record<string, string> {
   }
 
   return { ...(headers as Record<string, string>) };
+}
+
+function idempotencyHeaders(key: string | undefined): Record<string, string> {
+  return key === undefined ? {} : { "idempotency-key": key };
 }
 
 function smartBackendJobPath(template: string, jobId: string): string {

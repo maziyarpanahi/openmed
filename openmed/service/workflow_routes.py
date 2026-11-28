@@ -34,6 +34,14 @@ from .governed_workflows import (
     validate_workflow_view,
 )
 from .logging import current_request_id
+from .request_limits import (
+    REQUEST_BODY_TIMEOUT,
+    RequestBodyDeadline,
+    RequestBodyReadLimits,
+    RequestBodyTimeout,
+    RequestBodyTimeoutRecorder,
+    body_limit_response,
+)
 from .schemas import workflow_http_schemas
 
 WORKFLOW_ROUTE_SCOPES = {
@@ -71,11 +79,35 @@ class WorkflowBoundaryMiddleware:
     """Bound workflow bodies before shared buffering and sanitize log IDs.
 
     This limit also applies to chunked bodies and misleading Content-Length.
+    Workflow bodies share the service's receive-time bounds, so a stalled or
+    trickling body is rejected with ``408 request_body_timeout``.
     The request ID is metadata only; it is never mutation idempotency authority.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        read_limits: RequestBodyReadLimits | None = None,
+        metrics: RequestBodyTimeoutRecorder | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        """Wrap an ASGI app with workflow body and request-ID bounds.
+
+        Args:
+            app: The downstream ASGI application.
+            read_limits: Receive-time bounds. Defaults to
+                :class:`RequestBodyReadLimits`.
+            metrics: Optional aggregate sink for body timeouts.
+            clock: Monotonic seconds source; tests inject a fake clock.
+        """
+
         self.app = app
+        self.read_limits = (
+            read_limits if read_limits is not None else RequestBodyReadLimits()
+        )
+        self._metrics = metrics
+        self._clock = clock
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not scope.get("path", "").startswith(
@@ -113,8 +145,20 @@ class WorkflowBoundaryMiddleware:
             )
             return
         body = bytearray()
+        deadline = RequestBodyDeadline(self.read_limits, clock=self._clock)
         while True:
-            message = await receive()
+            try:
+                message = await deadline.receive(receive)
+            except RequestBodyTimeout as timeout:
+                body.clear()
+                if self._metrics is not None:
+                    self._metrics.record_request_body_timeout(reason=timeout.reason)
+                response = body_limit_response(REQUEST_BODY_TIMEOUT)
+                response.headers["cache-control"] = "no-store"
+                response.headers["connection"] = "close"
+                response.headers["x-request-id"] = request_id
+                await response(scope, receive, send)
+                return
             if message["type"] == "http.disconnect":
                 return
             if message["type"] != "http.request":
