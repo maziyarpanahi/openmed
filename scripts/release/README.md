@@ -33,27 +33,27 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 8,687,399 bytes. Its maximum is 9,729,887
-bytes, which provides 12% headroom. A fresh `import openmed` must remain at or
+The committed wheel baseline is 9,705,060 bytes. Its maximum is 10,675,566
+bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
 
 The baseline records `master` commit
-`174fd485c1539119d6dccebdca9a9526a0f0e7e1`. A clean archived rebuild with uv
-0.11.28 and Hatchling 1.33.0 measured 8,687,399 bytes, 1,772 wheel members,
-SHA-256 `a486d783dc0689e05e3f2b73d0e68baaba91e6cd58e6eb7ba57279118a312179`.
+`5b79cae5df6bc22b0fcdc799be480ee4ffc23c57`, the v4.0.0 line. A clean archived
+rebuild with Hatchling 1.33.0 measured 9,705,060 bytes, 1,881 wheel members,
+SHA-256 `ecb2e6cef31156e9c02fa5388e5ffdbc5f4dd90bea8e49b997215976983e24b9`.
 The refresh PR's build job independently rebuilds the frozen base on
 `ubuntu-latest` and requires its measured size to equal the proposed baseline;
 the local reproduction is not a substitute for that hosted check.
 
-Headroom is normally 10%. This refresh uses 12% once, for the v4.0
-integration: it merges a whole release of changes at once, and its wheel
-measures 9,702,254 bytes (1,881 members), 11.7% above the baseline. The growth
-is first-party Python source for the v4.0 service, export qualification,
-recovery, migration rehearsal and kit release features; the wheel gains no
-model weights, fixtures or build caches. The next refresh returns to 10%.
+This refresh returns to the normal 10% headroom after the one-off 12% that
+the v4.0 integration used. The v4.1 integration wheel measures 9,819,752 bytes
+(1,903 members), 1.2% above this baseline; the growth is first-party Python
+source, with no model weights, fixtures or build caches.
 
-The previous baseline, 7,848,985 bytes, recorded `master` commit
+The previous baseline, 8,687,399 bytes, recorded `master` commit
+`174fd485c1539119d6dccebdca9a9526a0f0e7e1` with 12% headroom. Before it,
+7,848,985 bytes recorded `master` commit
 `ac3b2df82fa547a395d6b24722e556d32b2b6c2e`.
 
 The prior baseline, `a88fe2feb699fd1945d053859998e54e00237825`, rebuilds with
