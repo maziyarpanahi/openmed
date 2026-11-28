@@ -14,7 +14,7 @@ nav:
       - Feature Map: feature-map.md
       - OpenMed 3.3.0 Release Notes: release/v3.3.0.md
       - Migrate from 3.2 to 3.3: migration/3.2-to-3.3.md
-      - Migrate from 3.3 to 4.0: migration/3.3-to-4.0.md
+      - OpenMed 4.0.0 Upgrade Guide: migration/3.3-to-4.0.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
@@ -584,6 +584,7 @@ nav:
           - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
           - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
           - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+          - Body-signal Model License Provenance: multimodal/body-signal-model-licenses.md
           - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
           - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
           - Generated Text Release Guard: multimodal/generated-text-guard.md

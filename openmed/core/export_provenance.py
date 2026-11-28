@@ -444,6 +444,25 @@ def write_observation_report(
             handle.write(content)
 
 
+def _create_observation(path: Path) -> int:
+    if os.name != "nt":
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+
+    import _winapi
+    import msvcrt
+
+    # CREATE_NEW on the reparse point itself also refuses dangling symlinks.
+    # Inherit the directory ACL and permit the same read/write sharing as os.open.
+    handle = _winapi.CreateFile(
+        str(path), _winapi.GENERIC_WRITE, 3, 0, 1, 0x00200080, 0
+    )
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)
+    except BaseException:
+        _winapi.CloseHandle(handle)
+        raise
+
+
 @contextmanager
 def _observation_descriptor(
     path: Path, *, create: bool = False
@@ -460,10 +479,13 @@ def _observation_descriptor(
         not stat.S_ISREG(expected.st_mode) or expected.st_nlink != 1
     ):
         raise ValueError(error)
-    flags = os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     if expected is None:
-        flags |= os.O_CREAT | os.O_EXCL
-    descriptor = os.open(path, flags, 0o666)
+        descriptor = _create_observation(path)
+    else:
+        flags = (
+            os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(path, flags)
     created = expected is None
     opened: os.stat_result | None = None
     succeeded = False
