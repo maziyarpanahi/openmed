@@ -3,7 +3,6 @@ import {
   POLICY_LABELS,
   SPAN_ACTIONS,
   type CanonicalLabel,
-  type OpenMedContractSpan,
   type PolicyLabel,
   type SpanAction,
 } from "./generated/contract-types";
@@ -36,22 +35,6 @@ export interface OpenMedSpan {
   section: string | null;
   metadata: Record<string, unknown>;
 }
-
-/** `true` when `A` and `B` are assignable to each other. */
-type MutuallyAssignable<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : false
-  : false;
-type AssertTrue<T extends true> = T;
-
-/**
- * Compile-time guard: `npm run typecheck` fails when the hand-written
- * `OpenMedSpan` and the generated `span.schema.json` type diverge.
- */
-type OpenMedSpanMatchesContract = AssertTrue<
-  MutuallyAssignable<OpenMedSpan, OpenMedContractSpan>
->;
 
 export interface TokenClassificationEntity {
   entity?: string;

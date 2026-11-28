@@ -61,9 +61,9 @@ beyond the three label arrays and no dependency.
 The `openmed` web package exports every generated `OpenMedContract*` type, and
 its `CANONICAL_LABELS`, `POLICY_LABELS` and `SPAN_ACTIONS` exports are the
 generated arrays. The hand-written `OpenMedSpan` stays the public span type;
-`types.ts` carries a compile-time guard that it is assignable to and from the
-generated `OpenMedContractSpan`, so `npm run typecheck` fails when they
-diverge.
+`src/contract-guards.ts` carries a compile-time guard that it is assignable to
+and from the generated `OpenMedContractSpan`, so `npm run typecheck` fails when
+they diverge.
 
 ```ts
 import type { OpenMedContractProvenance } from "openmed";
