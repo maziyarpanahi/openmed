@@ -24,7 +24,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from openmed.core.errors import LegacyRootedError
+if __name__ == "__main__":
+    # The worker runs this file as a script under ``python -I``, which drops the
+    # package path, so it must not import openmed (nor load the package inside
+    # the sandbox). Its errors only become exit codes and never reach callers.
+
+    class LegacyRootedError(Exception):
+        """Worker-local base; imported modules root errors in OpenMedError."""
+
+else:
+    from openmed.core.errors import LegacyRootedError
 
 
 class DecoderGuardError(ValueError, LegacyRootedError):
