@@ -31,6 +31,7 @@ from openmed.core.model_registry import (
 from openmed.core.models import ModelLoader
 from openmed.core.offline import (
     OFFLINE_ENV_VAR,
+    OfflineModeError,  # noqa: F401  (still importable from here, as in 4.0)
     OfflineModelUnavailableError,
     is_local_only,
 )
