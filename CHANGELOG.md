@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve FHIR terminology system URIs, with or without a trailing slash, and
+  the HL7 CPT URI to their grounding system keys. Restricted systems requested
+  by URI now raise `RestrictedVocabularyError`, and `POST /ground` returns
+  `restricted_terminology_unconfigured` instead of a validation error. Emitted
+  system URIs and the serialized `system` of saved result records are
+  unchanged (#4574).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.

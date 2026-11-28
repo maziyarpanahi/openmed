@@ -53,9 +53,50 @@ SYSTEM_ALIASES: Mapping[str, str] = {
 
 RESTRICTED_SYSTEMS = frozenset({"umls", "snomed", "cpt"})
 
+# Input-only URIs that identify a known system but are never emitted. CPT output
+# keeps ``SYSTEM_URIS["cpt"]``.
+_INPUT_SYSTEM_URI_ALIASES: Mapping[str, str] = {
+    "http://www.ama-assn.org/go/cpt": "cpt",
+}
+
+_SYSTEM_URI_KEYS: Mapping[str, str] = {
+    **{uri.rstrip("/").casefold(): system for system, uri in SYSTEM_URIS.items()},
+    **{
+        uri.rstrip("/").casefold(): system
+        for uri, system in _INPUT_SYSTEM_URI_ALIASES.items()
+    },
+}
+
 
 def canonical_system(value: object) -> str:
-    """Return a normalized terminology system key."""
+    """Return a normalized terminology system key.
+
+    Short names and aliases resolve through ``SYSTEM_ALIASES``. A known system
+    URI, such as ``http://snomed.info/sct``, resolves to its key, ignoring case
+    and a trailing slash. Unknown values are returned normalized but unmapped.
+
+    Args:
+        value: A terminology system short name, alias, or system URI.
+
+    Returns:
+        The canonical system key, or the normalized input when it is unknown.
+
+    Raises:
+        TypeError: If ``value`` is not a string.
+    """
+
+    key = _record_system_key(value)
+    return _SYSTEM_URI_KEYS.get(key.rstrip("/"), key)
+
+
+def _record_system_key(value: object) -> str:
+    """Normalize the system stored on a grounding result record.
+
+    Result records resolve short names and aliases only and keep any other value,
+    including a URI, as supplied apart from case and spacing. Rebuilding a saved
+    record therefore keeps its serialized ``system`` and ``system_uri``. Requests
+    and snapshots use :func:`canonical_system`, which also maps known URIs.
+    """
 
     if not isinstance(value, str):
         raise TypeError("terminology system must be a string")
