@@ -937,7 +937,10 @@ def test_builtin_registrations_do_not_import_the_owning_packages() -> None:
         "owners = ('openmed.clinical', 'openmed.structured', 'openmed.risk')\n"
         "print(sorted(name for name in sys.modules if name.startswith(owners)))\n"
     )
-    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    pythonpath = os.pathsep.join(
+        filter(None, (str(ROOT), os.environ.get("PYTHONPATH")))
+    )
+    env = {**os.environ, "PYTHONPATH": pythonpath}
     env.pop("HF_TOKEN", None)
 
     completed = subprocess.run(

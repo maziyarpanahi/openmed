@@ -401,7 +401,12 @@ def test_registry_import_does_not_load_service_frameworks() -> None:
         text=True,
         check=True,
         cwd=REPO_ROOT,
-        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(REPO_ROOT), os.environ.get("PYTHONPATH")))
+            ),
+        },
     )
     assert result.stdout.strip() == ""
 
