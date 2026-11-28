@@ -1,0 +1,227 @@
+{
+  "fixture": "identifier_validator_edge_cases_v1",
+  "synthetic": true,
+  "description": "Synthetic edge inputs for the web identifier validators: separators, case, Python whitespace (including U+001C-U+001F), Unicode decimal digits, folded Arabic-Indic and Gurmukhi digits, a Corsican NIR and a NIR key that Python's int() reads with a plus sign. Values are mutations of the shared identifier_validators_v1 vectors or are computed by the reference rule; expected is what the named Python reference returns. tests/web/test_identifier_validator_edge_cases.py checks every expected value against Python.",
+  "cases": [
+    {
+      "reference": "validate_luhn",
+      "value": "4992 7378 7789 3288",
+      "expected": true
+    },
+    {
+      "reference": "validate_luhn",
+      "value": "4992-7378-7789-3288",
+      "expected": true
+    },
+    {
+      "reference": "validate_luhn",
+      "value": "\u00b34992737877893288",
+      "expected": true
+    },
+    {
+      "reference": "validate_luhn",
+      "value": "",
+      "expected": false
+    },
+    {
+      "reference": "validate_ssn",
+      "value": "169 54 6850",
+      "expected": true
+    },
+    {
+      "reference": "validate_ssn",
+      "value": "169546850",
+      "expected": true
+    },
+    {
+      "reference": "validate_ssn",
+      "value": "16954685O",
+      "expected": false
+    },
+    {
+      "reference": "validate_ssn",
+      "value": "\u2003169-54-6850\u2003",
+      "expected": true
+    },
+    {
+      "reference": "validate_npi",
+      "value": "0716 2021 85",
+      "expected": true
+    },
+    {
+      "reference": "validate_npi",
+      "value": "07162021 85x",
+      "expected": true
+    },
+    {
+      "reference": "validate_iban",
+      "value": "de46 yvok ys9r yapb 2jju kq",
+      "expected": true
+    },
+    {
+      "reference": "validate_iban",
+      "value": "DE46-YVOK-YS9R-YAPB-2JJU-KQ",
+      "expected": true
+    },
+    {
+      "reference": "validate_iban",
+      "value": "DE46YVOKYS9RYAPB2JJUKQ\u001c",
+      "expected": true
+    },
+    {
+      "reference": "validate_iban",
+      "value": "DE\u0664\u0666YVOKYS9RYAPB2JJUKQ",
+      "expected": true
+    },
+    {
+      "reference": "validate_iban",
+      "value": "XX46YVOKYS9RYAPB2JJUKQ",
+      "expected": false
+    },
+    {
+      "reference": "validate_iban",
+      "value": "DE46YVOKYS9RYAPB2JJUKQ\ufeff",
+      "expected": false
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "975 886 706",
+      "expected": true
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "975-886-706",
+      "expected": true
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "975-886 706",
+      "expected": false
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "975886706",
+      "expected": true
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "\u0669\u0667\u0665\u0668\u0668\u0666\u0667\u0660\u0666",
+      "expected": false
+    },
+    {
+      "reference": "validate_canadian_sin",
+      "value": "\u001c975886706\u001f",
+      "expected": true
+    },
+    {
+      "reference": "validate_uk_nhs_number",
+      "value": "999 000 0018",
+      "expected": true
+    },
+    {
+      "reference": "validate_uk_nhs_number",
+      "value": "999-000-0018",
+      "expected": true
+    },
+    {
+      "reference": "validate_aadhaar",
+      "value": "5882 3384 6871",
+      "expected": true
+    },
+    {
+      "reference": "validate_aadhaar",
+      "value": "\u0665\u0668\u0668\u0662\u0663\u0663\u0668\u0664\u0666\u0668\u0667\u0661",
+      "expected": true
+    },
+    {
+      "reference": "validate_aadhaar",
+      "value": "\u0a6b\u0a6e\u0a6e\u0a68\u0a69\u0a69\u0a6e\u0a6a\u0a6c\u0a6e\u0a6d\u0a67",
+      "expected": true
+    },
+    {
+      "reference": "validate_aadhaar",
+      "value": "5882-3384-6871",
+      "expected": false
+    },
+    {
+      "reference": "validate_aadhaar",
+      "value": "588233846871\u3000",
+      "expected": true
+    },
+    {
+      "reference": "validate_chinese_resident_id",
+      "value": "13244520091012315x",
+      "expected": true
+    },
+    {
+      "reference": "validate_chinese_resident_id",
+      "value": "13244520090230315X",
+      "expected": false
+    },
+    {
+      "reference": "validate_dutch_bsn",
+      "value": "7123.45.681",
+      "expected": true
+    },
+    {
+      "reference": "validate_dutch_bsn",
+      "value": "12345681",
+      "expected": false
+    },
+    {
+      "reference": "validate_dutch_bsn",
+      "value": "00000000",
+      "expected": false
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "185052A12345633",
+      "expected": true
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "185052a12345633",
+      "expected": true
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "1 85 05 75 001 234 75",
+      "expected": true
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "1.85.05.75.001.234.75",
+      "expected": true
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "1850575100046+9",
+      "expected": true
+    },
+    {
+      "reference": "validate_french_nir",
+      "value": "18505750012347\u0665",
+      "expected": true
+    },
+    {
+      "reference": "validate_spanish_dni",
+      "value": "12345678z",
+      "expected": true
+    },
+    {
+      "reference": "validate_spanish_dni",
+      "value": " 12345678 Z ",
+      "expected": true
+    },
+    {
+      "reference": "validate_spanish_dni",
+      "value": "1234567\u0668Z",
+      "expected": true
+    },
+    {
+      "reference": "validate_spanish_dni",
+      "value": "12345678\u001cZ",
+      "expected": true
+    }
+  ]
+}

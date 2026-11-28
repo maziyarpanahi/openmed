@@ -9,6 +9,7 @@ from typing import Any, Literal, Mapping, Optional
 
 import httpx
 
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.decision import (
     DecisionRequest as FixedOptionDecisionRequest,
 )
@@ -309,6 +310,7 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         request_fields=_request_field_names(PrivacyGatewayRequest),
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
+    "capabilities": ClientEndpoint(method="GET", path="/v1/capabilities"),
     "journey_resources": ClientEndpoint(method="GET", path="/v1/journey/resources"),
     "system_one": ClientEndpoint(
         method="POST",
@@ -354,7 +356,7 @@ CLIENT_OPENAPI_EXCLUSIONS: Mapping[str, str] = {
 }
 
 
-class OpenMedAPIError(RuntimeError):
+class OpenMedAPIError(RuntimeError, LegacyRootedError):
     """Raised when the REST service returns a non-2xx error envelope."""
 
     def __init__(
@@ -678,6 +680,10 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
     def loaded_models(self, *, request_id: Optional[str] = None) -> JsonDict:
         """Return loaded model and warm-pool state."""
         return self._request("GET", "/models/loaded", request_id=request_id)
+
+    def capabilities(self, *, request_id: Optional[str] = None) -> JsonDict:
+        """Return the server's value-free capability descriptor and digest."""
+        return self._request("GET", "/v1/capabilities", request_id=request_id)
 
     def journey_resources(
         self,

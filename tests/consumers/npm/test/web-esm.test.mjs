@@ -58,6 +58,18 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/index.cjs",
     "dist/index.d.ts",
     "dist/index.d.cts",
+    "dist/catalog.js",
+    "dist/catalog.cjs",
+    "dist/catalog.d.ts",
+    "dist/catalog.d.cts",
+    "dist/multimodal/index.js",
+    "dist/multimodal/index.cjs",
+    "dist/multimodal/index.d.ts",
+    "dist/multimodal/index.d.cts",
+    "dist/speech/index.js",
+    "dist/speech/index.cjs",
+    "dist/speech/index.d.ts",
+    "dist/speech/index.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -193,6 +205,81 @@ test("local model references load with local files only", async () => {
   assert.equal(spans.length, hipaaCase.entities.length);
   assert.equal(openmed.isLocalModelReference("./models/installed-consumer"), true);
   assert.equal(openmed.isLocalModelReference(openmed.DEFAULT_MODEL_ID), false);
+});
+
+test("openmed/catalog lists bundled ONNX models offline", async () => {
+  const catalog = await import("openmed/catalog");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/catalog"));
+  assert.ok(resolved.endsWith("catalog.js"), "esm_catalog_entry");
+  const entries = catalog.listModels();
+  assert.ok(entries.length > 0, "catalog_empty");
+  for (const entry of entries) {
+    assert.ok(entry.formats.length > 0, "catalog_formats");
+    assert.ok(
+      entry.formats.every((format) => format.toLowerCase().startsWith("onnx")),
+      "catalog_non_onnx",
+    );
+  }
+  const first = entries[0];
+  assert.equal(catalog.getModel(first.repo_id), first);
+  assert.equal(catalog.getModel("OpenMed/not-in-the-catalog"), undefined);
+  assert.equal(Object.hasOwn(openmed, "listModels"), false, "catalog_in_main_entry");
+});
+
+test("openmed/multimodal admits packets offline from the installed build", async () => {
+  const multimodal = await import("openmed/multimodal");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/multimodal"));
+  assert.match(resolved, /multimodal[\\/]index\.js$/, "esm_multimodal_entry");
+  assert.equal(multimodal.MULTIMODAL_PACKET_SCHEMA, "openmed.multimodal.apple.v1");
+  await assert.rejects(multimodal.admitMultimodalPacket("{}"), (error) => {
+    assert.ok(error instanceof multimodal.MultimodalContractError, "multimodal_error_type");
+    assert.equal(error.code, "invalid_multimodal_contract");
+    return true;
+  });
+  assert.equal(
+    Object.hasOwn(openmed, "admitMultimodalPacket"),
+    false,
+    "multimodal_in_main_entry",
+  );
+});
+
+test("openmed/speech validates token timings from the installed build", async () => {
+  const speech = await import("openmed/speech");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/speech"));
+  assert.match(resolved, /speech[\\/]index\.js$/, "esm_speech_entry");
+  const token = new speech.SpeechTokenTiming({
+    tokenIndex: 0,
+    startMilliseconds: 500,
+    endMilliseconds: 650,
+    confidencePPM: 750000,
+    text: "synthetic",
+  });
+  const result = new speech.SpeechRecognition({ text: "synthetic", tokenTimes: [token] });
+  assert.equal(result.alignmentStatus, "aligned");
+  assert.equal(JSON.stringify(result).includes("synthetic"), false, "speech_text_serialized");
+  assert.throws(
+    () =>
+      new speech.SpeechTokenTiming({
+        tokenIndex: 0,
+        startMilliseconds: -1,
+        endMilliseconds: 650,
+        confidencePPM: 750000,
+        text: "synthetic",
+      }),
+    (error) => error instanceof speech.SpeechContractError && error.code === "speech_hypothesis_invalid",
+  );
+  assert.equal(Object.hasOwn(openmed, "SpeechTokenTiming"), false, "speech_in_main_entry");
+});
+
+test("openmed/validators checks synthetic identifiers offline", async () => {
+  const validators = await import("openmed/validators");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/validators"));
+  assert.ok(resolved.endsWith("validators.js"), "esm_validators_entry");
+  // Synthetic Luhn and NHS test-range values; never from a person.
+  assert.equal(validators.validateLuhn("4992737877893288"), true);
+  assert.equal(validators.validateLuhn("0992737877893288"), false);
+  assert.equal(validators.validateUkNhsNumber("9990000018"), true);
+  assert.equal(Object.hasOwn(openmed, "validateLuhn"), false, "validators_on_main_entry");
 });
 
 test("installed package made no network requests", () => {

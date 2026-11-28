@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.mlx.models.whisper import WhisperAssets, WhisperProcess
 from openmed.multimodal.asr_hallucination import (
     AsrHypothesisSegment,
@@ -51,7 +52,7 @@ from openmed.multimodal.streaming.speech.providers import (
 from openmed.multimodal.streaming.transcript.revision_ledger import TranscriptToken
 
 
-class OfflineAsrError(ValueError):
+class OfflineAsrError(ValueError, LegacyRootedError):
     """A controlled failure which never includes audio or recognized text."""
 
 

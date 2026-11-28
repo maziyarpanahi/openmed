@@ -158,6 +158,30 @@
           "response": []
         },
         {
+          "name": "Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/capabilities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "capabilities"
+              ]
+            },
+            "description": "Return the value-free capability descriptor: installed backends and surfaces, served model ids, schema versions, policy profiles and a digest. Requires models:read when authentication is enabled."
+          },
+          "response": []
+        },
+        {
           "name": "Unload Models",
           "request": {
             "method": "POST",

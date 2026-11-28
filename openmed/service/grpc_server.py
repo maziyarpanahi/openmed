@@ -15,6 +15,7 @@ from typing import Any, Callable
 import grpc
 from google.protobuf import struct_pb2
 
+from openmed.core.capabilities import capability_descriptor
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
@@ -118,6 +119,21 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
             yield from self._stream_deidentify(request, context)
         finally:
             self.admission.leave(streaming=True)
+
+    def GetCapabilities(self, request, context):
+        """Return the canonical capability descriptor of this server.
+
+        The response carries the same fields and digest as REST
+        ``GET /v1/capabilities`` for the same runtime, loads no model, and
+        never contains hostnames, paths or environment values.
+        """
+        del request
+        return self._unary(
+            context,
+            lambda: capabilities_response(
+                capability_descriptor(served_models=self.runtime.served_model_ids())
+            ),
+        )
 
     def _unary(self, context: grpc.ServicerContext, operation: Callable[[], Any]):
         # Refuse incompatible peers before admission, parsing or model work.
@@ -496,6 +512,47 @@ def _abort_incompatible_peer(context: Any) -> None:
     rejection = _peer_rejection(context)
     if rejection is not None:
         context.abort(*rejection)
+
+
+def capabilities_response(
+    descriptor: Mapping[str, Any],
+) -> openmed_pb2.CapabilitiesResponse:
+    """Convert a capability descriptor into its typed protobuf response.
+
+    Args:
+        descriptor: A descriptor from
+            :func:`openmed.core.capabilities.capability_descriptor`.
+
+    Returns:
+        The response message, field for field, digest included.
+    """
+    return openmed_pb2.CapabilitiesResponse(
+        schema=str(descriptor["schema"]),
+        schema_version=int(descriptor["schema_version"]),
+        backends=[
+            openmed_pb2.CapabilityBackend(
+                name=str(item["name"]),
+                extra=str(item["extra"]),
+                available=bool(item["available"]),
+            )
+            for item in descriptor["backends"]
+        ],
+        surfaces=[
+            openmed_pb2.CapabilitySurface(
+                name=str(item["name"]), available=bool(item["available"])
+            )
+            for item in descriptor["surfaces"]
+        ],
+        served_models=[str(item) for item in descriptor["served_models"]],
+        schema_versions=[
+            openmed_pb2.CapabilitySchemaVersion(
+                name=str(item["name"]), version=int(item["version"])
+            )
+            for item in descriptor["schema_versions"]
+        ],
+        policy_profiles=[str(item) for item in descriptor["policy_profiles"]],
+        digest=str(descriptor["digest"]),
+    )
 
 
 def _run_unary(context: grpc.ServicerContext, operation: Callable[[], Any]) -> Any:

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from openmed.agent.correlation import RunId
+from openmed.core.errors import LegacyRootedError
 
 from .access_tickets import (
     _DATA_CLASS_RE,
@@ -42,7 +43,7 @@ _REASONS = frozenset(
 )
 
 
-class AccessEventError(ValueError):
+class AccessEventError(ValueError, LegacyRootedError):
     """Expose a controlled code without payloads, paths, or provider messages."""
 
     def __init__(self, code: str) -> None:

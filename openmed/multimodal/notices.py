@@ -14,6 +14,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, ClassVar, cast
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "NOTICE_CATALOG",
     "NOTICE_RESULT_TYPES",
@@ -30,7 +32,7 @@ __all__ = [
 MAX_NOTICE_RESULT_JSON_BYTES = 64 * 1024
 
 
-class MultimodalNoticeError(ValueError):
+class MultimodalNoticeError(ValueError, LegacyRootedError):
     """Value-free failure of the multimodal notice or review contract."""
 
 

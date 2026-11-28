@@ -21,6 +21,33 @@ type AnalyzePayload {
   metadata: JSON!
 }
 
+type Capabilities {
+  schema: String!
+  schemaVersion: Int!
+  backends: [CapabilityBackend!]!
+  surfaces: [CapabilitySurface!]!
+  servedModels: [String!]!
+  schemaVersions: [CapabilitySchemaVersion!]!
+  policyProfiles: [String!]!
+  digest: String!
+}
+
+type CapabilityBackend {
+  name: String!
+  extra: String!
+  available: Boolean!
+}
+
+type CapabilitySchemaVersion {
+  name: String!
+  version: Int!
+}
+
+type CapabilitySurface {
+  name: String!
+  available: Boolean!
+}
+
 input DeidentifyInput {
   text: String!
   method: String! = "mask"
@@ -136,12 +163,12 @@ enum JourneyResourceKind {
 }
 
 type OpenMedSpan {
-  label: String!
-  start: Int
-  end: Int
-  text: String
+  label: String! @deprecated(reason: "Use canonicalLabel. label is kept for compatibility; removing it is a 5.0 decision.")
+  text: String @deprecated(reason: "Use textHash. text can carry the raw span surface and is kept for compatibility; removing it is a 5.0 decision.")
   schemaVersion: Int
   docId: String
+  start: Int
+  end: Int
   textHash: String
   entityType: String
   canonicalLabel: String
@@ -184,6 +211,7 @@ type Query {
   analyze(input: AnalyzeInput!): AnalyzePayload!
   deidentify(input: DeidentifyInput!): DeidentifyPayload!
   entityTypes: [EntityType!]!
+  capabilities: Capabilities!
   journeyResources(resourceType: JourneyResourceKind!, namespace: String = null, purpose: String = null, role: String = null, attributes: [String!] = null, consentState: String = null, exportPolicy: String = null, first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
 }
 

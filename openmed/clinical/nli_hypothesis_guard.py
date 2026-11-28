@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 NLI_HYPOTHESIS_GUARD_SCHEMA_VERSION: Final[int] = 1
 DEFAULT_MAX_HYPOTHESIS_CHARACTERS: Final[int] = 240
 DEFAULT_MAX_HYPOTHESIS_CLAUSES: Final[int] = 2
@@ -32,7 +34,7 @@ _ELIDED_SUBJECT_ASSERTION_RE = re.compile(
 )
 
 
-class HypothesisGuardError(ValueError):
+class HypothesisGuardError(ValueError, LegacyRootedError):
     """Raised when the hypothesis guard contract is invalid."""
 
 

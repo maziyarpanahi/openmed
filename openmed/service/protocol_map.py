@@ -31,6 +31,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional, Union
 
+from openmed.core.errors import LegacyRootedError
+
 from .api_compatibility import (
     DEFAULT_CONTRACT_PATH,
     REPOSITORY_ROOT,
@@ -76,14 +78,14 @@ _MAX_PATH_DEPTH = 3
 Status = Union[int, str, None]
 
 
-class ProtocolMapError(ValueError):
+class ProtocolMapError(ValueError, LegacyRootedError):
     """Raised when the protocol map document is not structurally valid.
 
     Messages are fixed strings; they never echo values from the document.
     """
 
 
-class ProtocolDriftError(RuntimeError):
+class ProtocolDriftError(RuntimeError, LegacyRootedError):
     """Raised when a transport and the protocol map have drifted apart.
 
     Attributes:

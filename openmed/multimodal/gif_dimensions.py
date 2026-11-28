@@ -6,6 +6,8 @@ import struct
 from dataclasses import dataclass
 from typing import BinaryIO, Callable, Final, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_GIF_HEADER_BYTES",
     "DEFAULT_MAX_GIF_PIXELS",
@@ -18,7 +20,7 @@ DEFAULT_MAX_GIF_HEADER_BYTES: Final[int] = 13 + 3 * 256
 DEFAULT_MAX_GIF_PIXELS: Final[int] = 100_000_000
 
 
-class GifDimensionsError(ValueError):
+class GifDimensionsError(ValueError, LegacyRootedError):
     """Value-free failure for malformed, truncated, or over-limit GIF headers."""
 
     def __init__(self, category: str) -> None:

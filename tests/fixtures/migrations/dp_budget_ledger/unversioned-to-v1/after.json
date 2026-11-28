@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "composition": "basic",
+      "max_delta": 1e-05,
+      "max_epsilon": 2.0,
+      "policy_fingerprint": "sha256:e980367f541a571113d0da7308cbfbf6275c893871da465b4db7779bf9e52cde",
+      "release_id": "release-a",
+      "spent_delta": 1e-06,
+      "spent_epsilon": 0.5
+    }
+  ],
+  "schema_version": "openmed.dp_budget_ledger.v1"
+}

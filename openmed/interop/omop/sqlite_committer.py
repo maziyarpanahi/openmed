@@ -16,6 +16,8 @@ from functools import lru_cache, wraps
 from itertools import islice
 from typing import Any, ParamSpec, TypeVar
 
+from openmed.core.errors import LegacyRootedError
+
 from ..omop_rollback_manifest import (
     OmopRollbackManifest,
     OmopRollbackManifestError,
@@ -95,7 +97,7 @@ _TARGETS = {
 }
 
 
-class OmopDatabaseError(ValueError):
+class OmopDatabaseError(ValueError, LegacyRootedError):
     """A closed database-adapter failure with no SQL or row-value details."""
 
     def __init__(self, code: str) -> None:

@@ -1,78 +1,18 @@
+import {
+  CANONICAL_LABELS,
+  POLICY_LABELS,
+  SPAN_ACTIONS,
+  type CanonicalLabel,
+  type PolicyLabel,
+  type SpanAction,
+} from "./generated/contract-types";
+
+// Label, policy and action lists are generated from span.schema.json by
+// scripts/codegen/emit_ts_types.py; edit the schema and regenerate instead.
+export { CANONICAL_LABELS, POLICY_LABELS, SPAN_ACTIONS };
+export type { CanonicalLabel, PolicyLabel, SpanAction };
+
 export const OPENMED_SPAN_SCHEMA_VERSION = 1 as const;
-
-export const CANONICAL_LABELS = [
-  "ACCOUNT_NUMBER",
-  "AGE",
-  "AMOUNT",
-  "API_KEY",
-  "BIC",
-  "BITCOIN_ADDRESS",
-  "BUILDING_NUMBER",
-  "CREDIT_CARD",
-  "CREDIT_CARD_ISSUER",
-  "CURRENCY",
-  "CVV",
-  "DATE",
-  "DATE_OF_BIRTH",
-  "EMAIL",
-  "ETHEREUM_ADDRESS",
-  "EYE_COLOR",
-  "FIRST_NAME",
-  "GENDER",
-  "GPS_COORDINATES",
-  "HEIGHT",
-  "IBAN",
-  "ID_NUM",
-  "IMEI",
-  "IP_ADDRESS",
-  "JOB_DEPARTMENT",
-  "JOB_TITLE",
-  "LAST_NAME",
-  "LITECOIN_ADDRESS",
-  "LOCATION",
-  "MAC_ADDRESS",
-  "MASKED_NUMBER",
-  "MIDDLE_NAME",
-  "OCCUPATION",
-  "ORDINAL_DIRECTION",
-  "ORGANIZATION",
-  "OTHER",
-  "PASSWORD",
-  "PERSON",
-  "PHONE",
-  "PIN",
-  "PREFIX",
-  "SSN",
-  "STREET_ADDRESS",
-  "TIME",
-  "URL",
-  "USER_AGENT",
-  "USERNAME",
-  "VEHICLE_REGISTRATION",
-  "VIN",
-  "ZIPCODE"
-] as const;
-
-export type CanonicalLabel = (typeof CANONICAL_LABELS)[number];
-
-export const POLICY_LABELS = [
-  "DIRECT_IDENTIFIER",
-  "QUASI_IDENTIFIER",
-  "CLINICAL_CONCEPT"
-] as const;
-
-export type PolicyLabel = (typeof POLICY_LABELS)[number];
-
-export const SPAN_ACTIONS = [
-  "keep",
-  "redact",
-  "replace",
-  "mask",
-  "hash",
-  "format_preserve"
-] as const;
-
-export type SpanAction = (typeof SPAN_ACTIONS)[number];
 
 export type TextHash = `hmac-sha256:${string}`;
 

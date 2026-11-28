@@ -6,6 +6,8 @@ import struct
 from dataclasses import dataclass
 from typing import BinaryIO, Callable, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "DEFAULT_MAX_BMP_HEADER_BYTES",
     "DEFAULT_MAX_BMP_PIXELS",
@@ -19,7 +21,7 @@ DEFAULT_MAX_BMP_PIXELS: Final[int] = 100_000_000
 _UINT32_MAX: Final[int] = (1 << 32) - 1
 
 
-class BmpDimensionsError(ValueError):
+class BmpDimensionsError(ValueError, LegacyRootedError):
     """Value-free failure for malformed or unsupported BMP headers."""
 
     def __init__(self, category: str) -> None:

@@ -131,6 +131,74 @@ content, and every failure raises `SpeechProviderError` whose message is a
 category string such as `buffer_limit_exceeded`. A session report names the
 provider, its revision, model fingerprint, lifecycle state and counters. Provider labels must be static asset identifiers, never patient or site identifiers; syntactic validation does not de-identify caller-supplied labels. Fingerprints are linkage metadata and require appropriate access and retention controls.
 
+## Android data contract
+
+The Android OpenMedKit validates transcripts with the same rules in
+`com.openmed.openmedkit.speech`. This package is the data contract only. Android
+has no audio capture or ASR provider yet.
+
+| Kotlin type | Rules |
+| --- | --- |
+| `SpeechTokenTiming` | `tokenIndex` 0 to 4096, millisecond times 0 to 86400000 with end not before start, `confidencePpm` 0 to 1000000, text up to 8192 Unicode scalars. |
+| `SpeechRecognition` | Text up to 8192 scalars, at most 4096 tokens with strictly increasing index and non-decreasing start and end times, optional decoder confidence in parts per million, and tokens only when `alignmentStatus` is `ALIGNED`. |
+| `SpeechEngineProvenance` | `providerId`, `providerRevision`, `modelFingerprint` and `language` follow the grammar in the table above. |
+
+A failure raises `SpeechContractException`. Its `error` is the Swift
+`StreamingSpeechError` code (`speech_hypothesis_invalid` or
+`speech_artifact_unverified`) and its `category` is the Python
+`SpeechProviderError` category, such as `token_start_ms_out_of_range`. Messages
+contain only those codes. `toString()` never includes transcript or token text,
+and the types hold no audio, path or endpoint. `SpeechContractParityTest` runs
+every case in `tests/fixtures/parity/speech_contract_v1.json`, the fixture the
+Python and Swift tests use:
+
+```bash
+cd android
+./gradlew :openmedkit:testDebugUnitTest --tests '*SpeechContractParityTest'
+```
+
+## Browser and Node.js types
+
+The `openmed` npm package carries the same data contract on the
+`openmed/speech` subpath. Browser and Electron hosts that run their own speech
+provider can check its output there. The subpath includes no audio capture,
+ASR engine or session, and the default `openmed` entry does not include it.
+
+```ts
+import { SpeechRecognition, SpeechTokenTiming } from "openmed/speech";
+
+const token = new SpeechTokenTiming({
+  tokenIndex: 0,
+  startMilliseconds: 500,
+  endMilliseconds: 650,
+  confidencePPM: 750_000,
+  text: tokenText,
+});
+const result = new SpeechRecognition({ text: hypothesisText, tokenTimes: [token] });
+```
+
+`SpeechTokenTiming`, `SpeechRecognition`, `SpeechPartialHypothesis`,
+`SpeechFinalizedSegment` and `SpeechEngineProvenance` apply the rules in the
+table above. Their field bounds and alignment-status rule follow OpenMedKit's
+Swift types:
+
+- token indices 0 to 4096, at most 4096 token timings;
+- times between 0 and 86400000 ms with `end` not before `start`;
+- confidences in parts per million;
+- text of at most 8192 Unicode code points (Swift `unicodeScalars`, Python
+  `len`), not UTF-16 code units;
+- `alignmentStatus` is `aligned` exactly when token timings are present.
+
+Finalized and partial tokens must also lie inside their segment or window, as
+in Python. Invalid timing or text throws `SpeechContractError` with code
+`speech_hypothesis_invalid`, and invalid provenance throws it with code
+`speech_artifact_unverified`, the same codes Swift's `StreamingSpeechError`
+uses. Each error names the offending field, never the value. Text is readable
+through `text` but stays out of `JSON.stringify` (which emits Python's
+value-free `to_dict()` fields), `String()` and `util.inspect`.
+`tests/web/test_speech_contract.spec.ts` runs the shared
+`tests/fixtures/parity/speech_contract_v1.json` fixture against these types.
+
 ## See also
 
 - [Streaming audio windows](../audio-windows.md)

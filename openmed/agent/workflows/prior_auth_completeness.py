@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 PRIOR_AUTH_COMPLETENESS_SCHEMA: Final = (
     "openmed.agent.workflows.prior_auth_completeness.v1"
 )
@@ -42,7 +44,7 @@ class ReviewerActionCode(str, Enum):
     REVIEW_UNSUPPORTED_STATEMENT = "review_unsupported_statement"
 
 
-class PriorAuthCompletenessError(ValueError):
+class PriorAuthCompletenessError(ValueError, LegacyRootedError):
     """A PHI-safe validation error.
 
     Args:

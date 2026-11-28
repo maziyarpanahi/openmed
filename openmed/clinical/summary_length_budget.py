@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_LENGTH_BUDGET_SCHEMA_VERSION: Final[int] = 1
 SUMMARY_LENGTH_BUDGET_POLICY_ID: Final[str] = "clinical_summary_v1"
 SUMMARY_LENGTH_BUDGET_DISCLAIMER: Final[str] = (
@@ -73,7 +75,7 @@ class SummaryLengthBudgetReason(str, Enum):
     UNSUPPORTED_SCHEMA = "unsupported_schema"
 
 
-class SummaryLengthBudgetError(ValueError):
+class SummaryLengthBudgetError(ValueError, LegacyRootedError):
     """Raised when a summary length budget cannot be built safely.
 
     The exception message contains only a fixed reason code and never echoes a

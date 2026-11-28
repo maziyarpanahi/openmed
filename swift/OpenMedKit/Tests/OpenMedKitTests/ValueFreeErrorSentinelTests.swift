@@ -25,6 +25,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     private static let delegatedTypes: [String: String] = [
         "OpenMedModelStoreError": "model store errors are owned by #3644",
         "ExtensionRedactionError": "swept by ExtensionTests/ExtensionErrorSentinelTests",
+        "OpenMedIntentError": "swept by OpenMedIntentsTests/RedactTextIntentTests",
     ]
 
     /// Private, payload-free markers caught inside their own file. The sweep
@@ -68,7 +69,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     private static let reasonStructErrors: Set<String> = [
         "DecisionCalibrationError", "DocumentRedactionPDF.Malformed", "ExecutionPlanResolver.MetadataInvalid",
         "OpenMedBundleArchive.Failure", "OpenMedBundleCacheError", "OpenMedManagedImportError",
-        "PortableBundle.Refusal", "PortableBundleCalibration.Malformed", "PortableBundleError",
+        "OpenMedSDKConfigError", "PortableBundle.Refusal", "PortableBundleCalibration.Malformed", "PortableBundleError",
         "PortableBundleJSON.Invalid",
     ]
 
@@ -698,8 +699,12 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         try addRawCases(DocumentRedactionExportError.self)
         try addRawCases(MultimodalContractRefusal.self)
         try addRawCases(MultimodalReviewError.self)
+        try addRawCases(OpenMedClinicalContextError.self)
+        try addRawCases(OpenMedDateShiftError.self)
         try addRawCases(OpenMedDecisionEncoderError.self)
         try addRawCases(OpenMedSecretProviderError.self)
+        try addRawCases(OpenMedTaskPackError.self)
+        try addRawCases(OpenMedSessionLifecycleError.self)
         try addRawCases(PHISentinelSweepError.self)
         try addRawCases(PhysiologicalWaveformError.self)
         try addRawCases(PreprocessingConformanceError.self)
@@ -714,6 +719,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
             .cancelled, .detectorFailure, .detectorResetFailure,
         ])
         add([MultimodalThermalError.invalidBudget])
+        add([OpenMedModelCatalogError.resourceMissing, .invalidEncoding, .invalidEntry(line: 2)])
         add([MultimodalNoticeError.invalidNotice, .invalidResult, .reviewerConfirmationRequired])
         add(OpenMedRuntimeError.allCases)
         add([
@@ -754,6 +760,11 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         add(PortableBundleReason.allCases.map(PortableBundleError.init))
         add(PortableBundleReason.allCases.map(PortableBundle.Refusal.init))
         add(DecisionCalibrationReason.allCases.map(DecisionCalibrationError.init))
+        add([
+            OpenMedSDKConfigError(
+                issues: OpenMedSDKConfigIssue.Code.allCases.map { OpenMedSDKConfigIssue(code: $0, field: nil) }
+                    + OpenMedSDKConfig.Field.allCases.map { OpenMedSDKConfigIssue(code: .wrongType, field: $0) })
+        ])
         add(
             OpenMedBundleCacheReason.allCases.map { OpenMedBundleCacheError($0) }
                 + [OpenMedBundleCacheError(.bundleRejected, bundleReason: .signatureInvalid)]

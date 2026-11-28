@@ -42,6 +42,7 @@ from openmed.agent.workflows.recovery import (
     recover_workflow,
     validate_checkpoint_lineage,
 )
+from openmed.core.errors import LegacyRootedError
 
 from .tokens import (
     MAX_APPROVAL_CLOCK_SKEW_SECONDS,
@@ -57,7 +58,7 @@ _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 _MAX_INT: Final = 2**63 - 1
 
 
-class RestoreReconciliationError(ValueError):
+class RestoreReconciliationError(ValueError, LegacyRootedError):
     """Fail-closed restore reconciliation error with a fixed code.
 
     Args:

@@ -10,6 +10,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 from .drain import ServiceShuttingDownError
 
 CIRCUIT_CLOSED = "closed"
@@ -41,8 +43,10 @@ class CircuitBreakerSnapshot:
     retry_after_seconds: Optional[int] = None
 
 
-class CircuitBreakerOpenError(RuntimeError):
+class CircuitBreakerOpenError(RuntimeError, LegacyRootedError):
     """Raised when a model/backend circuit is open and should fail fast."""
+
+    code = "circuit_breaker_open"
 
     def __init__(self, retry_after_seconds: int) -> None:
         self.retry_after_seconds = max(int(retry_after_seconds), 0)

@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from openmed.core.errors import LegacyRootedError
+
 SHUTTING_DOWN = "shutting_down"
 DRAIN_DEADLINE_EXCEEDED = "drain_deadline_exceeded"
 PARTICIPANT_FAILED = "participant_failed"
@@ -100,13 +102,15 @@ class DrainState(str, Enum):
     DRAINED = "drained"
 
 
-class ServiceShuttingDownError(RuntimeError):
+class ServiceShuttingDownError(RuntimeError, LegacyRootedError):
     """Typed, retryable refusal raised once a surface stops admitting work.
 
     Args:
         message: Fixed, value-free message.
         retry_after_seconds: Hint for when a client may retry elsewhere.
     """
+
+    code = "shutting_down"
 
     reason_code = SHUTTING_DOWN
 
@@ -564,7 +568,7 @@ class CallbackDrainParticipant(DrainParticipant):
         return 0 if self._outstanding is None else int(self._outstanding())
 
 
-class DrainRegistrationError(RuntimeError):
+class DrainRegistrationError(RuntimeError, LegacyRootedError):
     """Raised when a participant is registered after a drain started."""
 
 

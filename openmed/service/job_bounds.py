@@ -21,6 +21,8 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 DEFAULT_MAX_RUNNING_JOBS = 4
 DEFAULT_MAX_RETAINED_JOBS = 256
 DEFAULT_TERMINAL_TTL_SECONDS = 3600.0
@@ -70,12 +72,14 @@ class BulkJobBounds:
             raise ValueError("max_running_jobs must not exceed max_retained_jobs")
 
 
-class BulkJobsSaturatedError(RuntimeError):
+class BulkJobsSaturatedError(RuntimeError, LegacyRootedError):
     """Raised when a job manager already runs its configured maximum.
 
     The error carries only the manager kind and configured numbers, never a
     request path, URL or credential.
     """
+
+    code = "bulk_jobs_saturated"
 
     def __init__(
         self,

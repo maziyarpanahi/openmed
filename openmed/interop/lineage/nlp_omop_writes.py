@@ -15,6 +15,8 @@ from dataclasses import dataclass, field, replace
 from itertools import islice
 from typing import Any, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from ..omop.cdm_loader import (
     _PRIMARY_KEYS,
     _SCHEMA_COLUMNS,
@@ -105,7 +107,7 @@ _CODES = frozenset(
 )
 
 
-class NlpOmopStagingError(ValueError):
+class NlpOmopStagingError(ValueError, LegacyRootedError):
     """A closed, value-free staging or approval failure."""
 
     def __init__(self, code: str) -> None:

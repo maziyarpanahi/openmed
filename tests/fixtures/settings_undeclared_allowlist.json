@@ -1,0 +1,5 @@
+{
+  "description": "OPENMED_* identifiers in openmed/ that settings.schema.json does not declare yet. Shrink-only: remove an entry once its setting is declared or it moves to x-excluded-identifiers in openmed/core/settings.schema.json, and lower ALLOWLIST_CEILING in tests/unit/core/test_settings_declared.py.",
+  "undeclared": {},
+  "dynamic": {}
+}

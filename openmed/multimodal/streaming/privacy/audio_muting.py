@@ -9,6 +9,8 @@ from bisect import bisect_right
 from dataclasses import asdict, dataclass
 from enum import Enum
 
+from openmed.core.errors import LegacyRootedError
+
 from ...audio_resample_plan import plan_audio_resampling
 from ..transcript.revision_ledger import REVISION_SCHEMA_VERSION, TranscriptToken
 from .audio_retention import AudioRetentionSession
@@ -20,7 +22,7 @@ _DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 _REF = re.compile(r"[a-f0-9]{32}\Z")
 
 
-class AudioMutingError(ValueError):
+class AudioMutingError(ValueError, LegacyRootedError):
     """Controlled refusal; no speech, samples, paths or identifiers."""
 
 

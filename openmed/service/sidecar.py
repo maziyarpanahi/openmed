@@ -23,6 +23,7 @@ from time import perf_counter
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping, TextIO
 
+from openmed.core.errors import LegacyRootedError
 from openmed.service.secret_files import SecretSourceError, read_secret_setting
 from openmed.utils.gateway import (
     DEFAULT_MAX_TEXT_BYTES,
@@ -79,7 +80,7 @@ _REQUEST_KEYS = {
 }
 
 
-class SidecarRequestError(ValueError):
+class SidecarRequestError(ValueError, LegacyRootedError):
     """A safe validation error suitable for the sidecar error envelope."""
 
 

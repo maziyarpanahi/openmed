@@ -21,6 +21,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, TypeVar
 
+from openmed.core.errors import LegacyRootedError
+
 _SCHEMA = "openmed.audio.retention.v1"
 _REF = re.compile(r"[0-9a-f]{32}\Z")
 _T = TypeVar("_T")
@@ -35,7 +37,7 @@ _VIOLATIONS = frozenset(
 )
 
 
-class AudioRetentionError(ValueError):
+class AudioRetentionError(ValueError, LegacyRootedError):
     """Fixed-code refusal with no audio, source paths or provider exceptions."""
 
 

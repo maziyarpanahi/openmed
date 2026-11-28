@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 REVISION_SCHEMA_VERSION = "openmed.transcript.revisions.v1"
 MAX_TEXT_LENGTH = 65_536
 MAX_TOKENS = 4096
@@ -18,7 +20,7 @@ MAX_TIME_MS = 86_400_000
 _REF = re.compile(r"[0-9a-f]{32}\Z")
 
 
-class RevisionLedgerError(ValueError):
+class RevisionLedgerError(ValueError, LegacyRootedError):
     """Value-free malformed, stale or sealed-ledger error."""
 
 

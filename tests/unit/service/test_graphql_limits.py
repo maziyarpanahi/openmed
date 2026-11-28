@@ -783,6 +783,7 @@ def test_normal_operations_and_client_generation_still_work(
     client_schema = build_client_schema(schema_response.json()["data"])
     assert set(client_schema.query_type.fields) == {
         "analyze",
+        "capabilities",
         "deidentify",
         "entityTypes",
         "journeyResources",

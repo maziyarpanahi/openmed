@@ -26,6 +26,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .cdm_loader import (
@@ -149,7 +150,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class OmopFactProjectionError(ValueError):
+class OmopFactProjectionError(ValueError, LegacyRootedError):
     """Base error for invalid fact-projection contracts."""
 
 

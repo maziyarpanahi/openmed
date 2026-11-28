@@ -24,6 +24,7 @@ from openmed.agent.permissions.grants import (
     CapabilityGrantRequest,
     CapabilityGrantVerifier,
 )
+from openmed.core.errors import LegacyRootedError
 
 ARGUMENT_CLASSIFICATION_REPORT_SCHEMA_VERSION: Final = (
     "openmed.agent.argument_classification.v1"
@@ -56,7 +57,7 @@ class ArgumentAction(str, Enum):
     BLOCK = "block"
 
 
-class ArgumentClassifierError(ValueError):
+class ArgumentClassifierError(ValueError, LegacyRootedError):
     """Base class for value-free argument-classification failures."""
 
     def __init__(self, code: str, field_name: str) -> None:

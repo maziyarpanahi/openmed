@@ -25,6 +25,46 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./catalog": {
+      "import": {
+        "types": "./dist/catalog.d.ts",
+        "default": "./dist/catalog.js"
+      },
+      "require": {
+        "types": "./dist/catalog.d.cts",
+        "default": "./dist/catalog.cjs"
+      }
+    },
+    "./multimodal": {
+      "import": {
+        "types": "./dist/multimodal/index.d.ts",
+        "default": "./dist/multimodal/index.js"
+      },
+      "require": {
+        "types": "./dist/multimodal/index.d.cts",
+        "default": "./dist/multimodal/index.cjs"
+      }
+    },
+    "./speech": {
+      "import": {
+        "types": "./dist/speech/index.d.ts",
+        "default": "./dist/speech/index.js"
+      },
+      "require": {
+        "types": "./dist/speech/index.d.cts",
+        "default": "./dist/speech/index.cjs"
+      }
+    },
+    "./validators": {
+      "import": {
+        "types": "./dist/validators.d.ts",
+        "default": "./dist/validators.js"
+      },
+      "require": {
+        "types": "./dist/validators.d.cts",
+        "default": "./dist/validators.cjs"
+      }
     }
   },
   "files": [
@@ -33,11 +73,13 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
+    "build": "tsup src/index.ts src/catalog.ts src/multimodal/index.ts src/speech/index.ts src/validators.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_examples_node.spec.ts ../../tests/web/test_ort_web_loader.spec.ts ../../tests/web/test_webgpu_session.spec.ts ../../tests/web/test_model_loader_env.spec.ts ../../tests/web/test_kit_parity.spec.ts ../../tests/web/test_portable_policy.spec.ts ../../tests/web/test_inference_worker.spec.ts ../../tests/web/test_tokenizer_conformance.spec.ts ../../tests/web/test_decision_runtime.spec.ts ../../tests/web/test_portable_bundle.spec.ts ../../tests/web/test_device_capabilities.spec.ts ../../tests/web/test_bundle_cache.spec.ts ../../tests/web/test_portable_bundle_calibration.spec.ts",
-    "prepack": "npm run build"
+    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_examples_node.spec.ts ../../tests/web/test_ort_web_loader.spec.ts ../../tests/web/test_webgpu_session.spec.ts ../../tests/web/test_model_loader_env.spec.ts ../../tests/web/test_kit_parity.spec.ts ../../tests/web/test_portable_policy.spec.ts ../../tests/web/test_inference_worker.spec.ts ../../tests/web/test_tokenizer_conformance.spec.ts ../../tests/web/test_decision_runtime.spec.ts ../../tests/web/test_portable_bundle.spec.ts ../../tests/web/test_device_capabilities.spec.ts ../../tests/web/test_bundle_cache.spec.ts ../../tests/web/test_portable_bundle_calibration.spec.ts ../../tests/web/test_model_catalog.spec.ts ../../tests/web/test_pii_pack.spec.ts ../../tests/web/test_contract_types.spec.ts ../../tests/web/test_api_report.spec.ts ../../tests/web/test_sdk_config.spec.ts ../../tests/web/test_multimodal_contract.spec.ts ../../tests/web/test_speech_contract.spec.ts ../../tests/web/test_receipt_verification.spec.ts ../../tests/web/test_error_codes.spec.ts ../../tests/web/test_date_shift.spec.ts ../../tests/web/test_identifier_validators.spec.ts",
+    "prepack": "npm run build",
+    "api:check": "npm run build && node scripts/api-report.mjs --check",
+    "api:update": "npm run build && node scripts/api-report.mjs --update"
   },
   "peerDependencies": {
     "@huggingface/transformers": ">=3.0.0",
@@ -53,6 +95,7 @@
   },
   "devDependencies": {
     "@huggingface/tokenizers": "0.2.0",
+    "@microsoft/api-extractor": "7.60.1",
     "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",

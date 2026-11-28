@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
@@ -14,6 +15,7 @@ from strawberry.fastapi import BaseContext
 from strawberry.scalars import JSON
 from strawberry.types import Info
 
+from openmed.core.capabilities import capability_descriptor
 from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
@@ -29,6 +31,7 @@ from .admission import (
 from .auth import AuthPrincipal, scopes_satisfy
 from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE, ServiceShuttingDownError
 from .graphql_limits import GraphQLLimitsExtension
+from .graphql_span_fields import CANONICAL_SPAN_FIELDS
 from .journey_access import JourneyAccessGate, JourneyAccessRequest
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -48,6 +51,8 @@ GRAPHQL_FIELD_SCOPES = {
     "deidentify": ("pii:write",),
     "journeyResources": ("journey:read",),
     "entityTypes": (),
+    # Same read scope as REST GET /v1/capabilities and GET /models/loaded.
+    "capabilities": ("models:read",),
 }
 # Root fields that start model or heavy work, mirroring the REST route
 # policies of ``/analyze``, ``/pii/deidentify`` and ``/v1/journey/resources``.
@@ -419,60 +424,107 @@ class Entity:
         )
 
 
-@strawberry.type(name="OpenMedSpan")
-class OpenMedSpanType:
-    """Canonical OpenMed span fields exposed for selective retrieval."""
+SPAN_LABEL_DEPRECATION = (
+    "Use canonicalLabel. label is kept for compatibility; removing it is a 5.0 "
+    "decision."
+)
+SPAN_TEXT_DEPRECATION = (
+    "Use textHash. text can carry the raw span surface and is kept for "
+    "compatibility; removing it is a 5.0 decision."
+)
+# GraphQL types emitted by scripts/codegen/span_graphql.py and their Strawberry
+# annotations. A type missing here fails at import rather than at query time.
+_SPAN_FIELD_ANNOTATIONS: Mapping[str, Any] = {
+    "String": Optional[str],
+    "Int": Optional[int],
+    "Float": Optional[float],
+    "Boolean": Optional[bool],
+    "JSON!": JSON,
+    "[String!]!": list[str],
+    "[Int!]!": list[int],
+    "[Float!]!": list[float],
+    "[Boolean!]!": list[bool],
+    "[JSON!]!": list[JSON],
+}
+# Entity mappings name two canonical span fields differently.
+_SPAN_FIELD_FALLBACKS = {"score": "confidence", "replacement": "redacted_text"}
 
-    label: str
-    start: Optional[int]
-    end: Optional[int]
-    text: Optional[str]
-    schema_version: Optional[int]
-    doc_id: Optional[str]
-    text_hash: Optional[str]
-    entity_type: Optional[str]
-    canonical_label: Optional[str]
-    policy_label: Optional[str]
-    regulatory_tags: list[str]
-    score: Optional[float]
-    detector: Optional[str]
-    evidence: JSON
-    action: Optional[str]
-    replacement: Optional[str]
-    reversible_id: Optional[str]
-    section: Optional[str]
-    metadata: JSON
+
+def _span_field_value(kind: str, value: Any) -> Any:
+    """Convert one mapping value to its generated GraphQL field type."""
+    if kind.startswith("["):
+        item_kind = kind[1:-3]  # "[String!]!" -> "String"
+        return [_span_item_value(item_kind, item) for item in value or ()]
+    if kind == "JSON!":
+        return _json_mapping(value)
+    if kind == "Int":
+        return _optional_int(value)
+    if kind == "Float":
+        return _optional_float(value)
+    if kind == "Boolean":
+        return None if value is None else bool(value)
+    return _optional_str(value)
+
+
+def _span_item_value(kind: str, value: Any) -> Any:
+    """Convert one non-null list item to its generated GraphQL type."""
+    if kind == "JSON":
+        return _json_mapping(value)
+    if kind == "Int":
+        return int(value)
+    if kind == "Float":
+        return float(value)
+    if kind == "Boolean":
+        return bool(value)
+    return str(value)
+
+
+class _OpenMedSpanFields:
+    """Mapping projection shared by the generated ``OpenMedSpan`` type."""
 
     @classmethod
     def from_mapping(cls, item: Mapping[str, Any]) -> OpenMedSpanType:
         """Build a canonical span view from a span or entity mapping."""
-        entity_type = _optional_str(item.get("entity_type"))
-        canonical_label = _optional_str(item.get("canonical_label"))
-        label = str(item.get("label") or canonical_label or entity_type or "UNKNOWN")
-        score_value = item.get("score", item.get("confidence"))
-        return cls(
-            label=label,
-            start=_optional_int(item.get("start")),
-            end=_optional_int(item.get("end")),
-            text=_optional_str(item.get("text")),
-            schema_version=_optional_int(item.get("schema_version")),
-            doc_id=_optional_str(item.get("doc_id")),
-            text_hash=_optional_str(item.get("text_hash")),
-            entity_type=entity_type,
-            canonical_label=canonical_label,
-            policy_label=_optional_str(item.get("policy_label")),
-            regulatory_tags=[str(tag) for tag in item.get("regulatory_tags") or ()],
-            score=_optional_float(score_value),
-            detector=_optional_str(item.get("detector")),
-            evidence=_json_mapping(item.get("evidence")),
-            action=_optional_str(item.get("action")),
-            replacement=_optional_str(
-                item.get("replacement", item.get("redacted_text"))
-            ),
-            reversible_id=_optional_str(item.get("reversible_id")),
-            section=_optional_str(item.get("section")),
-            metadata=_json_mapping(item.get("metadata")),
+        values: dict[str, Any] = {}
+        for name, kind in CANONICAL_SPAN_FIELDS:
+            fallback = _SPAN_FIELD_FALLBACKS.get(name)
+            raw = item.get(name)
+            if fallback is not None:
+                raw = item.get(name, item.get(fallback))
+            values[name] = _span_field_value(kind, raw)
+        label = (
+            item.get("label")
+            or values.get("canonical_label")
+            or values.get("entity_type")
+            or "UNKNOWN"
         )
+        return cls(label=str(label), text=_optional_str(item.get("text")), **values)
+
+
+# Canonical fields come from the generated CANONICAL_SPAN_FIELDS, so the type
+# cannot drift from span.schema.json; ``label`` and ``text`` are deprecated
+# compatibility fields that the canonical span does not define.
+OpenMedSpanType = strawberry.type(
+    type(
+        "OpenMedSpanType",
+        (_OpenMedSpanFields,),
+        {
+            "__doc__": "Canonical OpenMed span fields exposed for selective retrieval.",
+            "__module__": __name__,
+            "__annotations__": {
+                "label": str,
+                "text": Optional[str],
+                **{
+                    name: _SPAN_FIELD_ANNOTATIONS[kind]
+                    for name, kind in CANONICAL_SPAN_FIELDS
+                },
+            },
+            "label": strawberry.field(deprecation_reason=SPAN_LABEL_DEPRECATION),
+            "text": strawberry.field(deprecation_reason=SPAN_TEXT_DEPRECATION),
+        },
+    ),
+    name="OpenMedSpan",
+)
 
 
 @strawberry.type
@@ -563,6 +615,81 @@ class EntityType:
 
     label: str
     policy_label: str
+
+
+@strawberry.type
+class CapabilityBackend:
+    """Whether one optional backend is installed."""
+
+    name: str
+    extra: str
+    available: bool
+
+
+@strawberry.type
+class CapabilitySurface:
+    """Whether the packages one OpenMed surface needs are installed."""
+
+    name: str
+    available: bool
+
+
+@strawberry.type
+class CapabilitySchemaVersion:
+    """The version of one canonical record schema."""
+
+    name: str
+    version: int
+
+
+@strawberry.type
+class Capabilities:
+    """The canonical, value-free capability descriptor of this server.
+
+    Field values come unchanged from the Python capability descriptor, so
+    ``digest`` equals the digest REST and the Python API report for the same
+    runtime. It never carries hostnames, paths or environment values.
+    """
+
+    schema: str
+    schema_version: int
+    backends: list[CapabilityBackend]
+    surfaces: list[CapabilitySurface]
+    served_models: list[str]
+    schema_versions: list[CapabilitySchemaVersion]
+    policy_profiles: list[str]
+    digest: str
+
+    @classmethod
+    def from_descriptor(cls, descriptor: Mapping[str, Any]) -> Capabilities:
+        """Project a capability descriptor onto the typed GraphQL object."""
+        return cls(
+            schema=str(descriptor["schema"]),
+            schema_version=int(descriptor["schema_version"]),
+            backends=[
+                CapabilityBackend(
+                    name=str(item["name"]),
+                    extra=str(item["extra"]),
+                    available=bool(item["available"]),
+                )
+                for item in descriptor["backends"]
+            ],
+            surfaces=[
+                CapabilitySurface(
+                    name=str(item["name"]), available=bool(item["available"])
+                )
+                for item in descriptor["surfaces"]
+            ],
+            served_models=[str(item) for item in descriptor["served_models"]],
+            schema_versions=[
+                CapabilitySchemaVersion(
+                    name=str(item["name"]), version=int(item["version"])
+                )
+                for item in descriptor["schema_versions"]
+            ],
+            policy_profiles=[str(item) for item in descriptor["policy_profiles"]],
+            digest=str(descriptor["digest"]),
+        )
 
 
 @strawberry.type
@@ -700,6 +827,23 @@ class Query:
             EntityType(label=label, policy_label=policy_label_for(label))
             for label in sorted(CANONICAL_LABELS)
         ]
+
+    @strawberry.field
+    async def capabilities(
+        self, info: Info[OpenMedGraphQLContext, None]
+    ) -> Capabilities:
+        """Return the capability descriptor without loading a model."""
+        try:
+            descriptor = await asyncio.to_thread(
+                capability_descriptor,
+                served_models=info.context.runtime.served_model_ids(),
+            )
+            return Capabilities.from_descriptor(descriptor)
+        except Exception:
+            raise GraphQLError(
+                SAFE_RESOLVER_ERROR,
+                extensions={"code": "OPENMED_RESOLVER_ERROR"},
+            ) from None
 
     @strawberry.field
     async def journey_resources(

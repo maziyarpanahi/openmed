@@ -53,6 +53,50 @@ const result = await deidentify(
 `{ variant: "fp32" }` or `{ variant: "fp16" }` when a different published
 variant is appropriate.
 
+## Model Catalog
+
+The `openmed/catalog` subpath lists the OpenMed ONNX models this release
+knows about, so an application can pick a model by language, size or license
+without querying the Hub. The rows are bundled in the package and listing them
+makes no network request; the default `openmed` entry does not include them.
+
+```ts
+import { getModel, listModels } from "openmed/catalog";
+
+const spanish = listModels({ language: "es", maxParamCount: 100_000_000 });
+const entry = getModel("OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android");
+```
+
+Each row has the same fields as the Android catalog: `repo_id`, `formats`
+(ONNX format tokens only), `tier`, `param_count`, `languages`, `license` and
+`reproducibility_hash`. Only permissively licensed models with at least one
+ONNX format are included. `listModels()` filters work like the Android
+`ModelCatalog.filter()`:
+
+| Filter | Matches |
+| --- | --- |
+| `format` | any of the row's formats, case-insensitive |
+| `tier` | the row's tier, case-insensitive; rows without a tier never match |
+| `maxParamCount` | `param_count <= maxParamCount`; rows without a count never match |
+| `language` | any of the row's languages, case-insensitive |
+| `license` | the row's license, case-insensitive |
+
+Every given filter must match, and results stay sorted by repo id. An unknown
+filter field, an empty token or a negative `maxParamCount` throws
+`ModelCatalogError` with code `invalid_filter`. `getModel()` matches the repo
+id exactly and returns `undefined` for ids outside the catalog.
+`createModelCatalog(rows)` and `parseModelCatalogJsonl(text)` build the same
+queryable catalog over your own rows, for example an Android catalog JSONL
+asset.
+
+The rows are generated from the repository's `models.jsonl` into
+`src/catalog.generated.ts`; never edit that file by hand. After a manifest
+change, regenerate it from the repository root with
+`python scripts/web/build_web_catalog.py`; CI runs the same command with
+`--check` and fails when the committed file is stale. `MODEL_CATALOG_DIGEST`
+is the SHA-256 of the rows as compact JSONL in Android field order, so it
+equals the digest of an Android catalog asset that holds the same rows.
+
 ## Node.js Example
 
 A runnable end-to-end script lives at
@@ -145,6 +189,93 @@ Downloading the default model implicitly on the first call is deprecated. A
 future major release will require explicit preparation: a local `model` path or
 a `pipeline` you load yourself. Prepare models that way now, and turn on
 offline-only mode to catch any download that remains.
+
+### PII Task Pack
+
+`piiPack` picks the PII model by job instead of by repository id, with the
+same ordered candidates as the Python, Swift and Android packs:
+
+```ts
+import { piiPack } from "openmed";
+
+const pack = await piiPack.load({ wasmPaths: "/ort/" }); // local files only
+const result = await pack.deidentify(text);
+showNotice(pack.notice); // your UI: show the review notice with the output
+```
+
+`piiPack.resolve()` lists the candidates without loading anything. `load()`
+tries them in rank order from local files only and fails with a
+`TaskPackError` (`local_model_unavailable`) rather than fetch; pass
+`allowRemoteModels: true` to let it download a candidate. Pass `pipeline` to
+run the pack over your own pipeline.
+
+### Portable SDK Configuration
+
+`parseSdkConfig()` reads the portable configuration document that the Python,
+Swift and Kotlin SDKs share (`confidence_threshold`, `local_only`, `model_id`,
+`model_revision`, `onnx_variant`, `policy_profile`). Unknown keys and bad values
+throw `SdkConfigError` with value-free `{ code, field }` issues. `local_only`
+defaults to `true`, and `toExtractPiiOptions()` maps it to
+`localFilesOnly: true, allowRemoteModels: false`, so a browser app sets one key
+instead of two flags:
+
+```ts
+import { deidentify, parseSdkConfig, toExtractPiiOptions } from "openmed";
+
+const config = parseSdkConfig({ model_id: "OpenMed/your-model-onnx" });
+const result = await deidentify(text, toExtractPiiOptions(config));
+```
+
+See `docs/configuration/sdk-config.md` for the keys, defaults and issue codes.
+
+### Date Shifting
+
+`stableDateShiftOffset()` returns the same patient-keyed day offset as
+Python's `openmed.core.date_shift.stable_offset_for()`, so every runtime shifts
+one patient's dates by the same number of days and keeps the intervals between
+them. `stableDateShiftOffsetFromSeed()` matches `stable_offset_from_seed()`, and
+`shiftIsoDate()` moves a `YYYY-MM-DD` date in UTC on the proleptic Gregorian
+calendar:
+
+```ts
+import { shiftIsoDate, stableDateShiftOffset } from "openmed";
+
+const days = await stableDateShiftOffset({ patientKey, secret, maxDays: 365 });
+shiftIsoDate("2024-03-01", days); // never 0, at most 365 days either way
+```
+
+The offset is HMAC-SHA256 of the patient key under your secret (text or bytes),
+reduced with `BigInt`; hashing uses WebCrypto only. Seeds may be numbers,
+`BigInt`s or decimal strings, so seeds beyond 2^53 stay exact. Invalid input
+throws `DateShiftError` with a code such as `secret_invalid` or
+`date_invalid`, and errors never include the key, secret, seed or date. The
+shared vectors in `tests/fixtures/parity/date_shift_v1.json` pin the results.
+
+### Identifier Validators
+
+The `openmed/validators` subpath ships the portable checksum validators that
+Python and the native kits use to confirm or reject identifier-shaped spans.
+They are not part of the main entry, so its bundle does not grow:
+
+```ts
+import { validateIban, validateLuhn } from "openmed/validators";
+
+validateLuhn("4992 7378 7789 3288"); // true: Luhn check over the digits
+validateIban("DE00YVOKYS9RYAPB2JJUKQ"); // false: wrong mod-97 check digits
+```
+
+`validateLuhn`, `validateSsn`, `validateNpi`, `validateIban`,
+`validateCanadianSin`, `validateUkNhsNumber`, `validateAadhaar`,
+`validateChineseResidentId`, `validateDutchBsn`, `validateFrenchNir` and
+`validateSpanishDni` each port the Python function of the same name and give
+its result on the shared vectors in
+`tests/fixtures/parity/identifier_validators_v1.json`; `IDENTIFIER_VALIDATORS`
+maps the Python names to them. They follow Python's string rules, including
+its whitespace set and Unicode decimal digits where the reference accepts them.
+`validateChineseResidentId` rejects a birth date after today, and its `today`
+option sets that date for tests. Validators never throw: anything that is not
+a string, or not shaped like the identifier, returns `false`. They perform no
+I/O and log nothing.
 
 ### Token Offsets
 
@@ -355,6 +486,118 @@ const result = await deidentify(clinicalNote, {
   logs, caches or stores input text.
 - **Teardown.** `dispose()` rejects outstanding work with `disposed`, asks the
   worker to release its runtime and terminates it.
+
+## Multimodal Evidence Packets
+
+The `openmed/multimodal` subpath admits the `openmed.multimodal.apple.v1`
+evidence packets that Python and OpenMedKit exchange. Admission checks the
+canonical form, the 64 KiB limit and the WebCrypto SHA-256 evidence digest.
+It then returns a frozen, typed asset, visual, transcript, provider or clock
+projection:
+
+```ts
+import { admitMultimodalPacket } from "openmed/multimodal";
+
+const packet = await admitMultimodalPacket(wire);
+console.log(packet.evidenceDigest, packet.projection.kind);
+```
+
+A refused packet throws `MultimodalContractError`, whose `code` is one of the
+five shared refusals and whose message holds nothing else. Integers that can
+exceed 2^53, such as nanosecond clock bounds, are `bigint`. Admission decodes
+no media and makes no network request. A valid packet is structural evidence,
+not proof of who produced it and not a clinical or disclosure decision. See
+[OpenMedKit multimodal evidence contracts](../../docs/multimodal/openmedkit-contracts.md).
+
+## Streaming Speech Contract
+
+The `openmed/speech` subpath validates speech provider output with the same
+rules as Python and OpenMedKit Swift: token timings, recognition results,
+partial hypotheses, finalized segments and engine provenance. Times are
+integer milliseconds, confidences are parts per million, and text lengths
+count Unicode code points:
+
+```ts
+import { SpeechFinalizedSegment, SpeechTokenTiming } from "openmed/speech";
+
+const token = new SpeechTokenTiming({
+  tokenIndex: 0,
+  startMilliseconds: 500,
+  endMilliseconds: 650,
+  confidencePPM: 750_000,
+  text: tokenText,
+});
+const segment = new SpeechFinalizedSegment({
+  segmentIndex: 0,
+  text: segmentText,
+  startMilliseconds: 500,
+  endMilliseconds: 900,
+  tokenTimes: [token],
+});
+```
+
+Invalid values throw `SpeechContractError` with a stable `code` and the
+offending `field`, and never the value or any transcript text. `JSON.stringify`,
+`String()` and `util.inspect` show lengths and counts instead of text. The
+subpath captures no audio and runs no recognizer. Decoder confidence is
+uncalibrated and is not clinical certainty. See the
+[offline ASR provider contract](../../docs/multimodal/streaming/offline-asr-contract.md).
+
+## Verifying Signed Audit Reports
+
+`verifyAuditReport(json, key)` checks an audit report that Python's
+`AuditReport.sign()` produced, entirely in the browser or Node with WebCrypto:
+
+```js
+import { verifyAuditReport } from "openmed";
+
+const { result, reason, spanOrder } = await verifyAuditReport(reportJson, key);
+if (!result) {
+  // reason: hash_mismatch | signature_mismatch | unsupported_algorithm | malformed
+}
+```
+
+It recomputes the report's `repro_hash` and checks the `HMAC-SHA256` signature
+with `crypto.subtle.verify`, trying the deterministic span order first and then
+the legacy stored order, exactly as `AuditReport.verify()` does. `reason` is
+`valid` or one of the codes the Swift and Kotlin verifiers share; an unsigned
+report gives `signature_mismatch`, and a report that is not a well-formed
+`AuditReport` gives `malformed` without echoing it.
+
+- Pass the report text (or its UTF-8 bytes) exactly as received. Do not parse it
+  with `JSON.parse` first: that turns `1.0` into `1` and prints `1e-07` as
+  `1e-7`, so the canonical bytes no longer match.
+- Every member other than `repro_hash` and `signature` is covered; a member
+  added after signing fails with `hash_mismatch`.
+- The key is the caller's: text (UTF-8) or bytes, never logged, copied only for
+  the WebCrypto import and zeroed afterwards. An empty key throws
+  `AuditReceiptError` with code `key_invalid`, and a missing or failing WebCrypto
+  throws `verifier_unavailable`; errors carry the code only.
+- The package verifies and never signs. `canonicalAuditJson()` and
+  `auditReportPayloads()` expose the canonical bytes for diagnostics.
+
+## Errors
+
+Failures that used to be plain `Error`s, and the `PortablePolicyError` and
+`OpenMedOfflineError` classes, are `OpenMedError`s, which extend `Error`. Read
+the portable code that every OpenMed runtime reports from `errorCode` (from
+`OPENMED_ERROR_CODES`); `code` is the most specific code, for example
+`profile_unknown`:
+
+```ts
+import { OpenMedError, extractPii } from "openmed";
+
+try {
+  await extractPii(text, { hashSecret });
+} catch (error) {
+  if (error instanceof OpenMedError && error.errorCode === "configuration_error") {
+    // fix the configuration; error.retryable says whether retrying can help
+  }
+}
+```
+
+Messages never include input text, secrets, paths or URLs. See
+`docs/api/errors.md` for the code each failure carries.
 
 ## Privacy and Safety
 

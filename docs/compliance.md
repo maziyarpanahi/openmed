@@ -58,12 +58,19 @@ and supervisory-authority guidance:
 - [Data Protection Impact Assessment template](compliance/dpia-template.md)
   connects a deployment's processing description, policy profile, audit
   residual-risk score, validation evidence, safeguards, and approval decision.
+- [EHDS secondary-use evidence map](compliance/eu-ehds-secondary-use.md)
+  maps OpenMed artifacts to European Health Data Space Regulation concepts for
+  data holders preparing pseudonymised or anonymised data, and lists what
+  OpenMed does not do.
 - [Data Processing Agreement template](compliance/dpa-template.md) covers the
   local/on-device baseline, no-telemetry posture, sub-processor inventory, data
   return or deletion, and reversible-pseudonymization key custody.
 - [EU AI Act and GDPR model-card field specification](compliance/model-card-eu-ai-act-fields.md)
   defines intended-purpose, limitation, accuracy/leakage, human-oversight,
   robustness, and GDPR fields for manifest- and `BenchmarkReport`-backed cards.
+- [AI Act technical-documentation evidence map](compliance/eu-ai-act-technical-documentation.md)
+  maps every Annex IV section to the OpenMed artifact that can support it and
+  names the sections that remain entirely the provider's own.
 
 ## Regional implementation checklists
 
@@ -73,6 +80,10 @@ they do not replace legal advice or supervisory-authority guidance:
 - [GDPR data-subject access and deletion export](compliance/gdpr-dsar-export.md)
   covers local evidence collection, identity verification, export, deletion,
   and audit handling.
+- [EU pseudonymisation and anonymisation terms](compliance/eu-pseudonymisation-terms.md)
+  maps each OpenMed action to its default GDPR category and to the evidence an
+  anonymisation claim would need, citing the EDPB pseudonymisation guidelines
+  and Court of Justice case law.
 - [Kenya Data Protection Act identifier checklist](compliance/ke-dpa-identifier-checklist.md)
   maps synthetic identifier fixtures and conservative validation steps.
 - [Nigeria Data Protection Act identifier checklist](compliance/ng-ndpa-identifier-checklist.md)

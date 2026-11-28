@@ -17,13 +17,14 @@ from enum import Enum
 from typing import Any, Final
 
 from openmed.clinical.units import parse_measurement
+from openmed.core.errors import LegacyRootedError
 
 NLI_NUMERIC_PRECHECK_SCHEMA_VERSION: Final[int] = 1
 _REL_TOLERANCE: Final[float] = 1e-12
 _ABS_TOLERANCE: Final[float] = 0.0
 
 
-class NumericPrecheckError(ValueError):
+class NumericPrecheckError(ValueError, LegacyRootedError):
     """Raised when a numeric claim violates the value-free input contract."""
 
 

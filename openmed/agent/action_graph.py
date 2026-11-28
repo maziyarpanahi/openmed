@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from openmed.core.errors import LegacyRootedError
+
 from .identifiers import GovernanceIdError, ToolId
 
 ACTION_GRAPH_SCHEMA_VERSION = "openmed.agent.action_graph.v1"
@@ -44,7 +46,7 @@ _REPORT_FIELDS = (
 )
 
 
-class ActionGraphError(ValueError):
+class ActionGraphError(ValueError, LegacyRootedError):
     """Raised when action-graph input fails closed structural validation.
 
     Args:

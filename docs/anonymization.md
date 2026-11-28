@@ -15,6 +15,11 @@ This document focuses on `replace`, which was upgraded in v1.3.0 to a full
 Faker-backed obfuscation engine. If you just want to compare all five
 methods side by side, start with the quickstart below.
 
+Under EU data protection law these methods produce pseudonymised data, which
+remain personal data, unless a separate risk assessment supports anonymity
+(GDPR Article 4(5) and Recital 26); see
+[EU pseudonymisation and anonymisation terms](compliance/eu-pseudonymisation-terms.md).
+
 ## Quickstart: choosing a method
 
 ### `mask` — clear placeholders
@@ -121,6 +126,20 @@ PHI as that key material.
 If `patient_key` is supplied with the older `date_shift_days` option, that
 value is treated as the maximum absolute offset bound; prefer
 `date_shift_max_days` for new code.
+
+Synthetic cross-runtime vectors for both offset helpers live in
+`tests/fixtures/parity/date_shift_v1.json`. They record synthetic patient keys
+(`SYNTH-PATIENT-0001` and so on, one with non-ASCII characters), two test-only
+secrets (one UTF-8 text, one raw bytes that are not valid UTF-8), request seeds
+inside and just outside the signed 64-bit range, several `date_shift_max_days`
+values, the intermediate SHA-256 digests and the expected offsets, plus ISO
+dates shifted across leap days, month ends, non-leap Februaries and year
+boundaries. Every vector has an id. Each seed is given as `seed_decimal`, the
+exact decimal text that is hashed, so ports never read a large seed as a
+rounded JSON number. A Swift, Kotlin or web port can recompute
+every vector to prove it shifts the same patient by the same number of days;
+`tests/unit/core/test_date_shift_vectors.py` recomputes them in Python and
+reports a mismatch by vector id only.
 
 #### Solar Hijri, Ethiopian and Thai Buddhist-era dates
 

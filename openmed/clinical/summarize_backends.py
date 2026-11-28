@@ -15,6 +15,7 @@ from openmed.clinical.brief_cancellation import (
     check_cancellation,
 )
 from openmed.core.capabilities import MissingOptionalDependencyError
+from openmed.core.errors import LegacyRootedError
 from openmed.core.model_registry import (
     resolve_summarizer_model,
     resolve_summarizer_package,
@@ -72,7 +73,7 @@ _FAILURE_MESSAGES = {
 }
 
 
-class LocalSummarizerError(RuntimeError):
+class LocalSummarizerError(RuntimeError, LegacyRootedError):
     """Content-free failure to resolve, admit, or run local summarization."""
 
     def __init__(self, message: str = "", *, reason: str = "execution_failed") -> None:

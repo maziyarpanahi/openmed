@@ -218,11 +218,13 @@ Then add the product:
 The `OpenMedKit`, `OpenMedExtensionSupport`, `OpenMedShareExtension` and
 `OpenMedActionExtension` products each ship a `PrivacyInfo.xcprivacy` at the
 root of their resource bundle. The manifests declare no tracking, no tracking
-domains and no collected data types. `OpenMedKit` declares three required-reason
+domains and no collected data types. `OpenMedKit` declares four required-reason
 API categories: system boot time (`35F9.1`) for monotonic session and latency
 timers, disk space (`E174.1`) for the bundle cache's free-storage check before
-it stages or evicts generations, and user defaults (`AC6B.1`) for reading the
-managed app configuration that an MDM server installs. The extension targets
+it stages or evicts generations, file timestamps (`C617.1`) for the
+modification dates `OpenMedModelStore.listCachedModels` reports for model
+snapshots inside the app's cache directory, and user defaults (`AC6B.1`) for
+reading the managed app configuration that an MDM server installs. The extension targets
 use none, so their accessed API lists are empty. The test-support
 `OpenMedPrivacySweep` target, which no product exposes, declares system boot
 time (`35F9.1`) for its sweep time budget. The scan demo declares user defaults
@@ -469,6 +471,49 @@ let openmed = try OpenMed(
 Core ML backends have no default tokenizer. Ship the tokenizer that matches
 the model; see [Offline Tokenizer Assets](#offline-tokenizer-assets).
 
+## Discovering Models With the Bundled Catalog
+
+OpenMedKit bundles `openmed_model_catalog.jsonl`, a read-only list of the
+Apple-runnable (MLX and Core ML) OpenMed models, so apps can choose a model by
+format, size, language or license instead of hard-coding repository names:
+
+```swift
+let catalog = try OpenMedModelCatalog.bundled()
+let candidates = catalog.filter(format: "mlx-fp", maxParamCount: 50_000_000, language: "de")
+if let entry = candidates.first {
+    let modelDirectory = try await OpenMedModelStore.downloadMLXModel(repoID: entry.repoID)
+}
+```
+
+- `OpenMedModelCatalog.bundled()` reads the package resource and never makes a
+  network request. The parsed catalog is cached for the process.
+- Each `OpenMedModelCatalogEntry` carries `repoID`, `formats`, `tier`,
+  `paramCount`, `languages`, `license` and `reproducibilityHash`, the same
+  fields as the Android `ModelCatalogEntry`. `formats` lists only MLX and Core
+  ML formats.
+- `filter(format:tier:maxParamCount:language:license:)` follows the Android
+  `ModelCatalog.filter` semantics: a `nil` argument matches every row, strings
+  compare case-insensitively, `format` and `language` match any listed value,
+  and `maxParamCount` is inclusive and skips rows without a parameter count.
+  Results keep catalog order (repository ids sorted case-insensitively).
+- `entry(repoID:)` is an exact-match lookup, like Android `byRepoId`.
+- Malformed resources throw `OpenMedModelCatalogError` with a reason code and
+  a line number, never row content.
+
+The resource is generated from the canonical `models.jsonl` manifest by
+`scripts/swift/build_swift_catalog.py`, which reuses the Android builder's row
+format and permissive-license allowlist and keeps only Apple-runnable formats.
+After changing `models.jsonl`, regenerate and commit it:
+
+```bash
+python3 scripts/swift/build_swift_catalog.py
+python3 scripts/swift/build_swift_catalog.py --check   # CI: fails when stale
+```
+
+`tests/fixtures/model_catalog/` holds a synthetic manifest subset, its
+generated catalog and shared filter vectors. The Python generator test and the
+Swift `OpenMedModelCatalogTests` both run those vectors.
+
 ## Downloading MLX Models From Hugging Face
 
 OpenMedKit includes a built-in downloader and local cache for Hub-hosted MLX artifacts:
@@ -480,6 +525,43 @@ let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
 )
 ```
 
+To show byte progress or let people cancel, start a download task instead:
+
+```swift
+let download = OpenMedModelStore.startMLXModelDownload(
+    repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx"
+)
+Task {
+    for await event in download.progress {
+        // event.fileName is repository-relative, for example "weights.safetensors".
+        print(event.fileName, event.bytesDone, event.bytesTotal ?? -1, event.filesDone, event.filesTotal)
+    }
+}
+// Call download.cancel() from a Cancel button to stop and clean up.
+let modelDirectory = try await download.value
+```
+
+- Each `OpenMedModelDownloadProgress` carries the repository-relative file
+  name, that file's `bytesDone` and `bytesTotal` (`nil` until the server
+  declares a length), `filesDone` and `filesTotal`, and `totalBytesDone` across
+  the whole download. `totalBytesDone`, `filesDone` and `filesTotal` never
+  decrease. `filesTotal` starts at 1 (`openmed-mlx.json`) and grows once the
+  file list is known. The event that completes a file has
+  `bytesDone == bytesTotal`. After the last file, `filesDone == filesTotal`.
+- Events never contain a URL, token, repository id, revision or absolute path.
+  Transport failures surface as the value-free
+  `OpenMedModelStoreError.transferFailed` rather than a `URLError` that embeds
+  the request URL.
+- `cancel()`, or cancelling the task that awaits `downloadMLXModel`, stops the
+  current transfer, removes the files this download wrote, and never writes the
+  ready marker. The snapshot is left `missing` or `partial`, and `value` throws
+  `CancellationError`.
+- Files are fetched with a delegate-based `URLSessionDownloadTask` and streamed
+  to disk instead of held in memory. The async `URLSession.download(for:delegate:)`
+  API delivers no `didWriteData` callbacks, so it cannot report byte progress.
+  Background `URLSession` transfers and resuming partial files are not
+  supported.
+
 Behavior:
 
 - downloads `openmed-mlx.json` first
@@ -488,6 +570,51 @@ Behavior:
 - returns a local directory URL ready for `OpenMedBackend.mlx`
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
+
+### Pinned, hash-verified downloads from the catalog
+
+Downloading by repository name caches whatever the revision (`main` by
+default) resolves to under that name, so the same cache key can name different
+bytes after an upstream push. Download a catalog entry instead to pin the
+snapshot to one commit and verify it against the catalog:
+
+```swift
+let entry = try OpenMedModelCatalog.bundled().entry(repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx")!
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(entry: entry)
+let commit = try OpenMedModelStore.cachedMLXModelRevisionSHA(
+    repoID: entry.repoID,
+    revision: modelDirectory.lastPathComponent
+)
+```
+
+`downloadMLXModel(entry:revision:cacheDirectory:)`:
+
+1. Returns a ready snapshot already verified for `entry.reproducibilityHash`
+   without any network request (`cachedMLXModelDirectory(entry:cacheDirectory:)`
+   performs the same lookup on its own).
+2. Otherwise fetches `api/models/<repo>/revision/<revision>` and recomputes the
+   reproducibility hash from the repository id, commit sha, release date and
+   sibling list. A mismatch throws `OpenMedModelStoreError.reproducibilityHashMismatch`
+   before any directory or file is created. A response without a valid
+   40-character commit sha throws `invalidModelInfo`.
+3. Downloads every file from `resolve/<commit sha>/…`, never from the moving
+   revision name, into `<cache>/<repo>/<commit sha>`, so one cache directory
+   always holds one commit.
+4. Records `revision_sha`, `reproducibility_hash` and `requested_revision` in the
+   ready marker. `cachedMLXModelRevisionSHA(repoID:revision:cacheDirectory:)`
+   returns the recorded sha, or `nil` for snapshots downloaded by name.
+
+`OpenMedModelIntegrity.reproducibilityHash(repoID:revisionSHA:released:siblings:)`
+is the same canonical hash that `scripts/manifest/generate_manifest.py`,
+`openmed/core/model_integrity.py` and Android's `ModelIntegrity` compute:
+SHA-256 over compact sorted-key JSON of `released` (`YYYY-MM-DD` or `null`),
+`repo_id`, `sha` (or `null`) and the code-point-sorted `siblings`, with Python's
+default ASCII escaping. The synthetic vectors in
+`tests/fixtures/parity/model_repro_hash_v1.json` are checked by the Python
+production functions, by `OpenMedModelIntegrityTests` and by Android's
+`ModelDownloaderTest`. The hash describes the
+snapshot's commit and file list. It does not hash file contents. Signed portable
+bundles (see [Bundle cache](models/bundle-cache.md)) cover those.
 
 The model store validates every manifest path before requesting artifact files,
 including all weight candidates and segmenter resources. Paths must be relative
@@ -506,6 +633,188 @@ their parents remain confined; it never follows an escaping link during cleanup.
 The downloader repeats the check after each response and before writing. This
 does not provide synchronization against another process concurrently replacing
 filesystem entries; applications should keep their cache private to the app.
+
+## Task Packs
+
+A task pack picks the model for a job so the app does not name a repository.
+OpenMedKit bundles `Resources/task_packs/task_packs.json`, a byte-identical
+copy of the shared [task pack manifest](models/task-packs.md), and reads its
+`apple` runtime entry: apache-2.0 MLX candidates in rank order.
+`OpenMedTaskPackManifest.bundled()` decodes it and fails closed on another
+schema or major version, an undeclared field, or a broken rank, license or
+notice rule.
+
+Every pack follows the same steps:
+
+- `resolve()` reads the manifest only and returns the candidates this device
+  can run, plus the skipped ones with a reason. MLX cannot run on the iOS
+  Simulator, so there every candidate is skipped with
+  `unsupported_on_simulator` and the status is `unsupportedOnSimulator`.
+- `prepare(store:allowDownload:)` loads the best cached candidate through
+  `OpenMedModelStore`, falling back in rank order. It downloads only when
+  `allowDownload` is `true`; the default `false` throws `not_cached` without
+  any network request when nothing is cached.
+- Inference runs on device through the existing `OpenMed` APIs. There is no
+  cloud fallback, and the packs do not log input text.
+
+`OpenMedTaskPackStore(cacheDirectory:revision:)` selects the cache; the default
+`.standard` store is the OpenMed MLX cache. Failures are
+`OpenMedTaskPackError` values whose raw value is a fixed reason code.
+
+### `MedicationPack`
+
+```swift
+let pack = try MedicationPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let result = try pack.extract(note)           // MedicationExtraction
+showNotice(result.notice.text)
+for mention in result.mentions {
+    highlight(mention.range(in: note), notice: mention.notice)
+}
+```
+
+`MedicationPack` extracts medication mentions and nothing else. `extract(_:)`
+runs `OpenMed.analyzeText` and keeps a mention only when the model label
+normalizes to one of the pack's canonical labels (`CHEMICAL` in pack version
+1.0.0; the PharmaDetect candidates emit `CHEM`). Labels such as `DRUG` or
+`MEDICATION` normalize to other canonical labels and are dropped. Each
+`MedicationMention` carries the normalized label, the model label, Unicode
+scalar offsets, the confidence, the source model id and the pack's
+`openmed.notice.medication.extraction_only` notice; the extraction result
+carries the notice too. No result type has a dose, frequency, interaction,
+recommendation or action field, no drug terminology is linked, and the pack
+triggers no follow-up action: the mentions are data for the app to show, with
+the notice. Creating the pack fails with `manifest_invalid` when the manifest
+does not attach that notice.
+
+### `PIIPack`
+
+```swift
+let pack = try PIIPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let found = try pack.extract(note)            // PIIPackExtraction
+let redacted = try pack.deidentify(note)      // PIIPackDeidentification
+print(redacted.redactedText)
+print(found.notice.text)
+```
+
+`extract(_:)` runs `OpenMed.extractPII` and returns `PIIPackSpan` values with
+the model label, the portable canonical label, Unicode scalar offsets and the
+confidence. Spans carry no input text; slice the source with
+`span.range(in:)` when you need it. `deidentify(_:policy:)` runs
+`OpenMed.deidentify(_:policy:)` under a bundled policy profile
+(`hipaa_safe_harbor` by default) and returns the policy result, whose actions
+are offset-only. Both results carry the source model id and the pack's
+`openmed.notice.pii.review_required` notice, which the app should show with
+the output.
+
+### `ClinicalEntityPack`
+
+```swift
+let pack = try ClinicalEntityPack()
+try await pack.prepare(allowDownload: userConsentedToDownload)
+
+let result = try pack.extract(note)           // ClinicalEntityExtraction
+for entity in result.entities {
+    print(entity.category, entity.start, entity.end, entity.confidence)
+}
+print(result.notice.text)
+```
+
+`extract(_:)` runs `OpenMed.analyzeText`, normalizes each model label with the
+portable OpenMed taxonomy (so `B-PATHOLOGY` and `Disease` normalize like Python's
+`normalize_label`), and keeps a mention only when the normalized label is one
+of the pack's canonical labels: `CONDITION`, `DISEASE` and `PATHOLOGY` in pack
+version 1.0.0. Mentions with any other label are dropped, never assigned a
+guessed category. Each `ClinicalEntity` carries the category, the model label,
+Unicode scalar offsets, the confidence and the source model id, but no input
+text; use `entity.range(in:)` to slice the note. The result carries the
+`openmed.notice.clinical_entity.extraction_only` notice: the pack reports
+mentions and offsets only and does not diagnose, rank or recommend care.
+
+Each `ClinicalEntity` also carries an advisory `assertion` with four axes, using
+the Python `assert_context` codes:
+
+| Axis | Values |
+|---|---|
+| `negation` | `affirmed`, `negated` |
+| `uncertainty` | `certain`, `uncertain` |
+| `temporality` | `recent`, `historical`, `hypothetical` |
+| `experiencer` | `patient`, `family`, `other` |
+
+`Patient denies chest pain.` returns `chest pain` with negation `negated`, and
+`Mother had breast cancer.` returns `breast cancer` with experiencer `family`.
+Negated, uncertain, hypothetical and non-patient mentions are flagged, never
+dropped. The axes are annotations for review: they trigger no action and are
+not a diagnosis.
+
+```swift
+let result = try pack.extract(note, sentences: sentenceSpans, language: "en")
+for entity in result.entities where entity.assertion?.negation == .negated {
+    print(entity.category, entity.start, entity.end)
+}
+```
+
+The assertion comes from `OpenMedClinicalContext`, an offline, deterministic
+port of the English path that Python's `assert_context` takes without
+sections. It reads its cues from the bundled
+`Resources/clinical/context_cues_en_v1.json`, a byte-identical copy of the
+shared cue table. Cue matching is case-insensitive on token boundaries,
+longest cue first. Pseudo-negations such as `cannot be excluded` are masked
+before negation cues are counted, so an odd count negates. Cues are scoped to
+the mention's clause, and the experiencer comes from the nearest family or
+other subject cue in that clause. Pass `sentences` in Unicode scalar offsets
+to bound modifier cues. Without them a regex sentence split is used; Python
+uses pySBD there when it is installed. The port keeps Python's known gaps for
+parity: a negation does not reach past `and` or `or`, so `cough` in
+`Denies fever and cough.` stays affirmed. `ClinicalAssertionParityTests`
+replays `tests/fixtures/parity/clinical_assertion_v1.json`, gaps included.
+
+When the caller declares a language other than English, for example
+`language: "es"`, the entities come back without an assertion and the
+extraction reports `assertionUnavailableReason == .unsupportedLanguage`; English
+cues are never applied to other languages. Section priors, multilingual cue
+packs and the document assertion graph stay Python-only.
+
+### Listing, measuring and deleting cached models
+
+Manage the cache through the store rather than deleting directories yourself,
+so every path stays inside the same confinement boundary:
+
+```swift
+for model in try OpenMedModelStore.listCachedModels() {
+    print(model.repoID, model.revision, model.state, model.sizeBytes)
+}
+let bytes = try OpenMedModelStore.totalCacheSizeBytes()
+try OpenMedModelStore.deleteModel(repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx", revision: "main")
+```
+
+- `listCachedModels(cacheDirectory:)` returns one `OpenMedCachedModel` per
+  snapshot directory (`<org>__<name>/<revision>`): repository id, revision,
+  state (`missing`, `partial` or `ready`, as `mlxModelCacheState` reports it),
+  byte size and latest modification date. Empty stray snapshot directories are
+  listed as `missing`. A snapshot whose files fail confinement or decoding is
+  `partial`. Hidden entries, loose files, symlinks and top-level directories
+  that are not repository directories are skipped.
+- `totalCacheSizeBytes(cacheDirectory:)` sums every regular file under the
+  cache root, including partial snapshots and stray files.
+- `deleteModel(repoID:revision:cacheDirectory:)` removes the ready marker
+  first, renames the snapshot to a hidden tombstone and then removes it. An
+  interrupted delete therefore never leaves a ready marker over missing files.
+  Other snapshots are untouched, and an empty repository directory is removed.
+  Deleting a snapshot that is not cached is a no-op.
+- No call follows a symlink. A symlinked repository or snapshot directory is
+  refused with `OpenMedModelStoreError.invalidManifestPath("unsafe_symlink")`,
+  and its target is left unchanged. Symlinks inside a snapshot are deleted as
+  links, never through to their targets. Filesystem failures surface as the
+  path-free `OpenMedModelStoreError.cacheDeletionFailed`.
+- Sizes never follow symlinks, so a link to a large file outside the cache adds
+  nothing.
+
+Lease, pin and last-green protection during eviction are not part of this API
+yet: do not delete a model that a running `OpenMed` instance still uses.
 
 ## Offline Tokenizer Assets
 
@@ -704,6 +1013,65 @@ expiration. Use `OpenMedRuntime` when you need those guarantees.
 Device and simulator memory evidence for these paths is not part of the package
 test suite; the unit tests drive every signal through deterministic fakes.
 
+## App Intents: Redact Text with OpenMed
+
+The `OpenMedIntents` library product adds a "Redact Text with OpenMed" action
+to Shortcuts, Siri and Spotlight. It is backed by `RedactTextIntent`. The
+intent takes text and a bundled policy name (default `hipaa_safe_harbor`) and
+returns the redacted text alone.
+
+```swift
+.product(name: "OpenMedIntents", package: "openmed")
+```
+
+```swift
+import AppIntents
+import OpenMedIntents
+
+struct MyAppIntents: AppIntentsPackage {
+    static var includedPackages: [any AppIntentsPackage.Type] { [OpenMedIntentsPackage.self] }
+}
+
+// At launch, point the intents at a model the app downloads with OpenMedModelStore.
+OpenMedIntentsConfiguration.redactor = .cachedMLXModel(
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
+)
+```
+
+The intent follows these rules:
+
+- **On-device only.** De-identification runs in the app's process with a
+  model already in the `OpenMedModelStore` cache. The intent never downloads a
+  model and has no cloud fallback. If the model is not cached, it fails with a
+  localized message asking the person to download one in the app.
+- **Returns only the redacted text.** No spans, labels, offsets, confidences
+  or original values are returned. Shortcuts can pass the output to any other
+  app or web action, so only already-redacted text may leave.
+- **Review before sharing.** Redaction is automated and can miss
+  identifiers. Unlike the Share extension, the intent shows no preview, so a
+  shortcut that forwards the result to another app or web action should let
+  the person review it first.
+- **Never opens the app** (`openAppWhenRun` is `false`) and **logs nothing**
+  about its input.
+- **Value-free errors.** Every failure surfaces as `OpenMedIntentError`, whose
+  message comes from the package's `Localizable` catalog and never contains
+  text, paths or model names. The cases are `emptyInput`, `inputTooLarge`
+  (over `OpenMedIntentsConfiguration.maximumInputUTF8Bytes`, 64 KiB),
+  `unknownPolicy`, `noCachedModel`, `runtimeUnavailable` (for example MLX on
+  the iOS Simulator, or on watchOS and visionOS) and `redactionFailed`.
+- **Custom pipelines.** Pass any local pipeline as
+  `OpenMedIntentRedactor { text, policy in ... }`, for example one built on a
+  bundled Core ML model. Tests use the same seam with a fake pipeline.
+
+`OpenMedIntents` ships its own `PrivacyInfo.xcprivacy`, declaring no tracking,
+no collected data and no required-reason APIs.
+
+`PIISummaryIntent` ("Summarize PII with OpenMed") uses the same boundary. It
+returns an `OpenMedPIISummary` that holds the redacted text, the identifier
+count and `label: count` entries, never values or offsets. See
+[OpenMedKit App Intents](runtimes/apple-app-intents.md) for the full
+contract and the shortcuts the demo app registers.
+
 ## Public API
 
 ### `OpenMedBackend`
@@ -885,6 +1253,9 @@ Runtime types follow one of these contracts:
 | Type | `Sendable` | Contract |
 |---|---|---|
 | `OpenMed`, `NERPipeline`, `PlatformModel`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | No | Inference is synchronous and has no internal lock. Use each instance from one isolation domain: create and call it from one task or actor, or keep it inside your own actor. Give concurrent workers separate instances. |
+| `MedicationPack` | No | Same single-isolation-domain rule as `PIIPack`. |
+| `PIIPack` | No | Same single-isolation-domain rule: prepare and run each pack from one task or actor. |
+| `ClinicalEntityPack` | No | Same single-isolation-domain rule as `PIIPack`. |
 | `ExtensionRedactionHandler`, `TranscriptLanguageRouter`, `SpeechEndpointAdapter`, `VoiceEmbeddingSession`, `VoiceEmbeddingBuffer`, `VoiceEmbeddingHandle`, `ConvertedAudioSamples`, `WFDBFileSource` | No | Same single-isolation-domain rule. |
 | `OpenMedMaple`, `CoreMLSpeechEngine` | Actor | Calls are serialized by the actor. |
 | `OpenMedVisionLanguageModel` | Yes | Share one instance. The MLX model container serializes model access. `generate(_:images:)` takes its images as `sending`, so do not keep using them concurrently after the call. |
@@ -924,8 +1295,9 @@ path, to a role-based case.
 | `OpenMedZeroShotError` | `unsupportedArtifact` with task and family values from the OpenMedKit MLX vocabulary (for example `token-classification` and `bert`), `missingPromptSpec` (a `prompt_spec` field name), `emptyInput`. |
 | `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
 | `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
+| `OpenMedModelCatalogError` | `resourceMissing`, `invalidEncoding`, `invalidEntry(line:)` (a 1-based line number, never the row). |
 | `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
-| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
+| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `OpenMedClinicalContextError`, `OpenMedTaskPackError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
 
 Internal MLX errors follow the same rule and surface through the public
 loaders: a Privacy Filter unknown token reports `unknownToken(index:)`, the
@@ -988,6 +1360,57 @@ Use CoreML when:
 - you are validating an app path that already depends on CoreML packaging
 
 For the current CoreML packaging status, see [CoreML packaging status](coreml-export.md).
+
+### Downloading Core ML snapshots through the model store
+
+`OpenMedModelStore` also acquires Core ML token-classification snapshots from
+the Hub, so apps no longer place Core ML artifacts themselves:
+
+```swift
+let model = try await OpenMedModelStore.downloadCoreMLModel(repoID: "OpenMed/<name>-coreml")
+let openmed = try OpenMed(backend: model.backend)
+```
+
+The snapshot root must hold an `openmed-coreml.json` that the store reads as
+follows. Every other field, such as latency, residency and provenance, is
+ignored.
+
+```json
+{
+  "format": "openmed-coreml",
+  "variants": [{"name": "coreml-fp16", "path": "Model.mlpackage"}],
+  "id2label": "Model_id2label.json",
+  "tokenizer": {"path": ".", "files": ["tokenizer.json", "tokenizer_config.json"]}
+}
+```
+
+- The first variant is used. Its `path` is a `.mlpackage` or `.mlmodelc`
+  directory. A package's files come from its own
+  `Model.mlpackage/openmed-coreml.json` provenance inventory, which
+  `openmed.coreml.convert` writes, or from an explicit `files` list relative
+  to the variant. A `.mlmodelc` variant must declare `files`.
+- `id2label` defaults to `id2label.json`. `tokenizer` defaults to the snapshot
+  root with `tokenizer.json` and `tokenizer_config.json`, plus the optional
+  `config.json`, `special_tokens_map.json`, `vocab.txt` and `added_tokens.json`.
+- Every declared path, including package inventory entries, passes the same
+  snapshot confinement as MLX manifests before any model file is requested.
+  An escaping path throws `OpenMedModelStoreError.invalidManifestPath` and
+  removes the files that download wrote. An unsupported manifest throws
+  `invalidCoreMLManifest`.
+- A `.mlpackage` is compiled with `MLModel.compileModel(at:)` only after every
+  file has downloaded. The compiled model lands in
+  `.openmed-compiled/Model.mlmodelc` inside the snapshot, and the source package
+  is kept (`OpenMedCoreMLModel.packageURL`). A failed compile throws
+  `coreMLCompilationFailed`. watchOS cannot compile Core ML models, so there a
+  `.mlpackage` variant throws `coreMLCompilationFailed` before its model files
+  download; publish a `.mlmodelc` variant for watchOS.
+- `coreMLModelCacheState(repoID:revision:cacheDirectory:)` reports `missing`,
+  `partial` or `ready` from the files on disk. A missing label map, tokenizer
+  file or compiled model leaves the snapshot `partial`.
+  `cachedCoreMLModel(repoID:revision:cacheDirectory:)` returns a ready snapshot
+  offline, and `downloadCoreMLModel` reuses one without network requests.
+- Core ML snapshots default to `Caches/OpenMed/CoreMLModels`, separate from
+  the MLX cache.
 
 ## Notes On Testing
 
@@ -1123,3 +1546,111 @@ trip. An unsigned `swift test` runner on macOS lacks the data-protection
 Keychain entitlement, so that test skips with `secret_missing_entitlement`
 there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
 physical device and is not covered by the package tests.
+
+## Verifying signed audit reports
+
+`OpenMedReceiptVerifier` checks, on device and offline, an `AuditReport` that
+Python signed with `AuditReport.sign()`. It recomputes the `repro_hash` and the
+HMAC-SHA256 `signature` from the report bytes with a canonical JSON encoder
+that matches Python's `_canonical_json()`: members sorted by Unicode scalar
+value, compact separators, lowercase `\uXXXX` escapes with surrogate pairs, and
+floats formatted like Python `repr` (`1e-07`, `5e-324`, `1e+16`, `1.0`).
+
+```swift
+import CryptoKit
+
+// The caller keeps custody of the release key, for example in the Keychain.
+guard let verifier = OpenMedReceiptVerifier(key: SymmetricKey(data: releaseKey)) else {
+    return  // an empty key is refused
+}
+let verification = verifier.verify(reportJSON)
+if verification.isValid {
+    // verification.matchedSpanOrder is .sorted, or .stored for a report
+    // signed before deterministic span order
+}
+```
+
+`verify(_:)` never throws and returns one reason code:
+
+| Reason | Meaning |
+| --- | --- |
+| `valid` | The repro hash and the HMAC match |
+| `hash_mismatch` | No span order reproduces the stored `repro_hash`: the report changed |
+| `signature_mismatch` | The report is unsigned, or its HMAC does not match the key |
+| `unsupported_algorithm` | The signature algorithm is not `HMAC-SHA256` |
+| `malformed` | Invalid JSON or UTF-8, a byte order mark, duplicate members, lone surrogates, non-finite numbers, nesting deeper than 64 levels, more than 8 MiB, or a missing or mistyped `spans`, `repro_hash` or `signature` |
+
+Like Python's `verify()`, the verifier tries the spans sorted by `(start, end,
+canonical_label, action, canonical span JSON)` and then in their stored order,
+and compares the HMAC in constant time with CryptoKit. `reproHashMatches`
+reports whether the stored hash matches, as `verify_repro_hash()` does. The
+result never echoes the report, and the verifier's descriptions never show the
+key. It verifies the bytes it receives: a report that Python accepts only after
+normalizing it (unknown fields, an integer where Python writes a float) does
+not verify. OpenMedKit only verifies; it never signs. The shared vectors and
+the cross-kit contract are described in
+[Audit Receipt Verification Vectors](swift-kotlin-parity.md#audit-receipt-verification-vectors).
+
+## Patient-keyed date shifting
+
+`OpenMedDateShift` computes the same date-shift offsets as Python's
+`openmed.core.date_shift`, so an iOS app and a Python pipeline shift the same
+patient's dates by the same number of days:
+
+```swift
+let days = try OpenMedDateShift.stableOffset(
+    patientKey: patientKey,  // String (UTF-8) or Data
+    secret: secret,          // Data or String; the caller keeps custody of it
+    maxDays: OpenMedDateShift.defaultMaxDays  // 365
+)
+let shifted = try OpenMedDateShift.shift(isoDate: "2024-03-01", byDays: days)
+```
+
+`stableOffset(patientKey:secret:maxDays:)` is `stable_offset_for()`: HMAC-SHA256
+of the patient key under the secret. `stableOffset(seed:maxDays:)` and
+`stableOffset(seedDecimal:maxDays:)` are `stable_offset_from_seed()`: SHA-256 of
+`openmed-date-shift-seed-v1\0` plus the seed's decimal text. Use the decimal form
+for seeds outside the `Int` range. The offset is never zero and lies in
+`-maxDays...maxDays`. The digest is reduced modulo `2 * maxDays` byte by byte,
+which equals Python's big-integer arithmetic. `shift(isoDate:byDays:)` takes and
+returns `YYYY-MM-DD` and counts days in the proleptic Gregorian calendar, as
+Python's `date + timedelta` does, for years 0001 to 9999.
+
+Invalid input throws `OpenMedDateShiftError`, whose description is the reason
+code only (`patient_key_empty`, `secret_empty`, `max_days_invalid`,
+`seed_invalid`, `date_invalid`, `date_out_of_range`). Patient keys, secrets,
+seeds and dates never appear in errors or descriptions, and nothing is stored.
+`DateShiftParityTests` replays `tests/fixtures/parity/date_shift_v1.json`.
+
+## Identifier checksum validators
+
+`OpenMedIdentifierValidators` ports the portable identifier validator subset
+from Python. Each function returns whether a candidate passes the same format
+and checksum rules as its Python reference:
+
+| Swift | Python reference |
+| --- | --- |
+| `luhn(_:)` | `clinical_ids.validate_luhn` |
+| `ssn(_:)` | `clinical_ids.validate_ssn` |
+| `npi(_:)` | `clinical_ids.validate_npi` |
+| `iban(_:)` | `clinical_ids.validate_iban` |
+| `aadhaar(_:)` | `pii_i18n.validate_aadhaar` |
+| `ukNHSNumber(_:)` | `clinical_ids.validate_uk_nhs_number` |
+| `dutchBSN(_:)` | `pii_i18n.validate_dutch_bsn` |
+| `spanishDNI(_:)` | `pii_i18n.validate_spanish_dni` |
+| `frenchNIR(_:)` | `pii_i18n.validate_french_nir` |
+| `chineseResidentID(_:today:)` | `pii_i18n.validate_chinese_resident_id` |
+| `canadianSIN(_:)` | `clinical_ids.validate_canadian_sin` |
+
+Normalization follows each reference. Separators and Python whitespace are
+removed where Python removes them, letters are upper-cased where Python
+upper-cases, and Unicode decimal digits are accepted where Python's `\d` or
+`int()` accepts them. Aadhaar folds Gurmukhi and Arabic-Indic digits.
+`chineseResidentID` compares the birth date with `today` (default: now, in
+the current time zone, like Python's `date.today()`).
+
+The validators return `Bool` only: they never throw, log or keep the
+candidate. They are not wired into detection patterns yet; the existing
+`PostProcessing` SSN and Luhn checks are unchanged.
+`IdentifierValidatorParityTests` replays
+`tests/fixtures/parity/identifier_validators_v1.json`.

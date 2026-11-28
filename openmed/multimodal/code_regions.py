@@ -10,10 +10,12 @@ from dataclasses import dataclass, field
 from itertools import islice
 from typing import Any, Literal, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 CodeDetectionPolicy = Literal["fail_closed", "coverage_incomplete"]
 
 
-class CodeDetectionError(ValueError):
+class CodeDetectionError(ValueError, LegacyRootedError):
     """A code scan failed; messages never include backend errors or payloads."""
 
 

@@ -21,6 +21,20 @@ public struct SpeechSessionLimits: Sendable {
 
 public enum SpeechSessionState: String, Sendable { case open, finished, cancelled, failed }
 
+extension SpeechSessionState {
+    /// The state projected onto the shared lifecycle vocabulary,
+    /// `openmed.session.lifecycle.v1`: `finished` is `finalized`; `open`,
+    /// `cancelled` and `failed` keep their names. The raw values are unchanged.
+    public var lifecycleState: OpenMedSessionLifecycleState {
+        switch self {
+        case .open: return .open
+        case .finished: return .finalized
+        case .cancelled: return .cancelled
+        case .failed: return .failed
+        }
+    }
+}
+
 /// Content-free ownership and lifecycle accounting.
 public struct SpeechSessionSnapshot: Sendable {
     public let state: SpeechSessionState
@@ -30,6 +44,9 @@ public struct SpeechSessionSnapshot: Sendable {
     public let finalizedSegments: Int
     public let decoding: Bool
     public let reason: StreamingSpeechError?
+    /// The session's state in the shared lifecycle vocabulary; see
+    /// ``StreamingSpeechSession/lifecycleState``.
+    public let lifecycleState: OpenMedSessionLifecycleState
 }
 
 /// Bounded, backpressured streaming recognition. Append calls must be awaited.
@@ -56,7 +73,12 @@ public final class StreamingSpeechSession: @unchecked Sendable, CustomStringConv
     private var generation: UInt64 = 0
     private var work: Work?
     private var closing = false
-    private var state: SpeechSessionState = .open
+    private var state: SpeechSessionState = .open {
+        // The first terminal state is the lifecycle outcome; later native
+        // changes, such as cancel() after a failure, cannot leave it.
+        didSet { if terminalLifecycle == nil, state != .open { terminalLifecycle = state.lifecycleState } }
+    }
+    private var terminalLifecycle: OpenMedSessionLifecycleState?
     private var reason: StreamingSpeechError?
     private var partials = 0
     private var segments = 0
@@ -96,8 +118,30 @@ public final class StreamingSpeechSession: @unchecked Sendable, CustomStringConv
 
     public func snapshot() -> SpeechSessionSnapshot {
         locked {
-            SpeechSessionSnapshot(state: state, bufferedFrames: count, totalFrames: total, partialHypotheses: partials, finalizedSegments: segments, decoding: work != nil, reason: reason)
+            SpeechSessionSnapshot(
+                state: state, bufferedFrames: count, totalFrames: total, partialHypotheses: partials, finalizedSegments: segments, decoding: work != nil, reason: reason,
+                lifecycleState: terminalLifecycle ?? state.lifecycleState)
         }
+    }
+
+    /// The session's state in the shared lifecycle vocabulary.
+    ///
+    /// It is the projection of the native state, except that the first
+    /// terminal state is kept: `finish()`, `cancel()` and `requestCancellation()`
+    /// never move a terminal session to another lifecycle state, so cancelling a
+    /// failed session still reports `failed` while ``snapshot()`` keeps the
+    /// native `cancelled`.
+    public var lifecycleState: OpenMedSessionLifecycleState {
+        locked { terminalLifecycle ?? state.lifecycleState }
+    }
+
+    /// Checks a lifecycle transition from the current state without making it.
+    ///
+    /// - Parameter target: The requested lifecycle state.
+    /// - Throws: ``OpenMedSessionLifecycleError`` with the shared reason code
+    ///   when the vocabulary rejects the transition.
+    public func checkLifecycleTransition(to target: OpenMedSessionLifecycleState) throws {
+        if let reason = lifecycleState.transitionReason(to: target) { throw reason }
     }
 
     /// Consumes and clears input even on refusal. Busy means no audio was admitted;

@@ -13,6 +13,7 @@ from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
 from openmed.clinical.review_transitions import ClinicalReviewPacket
+from openmed.core.errors import LegacyRootedError
 
 REGISTRY_SCHEMA_VERSION: Final = "1.0.0"
 REGISTRY_COMPATIBILITY_POLICY: Final = "same_major"
@@ -31,7 +32,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class RegistryContractError(ValueError):
+class RegistryContractError(ValueError, LegacyRootedError):
     """Raised when a registry artifact violates its public contract."""
 
 

@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 
 from openmed.agent.security.injection_guard import scan_text
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.evidence import EvidenceNode, NodeKind, PageGeometry
 
 SCREENING_VERSION = "openmed.visual-instruction-screening.v1"
@@ -45,7 +46,7 @@ _EXTRA_CUES = (
 )
 
 
-class InstructionScreeningError(ValueError):
+class InstructionScreeningError(ValueError, LegacyRootedError):
     """Controlled failure that never contains document text or source paths."""
 
 

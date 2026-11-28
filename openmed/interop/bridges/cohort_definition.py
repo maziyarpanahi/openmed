@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Final, cast
 
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.cohort.exchange import (
     CohortConversionLoss,
     CohortDefinitionExchange,
@@ -35,7 +36,7 @@ MAX_COHORT_SERVICE_RESPONSE_BYTES: Final = 8_000_000
 _ALLOWED_STATES: Final = frozenset(StoreState)
 
 
-class CohortServiceBridgeError(RuntimeError):
+class CohortServiceBridgeError(RuntimeError, LegacyRootedError):
     """Base error for adapter execution and protocol failures."""
 
 

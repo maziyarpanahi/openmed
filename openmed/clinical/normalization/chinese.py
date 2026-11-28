@@ -17,6 +17,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import (
     CHINESE_DRUG,
     CHINESE_ICD_10,
@@ -47,7 +48,7 @@ _DEFAULT_SYSTEMS = {
 }
 
 
-class ChineseTerminologyError(ValueError):
+class ChineseTerminologyError(ValueError, LegacyRootedError):
     """Base error for Chinese terminology dictionary validation."""
 
 

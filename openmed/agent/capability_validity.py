@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .identifiers import CapabilityId, GovernanceIdError
 
 CAPABILITY_VALIDITY_SCHEMA_VERSION: Final[str] = "openmed.agent.capability_validity.v1"
@@ -74,7 +76,7 @@ _STATUS_RANK: Final[dict[GrantStatus, int]] = {
 }
 
 
-class CapabilityValidityError(ValueError):
+class CapabilityValidityError(ValueError, LegacyRootedError):
     """Raised when grant metadata fails closed structural validation.
 
     Args:

@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 CACHE_SCHEMA_VERSION: Final = "openmed.terminology_cache.v1"
 PROVENANCE_SCHEMA_VERSION: Final = "openmed.terminology_provenance.v1"
 DEFAULT_SOURCE: Final = "user-supplied"
@@ -32,7 +34,7 @@ _SHA256_HEX_LENGTH = 64
 _MAX_CANONICAL_DEPTH = 64
 
 
-class TerminologyCacheError(ValueError):
+class TerminologyCacheError(ValueError, LegacyRootedError):
     """Base error for invalid or unusable terminology cache data."""
 
 

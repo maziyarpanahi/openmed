@@ -5430,10 +5430,12 @@
       "func OpenMedKit.OpenMed.extractPIIChunked(_: Swift.String, confidenceThreshold: Swift.Float = default, chunkTokenLimit: Swift.Int = default, tokenOverlap: Swift.Int = default, useSmartMerging: Swift.Bool = default) throws -> [OpenMedKit.EntityPrediction]"
     ],
     "OpenMedKit.OpenMed.init": [
+      "convenience OpenMedKit.OpenMed.init(backend: OpenMedKit.OpenMedBackend, config: OpenMedKit.OpenMedSDKConfig, maxSeqLength: Swift.Int = default, tokenizerPin: OpenMedKit.OpenMedTokenizerPin? = default) throws -> OpenMedKit.OpenMed",
       "convenience OpenMedKit.OpenMed.init(backend: OpenMedKit.OpenMedBackend, maxSeqLength: Swift.Int = default, allowNetworkAccess: Swift.Bool = default, tokenizerPin: OpenMedKit.OpenMedTokenizerPin? = default) throws -> OpenMedKit.OpenMed",
       "convenience OpenMedKit.OpenMed.init(modelURL: Foundation.URL, id2labelURL: Foundation.URL, tokenizerName: Swift.String? = default, tokenizerFolderURL: Foundation.URL? = default, maxSeqLength: Swift.Int = default, allowNetworkAccess: Swift.Bool = default, tokenizerPin: OpenMedKit.OpenMedTokenizerPin? = default) throws -> OpenMedKit.OpenMed"
     ],
     "OpenMedKit.OpenMed.load": [
+      "static func OpenMedKit.OpenMed.load(backend: OpenMedKit.OpenMedBackend, config: OpenMedKit.OpenMedSDKConfig, maxSeqLength: Swift.Int = default, tokenizerPin: OpenMedKit.OpenMedTokenizerPin? = default) async throws -> OpenMedKit.OpenMed",
       "static func OpenMedKit.OpenMed.load(backend: OpenMedKit.OpenMedBackend, maxSeqLength: Swift.Int = default, allowNetworkAccess: Swift.Bool = default, tokenizerPin: OpenMedKit.OpenMedTokenizerPin? = default) async throws -> OpenMedKit.OpenMed"
     ],
     "OpenMedKit.OpenMedAECG": [
@@ -7831,6 +7833,93 @@
     "OpenMedKit.OpenMedProtectionAvailability.unsupportedPlatform": [
       "case OpenMedKit.OpenMedProtectionAvailability.unsupportedPlatform"
     ],
+    "OpenMedKit.OpenMedReceiptVerification": [
+      "conformance OpenMedKit.OpenMedReceiptVerification: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerification: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification: Sendable",
+      "struct OpenMedKit.OpenMedReceiptVerification"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason": [
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: CaseIterable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Hashable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: RawRepresentable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.Reason: Sendable",
+      "enum OpenMedKit.OpenMedReceiptVerification.Reason raw(String)"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.hashMismatch": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.hashMismatch"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.malformed": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.malformed"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.signatureMismatch": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.signatureMismatch"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.unsupportedAlgorithm": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.unsupportedAlgorithm"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.Reason.valid": [
+      "case OpenMedKit.OpenMedReceiptVerification.Reason.valid"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder": [
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: CaseIterable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Equatable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Hashable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: RawRepresentable",
+      "conformance OpenMedKit.OpenMedReceiptVerification.SpanOrder: Sendable",
+      "enum OpenMedKit.OpenMedReceiptVerification.SpanOrder raw(String)"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder.sorted": [
+      "case OpenMedKit.OpenMedReceiptVerification.SpanOrder.sorted"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.SpanOrder.stored": [
+      "case OpenMedKit.OpenMedReceiptVerification.SpanOrder.stored"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.description": [
+      "var OpenMedKit.OpenMedReceiptVerification.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.isValid": [
+      "var OpenMedKit.OpenMedReceiptVerification.isValid: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.matchedSpanOrder": [
+      "var OpenMedKit.OpenMedReceiptVerification.matchedSpanOrder: OpenMedKit.OpenMedReceiptVerification.SpanOrder? { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.reason": [
+      "var OpenMedKit.OpenMedReceiptVerification.reason: OpenMedKit.OpenMedReceiptVerification.Reason { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerification.reproHashMatches": [
+      "var OpenMedKit.OpenMedReceiptVerification.reproHashMatches: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier": [
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomDebugStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomReflectable",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedReceiptVerifier: Sendable",
+      "struct OpenMedKit.OpenMedReceiptVerifier"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.customMirror": [
+      "var OpenMedKit.OpenMedReceiptVerifier.customMirror: Swift.Mirror { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.debugDescription": [
+      "var OpenMedKit.OpenMedReceiptVerifier.debugDescription: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.description": [
+      "var OpenMedKit.OpenMedReceiptVerifier.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.init": [
+      "OpenMedKit.OpenMedReceiptVerifier.init(key: CryptoKit.SymmetricKey) -> OpenMedKit.OpenMedReceiptVerifier?"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.maximumReportBytes": [
+      "static var OpenMedKit.OpenMedReceiptVerifier.maximumReportBytes: Swift.Int { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.signatureAlgorithm": [
+      "static var OpenMedKit.OpenMedReceiptVerifier.signatureAlgorithm: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedReceiptVerifier.verify": [
+      "func OpenMedKit.OpenMedReceiptVerifier.verify(_: Foundation.Data) -> OpenMedKit.OpenMedReceiptVerification",
+      "func OpenMedKit.OpenMedReceiptVerifier.verify(json: Swift.String) -> OpenMedKit.OpenMedReceiptVerification"
+    ],
     "OpenMedKit.OpenMedRelation": [
       "conformance OpenMedKit.OpenMedRelation: Sendable",
       "struct OpenMedKit.OpenMedRelation"
@@ -8160,6 +8249,212 @@
     ],
     "OpenMedKit.OpenMedRuntimeState.released": [
       "case OpenMedKit.OpenMedRuntimeState.released"
+    ],
+    "OpenMedKit.OpenMedSDKConfig": [
+      "conformance OpenMedKit.OpenMedSDKConfig: Decodable",
+      "conformance OpenMedKit.OpenMedSDKConfig: Encodable",
+      "conformance OpenMedKit.OpenMedSDKConfig: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfig: Sendable",
+      "struct OpenMedKit.OpenMedSDKConfig"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field": [
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: CaseIterable",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: CodingKey",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: CustomDebugStringConvertible",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: Hashable",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSDKConfig.Field: Sendable",
+      "enum OpenMedKit.OpenMedSDKConfig.Field raw(String)"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.confidenceThreshold": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.confidenceThreshold"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.localOnly": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.localOnly"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.modelID": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.modelID"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.modelRevision": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.modelRevision"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.onnxVariant": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.onnxVariant"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.Field.policyProfile": [
+      "case OpenMedKit.OpenMedSDKConfig.Field.policyProfile"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.ONNXVariant": [
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: CaseIterable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: Decodable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: Encodable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: Hashable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSDKConfig.ONNXVariant: Sendable",
+      "enum OpenMedKit.OpenMedSDKConfig.ONNXVariant raw(String)"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.ONNXVariant.auto": [
+      "case OpenMedKit.OpenMedSDKConfig.ONNXVariant.auto"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.ONNXVariant.fp16": [
+      "case OpenMedKit.OpenMedSDKConfig.ONNXVariant.fp16"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.ONNXVariant.fp32": [
+      "case OpenMedKit.OpenMedSDKConfig.ONNXVariant.fp32"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.ONNXVariant.int8": [
+      "case OpenMedKit.OpenMedSDKConfig.ONNXVariant.int8"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile": [
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: CaseIterable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: Decodable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: Encodable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: Hashable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSDKConfig.PolicyProfile: Sendable",
+      "enum OpenMedKit.OpenMedSDKConfig.PolicyProfile raw(String)"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.australiaPrivacyAct": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.australiaPrivacyAct"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.canadaPIPEDA": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.canadaPIPEDA"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.clinicalMinimalRedaction": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.clinicalMinimalRedaction"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.gdprArt9Health": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.gdprArt9Health"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.gdprPseudonymization": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.gdprPseudonymization"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.hipaaExpertReviewAssist": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.hipaaExpertReviewAssist"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.hipaaSafeHarbor": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.hipaaSafeHarbor"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.researchLimitedDataset": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.researchLimitedDataset"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.PolicyProfile.strictNoLeak": [
+      "case OpenMedKit.OpenMedSDKConfig.PolicyProfile.strictNoLeak"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.allowNetworkAccess": [
+      "var OpenMedKit.OpenMedSDKConfig.allowNetworkAccess: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.confidenceThreshold": [
+      "var OpenMedKit.OpenMedSDKConfig.confidenceThreshold: Swift.Double { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.defaults": [
+      "static var OpenMedKit.OpenMedSDKConfig.defaults: OpenMedKit.OpenMedSDKConfig { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.encode": [
+      "func OpenMedKit.OpenMedSDKConfig.encode(to: any Swift.Encoder) throws -> ()"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.init": [
+      "OpenMedKit.OpenMedSDKConfig.init(confidenceThreshold: Swift.Double = default, localOnly: Swift.Bool = default, modelID: Swift.String? = default, modelRevision: Swift.String? = default, onnxVariant: OpenMedKit.OpenMedSDKConfig.ONNXVariant = default, policyProfile: OpenMedKit.OpenMedSDKConfig.PolicyProfile = default) throws -> OpenMedKit.OpenMedSDKConfig",
+      "OpenMedKit.OpenMedSDKConfig.init(from: any Swift.Decoder) throws -> OpenMedKit.OpenMedSDKConfig"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.load": [
+      "static func OpenMedKit.OpenMedSDKConfig.load(_: Foundation.Data) throws -> OpenMedKit.OpenMedSDKConfig",
+      "static func OpenMedKit.OpenMedSDKConfig.load(contentsOf: Foundation.URL) throws -> OpenMedKit.OpenMedSDKConfig"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.localOnly": [
+      "var OpenMedKit.OpenMedSDKConfig.localOnly: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.modelID": [
+      "var OpenMedKit.OpenMedSDKConfig.modelID: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.modelRevision": [
+      "var OpenMedKit.OpenMedSDKConfig.modelRevision: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.onnxVariant": [
+      "var OpenMedKit.OpenMedSDKConfig.onnxVariant: OpenMedKit.OpenMedSDKConfig.ONNXVariant { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.policyProfile": [
+      "var OpenMedKit.OpenMedSDKConfig.policyProfile: OpenMedKit.OpenMedSDKConfig.PolicyProfile { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.schemaID": [
+      "static var OpenMedKit.OpenMedSDKConfig.schemaID: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.validate": [
+      "static func OpenMedKit.OpenMedSDKConfig.validate(_: Foundation.Data) -> [OpenMedKit.OpenMedSDKConfigIssue]"
+    ],
+    "OpenMedKit.OpenMedSDKConfig.version": [
+      "static var OpenMedKit.OpenMedSDKConfig.version: Swift.Int { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigError": [
+      "conformance OpenMedKit.OpenMedSDKConfigError: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedSDKConfigError: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfigError: Error",
+      "conformance OpenMedKit.OpenMedSDKConfigError: LocalizedError",
+      "conformance OpenMedKit.OpenMedSDKConfigError: Sendable",
+      "struct OpenMedKit.OpenMedSDKConfigError"
+    ],
+    "OpenMedKit.OpenMedSDKConfigError.description": [
+      "var OpenMedKit.OpenMedSDKConfigError.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigError.errorDescription": [
+      "var OpenMedKit.OpenMedSDKConfigError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigError.init": [
+      "OpenMedKit.OpenMedSDKConfigError.init(issues: [OpenMedKit.OpenMedSDKConfigIssue]) -> OpenMedKit.OpenMedSDKConfigError"
+    ],
+    "OpenMedKit.OpenMedSDKConfigError.issues": [
+      "var OpenMedKit.OpenMedSDKConfigError.issues: [OpenMedKit.OpenMedSDKConfigIssue] { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue": [
+      "conformance OpenMedKit.OpenMedSDKConfigIssue: CustomStringConvertible",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue: Sendable",
+      "struct OpenMedKit.OpenMedSDKConfigIssue"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code": [
+      "conformance OpenMedKit.OpenMedSDKConfigIssue.Code: CaseIterable",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue.Code: Equatable",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue.Code: Hashable",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue.Code: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSDKConfigIssue.Code: Sendable",
+      "enum OpenMedKit.OpenMedSDKConfigIssue.Code raw(String)"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.configNotObject": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.configNotObject"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.invalidFormat": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.invalidFormat"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.missingDependency": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.missingDependency"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.notAllowedValue": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.notAllowedValue"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.outOfRange": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.outOfRange"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.unknownField": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.unknownField"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.Code.wrongType": [
+      "case OpenMedKit.OpenMedSDKConfigIssue.Code.wrongType"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.code": [
+      "var OpenMedKit.OpenMedSDKConfigIssue.code: OpenMedKit.OpenMedSDKConfigIssue.Code { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.description": [
+      "var OpenMedKit.OpenMedSDKConfigIssue.description: Swift.String { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.field": [
+      "var OpenMedKit.OpenMedSDKConfigIssue.field: OpenMedKit.OpenMedSDKConfig.Field? { get }"
+    ],
+    "OpenMedKit.OpenMedSDKConfigIssue.init": [
+      "OpenMedKit.OpenMedSDKConfigIssue.init(code: OpenMedKit.OpenMedSDKConfigIssue.Code, field: OpenMedKit.OpenMedSDKConfig.Field?) -> OpenMedKit.OpenMedSDKConfigIssue"
     ],
     "OpenMedKit.OpenMedSecretDeletion": [
       "conformance OpenMedKit.OpenMedSecretDeletion: Decodable",
@@ -8559,6 +8854,73 @@
     ],
     "OpenMedKit.OpenMedSegmenterError.unreadableResource": [
       "case OpenMedKit.OpenMedSegmenterError.unreadableResource: (Swift.Int) -> OpenMedKit.OpenMedSegmenterError"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError": [
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: CaseIterable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Equatable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Error",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Hashable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: LocalizedError",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Sendable",
+      "enum OpenMedKit.OpenMedSessionLifecycleError raw(String)"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.errorDescription": [
+      "var OpenMedKit.OpenMedSessionLifecycleError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionCancelled": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionCancelled"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionClosed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionClosed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionFailed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionFailed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.transitionNotAllowed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.transitionNotAllowed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.unknownState": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.unknownState"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState": [
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: CaseIterable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Equatable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Hashable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Sendable",
+      "enum OpenMedKit.OpenMedSessionLifecycleState raw(String)"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.allowedTargets": [
+      "var OpenMedKit.OpenMedSessionLifecycleState.allowedTargets: [OpenMedKit.OpenMedSessionLifecycleState] { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.cancelled": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.cancelled"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.cancelling": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.cancelling"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.closed": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.closed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.failed": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.failed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.finalized": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.finalized"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.isTerminal": [
+      "var OpenMedKit.OpenMedSessionLifecycleState.isTerminal: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.open": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.open"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.transitionReason": [
+      "func OpenMedKit.OpenMedSessionLifecycleState.transitionReason(to: OpenMedKit.OpenMedSessionLifecycleState) -> OpenMedKit.OpenMedSessionLifecycleError?",
+      "static func OpenMedKit.OpenMedSessionLifecycleState.transitionReason(from: Swift.String, to: Swift.String) -> OpenMedKit.OpenMedSessionLifecycleError?"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.version": [
+      "static var OpenMedKit.OpenMedSessionLifecycleState.version: Swift.String { get }"
     ],
     "OpenMedKit.OpenMedSystemClock": [
       "conformance OpenMedKit.OpenMedSystemClock: OpenMedRuntimeClock",
@@ -10688,6 +11050,9 @@
     "OpenMedKit.SpeechSessionSnapshot.finalizedSegments": [
       "var OpenMedKit.SpeechSessionSnapshot.finalizedSegments: Swift.Int { get }"
     ],
+    "OpenMedKit.SpeechSessionSnapshot.lifecycleState": [
+      "var OpenMedKit.SpeechSessionSnapshot.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
+    ],
     "OpenMedKit.SpeechSessionSnapshot.partialHypotheses": [
       "var OpenMedKit.SpeechSessionSnapshot.partialHypotheses: Swift.Int { get }"
     ],
@@ -10715,6 +11080,9 @@
     ],
     "OpenMedKit.SpeechSessionState.finished": [
       "case OpenMedKit.SpeechSessionState.finished"
+    ],
+    "OpenMedKit.SpeechSessionState.lifecycleState": [
+      "var OpenMedKit.SpeechSessionState.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
     ],
     "OpenMedKit.SpeechSessionState.open": [
       "case OpenMedKit.SpeechSessionState.open"
@@ -10818,6 +11186,9 @@
     "OpenMedKit.StreamingSpeechSession.cancel": [
       "func OpenMedKit.StreamingSpeechSession.cancel() async -> ()"
     ],
+    "OpenMedKit.StreamingSpeechSession.checkLifecycleTransition": [
+      "func OpenMedKit.StreamingSpeechSession.checkLifecycleTransition(to: OpenMedKit.OpenMedSessionLifecycleState) throws -> ()"
+    ],
     "OpenMedKit.StreamingSpeechSession.description": [
       "var OpenMedKit.StreamingSpeechSession.description: Swift.String { get }"
     ],
@@ -10826,6 +11197,9 @@
     ],
     "OpenMedKit.StreamingSpeechSession.init": [
       "OpenMedKit.StreamingSpeechSession.init(engine: any OpenMedKit.LocalSpeechEngine, limits: OpenMedKit.SpeechSessionLimits = default, onEvent: (OpenMedKit.SpeechStreamEvent) -> Swift.Void) throws -> OpenMedKit.StreamingSpeechSession"
+    ],
+    "OpenMedKit.StreamingSpeechSession.lifecycleState": [
+      "var OpenMedKit.StreamingSpeechSession.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
     ],
     "OpenMedKit.StreamingSpeechSession.provenance": [
       "var OpenMedKit.StreamingSpeechSession.provenance: OpenMedKit.SpeechEngineProvenance { get }"

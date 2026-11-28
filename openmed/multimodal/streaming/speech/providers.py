@@ -22,6 +22,10 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
+from ...session_lifecycle import LifecycleState, transition_reason
+
 SPEECH_PROVIDER_CONTRACT_VERSION: Final[str] = (
     "openmed.multimodal.streaming.speech.providers.v1"
 )
@@ -108,7 +112,15 @@ class StreamState(str, Enum):
     CANCELLED = "cancelled"
 
 
-class SpeechProviderError(ValueError):
+#: Projection of each ``StreamState`` onto the shared lifecycle vocabulary.
+STREAM_LIFECYCLE_PROJECTION: Final[dict[StreamState, LifecycleState]] = {
+    StreamState.OPEN: LifecycleState.OPEN,
+    StreamState.FINALIZED: LifecycleState.FINALIZED,
+    StreamState.CANCELLED: LifecycleState.CANCELLED,
+}
+
+
+class SpeechProviderError(ValueError, LegacyRootedError):
     """Value-free failure raised for an unusable provider or session step.
 
     The message is the category itself, so no rejected payload, hypothesis text,
@@ -638,6 +650,31 @@ class StreamingAsrSession:
         """Return the current lifecycle state."""
 
         return self._state
+
+    @property
+    def lifecycle_state(self) -> LifecycleState:
+        """Return the state projected onto ``openmed.session.lifecycle.v1``.
+
+        ``state`` and :class:`StreamingAsrSessionReport` keep the
+        ``StreamState`` values; this projection only renames them.
+        """
+
+        return STREAM_LIFECYCLE_PROJECTION[self._state]
+
+    def check_lifecycle_transition(self, target: LifecycleState | str) -> None:
+        """Check a lifecycle transition from the current state without making it.
+
+        Args:
+            target: Requested lifecycle state.
+
+        Raises:
+            SpeechProviderError: With the lifecycle reason code as its
+                category when the shared vocabulary rejects the transition.
+        """
+
+        reason = transition_reason(self.lifecycle_state, target)
+        if reason is not None:
+            raise SpeechProviderError(reason)
 
     @property
     def buffered_chunks(self) -> int:

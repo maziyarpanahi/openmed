@@ -22,6 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from openmed.core.audit import AuditReport
+from openmed.core.errors import LegacyRootedError
 
 __all__ = [
     "GovernedWriteAction",
@@ -82,7 +83,7 @@ class GovernedWriteReviewerRole(str, Enum):
     SECURITY = "security_reviewer"
 
 
-class GovernedWriteAuditError(ValueError):
+class GovernedWriteAuditError(ValueError, LegacyRootedError):
     """Controlled projection error whose message contains no input values.
 
     Args:

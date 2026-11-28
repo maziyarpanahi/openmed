@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, BinaryIO, Protocol, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_limits import DESKTOP_V1, LimitProfile
 from .asset_manifest import AssetManifest
@@ -21,6 +23,7 @@ from .image_header import ImageHeaderError, read_image_header
 from .pdf_geometry import PdfGeometryStatus, read_pdf_geometry
 from .preflight import PreflightStatus, preflight_asset
 from .provider_result import ProviderResultEnvelope, ProviderResultOutcome
+from .session_lifecycle import LifecycleState, transition_reason
 from .streaming.speech.providers import (
     AudioChunk,
     FinalizedSegment,
@@ -47,7 +50,7 @@ SpeechEmission = PartialHypothesis | FinalizedSegment
 ProtectedOutput = ExtractedDocument | VLMResult | tuple[SpeechEmission, ...]
 
 
-class RuntimeSessionError(ValueError):
+class RuntimeSessionError(ValueError, LegacyRootedError):
     """Value-free caller-contract or lifecycle error."""
 
 
@@ -58,6 +61,15 @@ class SessionState(str, Enum):
     CANCELLING = "cancelling"
     CANCELLED = "cancelled"
     CLOSED = "closed"
+
+
+#: Projection of each ``SessionState`` onto the shared lifecycle vocabulary.
+SESSION_LIFECYCLE_PROJECTION: dict[SessionState, LifecycleState] = {
+    SessionState.OPEN: LifecycleState.OPEN,
+    SessionState.CANCELLING: LifecycleState.CANCELLING,
+    SessionState.CANCELLED: LifecycleState.CANCELLED,
+    SessionState.CLOSED: LifecycleState.CLOSED,
+}
 
 
 class SessionOperation(str, Enum):
@@ -385,6 +397,32 @@ class MultimodalSession:
         """Current lifecycle state, including honest pending cancellation."""
         with self._lock:
             return self._state
+
+    @property
+    def lifecycle_state(self) -> LifecycleState:
+        """Current state projected onto ``openmed.session.lifecycle.v1``.
+
+        ``state`` and the serialized session keep their own vocabulary; this
+        projection only renames it for cross-runtime comparison.
+        """
+        return SESSION_LIFECYCLE_PROJECTION[self.state]
+
+    def check_lifecycle_transition(self, target: LifecycleState | str) -> None:
+        """Check a lifecycle transition from the current state without making it.
+
+        ``cancel()`` and ``close()`` stay idempotent on a terminal session; this
+        check reports what the shared vocabulary says about a transition.
+
+        Args:
+            target: Requested lifecycle state.
+
+        Raises:
+            RuntimeSessionError: With the lifecycle reason code as its message
+                when the shared vocabulary rejects the transition.
+        """
+        reason = transition_reason(self.lifecycle_state, target)
+        if reason is not None:
+            raise RuntimeSessionError(reason)
 
     @property
     def events(self) -> tuple[SessionEvent, ...]:

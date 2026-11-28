@@ -19,6 +19,7 @@ from openmed.agent.approvals.side_effect_preview import (
     WriteKind,
     render_side_effect_preview,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.conditional_writes import (
     ConditionalWriteKind,
     ConditionalWritePlan,
@@ -44,7 +45,7 @@ _TARGET_DOMAIN = b"openmed.fhir.provenance-target.v1\x00"
 _ACTION_DOMAIN = b"openmed.fhir.write-provenance.v1\x00"
 
 
-class ProvenanceError(ValueError):
+class ProvenanceError(ValueError, LegacyRootedError):
     """Value-free rejection of an incomplete or unapproved write."""
 
 

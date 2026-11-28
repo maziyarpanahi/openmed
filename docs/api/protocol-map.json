@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract": "openmed.service.protocol-map",
-  "contract_version": "1.0.0",
+  "contract_version": "1.0.1",
   "description": "Operation, field and outcome equivalence between the OpenMed REST, GraphQL and gRPC service transports. Every entry is an identifier, status, code, field path or fixed explanation; nothing in this document is request content.",
   "categories": [
     "unauthenticated",
@@ -178,8 +178,12 @@
   ],
   "unmapped_operations": {
     "graphql": {
+      "capabilities": "Value-free capability descriptor; mirrors REST GET /v1/capabilities with the same models:read scope and digest. Cross-surface operation parity is owned by #3548.",
       "entityTypes": "Static canonical label catalog; no model work and no REST or gRPC equivalent.",
       "journeyResources": "Journey resource listing mirrors REST GET /v1/journey/resources and has no gRPC method; its principal binding is owned by #3549."
+    },
+    "grpc": {
+      "/openmed.service.v1.OpenMedService/GetCapabilities": "Value-free capability descriptor; mirrors REST GET /v1/capabilities with the same models:read scope and digest. Cross-surface operation parity is owned by #3548."
     }
   },
   "codes": {
@@ -582,7 +586,7 @@
       "transport": "rest",
       "outcomes": ["text_too_long", "stream_chunk_too_large"],
       "summary": "REST rejects over-limit text and stream chunk sizes during request validation with 422 validation_error, so clients cannot tell a limit from a malformed field.",
-      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+      "follow_up": "Recorded by the error-code registry (divergence rest_limits_reported_as_validation, docs/api/errors.md); reporting the limit code instead is a breaking change for a major release"
     },
     {
       "id": "rest_stream_errors_collapse_to_internal",
@@ -595,7 +599,7 @@
         "capability_unavailable"
       ],
       "summary": "Once a REST NDJSON stream has started, capacity, budget, circuit-breaker and capability failures arrive as in-band internal_error events, or bad_request when the failure is also a ValueError.",
-      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+      "follow_up": "Recorded by the error-code registry (divergence rest_stream_errors_collapse_to_internal, docs/api/errors.md); coded stream error events are a breaking change for a major release"
     },
     {
       "id": "graphql_limits_and_deadlines_uncoded",
@@ -630,7 +634,7 @@
         "capability_unavailable"
       ],
       "summary": "gRPC reports warm-pool, budget, circuit-breaker and capability failures as internal_error, or as invalid_request when the failure is also a ValueError.",
-      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+      "follow_up": "Recorded by the error-code registry (divergence grpc_collapses_taxonomy_codes, docs/api/errors.md); coded gRPC errors are v4.0 platform-contract R3 (breaking)"
     },
     {
       "id": "graphql_code_casing",

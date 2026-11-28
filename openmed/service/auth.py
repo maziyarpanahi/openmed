@@ -18,6 +18,8 @@ from fastapi import Request
 from starlette.responses import Response
 from starlette.routing import Match
 
+from openmed.core.errors import LegacyRootedError
+
 from .runtime import (
     DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
     SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR,
@@ -77,6 +79,8 @@ ROUTE_POLICIES = {
         ("pii:read",), "control"
     ),
     ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
+    # Same callers as /models/loaded: the descriptor lists the served models.
+    ("GET", "/v1/capabilities"): RoutePolicy(("models:read",), "control"),
     ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
     ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),
     ("POST", "/pii/extract"): RoutePolicy(("pii:read",), "model"),
@@ -244,7 +248,7 @@ class ServiceAuthConfig:
         return self.failure_rate_limit_rps > 0 and self.failure_rate_limit_burst > 0
 
 
-class AuthError(ValueError):
+class AuthError(ValueError, LegacyRootedError):
     """Authentication failure safe to expose through the API envelope."""
 
     def __init__(

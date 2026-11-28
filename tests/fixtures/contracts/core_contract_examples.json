@@ -1,0 +1,183 @@
+{
+  "schema": "openmed.core_contract_examples",
+  "version": 1,
+  "description": "Synthetic, non-PHI example records for the eight core contract schemas in openmed/core/schemas/json/. Every value is invented. tests/unit/release/test_codegen_types.py validates each record against its schema, and the generated TypeScript, Swift and Kotlin contract types must accept and round-trip every record without loss.",
+  "examples": {
+    "span": [
+      {
+        "schema_version": 1,
+        "doc_id": "synthetic-doc-001",
+        "start": 9,
+        "end": 20,
+        "text_hash": "hmac-sha256:3f7c1d2b9a8e6f5041c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a291807f6e5d",
+        "entity_type": "first_name",
+        "canonical_label": "FIRST_NAME",
+        "policy_label": "DIRECT_IDENTIFIER",
+        "regulatory_tags": ["hipaa:names"],
+        "score": 0.97,
+        "detector": "synthetic-detector",
+        "evidence": {
+          "rule": "synthetic_rule",
+          "window": [4, 24],
+          "matched": true,
+          "nested": {"weight": 0.5, "note": null}
+        },
+        "action": "replace",
+        "replacement": "[FIRST_NAME]",
+        "reversible_id": "rid-0001",
+        "section": "history",
+        "metadata": {"source": "synthetic", "tokens": 3}
+      },
+      {
+        "schema_version": 1,
+        "doc_id": "synthetic-doc-002",
+        "start": 0,
+        "end": 0,
+        "text_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "entity_type": "sensitive_attribute",
+        "canonical_label": "OTHER",
+        "policy_label": "SENSITIVE_ATTRIBUTE",
+        "regulatory_tags": [],
+        "score": null,
+        "detector": null,
+        "evidence": {},
+        "action": "keep",
+        "replacement": null,
+        "reversible_id": null,
+        "section": null,
+        "metadata": {}
+      }
+    ],
+    "entity": [
+      {
+        "schema_version": 1,
+        "entity_type": "date_of_birth",
+        "canonical_label": "DATE_OF_BIRTH",
+        "policy_label": "DIRECT_IDENTIFIER",
+        "regulatory_tags": ["hipaa:dates"]
+      }
+    ],
+    "action": [
+      {
+        "schema_version": 1,
+        "action": "mask",
+        "policy_label": "QUASI_IDENTIFIER",
+        "replacement": "[DATE]",
+        "reversible_id": null,
+        "metadata": {"profile": "synthetic_profile"}
+      }
+    ],
+    "audit": [
+      {
+        "schema_version": 1,
+        "event_id": "evt-0001",
+        "doc_id": "synthetic-doc-001",
+        "timestamp": "2026-01-02T03:04:05Z",
+        "actor": null,
+        "span_id": "span-0001",
+        "provenance_id": "prov-0001",
+        "metadata": {"step": "redact", "count": 1}
+      }
+    ],
+    "attestation": [
+      {
+        "schema_version": 1,
+        "template": {
+          "id": "synthetic-template",
+          "version": 1,
+          "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "profile_id": "synthetic-profile",
+        "generated_at": "2026-01-02T03:04:05Z",
+        "disclaimer": "Synthetic attestation for contract type tests only.",
+        "jurisdiction": {
+          "name": "Synthetic Jurisdiction",
+          "country_code": "ZZ",
+          "legal_reference": "Synthetic Act 1",
+          "source_url": "https://example.invalid/synthetic-act",
+          "attestation_title": "Synthetic residency attestation",
+          "residency_statement": "Processing stayed on the synthetic host.",
+          "guide_field": "synthetic_field"
+        },
+        "policy": {
+          "name": "synthetic_policy",
+          "posture": "strict",
+          "schema_version": 1,
+          "default_action": "redact"
+        },
+        "execution": {
+          "host_local": true,
+          "host_local_statement": "Ran on the local synthetic host.",
+          "offline_statement": "No network calls were made.",
+          "offline_assertion": {
+            "asserted": true,
+            "local_only": true,
+            "source": "config+environment",
+            "network_guard_requested": false,
+            "dependency_flags_enabled": true,
+            "environment_flags": {
+              "OPENMED_OFFLINE": true,
+              "HF_HUB_OFFLINE": true,
+              "TRANSFORMERS_OFFLINE": false,
+              "HF_DATASETS_OFFLINE": false
+            }
+          }
+        },
+        "models": [
+          {
+            "name": "synthetic-model",
+            "path": "models/synthetic-model",
+            "checksum": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "kind": "directory",
+            "file_count": 4
+          }
+        ],
+        "run": {
+          "document_length": 120,
+          "span_count": 2,
+          "input_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "deidentified_text_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "audit_repro_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "manifest_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "openmed_version": "0.0.0-synthetic"
+        },
+        "repro_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "integrity_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+      }
+    ],
+    "relation": [
+      {
+        "schema_version": 1,
+        "source_span_id": "span-0001",
+        "target_span_id": "span-0002",
+        "relation_type": "synthetic_relation",
+        "score": 0.5,
+        "evidence": {"pattern": "synthetic"},
+        "metadata": {}
+      }
+    ],
+    "code": [
+      {
+        "schema_version": 1,
+        "system": "urn:example:synthetic-codes",
+        "code": "SYN-001",
+        "display": null,
+        "confidence": 1,
+        "provenance_id": null,
+        "metadata": {"tier": "synthetic"}
+      }
+    ],
+    "provenance": [
+      {
+        "schema_version": 1,
+        "provenance_id": "prov-0001",
+        "detector": "synthetic-detector",
+        "version": "1.0.0",
+        "model": null,
+        "artifact_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "parameters": {"threshold": 0.5, "labels": ["FIRST_NAME", "DATE"]},
+        "metadata": {}
+      }
+    ]
+  }
+}

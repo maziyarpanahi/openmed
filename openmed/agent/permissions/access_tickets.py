@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Final, TypeVar, cast
 
 from openmed.agent.correlation import RunId
 from openmed.agent.identifiers import GovernanceIdError, PurposeId, ToolId
+from openmed.core.errors import LegacyRootedError
 
 if TYPE_CHECKING:
     from .access_events import AccessEventSink
@@ -84,7 +85,7 @@ class AccessTicketDenialEvidence:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
 
 
-class AccessTicketError(ValueError):
+class AccessTicketError(ValueError, LegacyRootedError):
     """Base class for value-free access-ticket failures."""
 
     def __init__(self, code: str, field_name: str) -> None:

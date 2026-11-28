@@ -10,6 +10,7 @@ import uuid
 from dataclasses import replace
 from typing import Any, Callable
 
+from openmed.core.errors import LegacyRootedError
 from openmed.service.privacy_gateway import safety_sweep_tripwire
 from openmed.structured.decision import DecisionInputFormat, DecisionMode, decide
 from openmed.structured.decision_interop import (
@@ -20,11 +21,11 @@ from openmed.structured.decision_interop import (
 _AUDIT = logging.getLogger("openmed.service.systemone.audit")
 
 
-class SystemOneInputError(ValueError):
+class SystemOneInputError(ValueError, LegacyRootedError):
     """A malformed, over-budget or non-text System One body."""
 
 
-class SystemOnePrivacyError(ValueError):
+class SystemOnePrivacyError(ValueError, LegacyRootedError):
     """A local de-identification or residual check refused dispatch."""
 
 

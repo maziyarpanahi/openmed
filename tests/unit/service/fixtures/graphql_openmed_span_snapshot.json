@@ -1,0 +1,54 @@
+{
+  "data": {
+    "analyze": {
+      "spans": [
+        {
+          "action": null,
+          "canonicalLabel": null,
+          "detector": null,
+          "docId": null,
+          "end": 22,
+          "entityType": null,
+          "evidence": {},
+          "label": "NAME",
+          "metadata": {},
+          "policyLabel": null,
+          "regulatoryTags": [],
+          "replacement": null,
+          "reversibleId": null,
+          "schemaVersion": null,
+          "score": 0.97,
+          "section": null,
+          "start": 10,
+          "text": "Maria Garcia",
+          "textHash": null
+        }
+      ]
+    },
+    "deidentify": {
+      "spans": [
+        {
+          "action": "mask",
+          "canonicalLabel": "PERSON",
+          "detector": null,
+          "docId": null,
+          "end": 22,
+          "entityType": "NAME",
+          "evidence": {},
+          "label": "NAME",
+          "metadata": {},
+          "policyLabel": null,
+          "regulatoryTags": [],
+          "replacement": "[NAME]",
+          "reversibleId": null,
+          "schemaVersion": null,
+          "score": 0.98,
+          "section": null,
+          "start": 10,
+          "text": "Maria Garcia",
+          "textHash": null
+        }
+      ]
+    }
+  }
+}

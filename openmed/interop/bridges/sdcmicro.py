@@ -20,6 +20,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "GPL_NOTICE",
     "LICENSE_ACKNOWLEDGEMENT_ENV",
@@ -198,7 +200,7 @@ Sys.chmod(output_path, mode = "0600")
 """
 
 
-class SDCMicroBridgeError(RuntimeError):
+class SDCMicroBridgeError(RuntimeError, LegacyRootedError):
     """Base exception for fail-closed sdcMicro bridge failures."""
 
 

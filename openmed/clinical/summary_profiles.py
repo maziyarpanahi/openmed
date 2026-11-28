@@ -25,6 +25,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, cast
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_PROFILE_SCHEMA_VERSION: Final[int] = 1
 SUMMARY_TEMPLATE_PROFILE_SCHEMA_VERSION: Final[int] = SUMMARY_PROFILE_SCHEMA_VERSION
 SUMMARY_PROFILE_VERSION: Final[str] = "1.0"
@@ -111,7 +113,7 @@ class SummaryFieldType(str, Enum):
         return self is not SummaryFieldType.TEXT
 
 
-class SummaryProfileError(ValueError):
+class SummaryProfileError(ValueError, LegacyRootedError):
     """Raised when a summary profile or typed summary payload is unsafe."""
 
 

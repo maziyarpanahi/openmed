@@ -15,6 +15,7 @@ from typing import Any
 
 from openmed.clinical.exporters.codeable_concept import SYSTEM_URI
 from openmed.clinical.exporters.codeable_concept_simple import codeable_concept
+from openmed.core.errors import LegacyRootedError
 
 from .athena import AthenaVocabularyIndex
 
@@ -52,7 +53,7 @@ _TEXT_FIELDS = (
 _RESTRICTED_VOCABULARY_IDS = frozenset({"cpt", "cpt4"})
 
 
-class RestrictedVocabularyBindingError(ValueError):
+class RestrictedVocabularyBindingError(ValueError, LegacyRootedError):
     """Raised when a restricted Athena vocabulary lacks explicit opt-in."""
 
 

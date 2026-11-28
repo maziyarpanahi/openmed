@@ -22,6 +22,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from openmed.__about__ import __version__
+from openmed.core.errors import LegacyRootedError
 
 from .egress import (
     EgressAdapter,
@@ -58,11 +59,11 @@ _RESPONSE_HEADER_ALLOWLIST = frozenset(
 Deidentifier = Callable[..., Any]
 
 
-class OpenHIMMediatorConfigurationError(ValueError):
+class OpenHIMMediatorConfigurationError(ValueError, LegacyRootedError):
     """Raised when opt-in OpenHIM mediator settings are invalid."""
 
 
-class OpenHIMMediatorProtocolError(RuntimeError):
+class OpenHIMMediatorProtocolError(RuntimeError, LegacyRootedError):
     """Raised when OpenHIM core rejects registration or a heartbeat."""
 
 

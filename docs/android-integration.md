@@ -48,20 +48,44 @@ fun availableAndroidModels(context: Context): List<ModelCatalogEntry> {
 ```
 
 Each entry exposes its repository ID, runnable formats, languages, tier,
-parameter count, license, and reproducibility hash. `ModelCatalog.filter(...)`
-can also select an exact format, tier, maximum parameter count, language, or
-license, and `byRepoId(...)` resolves a known entry.
+parameter count, license, and reproducibility hash. It also carries the
+manifest `family` (such as `PII` or `NER`), `task` (such as
+`token-classification`) and `canonicalLabels`, so an app can tell a PII model
+from a disease NER model without parsing repository names. A catalog asset
+built before these fields existed still loads: `family` and `task` are null and
+`canonicalLabels` is empty. `ModelCatalog.filter(...)` can also select an exact
+format, tier, maximum parameter count, language, license, or family, and
+`byRepoId(...)` resolves a known entry.
+
+```kotlin
+val piiModels = ModelCatalog.load(context).filter(family = "PII", format = "onnx")
+```
 
 ## Download with lifecycle progress
 
 `ModelDownloader.download` is blocking, so run it on `Dispatchers.IO`. It emits
 `DOWNLOAD_STARTED`, `DOWNLOAD_COMPLETE`, or `CACHE_HIT` events through
-`ModelDownloadLogger`. These are lifecycle events, not byte-percentage updates;
-show an indeterminate progress indicator between start and completion.
+`ModelDownloadLogger`. These are coarse status events, not byte-percentage
+updates. For a determinate progress bar or for logs that line up with Python,
+use the lifecycle sink and progress listener described under
+[Lifecycle events and byte progress](#lifecycle-events-and-byte-progress).
 
 The downloader verifies the catalog reproducibility hash and available file
 checksums in a staging directory. It exposes the model as ready only after
 integrity checks succeed.
+
+`ModelIntegrity.reproducibilityHash(...)` computes the same hash as Python's
+`openmed/core/model_integrity.py` and Swift's `OpenMedModelIntegrity`: SHA-256
+over compact sorted-key JSON of `released` (the date's first ten characters, or
+`null`), `repo_id`, `sha` (or `null`) and `siblings` sorted by Unicode code
+point, with Python's default ASCII escaping. The synthetic vectors in
+`tests/fixtures/parity/model_repro_hash_v1.json` cover null commits and dates,
+unsorted and nested siblings, JSON special characters, and non-ASCII repository
+ids and file names. `ModelDownloaderTest` and `tests/unit/core/test_model_integrity.py`
+both recompute every vector. Before OpenMedKit 4.1, Android wrote non-ASCII
+and other non-printable characters raw and sorted siblings by UTF-16 code unit,
+so its hash disagreed with Python and Swift for such names; names in printable
+ASCII hash exactly as before.
 
 ```kotlin
 import android.content.Context
@@ -115,6 +139,47 @@ network permission for this preparation step:
 ```
 
 Inference itself does not use that permission.
+
+### Lifecycle events and byte progress
+
+Pass a `ModelLifecycleSink` to receive the shared, value-free
+`openmed.model.lifecycle.v1` events that Python's `prefetch_model` emits (see
+[Model Lifecycle Events](models/lifecycle-events.md)). Pass a
+`ModelDownloadProgressListener` for per-file byte progress:
+
+```kotlin
+val downloader = ModelDownloader(
+    cache = cache,
+    lifecycleSink = ModelLifecycleSink { event -> auditLog(event.toJson()) },
+    progressListener = ModelDownloadProgressListener { index, count, bytes, size ->
+        onFileProgress(index, count, bytes, size)
+    },
+)
+```
+
+A download reports `requested`, then `ready` for a cache hit. Otherwise it
+reports `fetching` and `verified` for each file that has a published size and
+SHA-256, then `ready` with the file count and total bytes. A file that fails
+its size or digest check emits `integrity_failed` and is fetched once more. If
+it fails again, the download ends with `failed` and the reason
+`integrity_retry_exhausted`. A reproducibility-hash mismatch emits
+`integrity_failed` for the manifest (`file_count` 1, `byte_count` 0, `digest`
+the catalog hash) and then `failed` with `integrity_unverifiable`, and no file
+is downloaded or marked ready. Other failures end with `failed` and
+`no_matching_files`, `metadata_invalid_filename` or `download_error`. Files
+without a published SHA-256 are still checked by size, but emit no per-file
+event, because the event schema requires a digest.
+
+Events carry only the repository id, a 40- or 64-hex commit, counts, a digest
+and a reason code: never a URL, filename, path or exception text. Byte progress
+identifies a file by its index. For each file, the values only grow (a
+re-fetch after a failed check is not reported until it passes the bytes already
+reported) and end at the file size. `HttpHuggingFaceModelClient` reports bytes
+as they are written. A custom `HuggingFaceModelClient` that does not report
+them still produces `0` and the final size. Exceptions thrown by a sink or
+listener are ignored and never change the download outcome.
+`ModelDownloadStatus.lifecycleEvent` maps the legacy statuses onto the shared
+vocabulary.
 
 ## Locate and check the cache
 
@@ -263,6 +328,99 @@ directory that already carries the legacy ready marker and otherwise throws
 outside the cache root, including through a symlink, now raise
 `IllegalArgumentException`, and the state queries report them as `missing`.
 
+## Task packs
+
+A task pack picks a model for a job instead of a repository. The Kotlin packs
+read `packs/task_packs.json`, a byte-identical copy of the shared
+[task pack manifest](models/task-packs.md), and take its Android `onnx`
+candidates in rank order. Resolution reads only that file; it never downloads,
+opens a socket or loads a model.
+
+`prepare(downloader, allowDownload)` is blocking, so call it off the main
+thread. It opens the first cached candidate that matches its catalog
+integrity hash. When none is cached it returns
+`TaskPackPreparation(failure = NOT_CACHED)` and the downloader's client is
+never called, unless `allowDownload` is `true`; then it downloads candidates
+in rank order until one passes the manifest and file checks. The prepared
+model holds a cache lease until `close()`. Other failures are typed too:
+`NO_CANDIDATE`, `DOWNLOAD_FAILED` and `LOAD_FAILED`.
+
+```kotlin
+import android.content.Context
+import com.openmed.openmedkit.catalog.ModelCatalog
+import com.openmed.openmedkit.download.ModelDownloader
+import com.openmed.openmedkit.packs.PiiPack
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+suspend fun redact(context: Context, note: String, userApprovedDownload: Boolean): String? {
+    PiiPack(ModelCatalog.load(context)).use { pack ->
+        val preparation = withContext(Dispatchers.IO) {
+            pack.prepare(ModelDownloader(context), allowDownload = userApprovedDownload)
+        }
+        if (preparation.failure != null) return null // Show preparation.failure.
+        val result = pack.deidentify(note)
+        // result.detector, result.modelId and result.notice label the output.
+        return result.value.redactedText
+    }
+}
+```
+
+`PiiPack.extract` runs `extractPii` and `PiiPack.deidentify` runs the
+policy-driven `deidentify` of `OpenMedKit` on the prepared model. Without a
+prepared model both throw `TaskPackException(NOT_PREPARED)`. Pass
+`allowLocalFallback = true` to run the deterministic local recognizer of
+`OpenMed` instead; the result then reports
+`TaskPackDetector.LOCAL_RECOGNIZER` and a `null` model id. Every
+`TaskPackResult` carries the pack's notice key and default English text:
+detected identifiers are redaction candidates that still need review.
+Diagnostics go through `SafeLog` only and never contain input text.
+
+### Clinical entities
+
+`ClinicalEntityPack` prepares a DiseaseDetect candidate the same way and
+`extract(text)` runs `analyzeText` on it. A span is kept only when its model
+label normalizes, through the portable label taxonomy, to one of the pack's
+canonical labels (`CONDITION`, `DISEASE`, `PATHOLOGY`); every other label is
+dropped rather than guessed into a category. Each `ClinicalEntity` carries the
+`category`, Unicode scalar `start` and `end` offsets, the `confidence` and the
+source `modelId`, but no surface text. The pack reports condition mentions
+only: it does not diagnose, rank or recommend care, and its result carries
+that notice. The synthetic vectors in
+`tests/fixtures/parity/clinical_entity_pack_v1.json` fix the expected output
+for the Kotlin and Swift pack tests.
+
+Each `ClinicalEntity` also carries its ConText `assertion`: `negation`
+(`affirmed`, `negated`), `uncertainty` (`certain`, `uncertain`),
+`temporality` (`recent`, `historical`, `hypothetical`) and `experiencer`
+(`patient`, `family`, `other`), with the string codes of the Python
+`assert_context`. Negated, uncertain, hypothetical and non-patient mentions
+are flagged, never dropped. `ClinicalContext` ports the English path:
+case-insensitive, token-bounded, longest-first cues from the bundled
+`clinical/context_cues_en_v1.json`, pseudo-negation masking with odd/even
+negation counting, cue direction and scope terminators, sentence bounds and
+clause-scoped experiencer cues. Pass sentence bounds as Unicode scalar
+`ScalarSpan`s with `extract(text, threshold, language, sentences)`; without
+them a regex splitter is used. A non-English `language` returns the entities
+with `assertion = null` and `assertionReason = "unsupported_language"`. The
+port reproduces `tests/fixtures/parity/clinical_assertion_v1.json` exactly,
+including the recorded Python behavior where `and` or `or` ends a negation
+scope (`cough` in `Denies fever and cough.` stays affirmed). The axes are
+advisory annotations for review, not clinical decisions.
+
+### Medication mentions
+
+`MedicationPack` prepares a PharmaDetect candidate the same way and
+`extract(text)` returns `MedicationMention` values: the normalized `label`
+(`CHEMICAL`; the models emit `CHEM`), Unicode scalar `start` and `end`
+offsets, the `confidence` and the source `modelId`. Labels that do not
+normalize to `CHEMICAL` are dropped. The pack is extraction-only: no result
+type has a dose, interaction, recommendation or action field, and the pack
+never triggers a follow-up action. Every result carries the notice
+"Reports medication mentions and their offsets only. It never gives dosing
+advice and never triggers an action." (`result.notice`, key
+`openmed.notice.medication.extraction_only`); show it with the mentions.
+
 ## Offline-first deployment
 
 Separate model preparation from document processing. There are two supported
@@ -282,6 +440,12 @@ After either path is ready, OCR, tokenization, model inference, and
 de-identification run locally. No model is fetched at inference time, input PHI
 is never uploaded or fetched from a service, and there is no cloud fallback.
 An offline app that ships its model does not need network permission at all.
+
+To drive these settings from one portable document shared with Python and the
+other kits, parse it with `OpenMedSdkConfig.parse(json)` and pass the result to
+`ModelDownloader(cache, config)` and `OpenMed(backend, config)`. Its
+`local_only` key defaults to `true`, so such a downloader only serves cached
+models. See [Portable SDK configuration](configuration/sdk-config.md).
 
 The DJL tokenizer library that OpenMedKit uses runs usage telemetry whenever a
 tokenizer is created: it sends HTTP requests to the cloud instance-metadata
@@ -536,6 +700,80 @@ repository ID, status, and size. Application code must preserve that guarantee:
 never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
+
+## Verify signed audit reports
+
+`ReceiptVerifier` checks an `AuditReport` that Python signed with
+`AuditReport.sign()`, using only JDK and Android platform crypto. The kit never
+signs. The caller supplies the HMAC key, for example from the Android
+Keystore, and remains responsible for it:
+
+```kotlin
+when (val result = ReceiptVerifier.verify(reportJson, key)) {
+    is ReceiptVerification.Valid -> showVerified(result.spanOrder)
+    is ReceiptVerification.Rejected -> showRejected(result.code)
+}
+```
+
+`Valid.spanOrder` is `sorted`, or `stored` for a report signed before spans
+were sorted. `Rejected.code` is one of the following:
+
+| Code | Meaning |
+| --- | --- |
+| `hash_mismatch` | No span order reproduces the stored `repro_hash`, so the report content changed. |
+| `signature_mismatch` | The report is unsigned, or the hash matches but its HMAC does not match the key. |
+| `unsupported_algorithm` | The signature names no algorithm or one other than `HMAC-SHA256`. |
+| `malformed` | The input is not a structurally valid audit report. The input is never echoed. |
+
+The checks run in the order the Swift and web verifiers share: a missing or
+`null` signature, then the algorithm, then the hash, then the HMAC.
+
+The verifier reproduces Python's canonical JSON byte for byte. That covers
+member order by Unicode code point, ASCII escaping and Python float formatting
+(`1e-07`, not `1.0E-7`). The HMAC is compared in constant time. An empty key
+throws `IllegalArgumentException`; neither results nor errors contain the key.
+`ReceiptVerificationParityTest` replays the shared vectors in
+`tests/fixtures/parity/receipt_verification_v1.json`.
+
+## Patient-keyed date-shift offsets
+
+`DateShift` reproduces Python's `openmed.core.date_shift` offsets byte for
+byte using only JDK crypto, so one patient's dates shift by the same number of
+days on Android and on a server:
+
+```kotlin
+val days = DateShift.stableOffset(patientKey, secret, maxDays = 365)
+val shifted = DateShift.shift("2024-03-01", days) // ISO YYYY-MM-DD
+val seeded = DateShift.stableOffsetFromSeed(requestSeed, maxDays = 30)
+```
+
+An offset is a non-zero number of days in `[-maxDays, maxDays]`.
+`stableOffset` uses HMAC-SHA256 of the UTF-8 patient key under the caller's
+secret. `stableOffsetFromSeed` hashes the seed's decimal text, accepting a
+`Long` or a `BigInteger` of any size, as Python does. `shift` uses the
+proleptic Gregorian calendar and refuses results outside years 1 to 9999.
+Errors use fixed messages and never contain keys, secrets, seeds or dates, and
+nothing is logged or stored. The caller keeps custody of the secret. A
+date-shift `DeidentifyMethod` is separate work (#3643).
+`DateShiftParityTest` replays `tests/fixtures/parity/date_shift_v1.json`.
+
+## Identifier validators
+
+`PiiValidators` checks the portable identifier subset with the same rules as
+the Python reference. That covers `validateSSN`, `validateLuhn`, `validateNPI`,
+`validateIBAN`, `validateAadhaar`, `validateUKNHSNumber`, `validateDutchBSN`,
+`validateSpanishDNI`, `validateFrenchNIR`, `validateChineseResidentID` and
+`validateCanadianSIN`, plus `validatePhoneUS`, which mirrors Python's
+`validate_phone_us` but has no shared vectors. Each takes the candidate text and
+returns a `Boolean`. None of them logs, stores or echoes the input, so an app
+can reject a mistyped IBAN or Aadhaar number exactly where Python would.
+Separators, case and Unicode digits follow the Python function named for each
+validator in `tests/fixtures/parity/identifier_validators_v1.json`. For example,
+the Aadhaar check accepts Arabic-Indic and Gurmukhi digits, and the IBAN check
+ignores whitespace and hyphens. The SSN, Luhn, NPI, US phone, UK NHS number,
+Dutch BSN, Chinese resident ID and Canadian SIN checks read only the ASCII
+digits 0-9, as Python does, so Arabic-Indic, fullwidth and other non-ASCII
+digits never count toward them. `IdentifierValidatorParityTest` replays that fixture.
 
 ## Shared C++ runtime (libc++_shared.so)
 

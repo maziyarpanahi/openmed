@@ -15,6 +15,7 @@ nav:
       - OpenMed 3.3.0 Release Notes: release/v3.3.0.md
       - Migrate from 3.2 to 3.3: migration/3.2-to-3.3.md
       - OpenMed 4.0.0 Upgrade Guide: migration/3.3-to-4.0.md
+      - Migrate from 4.0 to 4.1: migration/4.0-to-4.1.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
@@ -30,6 +31,8 @@ nav:
       - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
       - Service Recovery CLI: cli/service-recovery.md
+      - Stored Record Migration CLI: cli/migrate.md
+      - Capabilities CLI: cli/capabilities.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Governed Agents:
@@ -150,6 +153,7 @@ nav:
       - Offline & Air-Gapped Installation: offline-install.md
       - Standalone Local Redactor Manifest: install/standalone.md
       - Offline Install Smoke Check: install/smoke-check.md
+      - Python 3.14 Extras Compatibility: install/python-versions.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - Continuation Authorization: serving/continuation-authorization.md
       - HMAC Request Signing: serving/request-signing.md
@@ -315,11 +319,13 @@ nav:
               - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Local Model-Cache Quotas: models/cache-quotas.md
+      - Model Lifecycle Events: models/lifecycle-events.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Signed Portable Model Bundles: models/portable-bundle.md
       - Crash-safe Bundle Generation Caches: models/bundle-cache.md
       - Decision Calibration in Bundles: models/portable-bundle-calibration.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
+      - Portable Task Packs: models/task-packs.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
@@ -353,6 +359,8 @@ nav:
       - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
+      - Portable SDK Configuration: configuration/sdk-config.md
+      - Environment Variables: configuration/environment-variables.md
       - Configuration Profiles: profiles.md
       - Extension Plugin SDK: plugin-sdk.md
       - Skill Bundle Integrity: skills/bundle-integrity.md
@@ -598,11 +606,15 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
+      - Stored Record Migrations: api/record-migrations.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Published JSON Schemas: api/schemas.md
       - Service Protocol Parity: api/protocol-parity.md
+      - Capability Descriptor: api/capabilities.md
       - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
+      - Generated Contract Types: api/contract-types.md
       - Offline File Redaction CLI: guides/file-redaction.md
       - Structured Release Risk & Expert Review: reidentification-risk.md
       - Minimum-necessary Field Selection: security/minimum-necessary.md
@@ -687,6 +699,7 @@ nav:
       - X12 837 Claim Redaction: interop/x12-837-redaction.md
       - Offline Artifact Inventory: interop/artifact-inventory.md
       - Compliance Posture: compliance.md
+      - EU Evidence Index: compliance/eu-evidence.md
       - Audit-envelope Metadata: compliance/audit-envelopes.md
       - Privacy Report Cardinality Budgets: compliance/report-cardinality.md
       - Privacy Report Field Linting: compliance/report-lint.md
@@ -769,6 +782,7 @@ nav:
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - OpenMedKit Apple Platforms: runtimes/apple-platforms.md
       - iOS Share and Action Extensions: runtimes/ios-share-extension.md
+      - OpenMedKit App Intents: runtimes/apple-app-intents.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
       - Tokenizer Conformance: tokenizer-conformance.md
       - Device Capability Resolution: runtimes/device-capabilities.md

@@ -10,6 +10,7 @@ expected_routes:
   - docs/migration/3.2-to-3.3/index.html
   - docs/release/v3.2.0/index.html
   - docs/migration/3.3-to-4.0/index.html
+  - docs/migration/4.0-to-4.1/index.html
   - docs/migration/3.1-to-3.2/index.html
   - docs/migration/3.0-to-3.1/index.html
   - docs/agent/index.html
@@ -99,6 +100,7 @@ classification:
     - release/v3.3.0.md
     - migration/3.2-to-3.3.md
     - migration/3.3-to-4.0.md
+    - migration/4.0-to-4.1.md
     - release/v2.5.0.md
     - release/v2.2.0.md
     - release/v2.2-standards-matrix.md
@@ -114,6 +116,8 @@ classification:
     - cli/help-drift.md
     - cli/machine-contract.md
     - cli/service-recovery.md
+    - cli/migrate.md
+    - cli/capabilities.md
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md
@@ -225,6 +229,7 @@ classification:
     - offline-install.md
     - install/standalone.md
     - install/smoke-check.md
+    - install/python-versions.md
     - serving/async-jobs.md
     - serving/continuation-authorization.md
     - serving/request-signing.md
@@ -379,11 +384,13 @@ classification:
     - models/clinical-slm-template-digests.md
     - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
+    - models/lifecycle-events.md
     - models/rollback-compatibility.md
     - models/portable-bundle.md
     - models/bundle-cache.md
     - models/portable-bundle-calibration.md
     - models/journey-specialist-pack.md
+    - models/task-packs.md
     - model-registry.md
     - ner-families.md
     - model-manifest.md
@@ -417,6 +424,8 @@ classification:
     - languages/morphology-projection.md
     - configuration.md
     - configuration/precedence-audit.md
+    - configuration/sdk-config.md
+    - configuration/environment-variables.md
     - profiles.md
     - plugin-sdk.md
     - skills/bundle-integrity.md
@@ -650,11 +659,15 @@ classification:
     - multimodal/inference-cli.md
     - api/deidentification.md
     - api/errors.md
+    - api/record-migrations.md
     - api/compatibility-gate.md
+    - api/schemas.md
     - api/protocol-parity.md
+    - api/capabilities.md
     - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md
+    - api/contract-types.md
     - guides/file-redaction.md
     - reidentification-risk.md
     - security/minimum-necessary.md
@@ -739,6 +752,7 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/eu-evidence.md
     - compliance/audit-envelopes.md
     - compliance/report-cardinality.md
     - compliance/report-lint.md
@@ -820,6 +834,7 @@ classification:
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
+    - runtimes/apple-app-intents.md
     - swift-kotlin-parity.md
     - tokenizer-conformance.md
     - runtimes/device-capabilities.md
@@ -894,13 +909,16 @@ classification:
     - clinical-domains.md
     - compliance/access-review-expiry.md
     - compliance/dpa-template.md
+    - compliance/eu-ehds-secondary-use.md
     - compliance/dpia-template.md
     - compliance/gdpr-dsar-export.md
     - compliance/ke-dpa-identifier-checklist.md
     - compliance/model-card-eu-ai-act-fields.md
+    - compliance/eu-ai-act-technical-documentation.md
     - compliance/ng-ndpa-identifier-checklist.md
     - compliance/za-popia-identifier-checklist.md
     - compliance/waiver-ledger.md
+    - compliance/eu-pseudonymisation-terms.md
     - demo/browser-egress.md
     - integrations-llamaindex.md
     - i18n/glossary.md

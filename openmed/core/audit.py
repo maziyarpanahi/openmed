@@ -1352,12 +1352,29 @@ def verify_repro_hash(report: AuditReport | Mapping[str, Any]) -> bool:
     return AuditReport.from_dict(report).repro_hash_matches()
 
 
+def load_audit_report_schema() -> dict[str, Any]:
+    """Return the bundled JSON Schema for :meth:`AuditReport.to_dict` output.
+
+    The schema (``audit_report.schema.json``) describes the whole signed
+    report, signed or unsigned. Span objects and context descriptors are
+    closed, so a raw-text key such as ``text`` fails validation. The
+    per-span ``OpenMedAuditEvent`` schema is ``audit.schema.json``.
+
+    Returns:
+        The Draft 2020-12 schema as a dictionary.
+    """
+    from .schemas import load_schema
+
+    return load_schema("audit_report")
+
+
 __all__ = [
     "AuditReport",
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
     "hash_text",
+    "load_audit_report_schema",
     "manifest_hash",
     "recompute_repro_hash",
     "stable_hash",

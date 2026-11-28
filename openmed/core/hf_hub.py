@@ -26,11 +26,20 @@ import shutil
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Callable, List, Mapping, Optional, Sequence
 
+from .model_lifecycle import (
+    NULL_MODEL_LIFECYCLE_SINK,
+    ModelLifecycleEvent,
+    ModelLifecycleEventError,
+    ModelLifecycleEventType,
+    ModelLifecycleSink,
+    emit_event,
+    resolve_sink,
+)
 from .model_registry import get_model_info
-from .offline import OfflineModeError, is_local_only
+from .offline import OfflineModeError, OfflineModelUnavailableError, is_local_only
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .config import OpenMedConfig
@@ -94,7 +103,20 @@ class DownloadProgress:
 
 
 class DownloadIntegrityError(RuntimeError):
-    """Raised when a downloaded model file cannot be verified safely."""
+    """Raised when a downloaded model file cannot be verified safely.
+
+    Attributes:
+        reason: Controlled, value-free code for the failure, also reported as
+            the ``reason`` of the ``failed`` model lifecycle event.
+    """
+
+    reason: str = "integrity_unverifiable"
+
+
+def _integrity_error(message: str, reason: str) -> DownloadIntegrityError:
+    error = DownloadIntegrityError(message)
+    error.reason = reason
+    return error
 
 
 @dataclass(frozen=True)
@@ -167,6 +189,7 @@ def prefetch_model(
     retries: int = DEFAULT_RETRIES,
     max_bandwidth: int | None = None,
     progress_callback: Callable[[DownloadProgress], None] | None = None,
+    lifecycle_sink: ModelLifecycleSink | None = None,
 ) -> str:
     """Pre-download an OpenMed model snapshot and return its local path.
 
@@ -179,8 +202,10 @@ def prefetch_model(
 
     When offline mode is active (``OPENMED_OFFLINE`` or ``config.local_only``),
     the download runs with ``local_files_only=True``; if the snapshot is not
-    already cached an :class:`~openmed.core.offline.OfflineModeError` is raised
-    instead of attempting a network fetch.
+    already cached an
+    :class:`~openmed.core.offline.OfflineModelUnavailableError` is raised
+    instead of attempting a network fetch. It is an ``OfflineModeError`` that
+    also carries the ``model_load_error`` code.
 
     Args:
         name_or_alias: Registry key, repo id, or bare model name to fetch.
@@ -197,18 +222,27 @@ def prefetch_model(
         max_bandwidth: Optional aggregate download cap in bytes per second.
         progress_callback: Optional callback receiving repository-relative
             filenames and byte/file totals. No file contents are exposed.
+        lifecycle_sink: Optional ``ModelLifecycleSink`` (see
+            :mod:`openmed.core.model_lifecycle`) receiving value-free
+            ``openmed.model.lifecycle.v1`` events: ``requested``,
+            ``fetching``, ``verified``, ``integrity_failed``, ``ready`` and
+            ``failed``. The default records nothing.
 
     Returns:
         Filesystem path to the downloaded snapshot directory.
 
     Raises:
         ImportError: If the optional ``[hf]`` extra is not installed.
-        OfflineModeError: If offline mode is active and the model is not cached.
+        OfflineModelUnavailableError: If offline mode is active and the model is
+            not cached. It is an ``OfflineModeError`` with the
+            ``model_load_error`` code.
         DownloadIntegrityError: If Hub metadata is insufficient for verification
             or a downloaded file remains corrupt after one forced re-fetch.
         ValueError: If *retries* or *max_bandwidth* is invalid.
+        TypeError: If *lifecycle_sink* has no ``emit`` method.
     """
 
+    sink = resolve_sink(lifecycle_sink)
     snapshot_download, local_entry_not_found = _import_snapshot_download()
     repo_id = resolve_repo_id(name_or_alias, org=org)
     local_only = is_local_only(config)
@@ -235,27 +269,117 @@ def prefetch_model(
     if cache_dir is not None:
         download_kwargs["cache_dir"] = cache_dir
 
+    _lifecycle(
+        sink,
+        ModelLifecycleEventType.REQUESTED,
+        repo_id=repo_id,
+        revision_sha=_revision_sha(revision),
+    )
     if not local_only:
-        return _prefetch_online(
-            repo_id=repo_id,
-            revision=revision,
-            allow_patterns=allow_patterns,
-            cache_dir=cache_dir,
-            retries=retries,
-            max_bandwidth=max_bandwidth,
-            progress_callback=progress_callback,
-        )
+        try:
+            return _prefetch_online(
+                repo_id=repo_id,
+                revision=revision,
+                allow_patterns=allow_patterns,
+                cache_dir=cache_dir,
+                retries=retries,
+                max_bandwidth=max_bandwidth,
+                progress_callback=progress_callback,
+                sink=sink,
+            )
+        except Exception as exc:
+            _lifecycle(
+                sink,
+                ModelLifecycleEventType.FAILED,
+                repo_id=repo_id,
+                reason=_failure_reason(exc),
+            )
+            raise
 
     try:
-        return snapshot_download(**download_kwargs)
+        snapshot_path = snapshot_download(**download_kwargs)
     except local_entry_not_found as exc:
+        _lifecycle(
+            sink,
+            ModelLifecycleEventType.FAILED,
+            repo_id=repo_id,
+            reason="offline_cache_miss",
+        )
         if local_only:
-            raise OfflineModeError(
+            raise OfflineModelUnavailableError(
                 f"{repo_id} is not available in the local cache and offline mode "
                 "blocks the download. Pre-fetch it once with offline mode "
-                "disabled, or point HF_HOME at a cache that already contains it."
+                "disabled, or point HF_HOME at a cache that already contains it.",
+                model_name=repo_id,
             ) from exc
         raise
+    except Exception:
+        _lifecycle(
+            sink,
+            ModelLifecycleEventType.FAILED,
+            repo_id=repo_id,
+            reason="download_error",
+        )
+        raise
+    # A cache hit is not re-measured: counts stay unknown rather than guessed.
+    # PureWindowsPath splits on both separators, so the snapshot directory name
+    # (the commit) is found on Windows and POSIX alike.
+    _lifecycle(
+        sink,
+        ModelLifecycleEventType.READY,
+        repo_id=repo_id,
+        revision_sha=_revision_sha(PureWindowsPath(str(snapshot_path)).name),
+    )
+    return snapshot_path
+
+
+def _revision_sha(value: Any) -> str | None:
+    if _is_hex_digest(value, 40) or _is_hex_digest(value, 64):
+        return str(value).lower()
+    return None
+
+
+def _failure_reason(error: Exception) -> str:
+    if isinstance(error, DownloadIntegrityError):
+        return error.reason
+    if isinstance(error, OfflineModeError):
+        return "offline_cache_miss"
+    return "download_error"
+
+
+def _lifecycle(
+    sink: ModelLifecycleSink,
+    event: ModelLifecycleEventType,
+    **fields: Any,
+) -> None:
+    """Emit one lifecycle event; the default sink builds nothing."""
+
+    if sink is NULL_MODEL_LIFECYCLE_SINK:
+        return
+    repo_id = fields.get("repo_id")
+    try:
+        record = ModelLifecycleEvent(event, **fields)
+    except ModelLifecycleEventError:
+        # A repo id outside the Hub pattern is dropped rather than emitted.
+        if repo_id is None:
+            return
+        try:
+            record = ModelLifecycleEvent(event, **{**fields, "repo_id": None})
+        except ModelLifecycleEventError:
+            return
+    emit_event(sink, record)
+
+
+def _file_event_fields(
+    remote_file: _RemoteFile, repo_id: str, commit_hash: str
+) -> dict[str, Any]:
+    return {
+        "repo_id": repo_id,
+        "revision_sha": _revision_sha(commit_hash),
+        "file_count": 1,
+        "byte_count": remote_file.size,
+        "digest": f"{remote_file.algorithm}:{remote_file.digest}",
+    }
 
 
 def _prefetch_online(
@@ -267,6 +391,7 @@ def _prefetch_online(
     retries: int,
     max_bandwidth: int | None,
     progress_callback: Callable[[DownloadProgress], None] | None,
+    sink: ModelLifecycleSink = NULL_MODEL_LIFECYCLE_SINK,
 ) -> str:
     hf_api_type, hf_hub_download = _import_online_downloads()
     api = hf_api_type()
@@ -280,8 +405,9 @@ def _prefetch_online(
     )
     commit_hash = getattr(repo_info, "sha", None)
     if not (_is_hex_digest(commit_hash, 40) or _is_hex_digest(commit_hash, 64)):
-        raise DownloadIntegrityError(
-            f"Cannot verify {repo_id}: the Hub did not report a valid commit hash."
+        raise _integrity_error(
+            f"Cannot verify {repo_id}: the Hub did not report a valid commit hash.",
+            "commit_unverifiable",
         )
 
     remote_files = _remote_files_from_info(
@@ -294,6 +420,8 @@ def _prefetch_online(
     files_total = len(remote_files)
 
     for files_done, remote_file in enumerate(remote_files):
+        file_fields = _file_event_fields(remote_file, repo_id, commit_hash)
+        _lifecycle(sink, ModelLifecycleEventType.FETCHING, **file_fields)
         local_path = _download_remote_file(
             hf_hub_download=hf_hub_download,
             repo_id=repo_id,
@@ -307,8 +435,16 @@ def _prefetch_online(
             files_total=files_total,
             force_download=False,
         )
-        if not _file_matches_metadata(local_path, remote_file):
+        mismatch = _metadata_mismatch_reason(local_path, remote_file)
+        if mismatch is not None:
+            _lifecycle(
+                sink,
+                ModelLifecycleEventType.INTEGRITY_FAILED,
+                **file_fields,
+                reason=mismatch,
+            )
             _unlink_corrupt_file(local_path, remote_file.filename)
+            _lifecycle(sink, ModelLifecycleEventType.FETCHING, **file_fields)
             local_path = _download_remote_file(
                 hf_hub_download=hf_hub_download,
                 repo_id=repo_id,
@@ -322,12 +458,21 @@ def _prefetch_online(
                 files_total=files_total,
                 force_download=True,
             )
-            if not _file_matches_metadata(local_path, remote_file):
-                raise DownloadIntegrityError(
+            mismatch = _metadata_mismatch_reason(local_path, remote_file)
+            if mismatch is not None:
+                _lifecycle(
+                    sink,
+                    ModelLifecycleEventType.INTEGRITY_FAILED,
+                    **file_fields,
+                    reason=mismatch,
+                )
+                raise _integrity_error(
                     f"Integrity verification failed for {remote_file.filename} "
-                    "after one forced re-fetch. Clear the model cache and retry."
+                    "after one forced re-fetch. Clear the model cache and retry.",
+                    "integrity_retry_exhausted",
                 )
 
+        _lifecycle(sink, ModelLifecycleEventType.VERIFIED, **file_fields)
         downloaded.append((remote_file, local_path))
         _emit_progress(
             progress_callback,
@@ -343,6 +488,14 @@ def _prefetch_online(
         snapshot_root=snapshot_root,
         revision=revision,
         commit_hash=commit_hash,
+    )
+    _lifecycle(
+        sink,
+        ModelLifecycleEventType.READY,
+        repo_id=repo_id,
+        revision_sha=_revision_sha(commit_hash),
+        file_count=len(downloaded),
+        byte_count=sum(remote_file.size for remote_file, _ in downloaded),
     )
     return str(snapshot_root)
 
@@ -395,8 +548,9 @@ def _remote_files_from_info(
     for sibling in siblings or ():
         filename = getattr(sibling, "rfilename", None)
         if not isinstance(filename, str) or not _safe_repo_filename(filename):
-            raise DownloadIntegrityError(
-                f"Cannot verify {repo_id}: the Hub reported an invalid filename."
+            raise _integrity_error(
+                f"Cannot verify {repo_id}: the Hub reported an invalid filename.",
+                "metadata_invalid_filename",
             )
         if patterns and not any(
             fnmatch.fnmatchcase(filename, pattern) for pattern in patterns
@@ -405,14 +559,16 @@ def _remote_files_from_info(
 
         size = getattr(sibling, "size", None)
         if isinstance(size, bool) or not isinstance(size, int) or size < 0:
-            raise DownloadIntegrityError(
-                f"Cannot verify {filename}: the Hub did not report its size."
+            raise _integrity_error(
+                f"Cannot verify {filename}: the Hub did not report its size.",
+                "metadata_missing_size",
             )
         algorithm, digest = _metadata_digest(sibling)
         if algorithm is None or digest is None:
-            raise DownloadIntegrityError(
+            raise _integrity_error(
                 f"Cannot verify {filename}: the Hub did not report an ETag or "
-                "SHA-256 digest."
+                "SHA-256 digest.",
+                "metadata_missing_digest",
             )
         remote_files.append(
             _RemoteFile(
@@ -425,8 +581,9 @@ def _remote_files_from_info(
 
     if not remote_files:
         pattern_hint = f" matching {patterns!r}" if patterns else ""
-        raise DownloadIntegrityError(
-            f"Cannot verify {repo_id}: the Hub reported no model files{pattern_hint}."
+        raise _integrity_error(
+            f"Cannot verify {repo_id}: the Hub reported no model files{pattern_hint}.",
+            "no_matching_files",
         )
     return remote_files
 
@@ -449,9 +606,17 @@ def _metadata_digest(sibling: Any) -> tuple[str | None, str | None]:
 
 
 def _file_matches_metadata(path: Path, remote_file: _RemoteFile) -> bool:
+    return _metadata_mismatch_reason(path, remote_file) is None
+
+
+def _metadata_mismatch_reason(path: Path, remote_file: _RemoteFile) -> str | None:
+    """Return a value-free code when *path* does not match its Hub metadata."""
+
     try:
-        if not path.is_file() or path.stat().st_size != remote_file.size:
-            return False
+        if not path.is_file():
+            return "file_missing"
+        if path.stat().st_size != remote_file.size:
+            return "size_mismatch"
         if remote_file.algorithm == "git-sha1":
             digest = hashlib.sha1(usedforsecurity=False)
             digest.update(f"blob {remote_file.size}\0".encode())
@@ -461,16 +626,17 @@ def _file_matches_metadata(path: Path, remote_file: _RemoteFile) -> bool:
             for chunk in iter(lambda: downloaded_file.read(1024 * 1024), b""):
                 digest.update(chunk)
     except OSError:
-        return False
-    return digest.hexdigest() == remote_file.digest
+        return "file_missing"
+    return None if digest.hexdigest() == remote_file.digest else "digest_mismatch"
 
 
 def _unlink_corrupt_file(path: Path, filename: str) -> None:
     try:
         path.unlink(missing_ok=True)
     except OSError as exc:
-        raise DownloadIntegrityError(
-            f"Corrupt file {filename} could not be removed before re-fetch: {exc}"
+        raise _integrity_error(
+            f"Corrupt file {filename} could not be removed before re-fetch: {exc}",
+            "corrupt_file_unremovable",
         ) from exc
 
 
@@ -502,8 +668,9 @@ def _cache_revision_reference(
         or "\\" in revision_name
         or any(not character.isprintable() for character in revision_name)
     ):
-        raise DownloadIntegrityError(
-            "Cannot cache the requested revision because its name is unsafe."
+        raise _integrity_error(
+            "Cannot cache the requested revision because its name is unsafe.",
+            "revision_name_unsafe",
         )
 
     refs_root = snapshot_root.parent.parent / "refs"
@@ -511,8 +678,9 @@ def _cache_revision_reference(
     try:
         ref_path.resolve().relative_to(refs_root.resolve())
     except ValueError as exc:
-        raise DownloadIntegrityError(
-            "Cannot cache the requested revision outside the model cache."
+        raise _integrity_error(
+            "Cannot cache the requested revision outside the model cache.",
+            "revision_name_unsafe",
         ) from exc
     ref_path.parent.mkdir(parents=True, exist_ok=True)
     if ref_path.exists() and ref_path.read_text(encoding="utf-8") == commit_hash:

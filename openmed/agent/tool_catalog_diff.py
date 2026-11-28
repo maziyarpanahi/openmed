@@ -19,6 +19,7 @@ from openmed.agent.tool_inventory import (
     ToolInventoryError,
     ToolInventoryRecord,
 )
+from openmed.core.errors import LegacyRootedError
 
 TOOL_CATALOG_DIFF_SCHEMA_VERSION: Final = "openmed.agent.tool_catalog_diff.v1"
 
@@ -35,7 +36,7 @@ CatalogInput = ToolInventory | Mapping[str, Any]
 CatalogKey = tuple[str, str]
 
 
-class ToolCatalogDiffError(ValueError):
+class ToolCatalogDiffError(ValueError, LegacyRootedError):
     """Raised when a catalog diff input violates the content-free contract.
 
     Error text contains only fixed snapshot and field names plus a stable

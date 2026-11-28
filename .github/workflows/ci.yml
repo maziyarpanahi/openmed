@@ -259,6 +259,12 @@ jobs:
       run: |
         uv run python scripts/parity/generate_portable_policies.py --check
 
+    - name: Check generated contract types are current
+      run: |
+        for emitter in scripts/codegen/emit_*_types.py; do
+          uv run python "$emitter" --check
+        done
+
     - name: Enforce public API backwards-compatibility policy
       run: |
         uv run python scripts/release/check_public_api.py
@@ -436,8 +442,8 @@ jobs:
       fail-fast: false
       # Pull requests cover both ends of the supported Python range on Linux
       # and the newest interpreter on Windows and macOS. Pushes to the default
-      # branches, and pull requests labelled `full-ci`, run all 9 combinations.
-      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.12"}]}') }}
+      # branches, and pull requests labelled `full-ci`, run all 15 combinations.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"ubuntu-latest","python-version":"3.14"},{"os":"ubuntu-latest","python-version":"3.15"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.14"},{"os":"windows-latest","python-version":"3.15"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.14"},{"os":"macos-latest","python-version":"3.15"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.15"},{"os":"windows-latest","python-version":"3.15"},{"os":"macos-latest","python-version":"3.15"}]}') }}
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -549,6 +555,45 @@ jobs:
           pip-audit-report.json
       if: always()
 
+  free-threading-smoke:
+    # Experimental, core-only: import openmed on free-threaded CPython 3.14t
+    # and compare concurrent safety_sweep() results with a single-threaded
+    # baseline. A crash or mismatch fails the job; a GIL re-enabled at import
+    # is a warning annotation. Optional extras are not installed here.
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.14t"
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Install the core package from the frozen lock
+      run: uv sync --frozen --python 3.14t
+    - name: Free-threading smoke test
+      run: >-
+        uv run --frozen python scripts/release/free_threading_smoke.py
+        --require-free-threaded --report free-threading-smoke.json
+    - name: Upload value-free free-threading report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: free-threading-smoke
+        path: free-threading-smoke.json
+        if-no-files-found: warn
+
   sbom:
     needs: repo-policy
     runs-on: ubuntu-latest
@@ -639,6 +684,39 @@ jobs:
         npm --prefix js/openmedkit-web test
         npm --prefix js/openmedkit-react-native test
         npm --prefix js/openmedkit-electron test
+
+    - name: Check the openmed web package API report
+      run: |
+        # Fails when the public declarations differ from js/openmedkit-web/api/.
+        # After reviewing the change, run `npm run api:update` in that package.
+        npm --prefix js/openmedkit-web run api:check
+
+  typescript-rest-client:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: clients/typescript/package-lock.json
+
+    - name: Install TypeScript REST client dependencies
+      run: npm ci --prefix clients/typescript
+
+    - name: Typecheck, build and test the TypeScript REST client
+      run: |
+        npm --prefix clients/typescript run typecheck
+        npm --prefix clients/typescript run build
+        npm --prefix clients/typescript run test:workflow
+        npm --prefix clients/typescript run test:decisions
+        npm --prefix clients/typescript run test:api
+
+    - name: Check the TypeScript REST client API baseline
+      run: npm --prefix clients/typescript run api:check
 
   browser-extension:
     needs: repo-policy
@@ -778,6 +856,11 @@ jobs:
     - name: Build package
       run: |
         uv build
+
+    - name: Check distribution metadata
+      run: |
+        python scripts/release/check_dist_metadata.py --dist-dir dist
+        uvx --from 'twine==7.0.0' twine check --strict dist/*
 
     - name: Verify refreshed wheel-size baseline
       id: wheel_baseline

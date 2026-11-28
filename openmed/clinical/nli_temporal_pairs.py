@@ -26,6 +26,7 @@ from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
 from openmed.core.audit import hash_text, stable_hash
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 TemporalStatus: TypeAlias = Literal[
@@ -170,7 +171,7 @@ class TemporalCompatibility(str, Enum):
     UNRESOLVED = "unresolved"
 
 
-class NliTemporalPairError(ValueError):
+class NliTemporalPairError(ValueError, LegacyRootedError):
     """Base error for malformed temporality-aware pair inputs."""
 
 

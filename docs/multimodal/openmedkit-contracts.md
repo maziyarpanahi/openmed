@@ -50,7 +50,54 @@ if case .visual(let evidence) = packet.projection {
 
 `MultimodalProjection` exposes typed asset, visual, transcript, provider and clock values. Construction of the containing packet is validated; no public initializer accepts an unchecked projection. Swift code that produces visual evidence, such as [native document intake](native-document-intake.md), uses `MultimodalPacket.visual(...)`: it derives the display geometry, serializes canonically and admits the result through `fromJSON`, so it produces the same bytes and digest as Python's `project_visual`. `toJSON()` preserves the exact admitted bytes, and `evidenceDigest` is the same lowercase SHA-256 returned by Python. Generic Codable decoding is not an alternative admission path.
 
+## Android admission
+
+The Android OpenMedKit admits the same packets through `com.openmed.openmedkit.multimodal.MultimodalPacket`. Admission runs the same checks in the same order as Python, so every packet produces the same `evidenceDigest` and every refusal the same code.
+
+```kotlin
+import com.openmed.openmedkit.multimodal.MultimodalPacket
+import com.openmed.openmedkit.multimodal.MultimodalPacketException
+import com.openmed.openmedkit.multimodal.MultimodalVisual
+
+// wire is the canonical packet received from a trusted local source boundary.
+try {
+    val packet = MultimodalPacket.fromJson(wire)
+    when (val projection = packet.projection) {
+        is MultimodalVisual -> {
+            val sourceBox = projection.sourceBox // provenance
+            val displayBox = projection.displayBox // validated rotation only
+        }
+        else -> Unit
+    }
+} catch (refusal: MultimodalPacketException) {
+    // refusal.refusal.code is one of the five codes below; nothing else is attached.
+}
+```
+
+The projections are `MultimodalAsset`, `MultimodalVisual`, `MultimodalTranscript`, `MultimodalProvider` and `MultimodalClockAlignment`. The asset projection carries the shared Android `AssetManifest` with the opaque `asset_ref` as its identifier, and the provider projection carries the shared Android `ProviderResultEnvelope`. Their existing validation applies unchanged. Floats are decoded only from the hex form, and integers and clock bounds use exact arithmetic. `toJson()` returns a copy of the admitted bytes. A `MultimodalPacketException` message is the refusal code only, with no cause. Android has no packet factory or local adapter seam yet.
+
 Python's `LocalMultimodalAdapter` and Swift's `LocalMultimodalAdapter` provide injected local execution seams. `run_local_adapter` / `LocalMultimodalExecution.run` reject a non-local declaration or an unsupported projection kind before invoking the adapter. A returned provider outcome must bind `input_digest` to the request packet's `evidence_digest`. Missing models, resource limits and validation failures use the existing provider result vocabulary; they never become successful empty outputs. Actual model execution, cancellation, resource enforcement and source custody remain responsibilities of the injected implementation. A declaration is not a network sandbox.
+
+## Browser and Node.js admission
+
+The `openmed` npm package admits the same packets from the `openmed/multimodal` subpath, so browser review tools can verify a packet's digest and read its source coordinates without Python or Swift. The default `openmed` entry does not include it.
+
+```ts
+import { admitMultimodalPacket, MultimodalContractError } from "openmed/multimodal";
+
+// wire is the canonical packet text or bytes from a trusted local source boundary.
+try {
+  const packet = await admitMultimodalPacket(wire);
+  if (packet.projection.kind === "visual") {
+    // Keep sourceBox for provenance; displayBox is only the validated rotation.
+    const { sourceBox, displayBox } = packet.projection.visual;
+  }
+} catch (error) {
+  if (error instanceof MultimodalContractError) console.warn(error.code);
+}
+```
+
+`admitMultimodalPacket` applies the checks below in the same order as Python, so a packet with several faults gets the same refusal code on every platform. It reads the packet with a strict JSON parser rather than `JSON.parse`, so duplicate keys are refused and integers keep their exact value. Fields that can exceed 2^53 are `bigint`: an asset's `byteSize`, provider `counts`, and clock bounds, overlap and uncertainty. Floating fields are decoded from their sixteen hex digits with a big-endian `DataView`. The evidence digest and a clock projection's source result digest are checked with WebCrypto SHA-256 (`globalThis.crypto.subtle`, available in secure browser contexts and Node.js 20+). Without it, admission throws `MultimodalDigestUnavailableError` instead of skipping the check; hosts can pass `{ subtle }` explicitly. Asset media types follow Python's `AssetManifest`, which also admits `video/mp4`, `application/edf` and `application/wfdb`. The packet, its projection and every nested value are frozen, and `toBytes()` returns a copy of the exact admitted bytes. The web package admits only `openmed.multimodal.apple.v1`, exported as `MULTIMODAL_PACKET_SCHEMAS`; it has no projection factories or local adapter seam.
 
 ## Wire identity and validation
 
@@ -70,14 +117,69 @@ Packets are limited to 64 KiB. Counts, source spans, token references, clock ran
 
 A digest detects changes relative to the supplied packet; it does not authenticate who produced it. Applications must check current source custody and review state at use time. Packets contain coordinates, counts and digests instead of raw media or transcript content, but remain sensitive metadata and require access controls. No automatic role assignment, diagnosis, PHI release or model-license decision follows from admission.
 
+## Session lifecycle vocabulary
+
+Runtime and streaming speech sessions share one lifecycle vocabulary, `openmed.session.lifecycle.v1`, defined in `openmed.multimodal.session_lifecycle` and described by `openmed/core/schemas/json/session_lifecycle.schema.json`. It has six states: `open`, `cancelling`, `finalized`, `cancelled`, `failed` and `closed`. `finalized`, `cancelled`, `failed` and `closed` are terminal and have no outgoing transition.
+
+| From | Allowed targets |
+| --- | --- |
+| `open` | `cancelling`, `finalized`, `cancelled`, `failed`, `closed` |
+| `cancelling` | `cancelled`, `failed`, `closed` |
+| terminal states | none |
+
+Each session keeps its own enum and its serialized report. A read-only `lifecycle_state` property projects the native state onto the shared vocabulary:
+
+| Native enum | Native value | `lifecycle_state` |
+| --- | --- | --- |
+| `SessionState` (`openmed.multimodal.session.v1`, `MultimodalSession`) | `open`, `cancelling`, `cancelled`, `closed` | same names |
+| `StreamState` (Python `StreamingAsrSession`) | `open`, `finalized`, `cancelled` | same names |
+| Swift `SpeechSessionState` (`StreamingSpeechSession`) | `open`, `finished`, `cancelled`, `failed` | `open`, `finalized`, `cancelled`, `failed` |
+
+In Swift, `SpeechSessionState.lifecycleState` is that mapping; `SpeechSessionState` raw values are unchanged. `MultimodalSession.to_json()` still reports `SessionState` values, and `StreamingAsrSessionReport` still reports `StreamState` values.
+
+`check_lifecycle_transition(target)` on either Python session checks a transition from the current state without changing it. A rejected transition raises the session's existing value-free error, `RuntimeSessionError` or `SpeechProviderError`, whose message (and, for `SpeechProviderError`, `category`) is the reason code:
+
+| Reason code | When |
+| --- | --- |
+| `unknown_state` | Either state is outside the vocabulary, such as the native Swift name `finished` |
+| `session_closed` | The source is `finalized` or `closed` |
+| `session_cancelled` | The source is `cancelled` |
+| `session_failed` | The source is `failed` |
+| `transition_not_allowed` | Any other pair outside the table, including staying in the same state |
+
+`session_closed` and `session_cancelled` are the codes the streaming ASR session already raises when `finalize()` or `cancel()` is called after it ended. `MultimodalSession.cancel()` and `close()` stay idempotent on a terminal session.
+
+OpenMedKit Swift mirrors this with `OpenMedSessionLifecycleState` (the six states, `isTerminal`, `allowedTargets`, `transitionReason(to:)`, and `transitionReason(from:to:)` over state names, which gives `unknown_state` for a name such as `finished`) and `OpenMedSessionLifecycleError`, whose raw values are the reason codes above. `StreamingSpeechSession` adds:
+
+| Swift API | Behaviour |
+| --- | --- |
+| `lifecycleState`, `snapshot().lifecycleState` | The projected state. The first terminal state is kept, so `cancel()` after a failure still reports `failed` while `snapshot().state` keeps the native `cancelled` |
+| `checkLifecycleTransition(to:)` | Throws `OpenMedSessionLifecycleError` with the reason code when the vocabulary rejects the transition, without changing the session |
+
+The native guards are unchanged. `append()` or `finish()` after `finish()` throws `StreamingSpeechError.closed` (`speech_session_closed`). After a cancel they throw `.cancelled` (`speech_session_cancelled`), and after a failure they throw the stored failure reason. `cancel()` and `requestCancellation()` never throw: on a terminal session they leave the lifecycle state unchanged. Errors carry codes only, never transcript text. `SessionLifecycleParityTests` replays the vectors against the projection, the transition table and real sessions driven to `finalized`, `cancelled` and `failed`:
+
+```bash
+cd swift/OpenMedKit && swift test --filter SessionLifecycleParityTests
+```
+
+The shared vectors are `tests/fixtures/parity/session_lifecycle_v1.json`: the states, terminal states, transition table, reason codes, the native projections above, allowed sequences with the native actions that produce them on each Python session, and rejected transitions with their reason codes. `failed` has no Python producer, so its sequences are checked through the transition table only.
+
+```bash
+python -m pytest tests/unit/multimodal/test_runtime_session.py -q
+```
+
 ## Offline parity validation
 
-The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.json`. Python recreates it from actual source contracts; Swift validates the same bytes, evidence identities, geometry, scalar/sample boundaries and all reason vocabularies. Negative controls cover unknown versions/capabilities, duplicate and unknown keys, numeric coercion and overflow, nonfinite values, incomplete provenance, incorrect transforms, invalidated citations and leaked held timestamps.
+The single synthetic fixture is `tests/fixtures/parity/multimodal_contract_v1.json`. Python recreates it from actual source contracts; Swift and the web package validate the same bytes, evidence identities, geometry, scalar/sample boundaries and all reason vocabularies. Negative controls cover unknown versions/capabilities, duplicate and unknown keys, numeric coercion and overflow, nonfinite values, incomplete provenance, incorrect transforms, invalidated citations and leaked held timestamps.
 
 ```bash
 python -m pytest tests/unit/multimodal/test_apple_contract.py -q
 cd swift/OpenMedKit
 swift test --disable-automatic-resolution --filter MultimodalContractParityTests
+cd ../../android
+./gradlew :openmedkit:testDebugUnitTest --tests '*MultimodalContractParityTest'
+cd ../../js/openmedkit-web
+npx tsx --test ../../tests/web/test_multimodal_contract.spec.ts
 ```
 
 Package dependencies must already be resolved and cached for an offline build. The tests themselves need no model weights, network access, microphone or real clinical data. The Swift workflow also runs when the shared fixture changes. These checks establish contract parity; they do not qualify any VLM/ASR model or complete application.

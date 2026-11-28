@@ -195,19 +195,28 @@ fun interface OpenMedSessionFactory {
             entry: ModelCatalogEntry,
             classifierFactory: (File) -> OnnxTokenClassifier,
         ): OpenMedSessionFactory = OpenMedSessionFactory {
-            val lease = cache.acquireLease(entry) ?: throw CachedModelUnavailableException()
-            try {
-                OpenMedKit(
-                    classifier = LeaseReleasingClassifier(
-                        classifierFactory(lease.directory),
-                        lease,
-                    ),
-                )
-            } catch (error: Throwable) {
-                lease.close()
-                throw error
-            }
+            openCachedKit(cache, entry, classifierFactory)
         }
+    }
+}
+
+/**
+ * Open a verified [ModelCache] entry under a cache lease that the returned
+ * facade releases when it closes.
+ */
+internal fun openCachedKit(
+    cache: ModelCache,
+    entry: ModelCatalogEntry,
+    classifierFactory: (File) -> OnnxTokenClassifier,
+): OpenMedKit {
+    val lease = cache.acquireLease(entry) ?: throw CachedModelUnavailableException()
+    try {
+        return OpenMedKit(
+            classifier = LeaseReleasingClassifier(classifierFactory(lease.directory), lease),
+        )
+    } catch (error: Throwable) {
+        lease.close()
+        throw error
     }
 }
 

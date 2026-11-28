@@ -30,6 +30,7 @@ from openmed.clinical.context import (
     ClinicalAssertion,
 )
 from openmed.core.audit import hash_text
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 TimelineRelationKind = Literal["before", "after", "overlap"]
@@ -94,7 +95,7 @@ _TEMPORAL_ATOM_RE = re.compile(
 )
 
 
-class TimelineGraphCycleError(ValueError):
+class TimelineGraphCycleError(ValueError, LegacyRootedError):
     """Raised when temporal precedence links contain a directed cycle."""
 
 

@@ -31,6 +31,7 @@ import grpc
 from cryptography import x509
 from cryptography.x509.verification import Store
 
+from openmed.core.errors import LegacyRootedError
 from openmed.guard.operational_limits import OperationalLimits
 
 from .auth import (
@@ -241,11 +242,12 @@ GRPC_RPC_ROUTES: Mapping[str, tuple[str, str]] = MappingProxyType(
         f"/{GRPC_SERVICE_NAME}/Extract": ("POST", "/pii/extract"),
         f"/{GRPC_SERVICE_NAME}/Deidentify": ("POST", "/pii/deidentify"),
         f"/{GRPC_SERVICE_NAME}/StreamDeidentify": ("POST", "/pii/deidentify/stream"),
+        f"/{GRPC_SERVICE_NAME}/GetCapabilities": ("GET", "/v1/capabilities"),
     }
 )
 
 
-class GrpcPolicyError(Exception):
+class GrpcPolicyError(LegacyRootedError):
     """Value-free RPC refusal carrying a stable reason code.
 
     Attributes:

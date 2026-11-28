@@ -1,5 +1,8 @@
 {
   "exports": [
+    "AUDIT_REPORT_SIGNATURE_ALGORITHM",
+    "AUDIT_REPORT_VERIFICATION_REASONS",
+    "AuditReceiptError",
     "BUDGET_LADDER",
     "BUNDLE_CACHE_CONTRACT_VERSION",
     "BUNDLE_CACHE_REASONS",
@@ -21,6 +24,7 @@
     "DECISION_COMPATIBILITY_POLICY",
     "DECISION_POLICY_VERSION",
     "DECISION_SCHEMA_VERSION",
+    "DEFAULT_DATE_SHIFT_MAX_DAYS",
     "DEFAULT_DECISION_ACCESS_POLICY",
     "DEFAULT_DECISION_CALIBRATION_ID",
     "DEFAULT_DECISION_CALIBRATION_PROFILE",
@@ -33,6 +37,7 @@
     "DEVICE_CAPABILITIES_SCHEMA",
     "DEVICE_CAPABILITIES_SCHEMA_VERSION",
     "DEVICE_FEATURES",
+    "DateShiftError",
     "DecisionCalibrationError",
     "DecisionEncoderError",
     "DecisionRequest",
@@ -65,7 +70,10 @@
     "MODEL_TIERS",
     "MemoryBundleCacheStorage",
     "NETWORK_STATES",
+    "OPENMED_ERROR_CODES",
+    "OPENMED_ERROR_CODE_RETRYABLE",
     "OPENMED_SPAN_SCHEMA_VERSION",
+    "OpenMedError",
     "OpenMedOfflineError",
     "OpfsBundleCacheStorage",
     "PLATFORM_PROVIDERS",
@@ -93,9 +101,18 @@
     "PROVIDER_ACCELERATORS",
     "PortableBundleError",
     "PortablePolicyError",
+    "SDK_CONFIG_DEFAULTS",
+    "SDK_CONFIG_FIELDS",
+    "SDK_CONFIG_ISSUE_CODES",
+    "SDK_CONFIG_ONNX_VARIANTS",
+    "SDK_CONFIG_POLICY_PROFILES",
+    "SDK_CONFIG_SCHEMA_ID",
+    "SDK_CONFIG_VERSION",
     "SPAN_ACTIONS",
     "SUPPORTED_DECISION_SCHEMA_VERSIONS",
+    "SdkConfigError",
     "Sha256",
+    "TaskPackError",
     "WEBGPU_BENCHMARK_SUITE",
     "WebGpuClassificationHead",
     "WebGpuTokenClassificationSession",
@@ -104,11 +121,13 @@
     "alignTokenOffsets",
     "applyKitParitySpans",
     "assertOfflineAssetPath",
+    "auditReportPayloads",
     "budgetBucket",
     "bundleCacheKey",
     "bundleCalibrationProfileJson",
     "bundleGenerationId",
     "bundleTrustDigest",
+    "canonicalAuditJson",
     "canonicalJson",
     "certifyWebGpuReference",
     "checkKitParityCompatibility",
@@ -154,12 +173,15 @@
     "normalizeOrtAssetPath",
     "normalizePortableLabel",
     "openBundleCacheStorage",
+    "openMedErrorCode",
     "parseDecisionRequest",
     "parseDeviceCapabilityProfile",
     "parseExecutionConstraints",
     "parseKitParityResult",
     "parsePortableBundleManifest",
     "parsePortableBundleTrustPolicy",
+    "parseSdkConfig",
+    "piiPack",
     "policyLabelFor",
     "portableBundleContentId",
     "portableBundleSigningInput",
@@ -182,15 +204,22 @@
     "serveInferenceWorker",
     "setOfflineOnly",
     "sha256Digest",
+    "shiftIsoDate",
     "spansToRedactedText",
+    "stableDateShiftOffset",
+    "stableDateShiftOffsetFromSeed",
+    "toExtractPiiOptions",
     "toKitParityResult",
+    "toLoadModelOptions",
     "trimSpanWhitespace",
     "utf16ToScalarOffset",
     "utf8ToScalarOffset",
     "validateDecisionCalibrationProfile",
     "validateDecisionCalibrationRequest",
     "validateKitParityResult",
+    "validateSdkConfig",
     "verificationDigest",
+    "verifyAuditReport",
     "verifyKitParityResult",
     "verifyPortableBundle",
     "webDeviceCapabilityProfile"
@@ -204,6 +233,46 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./catalog": {
+      "import": {
+        "types": "./dist/catalog.d.ts",
+        "default": "./dist/catalog.js"
+      },
+      "require": {
+        "types": "./dist/catalog.d.cts",
+        "default": "./dist/catalog.cjs"
+      }
+    },
+    "./multimodal": {
+      "import": {
+        "types": "./dist/multimodal/index.d.ts",
+        "default": "./dist/multimodal/index.js"
+      },
+      "require": {
+        "types": "./dist/multimodal/index.d.cts",
+        "default": "./dist/multimodal/index.cjs"
+      }
+    },
+    "./speech": {
+      "import": {
+        "types": "./dist/speech/index.d.ts",
+        "default": "./dist/speech/index.js"
+      },
+      "require": {
+        "types": "./dist/speech/index.d.cts",
+        "default": "./dist/speech/index.cjs"
+      }
+    },
+    "./validators": {
+      "import": {
+        "types": "./dist/validators.d.ts",
+        "default": "./dist/validators.js"
+      },
+      "require": {
+        "types": "./dist/validators.d.cts",
+        "default": "./dist/validators.cjs"
       }
     }
   }

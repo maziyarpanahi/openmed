@@ -53,6 +53,7 @@ from openmed.core.aead_envelope import (
     envelope_from_text,
     envelope_to_text,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.key_provider import (
     EncryptionError,
     KeyProvider,
@@ -158,7 +159,7 @@ register_error_messages(
 )
 
 
-class JobPayloadError(EncryptionError):
+class JobPayloadError(EncryptionError, LegacyRootedError):
     """Value-free failure of a job payload lifecycle operation.
 
     Attributes:

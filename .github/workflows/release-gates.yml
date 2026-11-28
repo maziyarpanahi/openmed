@@ -199,6 +199,20 @@ jobs:
             --check "$MIGRATION_GUIDE"
           echo "API migration guide completeness gate passed." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Require record migrators for schema version bumps
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python scripts/release/record_migration_gate.py \
+            --json "$RUNNER_TEMP/record-migration-gate.json"
+          echo "Record migration gate passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare packaged JSON Schemas with the last release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python scripts/release/schema_release_diff.py \
+            --json "$RUNNER_TEMP/schema-release-diff.json"
+          echo "Packaged JSON Schema release comparison passed." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check for complete staged candidate
         id: check-candidate
         run: |

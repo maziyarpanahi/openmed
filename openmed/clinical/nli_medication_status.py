@@ -18,12 +18,13 @@ from enum import Enum
 from typing import Any, Final
 
 from openmed.clinical.med_reconciliation import normalize_medication_timestamp
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 NLI_MEDICATION_STATUS_SCHEMA_VERSION: Final[int] = 1
 
 
-class MedicationStatusPrecheckError(ValueError):
+class MedicationStatusPrecheckError(ValueError, LegacyRootedError):
     """Raised when medication precheck input violates the safe contract."""
 
 

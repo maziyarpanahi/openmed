@@ -10,6 +10,8 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import BinaryIO
 
+from openmed.core.errors import LegacyRootedError
+
 EDF_NOTICE = (
     "Non-diagnostic signals for review only. Explicit reviewer confirmation is "
     "required before consequential use. Header withholding does not de-identify "
@@ -42,7 +44,7 @@ _OFFSET = re.compile(rb"[+-][0-9]+(?:\.[0-9]+)?")
 _DURATION = re.compile(rb"[0-9]+(?:\.[0-9]+)?")
 
 
-class EdfError(ValueError):
+class EdfError(ValueError, LegacyRootedError):
     """Failure containing a stable controlled reason code, never source values."""
 
     def __init__(self, code: str) -> None:

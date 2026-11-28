@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.validation import validation_result
 
 from .bundle import to_bundle
@@ -53,7 +54,7 @@ _DIV_START = '<div xmlns="http://www.w3.org/1999/xhtml"><p>'
 _DIV_END = "</p></div>"
 
 
-class AmbientDocumentError(ValueError):
+class AmbientDocumentError(ValueError, LegacyRootedError):
     """A controlled, value-free ambient export refusal."""
 
 

@@ -22,6 +22,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 REDACTION_CONTRACT_SCHEMA_VERSION: Final = 1
 REDACTED_VALUE: Final = "[REDACTED]"
 MAX_REDACTION_RULES: Final = 256
@@ -76,11 +78,11 @@ _MISSING = object()
 _REMOVE = object()
 
 
-class RedactionContractError(ValueError):
+class RedactionContractError(ValueError, LegacyRootedError):
     """The path or action contract cannot be applied safely."""
 
 
-class RedactionInputError(TypeError):
+class RedactionInputError(TypeError, LegacyRootedError):
     """The resource is not an acyclic JSON-compatible value."""
 
 

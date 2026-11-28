@@ -1,0 +1,105 @@
+# Shared parity fixtures
+
+The JSON files in this directory are cross-runtime contract vectors. Python,
+Swift (OpenMedKit) and Android (`android/openmedkit`) tests read the same bytes,
+so a change here changes what every listed runtime must accept. Every file in
+this directory must have a row in the table below;
+`tests/unit/test_parity_fixture_readme.py` fails when one is missing. The
+`tokenizer/` subdirectory has a row of its own.
+
+| Fixture | Version | Python test | Swift test | Android test | Workflow path filter | How to update |
+| --- | --- | --- | --- | --- | --- | --- |
+| `offset_contract.json` | `version: 1`, `offset_unit: unicode_scalar` | `tests/unit/core/test_offset_contract_parity.py` | `OffsetContractParityTests.swift` | `OffsetContractParityTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit by hand |
+| `multimodal_contract_v1.json` | `version: 1` | `tests/unit/multimodal/test_apple_contract.py` | `MultimodalContractParityTests.swift` | none | `swift-test.yml` | Regenerate from `tests/fixtures/multimodal/apple_contract.py` |
+| `multimodal_contracts_v1.json` | `version: 1` | `tests/unit/multimodal/test_android_contract_parity.py` | none | `MultimodalContractParityTest.kt` | `android-ci.yml` | Edit by hand |
+| `speech_contract_v1.json` | `version: 1` | `tests/unit/multimodal/test_apple_speech_contract.py` | `SpeechContractParityTests.swift` | none | `swift-test.yml` | Edit by hand |
+| `date_shift_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/core/test_date_shift_vectors.py` | `DateShiftParityTests.swift` | `DateShiftParityTest.kt` | `android-ci.yml` | Edit by hand; the Python test recomputes every digest, offset and shifted date |
+| `identifier_validators_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/core/test_identifier_vectors.py` | `IdentifierValidatorParityTests.swift` | `IdentifierValidatorParityTest.kt` | `android-ci.yml` | Edit by hand; the Python test checks every value against its reference validator |
+| `catalog_filters_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/parity/test_catalog_filter_vectors.py` | `OpenMedModelCatalogTests.swift` | `CatalogFilterParityTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit by hand |
+| `clinical_assertion_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/clinical/test_clinical_assertion_vectors.py` | `ClinicalAssertionParityTests.swift` | `ClinicalAssertionParityTest.kt` | `swift-test.yml`, `android-ci.yml` | Regenerate with `python scripts/parity/export_context_cues.py` |
+| `clinical_entity_pack_v1.json` | `schema_version: 1.0.0` | `tests/unit/parity/test_clinical_entity_pack_vectors.py` | none yet | `ClinicalEntityPackTest.kt` | `android-ci.yml` | Edit by hand |
+| `context_cues_en_v1.json` | `version: 1` | `tests/unit/clinical/test_swift_context_cue_resource.py` | `ClinicalAssertionParityTests.swift` | `ClinicalAssertionParityTest.kt` | `swift-test.yml`, `android-ci.yml` | Regenerate with `python scripts/parity/export_context_cues.py`, then copy it into the Swift and Android resources |
+| `error_codes_v1.json` | `schema_version: 1`, `synthetic: true` | `tests/unit/core/test_error_code_vectors.py` | `ErrorCodeParityTests.swift` | `ErrorCodeParityTest.kt` | `android-ci.yml` | Edit by hand; the Python test checks its codes against `openmed/core/error_codes.json` |
+| `model_lifecycle_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/core/test_model_lifecycle_events.py` | none yet | `ModelDownloaderTest.kt` | `android-ci.yml` | Edit by hand |
+| `model_repro_hash_v1.json` | `version: 1` | `tests/unit/core/test_model_integrity.py` | `OpenMedModelIntegrityTests.swift` | `ModelDownloaderTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit by hand; the Python test recomputes every hash |
+| `receipt_verification_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/core/test_receipt_vectors.py` | `ReceiptVerificationParityTests.swift` | `ReceiptVerificationParityTest.kt` | `android-ci.yml` | Regenerate with `python scripts/parity/generate_receipt_vectors.py` |
+| `sdk_config_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/core/test_sdk_config.py` | `SDKConfigParityTests.swift` | `SdkConfigParityTest.kt` | `android-ci.yml` | Edit by hand |
+| `session_lifecycle_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/multimodal/test_runtime_session.py` | `SessionLifecycleParityTests.swift` | none | none | Edit by hand |
+| `decision_encoder_v1.json` | `schema_version: openmed.tests.decision_encoder_parity.v1`, `synthetic: true` | `tests/unit/structured/test_decision_encoder_parity.py` | `DecisionRuntimeParityTests.swift` | `DecisionRuntimeParityTest.kt` | none | Regenerate with `python -m tests.unit.structured.test_decision_encoder_parity --write` |
+| `document_intake_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/multimodal/test_native_intake.py` | `DocumentIntakeParityTests.swift`, `DocumentRedactionExportTests.swift` | `DocumentEvidenceParityTest.kt`, `DocumentRedactionExportTest.kt` | `swift-test.yml`, `android-ci.yml` | Regenerate with `python -m tests.fixtures.multimodal.document_intake` |
+| `kit_parity_vectors.json` | `version: 1` | `tests/unit/parity/test_kit_parity_vectors.py` | `KitParityVectorTests.swift` | `KitParityVectorTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit the cases by hand, then refresh derived fields and digests with `python scripts/parity/update_native_span_fixture.py --write` |
+| `portable_policy_vectors.json` | `version: 1` | `tests/unit/parity/test_portable_policy.py` | `PortablePolicyVectorTests.swift` | `PortablePolicyVectorTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit the cases by hand, then derive the expected blocks with `python scripts/parity/generate_portable_policies.py --write` |
+| `tokenizer/` | `version: 1`, `contract_version: openmed.tokenizer-conformance.v1` | `tests/unit/eval/test_tokenizer_conformance.py` | `TokenizerConformanceTests.swift` | `TokenizerConformanceTest.kt` | `swift-test.yml`, `android-ci.yml` (`tokenizer/**`) | Regenerate with `python scripts/eval/generate_tokenizer_conformance.py`; `tokenizer_runtime_support_v1.json` is edited by hand and only validated |
+| `README.md` | n/a | `tests/unit/test_parity_fixture_readme.py` | none | none | none | This file |
+
+Swift tests live in `swift/OpenMedKit/Tests/OpenMedKitTests/` and resolve the
+file from the repository root. Android tests live under
+`android/openmedkit/src/test/kotlin/com/openmed/openmedkit/` and load the
+file by name from the test classpath: `android/openmedkit/build.gradle.kts`
+adds this directory, `fixtures/parity/` and `tests/fixtures/processing/` as
+test resource roots, so file names must stay unique across the three.
+
+The workflows only start for the exact paths listed in their `paths:` filters
+(both `push` and `pull_request`). `tests/unit/android/test_android_icu_parity_policy.py`
+also asserts that `android-ci.yml` lists `offset_contract.json`.
+`decision_encoder_v1.json` is in neither filter, and `android-ci.yml` does not
+run `DecisionRuntimeParityTest`; the full Android unit run in
+`android-publish.yml` and the full `swift test` step in `swift-test.yml`
+execute its native consumers. `android-ci.yml` also does not run
+`DocumentRedactionExportTest`, so the `document_intake_v1.json` export checks
+run on Android only in the full unit run of `android-publish.yml`. Every other
+Android test in the table is in the `--tests` list of `android-ci.yml`, and
+`swift-test.yml` runs every Swift test in a full `swift test` step.
+
+The kit-parity, portable policy, decision and tokenizer vectors are also
+replayed by the web kits under `tests/web/`; see
+[`docs/swift-kotlin-parity.md`](../../../docs/swift-kotlin-parity.md),
+[`docs/decision-models.md`](../../../docs/decision-models.md) and
+[`docs/tokenizer-conformance.md`](../../../docs/tokenizer-conformance.md).
+
+Regenerate `multimodal_contract_v1.json` after changing its source contracts:
+
+```bash
+.venv/bin/python -c "import json; from tests.fixtures.multimodal.apple_contract import fixture; print(json.dumps(fixture(), indent=2))" > tests/fixtures/parity/multimodal_contract_v1.json
+```
+
+## Related fixtures
+
+- `fixtures/parity/`: the Swift-Kotlin span fixture (`expected_spans.json`,
+  `synthetic_clinical_note.txt` and the digest manifest
+  `span_parity_manifest.json`), read by Swift `SpanEquivalenceParityTests.swift`,
+  Android `SpanEquivalenceTest.kt` and Python
+  `tests/unit/parity/test_native_span_fixture.py`. Both `swift-test.yml` and
+  `android-ci.yml` list `fixtures/parity/**`; see
+  `docs/swift-kotlin-parity.md` for its update command.
+- `android/openmedkit/src/test/resources/parity/android_span_parity.json`:
+  documented in its own `README.md` and generated by
+  `scripts/android/generate_parity_fixtures.py`.
+
+## Adding a case
+
+1. Use synthetic values only. Never copy real patient text, names, record
+   numbers, dates or contact details, even partially. Prefer reserved forms:
+   `example.com` or `example.test` mailboxes, `555-01xx` phone numbers,
+   all-zero identifiers and documentation IP ranges.
+2. Check the edited file for identifier-shaped values with the local scanner,
+   before and after your edit, and compare the per-rule counts in the report
+   (it never prints matched values):
+
+   ```bash
+   .venv/bin/python scripts/privacy_scan.py --paths tests/fixtures/parity/<file> --output ~/privacy-scan.json
+   ```
+
+   Every fixture here already produces some hits (for example digit runs
+   inside digests that look like phone or card numbers, or an `example.test`
+   mailbox), so the scan exits non-zero today; any count that goes up must be
+   explained by a synthetic or reserved value.
+3. Keep the existing `version` for additive cases. A change in shape needs a new
+   `_v2` file and updated consumers in every runtime listed above.
+4. Run every consumer: the Python test with `.venv/bin/python -m pytest <file> -q`,
+   `swift test --filter <TestClass>` from the repository root on macOS, and
+   `./gradlew :openmedkit:testDebugUnitTest --tests '*<TestClass>'` from
+   `android/`.
+5. For a new fixture file, add its row here, add it to the `paths:` filters of
+   every workflow that runs its consumers, and make sure its name is unique
+   across the Android test resource roots.

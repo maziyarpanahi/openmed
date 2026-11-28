@@ -1,0 +1,150 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/capabilities/capability-descriptor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed capability descriptor",
+  "description": "Value-free description of what one OpenMed runtime supports: installed optional backends and transport surfaces, served public model ids, canonical record schema versions and bundled policy profiles, sealed by a digest of its canonical JSON form. It never carries hostnames, filesystem paths, cache locations, environment values or credentials.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "backends",
+    "digest",
+    "policy_profiles",
+    "schema",
+    "schema_version",
+    "schema_versions",
+    "served_models",
+    "surfaces"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.capabilities"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "backends": {
+      "description": "Every registered optional backend, sorted by name, with whether all of its modules are importable.",
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "extra",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "enum": [
+              "coreml",
+              "gliformer",
+              "gliner",
+              "gliner2",
+              "hf",
+              "langchain",
+              "llamaindex",
+              "mcp",
+              "medspacy",
+              "mlx",
+              "multimodal",
+              "onnx",
+              "openvino",
+              "philter",
+              "presidio",
+              "pydeid",
+              "service",
+              "spacy",
+              "triton"
+            ]
+          },
+          "extra": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "surfaces": {
+      "description": "Every OpenMed surface, sorted by name, with whether the packages it needs are installed.",
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "enum": [
+              "cli",
+              "graphql",
+              "grpc",
+              "mcp",
+              "python",
+              "rest"
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "served_models": {
+      "description": "Sorted public model ids the reporting runtime serves; empty for the Python API and the CLI. Local paths are never listed.",
+      "type": "array",
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 257,
+        "pattern": "^(?!.*\\.\\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:/[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$"
+      }
+    },
+    "schema_versions": {
+      "description": "Version of every canonical record schema, sorted by name.",
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "policy_profiles": {
+      "description": "Sorted canonical names of the bundled de-identification policy profiles.",
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      }
+    },
+    "digest": {
+      "description": "sha256 of the canonical JSON form (sorted keys, compact separators, ASCII escapes) of every other field.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

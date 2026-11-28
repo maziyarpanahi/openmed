@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from numbers import Integral, Real
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 DP_SYNTH_PROTOCOL_VERSION = 1
 DEFAULT_DP_SYNTH_EXECUTABLE = "openmed-dp-synth-engine"
 DEFAULT_ENGINE_TIMEOUT_SECONDS = 120.0
@@ -53,7 +55,7 @@ _FORBIDDEN_STATISTIC_KEYS = frozenset(
 )
 
 
-class DPSynthBridgeError(RuntimeError):
+class DPSynthBridgeError(RuntimeError, LegacyRootedError):
     """Base class for safe DP synthesizer bridge failures."""
 
 

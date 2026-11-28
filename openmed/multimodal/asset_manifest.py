@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 MANIFEST_VERSION = 1
 MAX_MANIFEST_BYTE_SIZE = (1 << 63) - 1
 MAX_MANIFEST_COUNT = (1 << 31) - 1
@@ -69,7 +71,7 @@ _SUPPORTED_EXACT_MEDIA_TYPES = {
 _SUPPORTED_MEDIA_PREFIXES = ("image/", "audio/")
 
 
-class AssetManifestError(ValueError):
+class AssetManifestError(ValueError, LegacyRootedError):
     """Raised when a privacy-safe asset manifest fails validation."""
 
 

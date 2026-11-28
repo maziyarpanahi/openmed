@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple
 
+from openmed.core.errors import LegacyRootedError
 from openmed.utils.validation import validate_model_name
 
 from .drain import ServiceShuttingDownError
@@ -129,8 +130,10 @@ def _parse_positive_byte_size(raw_value: Any, *, setting_name: str) -> int:
     return value
 
 
-class WarmPoolBackpressureError(RuntimeError):
+class WarmPoolBackpressureError(RuntimeError, LegacyRootedError):
     """Raised when the warm-pool cannot admit a model within its wait bound."""
+
+    code = "service_busy"
 
     def __init__(
         self,

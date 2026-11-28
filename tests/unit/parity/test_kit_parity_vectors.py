@@ -161,7 +161,10 @@ def test_every_kit_vocabulary_stays_inside_the_profile() -> None:
     swift_actions = re.search(
         r"public enum PolicyAction.*?\{(.*?)\n\s*var", swift, re.S
     )
-    web = (ROOT / "js/openmedkit-web/src/types.ts").read_text(encoding="utf-8")
+    # The web label list is generated from span.schema.json (#5356).
+    web = (ROOT / "js/openmedkit-web/src/generated/contract-types.ts").read_text(
+        encoding="utf-8"
+    )
     web_labels = re.search(r"CANONICAL_LABELS = \[(.*?)\] as const", web, re.S)
     native = (ROOT / "js/openmedkit-react-native/src/index.ts").read_text("utf-8")
     rn_actions = re.search(r"export type SpanAction =(.*?);", native, re.S)

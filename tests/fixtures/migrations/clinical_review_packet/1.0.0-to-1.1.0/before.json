@@ -1,0 +1,30 @@
+{
+  "conflict_id": "conflict_aaaaaaaaaaaaaaaa",
+  "created_at": "2026-09-21T10:00:00Z",
+  "expires_at": null,
+  "fact_ids": [
+    "fact_aaaaaaaaaaaaaaaa",
+    "fact_bbbbbbbbbbbbbbbb"
+  ],
+  "packet_id": "reviewpacket_aaaaaaaaaaaaaaaa",
+  "policy_id": "openmed.fact.reconciliation",
+  "policy_version": "1.0.0",
+  "priority": "normal",
+  "provenance_fingerprint": "sha256:bf459932ae27ab8765e51487d6b82e6cb9a6f1c567377c299f330911ed1a7252",
+  "schema_version": "1.0.0",
+  "state": "in_review",
+  "transitions": [
+    {
+      "event_id": "reviewevent_5a9364debe5907ca1fb3ec224928ebb5",
+      "from_state": "queued",
+      "occurred_at": "2026-09-21T11:00:00Z",
+      "packet_id": "reviewpacket_aaaaaaaaaaaaaaaa",
+      "policy_id": "openmed.fact.reconciliation",
+      "policy_version": "1.0.0",
+      "provenance_fingerprint": "sha256:65e4789f4655d15780e554054787cfcc049b0358f382d1188b163c34475888a7",
+      "reason_code": "reviewer_assigned",
+      "schema_version": "1.0.0",
+      "to_state": "in_review"
+    }
+  ]
+}

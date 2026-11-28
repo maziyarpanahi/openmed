@@ -21,13 +21,10 @@ spec.loader.exec_module(size_budget)
 def test_committed_wheel_budget_keeps_the_documented_headroom():
     budget = size_budget.load_wheel_budget()
 
-    # 10% is the policy. 12% is the one-off allowance for the v4.0 integration,
-    # whose whole-release delta exceeds 10% (scripts/release/README.md); the
-    # next baseline refresh returns to 10%.
-    assert budget.headroom_percent in {10, 12}
-    assert budget.maximum_bytes == math.ceil(
-        budget.baseline_bytes * (100 + budget.headroom_percent) / 100
-    )
+    # 10% is the policy (scripts/release/README.md). The v4.0 integration used
+    # 12% once; the v4.1 refresh returned to 10%.
+    assert budget.headroom_percent == 10
+    assert budget.maximum_bytes == math.ceil(budget.baseline_bytes * 110 / 100)
 
 
 def test_six_megabyte_wheel_growth_exceeds_committed_budget(tmp_path):

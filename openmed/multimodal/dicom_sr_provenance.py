@@ -21,6 +21,8 @@ from functools import wraps
 from itertools import islice
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .base import ExtractedDocument, SourceSpan
 
 __all__ = [
@@ -64,7 +66,7 @@ _RECORD_FIELDS = (
 )
 
 
-class DicomSrProvenanceError(ValueError):
+class DicomSrProvenanceError(ValueError, LegacyRootedError):
     """Base error for invalid or incomplete DICOM-SR provenance input."""
 
 

@@ -21,6 +21,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Sequence
 
+from openmed.core.errors import LegacyRootedError
+
 from .asset_limits import MOBILE_V1, LimitProfile
 from .base import ExtractedDocument, register_handler
 from .code_regions import (
@@ -53,7 +55,7 @@ class DicomPixelStatus(str, Enum):
     CLEANED = "pixels_cleaned"
 
 
-class DicomDeidentificationError(ValueError):
+class DicomDeidentificationError(ValueError, LegacyRootedError):
     """Refuse an unsafe DICOM operation with a value-free reason code."""
 
     def __init__(self, reason_code: str) -> None:

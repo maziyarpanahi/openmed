@@ -32,6 +32,7 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
     canonical_json,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .reference_integrity import reference_integrity_report
@@ -129,7 +130,7 @@ _CONDITION_STATUSES: Final = frozenset(
 )
 
 
-class FHIRJourneyRoundTripError(ValueError):
+class FHIRJourneyRoundTripError(ValueError, LegacyRootedError):
     """Base error for malformed round-trip contracts."""
 
 

@@ -31,6 +31,7 @@ from typing import Any, Final
 
 from openmed.core.audit import stable_hash
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS
+from openmed.core.errors import LegacyRootedError
 from openmed.risk.kanon import enforce_kanon
 from openmed.structured.hierarchies import (
     COLUMN_TYPE_DATE,
@@ -59,7 +60,7 @@ REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP: Final = 0.5
 REFERENCE_SUPPRESSION_RATE_CAP: Final = 0.1
 
 
-class AnonymizationError(ValueError):
+class AnonymizationError(ValueError, LegacyRootedError):
     """Raised for an invalid anonymization request (unknown model or column
     type, missing quasi-identifier column, empty inputs) or when the underlying
     enforcement engine cannot reach the target within the suppression bound."""

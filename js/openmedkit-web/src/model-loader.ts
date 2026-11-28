@@ -1,3 +1,4 @@
+import { OpenMedError } from "./errors";
 import {
   failClosedWhenOffline,
   OpenMedOfflineError,
@@ -158,21 +159,53 @@ export async function loadOnnxModel(
   model: string,
   options: LoadOnnxModelOptions = {},
 ): Promise<TokenClassificationPipeline> {
+  return loadOnnx(model, options, false);
+}
+
+/**
+ * Load an OpenMed ONNX model whose runtime assets must stay local, even when
+ * the model reference is a Hub id resolved from local files. Package-internal:
+ * task packs use it when the caller has not consented to remote models.
+ */
+export async function loadOnnxModelWithLocalAssets(
+  model: string,
+  options: LoadOnnxModelOptions = {},
+): Promise<TokenClassificationPipeline> {
+  return loadOnnx(model, options, true);
+}
+
+function loadOnnx(
+  model: string,
+  options: LoadOnnxModelOptions,
+  localAssetsOnly: boolean,
+): Promise<TokenClassificationPipeline> {
   const { variant = "int8", pipelineOptions, ...loaderOptions } = options;
-  return loadTokenClassificationPipeline(model, {
-    ...loaderOptions,
-    quantized: false,
-    pipelineOptions: {
-      subfolder: "",
-      model_file_name: ONNX_MODEL_FILENAMES[variant],
-      ...pipelineOptions,
+  return loadPipeline(
+    model,
+    {
+      ...loaderOptions,
+      quantized: false,
+      pipelineOptions: {
+        subfolder: "",
+        model_file_name: ONNX_MODEL_FILENAMES[variant],
+        ...pipelineOptions,
+      },
     },
-  });
+    localAssetsOnly,
+  );
 }
 
 export async function loadTokenClassificationPipeline(
   model: string,
   options: LoadModelOptions = {},
+): Promise<TokenClassificationPipeline> {
+  return loadPipeline(model, options, false);
+}
+
+async function loadPipeline(
+  model: string,
+  options: LoadModelOptions,
+  localAssetsOnly: boolean,
 ): Promise<TokenClassificationPipeline> {
   const offlineOnly = resolveOfflineOnly(options.offlineOnly);
   if (offlineOnly || isLocalModelReference(model)) {
@@ -181,7 +214,11 @@ export async function loadTokenClassificationPipeline(
     options = { ...options, localFilesOnly: true, allowRemoteModels: false };
   }
   const runtime = await resolveRuntime(options.runtime);
-  configureLocalRuntimeAssets(runtime, options.wasmPaths, offlineOnly);
+  configureLocalRuntimeAssets(
+    runtime,
+    options.wasmPaths,
+    offlineOnly || localAssetsOnly,
+  );
   const localReference = isLocalModelReference(model);
   const localFilesOnly = options.localFilesOnly ?? localReference;
   const allowRemoteModels = options.allowRemoteModels ?? !localFilesOnly;
@@ -256,7 +293,8 @@ async function resolveRuntime(
   try {
     return (await import(moduleName)) as RawTransformersRuntime;
   } catch (error) {
-    throw new Error(
+    throw new OpenMedError(
+      "capability_error",
       "Install @huggingface/transformers or pass a token-classification pipeline.",
       { cause: error },
     );
@@ -272,13 +310,14 @@ export function assertLocalModelReference(model: string): void {
 
 /**
  * Point ONNX Runtime Web at caller-supplied local WebAssembly assets and, in
- * offline-only mode, refuse runtime settings that would fetch from a CDN or
- * another host. Transformers.js defaults `wasmPaths` to jsDelivr in browsers.
+ * offline-only mode or for a local-assets-only load, refuse runtime settings
+ * that would fetch from a CDN or another host. Transformers.js defaults
+ * `wasmPaths` to jsDelivr in browsers.
  */
 function configureLocalRuntimeAssets(
   runtime: RawTransformersRuntime,
   wasmPaths: OnnxWasmPaths | undefined,
-  offlineOnly: boolean,
+  refuseRemoteAssets: boolean,
 ): void {
   const localWasmPaths =
     wasmPaths === undefined ? undefined : toLocalWasmPaths(wasmPaths);
@@ -286,7 +325,7 @@ function configureLocalRuntimeAssets(
   if (env === undefined) {
     return;
   }
-  if (offlineOnly) {
+  if (refuseRemoteAssets) {
     const { localModelPath } = env;
     const remoteModelPath =
       localModelPath !== undefined &&

@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import inspect
 import json
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 import pytest
 
+from scripts.docs import stage_pages as stage_pages_module
 from scripts.docs.stage_pages import (
     DEFAULT_PUBLICATION,
     MANIFEST_NAME,
+    SCHEMA_ID_HOST,
+    SCHEMA_INDEX_PATH,
+    SCHEMA_PENDING_ID_HOSTS,
+    SCHEMA_SOURCE_DIR,
+    SCHEMA_UNPUBLISHED_REASON,
     PageStagingError,
     artifact_path_for_url,
     build_manifest,
@@ -24,15 +33,20 @@ from scripts.docs.stage_pages import (
     markdown_output_path,
     normalized_expected_paths,
     owner_for_path,
+    packaged_schema_files,
+    plan_schema_publication,
     prune_source_maps,
     public_route_for_path,
     resolve_release_tag,
+    schema_publication_path,
+    stage_schemas,
     translated_output_path,
     translated_output_paths,
     validate_internal_references,
     validate_llm_feeds,
     validate_publication_contract,
     validate_publication_metadata,
+    verify_staged_schemas,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,6 +113,8 @@ def test_owner_for_path(subtests) -> None:
         ("docs/demo/web/index.html", "browser-demo"),
         ("docs/eval/benchmark-leaderboard/index.html", "leaderboard"),
         (MANIFEST_NAME, "staging"),
+        (SCHEMA_INDEX_PATH, "schemas"),
+        ("schemas/compliance/control_evidence.schema.json", "schemas"),
     ]:
         with subtests.test(path=path, owner=owner):
             assert owner_for_path(path) == owner
@@ -781,3 +797,265 @@ def test_makefile_and_pages_workflow_use_only_shared_staging_entrypoint() -> Non
         assert "rsync " not in content
     assert "mkdocs build --strict" not in workflow
     assert "openmed.eval.leaderboard" not in workflow
+
+
+def _write_schema(root: Path, relative: str, schema: dict[str, object]) -> Path:
+    path = root / "openmed" / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _synthetic_schema(schema_id: str, **extra: object) -> dict[str, object]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": schema_id,
+        "title": "Synthetic record",
+        "type": "object",
+        **extra,
+    }
+
+
+def test_schema_id_host_is_the_pages_custom_domain() -> None:
+    cname = (ROOT / "docs" / "website" / "CNAME").read_text(encoding="utf-8")
+
+    assert SCHEMA_ID_HOST == cname.strip() == "openmed.life"
+    assert SCHEMA_ID_HOST not in SCHEMA_PENDING_ID_HOSTS
+    assert SCHEMA_SOURCE_DIR == ROOT / "openmed"
+
+
+def test_every_packaged_schema_is_staged_byte_identical_at_its_id_path(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "site"
+    output.mkdir()
+
+    index_path = stage_schemas(output)
+    verify_staged_schemas(output)
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    packaged = {
+        path.relative_to(ROOT).as_posix(): path
+        for path in (ROOT / "openmed").rglob("*.schema.json")
+        if "__pycache__" not in path.parts
+    }
+    sources = [entry["source"] for entry in index["schemas"]]
+    assert sorted(sources) == sources
+    assert len(sources) == len(set(sources))
+    assert set(sources) == set(packaged)
+    assert index["host"] == SCHEMA_ID_HOST
+    assert index["schema_version"] == 1
+    assert index["summary"]["total"] == len(packaged)
+
+    published = 0
+    for entry in index["schemas"]:
+        source_bytes = packaged[entry["source"]].read_bytes()
+        source = json.loads(source_bytes)
+        assert entry["$id"] == source["$id"]
+        assert entry["sha256"] == hashlib.sha256(source_bytes).hexdigest()
+        host = urlsplit(entry["$id"]).hostname
+        if host == SCHEMA_ID_HOST:
+            published += 1
+            assert entry["published"] is True
+            assert entry["reason"] is None
+            assert entry["path"] == urlsplit(entry["$id"]).path.lstrip("/")
+            assert (output / entry["path"]).read_bytes() == source_bytes
+        else:
+            assert host in SCHEMA_PENDING_ID_HOSTS
+            assert entry["published"] is False
+            assert entry["path"] is None
+            assert entry["reason"] == SCHEMA_UNPUBLISHED_REASON
+    assert published > 0
+    assert index["summary"]["published"] == published
+    assert index["summary"]["unpublished"] == len(packaged) - published
+
+    staged = {
+        path.relative_to(output).as_posix()
+        for path in output.rglob("*")
+        if path.is_file()
+    }
+    expected = {entry["path"] for entry in index["schemas"] if entry["published"]}
+    assert staged == expected | {SCHEMA_INDEX_PATH}
+    assert {owner_for_path(path) for path in staged} == {"schemas"}
+
+
+def test_index_records_declared_schema_versions() -> None:
+    entries = {entry["source"]: entry for entry in plan_schema_publication()}
+
+    assert entries["openmed/core/schemas/json/span.schema.json"]["schema_version"] == 1
+    assert (
+        entries["openmed/core/schemas/json/care_gap.schema.json"]["schema_version"]
+        == "1.0.0"
+    )
+    assert (
+        entries["openmed/core/schemas/json/decision_result.schema.json"][
+            "schema_version"
+        ]
+        == "1.2.0"
+    )
+    assert entries["openmed/core/config.schema.json"]["schema_version"] is None
+
+
+def test_off_host_schema_id_fails_staging_naming_only_the_file(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "openmed"
+    _write_schema(
+        tmp_path,
+        "synthetic/record.schema.json",
+        _synthetic_schema("https://schemas.example.invalid/schemas/record.json"),
+    )
+    output = tmp_path / "site"
+    output.mkdir()
+
+    with pytest.raises(PageStagingError) as excinfo:
+        stage_schemas(output, source_dir=source)
+
+    message = str(excinfo.value)
+    assert message.endswith(": openmed/synthetic/record.schema.json")
+    assert "example.invalid" not in message
+    assert str(tmp_path) not in message
+    assert not (output / SCHEMA_INDEX_PATH).exists()
+
+
+@pytest.mark.parametrize(
+    "schema_id",
+    [
+        None,
+        "",
+        "http://openmed.life/schemas/record.schema.json",
+        "https://user@openmed.life/schemas/record.schema.json",
+        "https://openmed.life:8443/schemas/record.schema.json",
+        "https://openmed.life/schemas/record.schema.json?v=1",
+        "https://openmed.life/schemas/record.schema.json#root",
+        "https://openmed.life/record.schema.json",
+        "https://openmed.life/schemas/../index.html",
+        "https://openmed.life/schemas//record.schema.json",
+        "https://openmed.life/schemas/record",
+        "https://openmed.life/schemas/index.json",
+        "https://www.openmed.life/schemas/record.schema.json",
+        "urn:openmed:record",
+    ],
+)
+def test_unpublishable_schema_ids_are_rejected(schema_id: object) -> None:
+    label = "openmed/synthetic/record.schema.json"
+
+    with pytest.raises(PageStagingError) as excinfo:
+        schema_publication_path(schema_id, label=label)
+
+    assert str(excinfo.value).endswith(f": {label}")
+    if isinstance(schema_id, str) and schema_id:
+        assert schema_id not in str(excinfo.value)
+
+
+def test_pending_id_hosts_are_listed_but_not_copied(tmp_path: Path) -> None:
+    source = tmp_path / "openmed"
+    _write_schema(
+        tmp_path,
+        "a/published.schema.json",
+        _synthetic_schema("https://openmed.life/schemas/synthetic/a.schema.json"),
+    )
+    _write_schema(
+        tmp_path,
+        "b/pending.schema.json",
+        _synthetic_schema("https://openmed.dev/schemas/synthetic/b/1.0.0"),
+    )
+    _write_schema(tmp_path, "b/__pycache__/ignored.schema.json", {"$id": "x"})
+    output = tmp_path / "site"
+    output.mkdir()
+
+    index = json.loads(stage_schemas(output, source_dir=source).read_text("utf-8"))
+    verify_staged_schemas(output, source_dir=source)
+
+    assert [entry["source"] for entry in index["schemas"]] == [
+        "openmed/a/published.schema.json",
+        "openmed/b/pending.schema.json",
+    ]
+    pending = index["schemas"][1]
+    assert pending["published"] is False
+    assert pending["path"] is None
+    assert pending["schema_version"] == "1.0.0"
+    assert (output / "schemas" / "synthetic" / "a.schema.json").is_file()
+    assert not (output / "schemas" / "synthetic" / "b").exists()
+    assert index["summary"] == {"published": 1, "total": 2, "unpublished": 1}
+
+
+def test_schema_staging_refuses_duplicates_and_replacements(tmp_path: Path) -> None:
+    source = tmp_path / "openmed"
+    schema_id = "https://openmed.life/schemas/synthetic.schema.json"
+    _write_schema(tmp_path, "a/first.schema.json", _synthetic_schema(schema_id))
+    output = tmp_path / "site"
+    (output / "schemas").mkdir(parents=True)
+    (output / "schemas" / "synthetic.schema.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(PageStagingError, match="would replace staged output"):
+        stage_schemas(output, source_dir=source)
+
+    _write_schema(tmp_path, "b/second.schema.json", _synthetic_schema(schema_id))
+    with pytest.raises(PageStagingError, match="share one \\$id path"):
+        plan_schema_publication(source)
+
+
+def test_schema_staging_rejects_invalid_json_and_symlinks(tmp_path: Path) -> None:
+    source = tmp_path / "openmed"
+    broken = source / "broken.schema.json"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(PageStagingError, match="not valid JSON: openmed/broken"):
+        plan_schema_publication(source)
+
+    broken.write_text("[]", encoding="utf-8")
+    with pytest.raises(PageStagingError, match="JSON object: openmed/broken"):
+        plan_schema_publication(source)
+
+    broken.unlink()
+    target = tmp_path / "outside.json"
+    target.write_text("{}", encoding="utf-8")
+    (source / "linked.schema.json").symlink_to(target)
+    with pytest.raises(PageStagingError, match="symlink: openmed/linked"):
+        packaged_schema_files(source)
+
+
+def test_staged_schema_verification_detects_drift(tmp_path: Path) -> None:
+    source = tmp_path / "openmed"
+    _write_schema(
+        tmp_path,
+        "record.schema.json",
+        _synthetic_schema("https://openmed.life/schemas/record.schema.json"),
+    )
+    output = tmp_path / "site"
+    output.mkdir()
+    stage_schemas(output, source_dir=source)
+    staged = output / "schemas" / "record.schema.json"
+
+    staged.write_text("{}", encoding="utf-8")
+    with pytest.raises(PageStagingError, match="differs openmed/record"):
+        verify_staged_schemas(output, source_dir=source)
+
+    staged.unlink()
+    with pytest.raises(PageStagingError, match="missing openmed/record"):
+        verify_staged_schemas(output, source_dir=source)
+
+    _write_schema(
+        tmp_path,
+        "late.schema.json",
+        _synthetic_schema("https://openmed.life/schemas/late.schema.json"),
+    )
+    with pytest.raises(PageStagingError, match="every packaged schema once"):
+        verify_staged_schemas(output, source_dir=source)
+
+    (output / SCHEMA_INDEX_PATH).write_text("{", encoding="utf-8")
+    with pytest.raises(PageStagingError, match="unreadable"):
+        verify_staged_schemas(output, source_dir=source)
+
+
+def test_stage_pages_publishes_and_verifies_schemas_before_the_manifest() -> None:
+    source = inspect.getsource(stage_pages_module.stage_pages)
+
+    copy_website = source.index("copy_website(DEFAULT_WEBSITE_DIR, output_dir)")
+    staging = source.index("stage_schemas(output_dir)")
+    verification = source.index("verify_staged_schemas(output_dir)")
+    manifest = source.index("write_manifest(")
+    assert copy_website < staging < verification < manifest
+    assert "SCHEMA_INDEX_PATH" in source

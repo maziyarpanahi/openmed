@@ -16,6 +16,7 @@ from typing import Any, TypeVar, cast
 
 from openmed.agent.artifact_reference import ArtifactReference
 from openmed.agent.tools.data_projection import DataProjectionPlan, plan_data_projection
+from openmed.core.errors import LegacyRootedError
 
 from .access_tickets import (
     AccessTicket,
@@ -49,7 +50,7 @@ class ResultQuarantineCode(str, Enum):
     READ_FAILED = "read_failed"
 
 
-class ResultQuarantinedError(ValueError):
+class ResultQuarantinedError(ValueError, LegacyRootedError):
     """Fail closed without retaining a result, field name, or provider message."""
 
     def __init__(self, code: ResultQuarantineCode) -> None:

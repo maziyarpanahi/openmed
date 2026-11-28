@@ -10,19 +10,22 @@ pip install "openmed[service]"
 python -m openmed.service.logging --host 127.0.0.1 --port 8000
 ```
 
-The schema has four root queries:
+The schema has five root queries:
 
 - `analyze` runs clinical entity analysis.
 - `deidentify` returns redacted text, entities, canonical spans, the selected
   policy profile, and aggregate risk facets.
 - `entityTypes` lists canonical labels and their policy categories without
   loading a model.
+- `capabilities` returns the value-free
+  [capability descriptor](../api/capabilities.md) without loading a model.
 - `journeyResources` provides policy-filtered Journey metadata.
 
 There are no mutations or subscriptions. When REST authentication is enabled,
 GraphQL uses the same principal and authorizes the entire document before
 running any resolver: `analyze` requires `analyze:write`, `deidentify` requires
-`pii:write`, and `journeyResources` requires `journey:read`. `entityTypes` has
+`pii:write`, `journeyResources` requires `journey:read`, and `capabilities`
+requires `models:read`, like REST `GET /v1/capabilities`. `entityTypes` has
 no additional field scope. Aliases, fragment spreads, and mixed-field requests
 cannot bypass this check. A denied document returns `data: null` and the
 value-free `OPENMED_FORBIDDEN` extension code, without partial results.
@@ -79,6 +82,28 @@ query Deidentify($input: DeidentifyInput!) {
 }
 ```
 
+A client can read the server's capabilities before choosing an operation. The
+fields match the descriptor's JSON fields in camelCase, and `digest` equals the
+digest that REST and `openmed.core.capabilities.capability_descriptor()` report
+for the same runtime:
+
+```graphql
+query Capabilities {
+  capabilities {
+    digest
+    servedModels
+    surfaces {
+      name
+      available
+    }
+    schemaVersions {
+      name
+      version
+    }
+  }
+}
+```
+
 Resolver failures return a generic `OPENMED_RESOLVER_ERROR`. OpenMed suppresses
 exception-derived GraphQL messages and the GraphQL execution logger so raw
 input text is not copied into resolver errors or logs.
@@ -118,6 +143,32 @@ classifies the live schema against the accepted baseline in
 `docs/api/baselines/graphql-schema.graphql` and fails on removed or retyped
 fields, arguments and enum values, tightened input nullability, and new
 required arguments.
+
+## Canonical span fields
+
+The canonical fields of the `OpenMedSpan` type are generated from
+`openmed/core/schemas/json/span.schema.json` into
+`openmed/service/graphql_span_fields.py` by `scripts/codegen/span_graphql.py`,
+and the Strawberry type is built from that module. String, integer, number and
+boolean properties map to nullable `String`, `Int`, `Float` and `Boolean`;
+objects map to `JSON!` and arrays to non-null lists such as `[String!]!`.
+
+`label` and `text` are not part of the canonical span. They stay on the type
+for compatibility, marked `@deprecated` in the SDL. Use `canonicalLabel`
+instead of `label`, and `textHash` instead of `text`, which can carry the raw
+span surface. Removing them is a 5.0 decision. Their values, and every existing
+response shape, are unchanged.
+
+After changing the span schema, regenerate the module and the SDL:
+
+```bash
+.venv/bin/python scripts/codegen/span_graphql.py
+.venv/bin/python scripts/export_graphql_schema.py
+```
+
+`scripts/codegen/span_graphql.py --check`, which the unit tests also run, fails
+when the module is stale or when the live type and the schema disagree on a
+field name or type.
 
 ## Document, variable, and execution budgets
 

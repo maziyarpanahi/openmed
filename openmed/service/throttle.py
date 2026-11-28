@@ -16,6 +16,8 @@ from typing import Any, Optional
 from fastapi import Request
 from starlette.responses import Response
 
+from openmed.core.errors import LegacyRootedError
+
 from .batcher import BackpressureError
 from .runtime import (
     DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
@@ -424,8 +426,10 @@ class BlockingConcurrencyGate:
             self._condition.notify_all()
 
 
-class ServiceBusyError(RuntimeError):
+class ServiceBusyError(RuntimeError, LegacyRootedError):
     """Reject additional model work when the request's gate is full."""
+
+    code = "service_busy"
 
     def __init__(self, gate: ConcurrencyGate, key_by: str) -> None:
         super().__init__("Service is busy; retry later")

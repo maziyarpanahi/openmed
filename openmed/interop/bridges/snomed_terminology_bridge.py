@@ -21,6 +21,7 @@ from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 from openmed.clinical.grounding.matcher import ConceptMatch, normalize_term
+from openmed.core.errors import LegacyRootedError
 
 SNOMED_SYSTEM_URI = "http://snomed.info/sct"
 SNOMED_TERMINOLOGY_SYSTEM = SNOMED_SYSTEM_URI
@@ -75,11 +76,13 @@ __all__ = [
 ]
 
 
-class SNOMEDTerminologyBridgeError(RuntimeError):
+class SNOMEDTerminologyBridgeError(RuntimeError, LegacyRootedError):
     """Base error for a configured SNOMED terminology-server request."""
 
 
-class SNOMEDTerminologyConfigurationError(SNOMEDTerminologyBridgeError, ValueError):
+class SNOMEDTerminologyConfigurationError(
+    SNOMEDTerminologyBridgeError, ValueError, LegacyRootedError
+):
     """Raised when the caller has not supplied a usable bridge configuration."""
 
 

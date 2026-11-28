@@ -22,6 +22,7 @@ from openmed.clinical.journey_contracts import (
     EvidenceLocator,
     canonical_json,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.base import ExtractedDocument
 from openmed.multimodal.ocr import OcrResult
 from openmed.structured.store import StoreResult, StoreState
@@ -62,7 +63,7 @@ _MEDIA_TYPE_RE = re.compile(r"^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$")
 Box = tuple[float, float, float, float]
 
 
-class MultimodalCoordinateError(ValueError):
+class MultimodalCoordinateError(ValueError, LegacyRootedError):
     """Value-safe validation error for multimodal coordinates."""
 
 

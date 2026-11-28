@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
+from openmed.core.errors import LegacyRootedError
 from openmed.core.models import ModelLoader
 from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
@@ -969,14 +970,16 @@ def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
     return tuple(models)
 
 
-class ModelNotServedError(ValueError):
+class ModelNotServedError(ValueError, LegacyRootedError):
     """A network request selected a model outside the operator's served set."""
+
+    code = "model_not_served"
 
     def __init__(self) -> None:
         super().__init__("model_not_served")
 
 
-class StreamDeadlineExceeded(TimeoutError):
+class StreamDeadlineExceeded(TimeoutError, LegacyRootedError):
     """A streaming request ran past its one request-wide deadline.
 
     Attributes:

@@ -16,13 +16,23 @@ so API drift is caught in tests instead of downstream apps.
 | `EntityPrediction.confidence` | `EntityPrediction.confidence` | Present |
 | `EntityPrediction.start` | `EntityPrediction.start` | Present |
 | `EntityPrediction.end` | `EntityPrediction.end` | Present |
+| `OpenMedModelStore.listCachedModels(cacheDirectory:)` | `ModelCache.isAvailable(repoId)`, `ModelCache.sizeBytes(repoId)` | Present; Swift lists every snapshot with its state, size and modification date |
+| `OpenMedModelStore.totalCacheSizeBytes(cacheDirectory:)` | `ModelCache.totalSizeBytes()` | Present; Swift counts every regular file under the cache root, Android counts ready models |
+| `OpenMedModelStore.deleteModel(repoID:revision:cacheDirectory:)` | `ModelCache.evict(repoId)` | Present; Swift has no lease protection yet (#3644) |
 | `OpenMedModelStore.downloadMLXModel(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` | Android acquires ONNX or TFLite artifacts; the MLX-named member stays deprecated for source compatibility and never downloads |
+| `OpenMedModelStore.startMLXModelDownload(repoID:revision:cacheDirectory:)` and `OpenMedModelDownloadTask.progress` / `cancel()` | `ModelTransferControl` cancellation and `ModelDownloadLogger` events | Present; Swift reports per-file and total byte progress and removes its partial files on cancel |
 | `OpenMedModelStore.cachedMLXModelDirectory(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory` | Present; MLX-named member deprecated |
 | `OpenMedModelStore.isMLXModelCached(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
 | `OpenMedModelStore.mlxModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
+| `OpenMedModelStore.downloadCoreMLModel(repoID:revision:cacheDirectory:)` and `coreMLModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` | Swift-only format: Android acquires ONNX or TFLite; both report `missing`, `partial` and `ready` |
 | `OpenMedMLXModelCacheState.missing` | `ArtifactCacheState.MISSING` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.partial` | `ArtifactCacheState.PARTIAL` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.ready` | `ArtifactCacheState.READY` | Present; MLX-named enum deprecated |
+| `OpenMedModelCatalog.bundled()` | `ModelCatalog.load(context)` | Present; same row format and filter semantics, platform-runnable formats only (MLX/Core ML on Swift, ONNX/TFLite on Android) |
+| `OpenMedModelCatalog.filter(format:tier:maxParamCount:language:license:)` | `ModelCatalog.filter(format, tier, maxParamCount, language, license)` | Present; Swift covered by the shared vectors in `tests/fixtures/model_catalog/`, Kotlin by [the catalog filter vectors](#model-catalog-filters) |
+| `OpenMedModelCatalog.entry(repoID:)` | `ModelCatalog.byRepoId(repoId)` | Present |
+| `OpenMedModelStore.downloadMLXModel(entry:revision:cacheDirectory:)` | `ModelDownloader.download(entry, revision)` | Present; both refuse a reproducibility-hash mismatch before writing files and record the resolved commit sha |
+| `OpenMedModelIntegrity.reproducibilityHash(repoID:revisionSHA:released:siblings:)` | `ModelIntegrity.reproducibilityHash(repoId, revisionSha, released, siblings)` | Present; Swift matches the Python generator byte for byte, including `\uXXXX` escapes for non-ASCII sibling names (shared Python/Kotlin vectors are #5398) |
 
 Android never runs MLX artifacts. See
 [Migrating from the MLX-named store](android-integration.md#migrating-from-the-mlx-named-store)
@@ -30,6 +40,39 @@ for the format-aware replacements.
 
 The checklist only proves that a few names exist. The committed public API
 baselines below catch every removed or changed declaration.
+
+## Model Catalog Filters
+
+The Android `ModelCatalog.filter()` defines the catalog filter rules. The Swift
+`OpenMedModelCatalog` and the web `openmed/catalog` subpath follow them:
+
+| Filter | Rule |
+| --- | --- |
+| `format` | Case-insensitive equality with any of the row's formats. It never matches by prefix: `onnx` does not select a row whose only format is `onnx-int8`. |
+| `tier`, `license` | Case-insensitive equality. A row whose value is `null` never matches a filter on that field. |
+| `maxParamCount` | Inclusive: keeps rows with `param_count <= maxParamCount`. A row with a `null` parameter count never matches. |
+| `language` | Case-insensitive membership in the row's languages. `en` does not match `en-US`. |
+| Combined | Every given filter must match. No filter returns every row. Results keep catalog order. |
+| Lookup | `byRepoId` matches `repo_id` exactly, including case. |
+
+`tests/fixtures/parity/catalog_filters_v1.json` (schema
+`openmed.model_catalog_filters`, version 1) pins these rules. It holds
+synthetic rows in the Android catalog JSONL row format, filter queries with the
+expected repo ids, and lookups. The cases cover an unknown format, a format
+prefix, mixed-case tokens in rows and queries, null tier, null parameter count,
+null license, a zero parameter count, region-tagged languages and combined
+predicates. Tokens are ASCII, so case folding is the same on every platform.
+
+| Surface | Test | CI gate |
+| --- | --- | --- |
+| Python | `tests/unit/parity/test_catalog_filter_vectors.py` checks the fixture against a reference of the rules | the `pytest` run in `.github/workflows/ci.yml` |
+| Kotlin | `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/CatalogFilterParityTest.kt` loads the rows with `ModelCatalog.fromJsonLines` | `--tests '*CatalogFilterParityTest'` in `.github/workflows/android-ci.yml` |
+| Swift | `testSharedCatalogFilterParityVectors` in `swift/OpenMedKit/Tests/OpenMedKitTests/OpenMedModelCatalogTests.swift` loads the rows with `OpenMedModelCatalog(jsonLines:)` | the `swift test` run in `.github/workflows/swift-test.yml` |
+
+```bash
+cd android
+./gradlew :openmedkit:testDebugUnitTest --tests '*CatalogFilterParityTest'
+```
 
 ## Public API Baselines
 
@@ -42,9 +85,10 @@ code with it on every pull request that touches the kit.
 | Swift, iOS Simulator | `swift/OpenMedKit/api/ios/<Module>.json` | `swift-api-digester -dump-sdk` on an `xcodebuild` iOS Simulator build | `Swift Package (OpenMedKit)` / Check iOS Swift API baseline |
 | Kotlin | `android/openmedkit/api/openmedkit.api` | Kotlin binary-compatibility validator (`apiDump`) | `Android CI (OpenMedKit)` / `apiCheck` |
 
-The Swift baselines cover the five library products of the root
+The Swift baselines cover the six library products of the root
 `Package.swift`: `OpenMedKit`, `OpenMedSpeech`, `OpenMedExtensionSupport`,
-`OpenMedShareExtension` and `OpenMedActionExtension`. The iOS baseline is the
+`OpenMedShareExtension`, `OpenMedActionExtension` and `OpenMedIntents`. The
+Swift-only `OpenMedIntents` App Intents product has no Kotlin counterpart. The iOS baseline is the
 one that records the UIKit-only Share and Action extension classes.
 `scripts/release/swift_api_baseline.py` turns each digester dump into a
 toolchain-neutral list of declarations keyed by module-qualified symbol, such
@@ -533,3 +577,98 @@ are for tests only. The expected blocks are derived from the Python reference by
 To change a profile, edit `openmed/core/policies/`, run
 `python scripts/parity/generate_portable_policies.py --write`, review the
 regenerated resources and vectors, and run every consumer above.
+
+## Parity Fixture Index
+
+Every shared contract vector in `tests/fixtures/parity/`, including the
+kit-parity and portable policy vectors above, is listed in its
+[README](https://github.com/maziyarpanahi/openmed/blob/master/tests/fixtures/parity/README.md)
+with its version, the Python, Swift and Android tests that read it, the
+workflow path filters that run them, and how to update it.
+
+## Audit Receipt Verification Vectors
+
+`AuditReport.sign()` and `verify()` (`openmed/core/audit.py`) protect a
+de-identification report with a `repro_hash` and an HMAC-SHA256 `signature`
+over canonical JSON. Canonical bytes are easy to get wrong in another language,
+so `tests/fixtures/parity/receipt_verification_v1.json` (schema
+`openmed.receipt_verification_vectors`, version 1) lets the Swift, Kotlin and
+web verifiers check their bytes, hashes and verdicts against the Python
+reference.
+
+The vectors are synthetic. Every report is signed with the published material
+in `test_keys`, which is marked `test_only` and must never sign a real report.
+Reports carry offsets, labels, actions and SHA-256 hashes of synthetic
+placeholders only; they contain no identifiers or source text.
+
+Canonical JSON is UTF-8 with object members sorted by Unicode code point, `,`
+and `:` separators with no whitespace, every non-ASCII character escaped as
+lowercase `\uXXXX` (astral characters as UTF-16 surrogate pairs), no `NaN` or
+infinities, and floats in the shortest round-trip form Python prints: `1e-07`,
+`5e-324`, `1e+16` and `1.0`, not `1e-7`, `1.0E-7` or `1`. Swift's default
+`String` ordering and JavaScript's UTF-16 ordering both differ from code-point
+order for some keys; the vectors include such keys and labels.
+
+For each case the fixture records the received `report`, one candidate per span
+order a verifier must try (`sorted` by `(start, end, canonical_label, action,
+canonical JSON of the span)`, then `stored`, listed only when it differs), and
+the expected verdict:
+
+| Field | Meaning |
+| --- | --- |
+| `repro_payload_b64` | Canonical bytes of the report without `repro_hash` and `signature` |
+| `expected_repro_hash` | `sha256:` plus the hex SHA-256 of those bytes |
+| `signing_payload_b64` | Canonical bytes of the report without `signature`, keeping the stored `repro_hash` |
+| `expected_hmac` | Hex HMAC-SHA256 of the signing bytes under the test material |
+| `expected.verifies` | Whether `AuditReport.verify()` accepts the report |
+| `expected.matched_span_order` | The span order that verified, or `null` |
+
+A report verifies when `signature` is an object with algorithm `HMAC-SHA256`
+and some span order, tried sorted first, has a repro hash equal to the stored
+`repro_hash` and an HMAC equal to `signature.value`. The cases cover a signed
+baseline, an unsigned report, tampered offset, label and action, a flipped
+signature digit, an unknown algorithm, the legacy stored span order, non-ASCII
+keys and values, and float edge cases (`0.1`, `1e-07`, `0.30000000000000004`,
+`5e-324`).
+
+The Kotlin verifier is `ReceiptVerifier` in
+`android/openmedkit/src/main/kotlin/com/openmed/openmedkit/receipt/`, and
+`ReceiptVerificationParityTest` checks its bytes, hashes, HMACs and verdicts
+against every case. Its result codes are `valid`, `hash_mismatch`,
+`signature_mismatch` (also used for an unsigned report),
+`unsupported_algorithm` and `malformed`.
+
+The web package's `verifyAuditReport()` (`js/openmedkit-web/src/receipt.ts`)
+consumes every case in `tests/web/test_receipt_verification.spec.ts`: it must
+reproduce each candidate's payload bytes and the expected verdict, with reason
+codes `valid`, `hash_mismatch`, `signature_mismatch` (also for an unsigned
+report), `unsupported_algorithm` and `malformed`.
+
+Regenerate or check the fixture with
+`python scripts/parity/generate_receipt_vectors.py --write` or `--check`;
+`tests/unit/core/test_receipt_vectors.py` checks that regeneration is
+byte-stable, that every case verifies in Python with the expected result, and
+that the bytes, hashes and HMACs recompute without OpenMed code.
+
+### Kit verifiers
+
+`OpenMedReceiptVerifier` in OpenMedKit Swift replays every case in
+`ReceiptVerificationParityTests`. It checks the payload bytes, repro hash and
+HMAC of each candidate, and the verdict, `reproHashMatches` and matched span
+order. Each verdict carries one reason code, which the Kotlin and web verifiers
+share:
+
+| Reason | Cases |
+| --- | --- |
+| `valid` | `signed_baseline`, `legacy_span_order`, `non_ascii_keys_and_values`, `float_edge_cases` |
+| `hash_mismatch` | `tampered_offset`, `tampered_label`, `tampered_action` |
+| `signature_mismatch` | `unsigned`, `tampered_signature_byte` |
+| `unsupported_algorithm` | `unknown_algorithm` |
+| `malformed` | Input the verifier cannot check; no vector uses it |
+
+The checks run in Python's order. A missing or `null` signature is
+`signature_mismatch`. An algorithm other than `HMAC-SHA256` is
+`unsupported_algorithm`. A stored hash that no span order reproduces is
+`hash_mismatch`. Otherwise the HMAC decides between `valid` and
+`signature_mismatch`. `signature.value` must be the 64 lowercase hex digits
+Python writes.

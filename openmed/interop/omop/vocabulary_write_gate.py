@@ -19,6 +19,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .mutation_batch import (
     OmopApprovalBinding,
     OmopBatchCommitter,
@@ -39,7 +41,7 @@ class VocabularyCompatibility(str, Enum):
     RETIRED = "retired"
 
 
-class VocabularyWriteGateError(ValueError):
+class VocabularyWriteGateError(ValueError, LegacyRootedError):
     """A value-free vocabulary gate validation or write-blocking error."""
 
     def __init__(

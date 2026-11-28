@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 from .contracts import (
@@ -66,11 +67,11 @@ _MIGRATION_SQL = (
 _MIGRATION_CHECKSUM = canonical_digest(_MIGRATION_SQL)
 
 
-class IdentityStoreCompatibilityError(RuntimeError):
+class IdentityStoreCompatibilityError(RuntimeError, LegacyRootedError):
     """Raised when persisted identity state uses an unsupported schema."""
 
 
-class IdentityStoreError(RuntimeError):
+class IdentityStoreError(RuntimeError, LegacyRootedError):
     """Value-safe local identity-store lifecycle error."""
 
 

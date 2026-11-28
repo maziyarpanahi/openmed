@@ -1,3 +1,4 @@
+import { OpenMedError } from "../errors";
 import {
   probeOrtWebCapabilities,
   type CapabilityDetectionOptions,
@@ -310,7 +311,7 @@ export class WebGpuClassificationHead {
         weightsBuffer === undefined ||
         biasBuffer === undefined
       ) {
-        throw new Error("WebGPU classification head was not initialized");
+        throw new OpenMedError("internal_error", "WebGPU classification head was not initialized");
       }
       const bindGroup = this.device.createBindGroup({
         label: `${this.label} bindings`,
@@ -389,7 +390,10 @@ export class WebGpuClassificationHead {
               : `line ${message.lineNum}: ${message.message}`,
           )
           .join("; ");
-        throw new Error(`WebGPU classification shader compilation failed: ${locations}`);
+        throw new OpenMedError(
+          "capability_error",
+          `WebGPU classification shader compilation failed: ${locations}`,
+        );
       }
     }
     const descriptor = {
@@ -417,7 +421,7 @@ export class WebGpuClassificationHead {
 
   private ensureActive(): void {
     if (this.disposed) {
-      throw new Error("WebGPU classification head has been disposed");
+      throw new OpenMedError("input_error", "WebGPU classification head has been disposed");
     }
   }
 }
@@ -702,7 +706,10 @@ export class WebGpuTokenClassificationSession {
 
   private ensureActive(): void {
     if (this.disposed) {
-      throw new Error("WebGPU token-classification session has been disposed");
+      throw new OpenMedError(
+        "input_error",
+        "WebGPU token-classification session has been disposed",
+      );
     }
   }
 }
@@ -1080,7 +1087,10 @@ function extractLogits(
         : requestedOutputName;
   const tensor = outputs[outputName];
   if (!isOrtTensorLike(tensor) || tensor.data === undefined || tensor.dims === undefined) {
-    throw new Error(`ONNX Runtime output ${JSON.stringify(outputName)} is not a tensor`);
+    throw new OpenMedError(
+      "inference_error",
+      `ONNX Runtime output ${JSON.stringify(outputName)} is not a tensor`,
+    );
   }
   if (tensor.dims.length !== 3) {
     throw new RangeError("token-classification logits must have rank 3");

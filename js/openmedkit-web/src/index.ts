@@ -4,7 +4,9 @@ import {
   loadOnnxModel,
   loadTokenClassificationPipeline,
 } from "./model-loader";
+import { OpenMedError } from "./errors";
 import { resolveOfflineOnly } from "./offline";
+import { createTaskPack, type TaskPack } from "./packs";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
   type DeidentifyOptions,
@@ -48,6 +50,9 @@ export type {
   TokenClassificationPipeline,
   TransformersRuntime,
 } from "./types";
+// Generated span.schema.json, entity, action, audit, attestation, relation,
+// code and provenance record types (`OpenMedContract*`).
+export type * from "./generated/contract-types";
 export {
   decodeBioTokenSpans,
   flattenTokenClassificationOutput,
@@ -120,6 +125,45 @@ export {
   PORTABLE_POLICY_RESOURCES,
   PORTABLE_TAXONOMY_LABELS,
 } from "./portable-policy-resources";
+export {
+  SDK_CONFIG_DEFAULTS,
+  SDK_CONFIG_FIELDS,
+  SDK_CONFIG_ISSUE_CODES,
+  SDK_CONFIG_ONNX_VARIANTS,
+  SDK_CONFIG_POLICY_PROFILES,
+  SDK_CONFIG_SCHEMA_ID,
+  SDK_CONFIG_VERSION,
+  SdkConfigError,
+  parseSdkConfig,
+  toExtractPiiOptions,
+  toLoadModelOptions,
+  validateSdkConfig,
+} from "./sdk-config";
+export type {
+  OpenMedSdkConfig,
+  SdkConfigField,
+  SdkConfigIssue,
+  SdkConfigIssueCode,
+  SdkConfigOnnxVariant,
+  SdkConfigPolicyProfile,
+} from "./sdk-config";
+export {
+  AUDIT_REPORT_SIGNATURE_ALGORITHM,
+  AUDIT_REPORT_VERIFICATION_REASONS,
+  AuditReceiptError,
+  auditReportPayloads,
+  canonicalAuditJson,
+  verifyAuditReport,
+} from "./receipt";
+export type {
+  AuditReceiptErrorCode,
+  AuditReportCrypto,
+  AuditReportPayload,
+  AuditReportSpanOrder,
+  AuditReportVerification,
+  AuditReportVerificationReason,
+  VerifyAuditReportOptions,
+} from "./receipt";
 export type {
   KitParityAction,
   KitParityBundleContract,
@@ -132,7 +176,30 @@ export {
   loadTokenClassificationPipeline,
 } from "./model-loader";
 export { OpenMedOfflineError, isOfflineOnly, setOfflineOnly } from "./offline";
+export { TaskPackError } from "./packs";
+export type {
+  LoadedTaskPack,
+  TaskPack,
+  TaskPackCandidate,
+  TaskPackDeidentifyOptions,
+  TaskPackErrorCode,
+  TaskPackExtractOptions,
+  TaskPackLoadOptions,
+  TaskPackResolution,
+} from "./packs";
+export {
+  DEFAULT_DATE_SHIFT_MAX_DAYS,
+  DateShiftError,
+  shiftIsoDate,
+  stableDateShiftOffset,
+  stableDateShiftOffsetFromSeed,
+} from "./date-shift";
+export type { DateShiftErrorCode, StableDateShiftOffsetOptions } from "./date-shift";
 export type { OpenMedOfflineErrorCode } from "./offline";
+export { OPENMED_ERROR_CODES, OPENMED_ERROR_CODE_RETRYABLE } from "./error-codes";
+export type { OpenMedErrorCode } from "./error-codes";
+export { OpenMedError, openMedErrorCode } from "./errors";
+export type { OpenMedErrorOptions } from "./errors";
 export {
   DECISION_ADVISORY,
   DECISION_COMPATIBILITY_POLICY,
@@ -475,7 +542,10 @@ function optionKey(value: unknown, seen = new Set<object>()): string {
       return `identity:${identity(object)}`;
     }
     if (Object.getOwnPropertySymbols(object).length > 0) {
-      throw new Error("OpenMed loader options do not support symbol keys");
+      throw new OpenMedError(
+        "configuration_error",
+        "OpenMed loader options do not support symbol keys",
+      );
     }
     seen.add(object);
     const key = Array.isArray(value)
@@ -487,7 +557,10 @@ function optionKey(value: unknown, seen = new Set<object>()): string {
     return key;
   }
   if (typeof value === "symbol") {
-    throw new Error("OpenMed loader options do not support symbol values");
+    throw new OpenMedError(
+      "configuration_error",
+      "OpenMed loader options do not support symbol values",
+    );
   }
   return JSON.stringify([typeof value, Object.is(value, -0) ? "-0" : String(value)]);
 }
@@ -499,7 +572,7 @@ async function disposeOwned(entry: OwnedPipeline): Promise<void> {
       await new Promise<void>(resolve => { entry.drained = resolve; });
     }
     try { await pipeline.dispose?.(); } catch {
-      throw new Error("OpenMed pipeline disposal failed");
+      throw new OpenMedError("internal_error", "OpenMed pipeline disposal failed");
     }
   })();
 }
@@ -509,7 +582,7 @@ export async function disposeDefaultPipelines(): Promise<void> {
   ownedPipelines.clear();
   const results = await Promise.allSettled(entries.map(disposeOwned));
   if (results.some(result => result.status === "rejected")) {
-    throw new Error("OpenMed pipeline disposal failed");
+    throw new OpenMedError("internal_error", "OpenMed pipeline disposal failed");
   }
 }
 async function acquireOwned(model: string, options: ExtractPiiOptions): Promise<OwnedPipeline> {
@@ -541,7 +614,7 @@ export async function extractPii(
       ? await ephemeralHashSecret()
       : new Uint8Array(toBytes(options.hashSecret));
   if (hashSecret.byteLength === 0) {
-    throw new Error("hashSecret must not be empty");
+    throw new OpenMedError("configuration_error", "hashSecret must not be empty");
   }
   const model = options.model ?? DEFAULT_MODEL_ID;
   const owned = options.pipeline === undefined ? await acquireOwned(model, options) : undefined;
@@ -651,6 +724,22 @@ export async function deidentify(
 }
 
 /**
+ * The portable PII task pack for the web runtime.
+ *
+ * `piiPack.resolve()` returns the pack's ordered web candidates from the
+ * bundled task pack manifest, checked against the bundled ONNX catalog, in the
+ * order the Python resolver returns for runtime `web`. `piiPack.load()` loads
+ * the first available candidate through the OpenMed ONNX loader: from local
+ * files only unless `allowRemoteModels: true` is passed, failing with a coded
+ * `TaskPackError` instead of fetching. Pass `pipeline` to use your own.
+ */
+export const piiPack: TaskPack = /* @__PURE__ */ createTaskPack("pii", {
+  extractPii,
+  deidentify,
+  pinnedRevisions: { [DEFAULT_MODEL_ID]: DEFAULT_MODEL_REVISION },
+});
+
+/**
  * Apply span replacements right to left at UTF-16 offsets.
  *
  * Spans whose action is `keep` are left in the text: a kept span is an
@@ -675,7 +764,7 @@ export async function hmacTextHash(
   const payload = toBytes(surface);
   const key = new Uint8Array(toBytes(secret));
   if (key.byteLength === 0) {
-    throw new Error("hashSecret must not be empty");
+    throw new OpenMedError("configuration_error", "hashSecret must not be empty");
   }
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {

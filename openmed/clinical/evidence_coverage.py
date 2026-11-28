@@ -16,6 +16,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 EVIDENCE_COVERAGE_SCHEMA_VERSION = "openmed.clinical.evidence_coverage.v1"
 EVIDENCE_COVERAGE_NOTE = (
     "Evidence coverage is a value-free review aid, not clinical interpretation."
@@ -90,7 +92,7 @@ _REVIEW_ALIASES = {
 }
 
 
-class EvidenceCoverageError(ValueError):
+class EvidenceCoverageError(ValueError, LegacyRootedError):
     """Raised when a value-free evidence coverage input is invalid."""
 
 

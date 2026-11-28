@@ -22,6 +22,7 @@ from openmed.clinical.journey_contracts import (
     canonical_json,
     derived_opaque_id,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.ingest.pipeline_contracts import PIPELINE_STAGES
 
 PIPELINE_MIGRATION_SCHEMA_VERSION: Final = "1.0.0"
@@ -85,7 +86,7 @@ _CONFIG_FIELDS: Final[Mapping[str, frozenset[str]]] = {
 }
 
 
-class PipelineMigrationError(ValueError):
+class PipelineMigrationError(ValueError, LegacyRootedError):
     """Raised when a declarative pipeline description is malformed."""
 
 

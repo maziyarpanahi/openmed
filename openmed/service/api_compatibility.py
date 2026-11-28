@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from openmed.core.errors import ERROR_CODES
+from openmed.core.errors import ERROR_CODES, LegacyRootedError
 
 SCHEMA_VERSION = 1
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -149,11 +149,11 @@ STABLE_ERROR_CATEGORIES = tuple(
 DEFAULT_ERROR_CATEGORIES = STABLE_ERROR_CATEGORIES
 
 
-class APIContractError(ValueError):
+class APIContractError(ValueError, LegacyRootedError):
     """Raised when a checked-in or live API contract is not structurally valid."""
 
 
-class APICompatibilityError(RuntimeError):
+class APICompatibilityError(RuntimeError, LegacyRootedError):
     """Raised when a service API change removes a client-visible contract."""
 
     def __init__(self, report: "CompatibilityReport") -> None:
@@ -169,7 +169,7 @@ class APICompatibilityError(RuntimeError):
         super().__init__(message or "Service API compatibility check failed")
 
 
-class APISurfaceUnavailable(RuntimeError):
+class APISurfaceUnavailable(RuntimeError, LegacyRootedError):
     """Raised when an optional schema toolchain cannot run in this environment.
 
     Attributes:

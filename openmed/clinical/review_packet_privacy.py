@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Final, Protocol, TypeVar
 
 from openmed.core.audit import hash_text
+from openmed.core.errors import LegacyRootedError
 from openmed.core.review_workflow import critical_labels as default_critical_labels
 
 REVIEW_PACKET_PRIVACY_SCHEMA_VERSION: Final = 1
@@ -31,7 +32,7 @@ class LeakageDetector(Protocol):
         """Return findings for ``text``."""
 
 
-class ReviewPacketPrivacyError(RuntimeError):
+class ReviewPacketPrivacyError(RuntimeError, LegacyRootedError):
     """Base error for a review-packet privacy scan."""
 
 

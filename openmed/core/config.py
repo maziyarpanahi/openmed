@@ -640,6 +640,41 @@ class OpenMedConfig:
             "profile": self.profile,
         }
 
+    def to_sdk_config(
+        self,
+        *,
+        confidence_threshold: float = 0.5,
+        policy_profile: str = "hipaa_safe_harbor",
+    ) -> Dict[str, Any]:
+        """Return the portable SDK configuration subset of this config.
+
+        The result follows ``sdk_config.schema.json`` and holds six keys:
+        ``local_only``, ``model_id`` (``pii_model``), ``model_revision``
+        (``pii_model_revision``) and ``onnx_variant`` come from this config.
+        ``confidence_threshold`` and ``policy_profile`` are per-call settings
+        in Python, so they are passed explicitly.
+
+        Args:
+            confidence_threshold: Threshold to record, in ``[0, 1]``.
+            policy_profile: Portable policy profile name.
+
+        Returns:
+            A validated SDK configuration document.
+
+        Raises:
+            openmed.core.sdk_config.SdkConfigError: When a value is outside
+                the portable subset, such as a ``pii_model`` that is a local
+                path rather than a repository id.
+        """
+
+        from .sdk_config import sdk_config_from_openmed_config
+
+        return sdk_config_from_openmed_config(
+            self,
+            confidence_threshold=confidence_threshold,
+            policy_profile=policy_profile,
+        )
+
     def validate(self) -> None:
         """Validate this configuration against the bundled JSON Schema.
 

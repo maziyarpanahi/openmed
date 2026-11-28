@@ -50,3 +50,51 @@ test("CommonJS deidentify redacts the synthetic session", async () => {
   });
   assert.equal(result.deidentifiedText, divergence.expected_redacted, redactionCase.id);
 });
+
+test("CommonJS and ESM catalog subpaths list the same rows", async () => {
+  const catalog = require("openmed/catalog");
+  assert.ok(require.resolve("openmed/catalog").endsWith("catalog.cjs"), "cjs_catalog_entry");
+  const esm = await import("openmed/catalog");
+  assert.deepEqual(
+    catalog.listModels().map((entry) => entry.repo_id),
+    esm.listModels().map((entry) => entry.repo_id),
+  );
+  assert.equal(catalog.MODEL_CATALOG_DIGEST, esm.MODEL_CATALOG_DIGEST);
+});
+
+test("CommonJS and ESM multimodal subpaths expose the same surface", async () => {
+  const multimodal = require("openmed/multimodal");
+  assert.ok(
+    require.resolve("openmed/multimodal").endsWith("index.cjs"),
+    "cjs_multimodal_entry",
+  );
+  const esm = await import("openmed/multimodal");
+  assert.deepEqual(
+    Object.keys(multimodal).sort(),
+    Object.keys(esm)
+      .filter((key) => key !== "default")
+      .sort(),
+  );
+  assert.deepEqual(multimodal.MULTIMODAL_REFUSALS, esm.MULTIMODAL_REFUSALS);
+});
+
+test("CommonJS and ESM speech subpaths expose the same surface", async () => {
+  const speech = require("openmed/speech");
+  assert.ok(require.resolve("openmed/speech").endsWith("index.cjs"), "cjs_speech_entry");
+  const esm = await import("openmed/speech");
+  assert.deepEqual(
+    Object.keys(speech).sort(),
+    Object.keys(esm)
+      .filter((key) => key !== "default")
+      .sort(),
+  );
+  assert.deepEqual(speech.SPEECH_CONTRACT_ERROR_CODES, esm.SPEECH_CONTRACT_ERROR_CODES);
+});
+
+test("CommonJS resolves openmed/validators to its own entry", () => {
+  const resolved = require.resolve("openmed/validators");
+  assert.ok(resolved.endsWith("validators.cjs"), "cjs_validators_entry");
+  const validators = require("openmed/validators");
+  assert.equal(validators.validateDutchBsn("712345681"), true);
+  assert.equal(validators.validateDutchBsn("012345681"), false);
+});

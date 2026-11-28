@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.ingest.contracts import (
     Cancellation,
     Checkpoint,
@@ -138,7 +139,7 @@ _ERROR_MESSAGES = {
 }
 
 
-class JobRecoveryError(RuntimeError):
+class JobRecoveryError(RuntimeError, LegacyRootedError):
     """Value-free failure of a durable job operation.
 
     Attributes:

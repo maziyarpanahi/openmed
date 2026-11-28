@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import CONDITION, MEDICATION
 from openmed.core.terminology_licenses import (
     TerminologyLicense,
@@ -43,7 +44,7 @@ _KIND_TO_SYSTEM = {
 _SUPPORTED_SUFFIXES = frozenset({".csv", ".json", ".jsonl", ".tsv"})
 
 
-class IndiaTerminologyError(ValueError):
+class IndiaTerminologyError(ValueError, LegacyRootedError):
     """Base error for invalid caller-supplied terminology metadata or rows."""
 
 

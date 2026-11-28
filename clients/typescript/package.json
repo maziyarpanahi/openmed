@@ -1,23 +1,60 @@
 {
   "name": "@openmed/rest-client",
-  "version": "0.0.0",
+  "version": "4.0.0",
   "description": "Dependency-light TypeScript client for the OpenMed REST service.",
-  "private": true,
+  "keywords": [
+    "openmed",
+    "medical-ai",
+    "de-identification",
+    "rest-client",
+    "healthcare"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:workflow": "node --test tests/workflow-client.test.mjs",
-    "test:decisions": "node --test tests/decision-client.test.mjs"
+    "test:decisions": "node --test tests/decision-client.test.mjs",
+    "test:api": "node --test tests/api-baseline.test.mjs",
+    "api:check": "node scripts/api-baseline.mjs --check",
+    "api:update": "node scripts/api-baseline.mjs --update",
+    "prepack": "npm run build"
   },
   "dependencies": {},
   "devDependencies": {
     "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maziyarpanahi/openmed.git",
+    "directory": "clients/typescript"
+  },
+  "homepage": "https://github.com/maziyarpanahi/openmed/tree/master/clients/typescript#readme",
+  "bugs": {
+    "url": "https://github.com/maziyarpanahi/openmed/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

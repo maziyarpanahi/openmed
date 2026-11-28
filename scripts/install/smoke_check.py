@@ -470,6 +470,7 @@ def _check_proto_stubs(root: Path) -> None:
         "Extract",
         "Deidentify",
         "StreamDeidentify",
+        "GetCapabilities",
     ]
     assert callable(openmed_pb2_grpc.OpenMedServiceStub)
     assert kserve_v2_pb2.DESCRIPTOR.package == "openmed.kserve.v2"

@@ -10,6 +10,8 @@ from enum import Enum
 from fractions import Fraction
 from typing import Any, Callable, Iterable
 
+from openmed.core.errors import LegacyRootedError
+
 from .asr_audio_profile import (
     AsrAudioProfile,
     AsrCompatibility,
@@ -25,7 +27,7 @@ AUDIO_CONVERSION_NOTICE = (
 _FILTER_ID = "hann-sinc-32-zero-pad-v1"
 
 
-class AudioConversionError(ValueError):
+class AudioConversionError(ValueError, LegacyRootedError):
     """Controlled, payload-free conversion failure."""
 
 
