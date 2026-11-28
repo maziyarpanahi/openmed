@@ -246,6 +246,18 @@ def test_capabilities_answers_the_same_callers_as_loaded_models(
         assert outcomes["other"] == (403, 403)
 
 
+def _decoded_strings(payload: Any) -> str:
+    """Join every key and string value of a decoded JSON payload."""
+
+    if isinstance(payload, dict):
+        return "\n".join(
+            f"{key}\n{_decoded_strings(value)}" for key, value in payload.items()
+        )
+    if isinstance(payload, list):
+        return "\n".join(_decoded_strings(item) for item in payload)
+    return payload if isinstance(payload, str) else ""
+
+
 def test_planted_path_and_environment_sentinels_never_appear(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -278,9 +290,11 @@ def test_planted_path_and_environment_sentinels_never_appear(
 
     assert response.status_code == 200
     # Negative control: the planted path is a real preload entry, so it does
-    # reach the operator-facing /models/loaded view.
-    assert path_sentinel in loaded.text
+    # reach the operator-facing /models/loaded view. JSON escapes the
+    # backslashes of a Windows path, so compare the decoded strings too.
+    assert path_sentinel in _decoded_strings(loaded.json())
     text = response.text
+    decoded = _decoded_strings(response.json())
     for sentinel in (
         TOKEN_SENTINEL,
         path_sentinel,
@@ -294,6 +308,7 @@ def test_planted_path_and_environment_sentinels_never_appear(
         "synthetic-read",
     ):
         assert sentinel not in text
+        assert sentinel not in decoded
     validate_capability_descriptor(response.json())
 
 
